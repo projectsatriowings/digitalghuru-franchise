@@ -1,0 +1,67 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.env
+
+# Production build outputs
+dist/
+!packages/shared/dist/
+build/
+.next/
+out/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Editor / OS
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Database / Prisma
+prisma/*.db
+prisma/*.db-journal
+
+# Expo / React Native
+.expo/
+web-build/
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+
+# Tests & Coverage
+coverage/
+.nyc_output/
+
+# Mobile Binary Artifacts
+*.apk
+*.aab
+
+# Scratch / Temporary Dev Scripts
+scratch/
+
+
+
+# Database Backups & Dumps
+backups/
+server/backups/
+*.dump

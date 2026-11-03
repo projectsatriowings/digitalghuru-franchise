@@ -1,0 +1,28 @@
+{
+  "name": "digital-guru-franchise",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "server",
+    "apps/web",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:server": "npm run dev --workspace=server",
+    "dev:web": "npm run dev --workspace=@tuition/web",
+    "build:server": "npm run build --workspace=server",
+    "build:web": "npm run build --workspace=@tuition/web",
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present"
+  },
+  "devDependencies": {
+    "@types/react": "~18.2.79",
+    "@types/react-dom": "~18.2.25",
+    "typescript": "^5.5.4"
+  },
+  "dependencies": {
+    "leaflet": "^1.9.4"
+  }
+}
+
