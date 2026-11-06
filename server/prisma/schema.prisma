@@ -223,6 +223,7 @@ model Institute {
 
   @@index([status])
   @@index([name])
+  @@index([franchiseId])
 }
 
 model User {

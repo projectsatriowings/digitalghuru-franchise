@@ -44,23 +44,23 @@ router.get('/photo-raw/:key', requireRole('SUPER_ADMIN', 'ACADEMIC_ADMIN', 'STAF
 router.use(requireInstituteContext);
 
 // Student management routes
-router.get('/admission-prefix', requireRole('SUPER_ADMIN', 'ACADEMIC_ADMIN', 'STAFF'), getAdmissionPrefixInfo);
-router.get('/lookup', requireRole('SUPER_ADMIN', 'ACADEMIC_ADMIN', 'STAFF'), lookupExistingStudent);
-router.get('/lookup-parent', requireRole('SUPER_ADMIN', 'ACADEMIC_ADMIN', 'STAFF'), lookupParent);
+router.get('/admission-prefix', requireRole('SUPER_ADMIN', 'FRANCHISE_OWNER', 'ACADEMIC_ADMIN', 'STAFF'), getAdmissionPrefixInfo);
+router.get('/lookup', requireRole('SUPER_ADMIN', 'FRANCHISE_OWNER', 'ACADEMIC_ADMIN', 'STAFF'), lookupExistingStudent);
+router.get('/lookup-parent', requireRole('SUPER_ADMIN', 'FRANCHISE_OWNER', 'ACADEMIC_ADMIN', 'STAFF'), lookupParent);
 router.get('/my/profile', requireRole('STUDENT'), getMyStudentProfile);
-router.get('/', requireRole('SUPER_ADMIN', 'ACADEMIC_ADMIN', 'STAFF'), listStudents);
-router.post('/', requireRole('SUPER_ADMIN', 'ACADEMIC_ADMIN', 'STAFF'), admitStudent);
-router.post('/:id/enroll', requireRole('SUPER_ADMIN', 'ACADEMIC_ADMIN', 'STAFF'), enrollExistingStudent);
+router.get('/', requireRole('SUPER_ADMIN', 'FRANCHISE_OWNER', 'ACADEMIC_ADMIN', 'STAFF'), listStudents);
+router.post('/', requireRole('SUPER_ADMIN', 'FRANCHISE_OWNER', 'ACADEMIC_ADMIN', 'STAFF'), admitStudent);
+router.post('/:id/enroll', requireRole('SUPER_ADMIN', 'FRANCHISE_OWNER', 'ACADEMIC_ADMIN', 'STAFF'), enrollExistingStudent);
 
 // Photograph upload routes
-router.post('/upload-photo', requireRole('SUPER_ADMIN', 'ACADEMIC_ADMIN', 'STAFF'), handlePhotoUpload, uploadStudentPhoto);
-router.post('/:id/photo', requireRole('SUPER_ADMIN', 'ACADEMIC_ADMIN', 'STAFF'), handlePhotoUpload, uploadStudentPhoto);
+router.post('/upload-photo', requireRole('SUPER_ADMIN', 'FRANCHISE_OWNER', 'ACADEMIC_ADMIN', 'STAFF'), handlePhotoUpload, uploadStudentPhoto);
+router.post('/:id/photo', requireRole('SUPER_ADMIN', 'FRANCHISE_OWNER', 'ACADEMIC_ADMIN', 'STAFF'), handlePhotoUpload, uploadStudentPhoto);
 
-router.get('/:id', requireRole('SUPER_ADMIN', 'ACADEMIC_ADMIN', 'STAFF', 'PARENT', 'STUDENT'), getStudentById);
-router.patch('/:id', requireRole('SUPER_ADMIN', 'ACADEMIC_ADMIN', 'STAFF'), updateStudent);
-router.put('/:id', requireRole('SUPER_ADMIN', 'ACADEMIC_ADMIN', 'STAFF'), updateStudent);
-router.put('/:id/batch-assignment', requireRole('SUPER_ADMIN', 'ACADEMIC_ADMIN', 'STAFF'), assignStudentBatch);
-router.patch('/:id/status', requireRole('SUPER_ADMIN', 'ACADEMIC_ADMIN', 'STAFF'), updateStudentStatus);
+router.get('/:id', requireRole('SUPER_ADMIN', 'FRANCHISE_OWNER', 'ACADEMIC_ADMIN', 'STAFF', 'PARENT', 'STUDENT'), getStudentById);
+router.patch('/:id', requireRole('SUPER_ADMIN', 'FRANCHISE_OWNER', 'ACADEMIC_ADMIN', 'STAFF'), updateStudent);
+router.put('/:id', requireRole('SUPER_ADMIN', 'FRANCHISE_OWNER', 'ACADEMIC_ADMIN', 'STAFF'), updateStudent);
+router.put('/:id/batch-assignment', requireRole('SUPER_ADMIN', 'FRANCHISE_OWNER', 'ACADEMIC_ADMIN', 'STAFF'), assignStudentBatch);
+router.patch('/:id/status', requireRole('SUPER_ADMIN', 'FRANCHISE_OWNER', 'ACADEMIC_ADMIN', 'STAFF'), updateStudentStatus);
 
 import {
   allocateStudentSubjects,
@@ -68,13 +68,13 @@ import {
 } from '../academics/academics.controller.js';
 
 // Student Subject Allocations
-router.get('/:id/subject-allocations', requireRole('SUPER_ADMIN', 'ACADEMIC_ADMIN', 'STAFF', 'PARENT', 'STUDENT'), getStudentSubjectAllocations);
-router.post('/:id/subject-allocations', requireRole('SUPER_ADMIN', 'ACADEMIC_ADMIN', 'STAFF'), allocateStudentSubjects);
+router.get('/:id/subject-allocations', requireRole('SUPER_ADMIN', 'FRANCHISE_OWNER', 'ACADEMIC_ADMIN', 'STAFF', 'PARENT', 'STUDENT'), getStudentSubjectAllocations);
+router.post('/:id/subject-allocations', requireRole('SUPER_ADMIN', 'FRANCHISE_OWNER', 'ACADEMIC_ADMIN', 'STAFF'), allocateStudentSubjects);
 
 // Student credential management routes
-router.post('/:id/reset-password', requireRole('SUPER_ADMIN', 'ACADEMIC_ADMIN', 'STAFF'), resetStudentPassword);
-router.patch('/:id/account-identifier', requireRole('SUPER_ADMIN', 'ACADEMIC_ADMIN', 'STAFF'), updateStudentLoginIdentifier);
-router.patch('/:id/account-status', requireRole('SUPER_ADMIN', 'ACADEMIC_ADMIN', 'STAFF'), updateStudentAccountStatus);
+router.post('/:id/reset-password', requireRole('SUPER_ADMIN', 'FRANCHISE_OWNER', 'ACADEMIC_ADMIN', 'STAFF'), resetStudentPassword);
+router.patch('/:id/account-identifier', requireRole('SUPER_ADMIN', 'FRANCHISE_OWNER', 'ACADEMIC_ADMIN', 'STAFF'), updateStudentLoginIdentifier);
+router.patch('/:id/account-status', requireRole('SUPER_ADMIN', 'FRANCHISE_OWNER', 'ACADEMIC_ADMIN', 'STAFF'), updateStudentAccountStatus);
 
 export default router;
 

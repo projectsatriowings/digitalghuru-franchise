@@ -45,12 +45,12 @@ const DEMO_ACCOUNTS: DemoAccount[] = [
   },
   {
     role: 'FRANCHISE_OWNER',
-    label: 'Franchise Owner',
+    label: 'Franchisee Admin',
     roleBadgeColor: 'text-[#006FFF]',
     badgeBg: 'bg-blue-50 border-blue-200',
     identifier: 'rajesh.owner@digitalghuru.example.com',
     password: 'FranchiseOwner#2026',
-    subtext: 'Franchise & Branch Revenue',
+    subtext: 'Multi-Branch Operations & Revenue',
   },
   {
     role: 'ACADEMIC_ADMIN',
@@ -250,11 +250,10 @@ export const Login: React.FC = () => {
                     setSelectedRole(item.role);
                     setError(null);
                   }}
-                  className={`py-2 px-1 text-xs font-semibold rounded-xl transition-all ${
-                    selectedRole === item.role
+                  className={`py-2 px-1 text-xs font-semibold rounded-xl transition-all ${selectedRole === item.role
                       ? 'bg-[#006FFF] text-white shadow-md font-bold'
                       : 'text-slate-300 hover:text-white hover:bg-slate-800/80'
-                  }`}
+                    }`}
                 >
                   {item.label}
                 </button>
@@ -271,7 +270,7 @@ export const Login: React.FC = () => {
                     </>
                   ) : selectedRole === 'FRANCHISE_OWNER' ? (
                     <>
-                      <Building2 className="w-5 h-5 text-[#006FFF]" /> Franchise Owner Portal
+                      <Building2 className="w-5 h-5 text-[#006FFF]" /> Franchisee Admin Portal
                     </>
                   ) : selectedRole === 'ACADEMIC_ADMIN' ? (
                     <>
@@ -427,29 +426,29 @@ export const Login: React.FC = () => {
               {/* Quick Demo Credentials Autofill Section (Visible only in Development or explicitly enabled Demo mode) */}
               {isDemoModeEnabled && (
                 <div className="mt-6 pt-5 border-t border-slate-200">
-                <div className="flex items-center justify-between mb-2.5">
-                  <span className="text-[11px] font-bold text-slate-600 uppercase tracking-wider flex items-center gap-1.5 font-display">
-                    <Sparkles className="w-3.5 h-3.5 text-[#006FFF]" /> Quick Demo Access (1-Click Fill)
-                  </span>
-                  <span className="text-[10px] bg-blue-50 text-[#006FFF] px-2 py-0.5 rounded-full border border-blue-200 font-semibold">
-                    Demo Mode
-                  </span>
-                </div>
+                  <div className="flex items-center justify-between mb-2.5">
+                    <span className="text-[11px] font-bold text-slate-600 uppercase tracking-wider flex items-center gap-1.5 font-display">
+                      <Sparkles className="w-3.5 h-3.5 text-[#006FFF]" /> Quick Demo Access (1-Click Fill)
+                    </span>
+                    <span className="text-[10px] bg-blue-50 text-[#006FFF] px-2 py-0.5 rounded-full border border-blue-200 font-semibold">
+                      Demo Mode
+                    </span>
+                  </div>
 
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  {DEMO_ACCOUNTS.map((demo) => (
-                    <button
-                      key={demo.role}
-                      type="button"
-                      onClick={() => handleSelectDemo(demo)}
-                      className="p-2.5 rounded-xl bg-slate-50 hover:bg-blue-50/50 border border-slate-200 hover:border-[#006FFF]/40 text-left text-slate-900 transition-all group cursor-pointer"
-                    >
-                      <div className={`font-bold text-[11px] ${demo.roleBadgeColor}`}>{demo.label}</div>
-                      <div className="text-[10px] text-slate-500 truncate mt-0.5">{demo.subtext}</div>
-                    </button>
-                  ))}
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    {DEMO_ACCOUNTS.map((demo) => (
+                      <button
+                        key={demo.role}
+                        type="button"
+                        onClick={() => handleSelectDemo(demo)}
+                        className="p-2.5 rounded-xl bg-slate-50 hover:bg-blue-50/50 border border-slate-200 hover:border-[#006FFF]/40 text-left text-slate-900 transition-all group cursor-pointer"
+                      >
+                        <div className={`font-bold text-[11px] ${demo.roleBadgeColor}`}>{demo.label}</div>
+                        <div className="text-[10px] text-slate-500 truncate mt-0.5">{demo.subtext}</div>
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
               )}
             </div>
 
@@ -487,10 +486,10 @@ export const Login: React.FC = () => {
             <div className="mt-4 space-y-3 text-xs">
               <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200">
                 <div className="font-bold text-[#006FFF] flex items-center gap-1.5 mb-1">
-                  <Building2 className="w-4 h-4" /> Franchise Owner & Branch Admin
+                  <Building2 className="w-4 h-4" /> Franchisee Admin & Branch Admin
                 </div>
                 <p className="text-slate-600 leading-relaxed">
-                  Franchise credentials are provided upon agreement signing by the Super Admin team. Contact your franchise coordinator or platform administrator.
+                  Franchisee Admin accounts are authorized by Super Admin with multi-branch management access. Contact your platform administrator for access.
                 </p>
               </div>
 

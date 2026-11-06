@@ -24,6 +24,8 @@ import {
   getRoyaltyPaymentReceipt,
   getSuperAdminFranchiseDashboard,
   getFranchiseOwnerDashboard,
+  getMyAssignedBranches,
+  getUnassignedBranches,
 } from './franchise.controller.js';
 import { authenticateToken, requireRole } from '../../middleware/auth.js';
 
@@ -33,10 +35,12 @@ const router = Router();
 router.use(authenticateToken);
 
 // -------------------------------------------------------------
-// DASHBOARD ENDPOINTS
+// DASHBOARD & ASSIGNED BRANCH ENDPOINTS
 // -------------------------------------------------------------
 router.get('/dashboard/super-admin', requireRole('SUPER_ADMIN'), getSuperAdminFranchiseDashboard);
 router.get('/dashboard/owner', requireRole('SUPER_ADMIN', 'FRANCHISE_OWNER'), getFranchiseOwnerDashboard);
+router.get('/my-branches', requireRole('SUPER_ADMIN', 'FRANCHISE_OWNER'), getMyAssignedBranches);
+router.get('/unassigned-branches', requireRole('SUPER_ADMIN'), getUnassignedBranches);
 
 // -------------------------------------------------------------
 // CORE FRANCHISE CRUD

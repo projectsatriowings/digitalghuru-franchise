@@ -84,99 +84,120 @@ export async function requireInstituteContext(req: AuthenticatedRequest, res: Re
     return next();
   }
 
-  // Franchise Owners have access to all branches under their franchises
+  // Franchisee Admin (FRANCHISE_OWNER) has access to all branches assigned to their franchise
   if (req.user.role === 'FRANCHISE_OWNER') {
     let instituteId = (req.headers['x-institute-id'] as string) || (req.query.instituteId as string) || req.user.instituteId;
-    if (!instituteId) {
-      const franchise = await prisma.franchise.findFirst({
-        where: { ownerUserId: req.user.userId },
-        include: { branches: { take: 1 } },
-      });
-      if (franchise && franchise.branches.length > 0) {
-        instituteId = franchise.branches[0].id;
-      }
-    }
-    if (instituteId) {
-      const branchBelongs = await prisma.institute.findFirst({
-        where: {
-          id: instituteId,
-          franchise: {
-            ownerUserId: req.user.userId,
+
+          const userFranchise = await prisma.franchise.findFirst({
+            where: { ownerUserId: req.user.userId },
+            include: {
+              branches: {
+                select: { id: true, code: true, name: true, status: true },
+                orderBy: { name: 'asc' },
+              },
           },
-        },
-      });
-      if (branchBelongs) {
+    });
+
+      if (!userFranchise || userFranchise.branches.length === 0) {
+        return res.status(400).json({
+          success: false,
+          error: 'Institute context required: No campus branches currently assigned to your franchise center',
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+        const assignedBranchIds = userFranchise.branches.map((b) => b.id);
+        req.franchiseId = userFranchise.id;
+    (req as any).assignedBranchIds = assignedBranchIds;
+
+      // Handle 'ALL' (Consolidated Mode)
+      if (instituteId === 'ALL' || instituteId === 'all') {
+        if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) {
+          return res.status(400).json({
+            success: false,
+            error: 'Please select a specific campus branch from the branch selector to perform this operation',
+            timestamp: new Date().toISOString(),
+          });
+        }
+        // For safe read-only routes, default to first assigned branch so downstream queries receive a valid UUID
+        req.instituteId = assignedBranchIds[0];
+        return next();
+      }
+
+      // Default to first branch if none explicitly specified
+      if (!instituteId) {
+        req.instituteId = assignedBranchIds[0];
+        return next();
+      }
+
+      // Verify requested branch strictly belongs to this Franchisee Admin
+      if (assignedBranchIds.includes(instituteId)) {
         req.instituteId = instituteId;
         return next();
       }
+
       return res.status(403).json({
         success: false,
         error: 'Forbidden: You do not have authorization to access this campus branch',
         timestamp: new Date().toISOString(),
       });
     }
-    return res.status(400).json({
-      success: false,
-      error: 'Institute context required: No campus branches assigned to your franchise',
-      timestamp: new Date().toISOString(),
-    });
-  }
 
-  // For institute-bound roles, verify active membership
-  let instituteId = (req.headers['x-institute-id'] as string) || (req.query.instituteId as string) || req.user.instituteId;
-  if (!instituteId) {
-    const fallbackMembership = await prisma.instituteMembership.findFirst({
-      where: { userId: req.user.userId, isActive: true },
-      select: { instituteId: true },
-    });
-    if (fallbackMembership) {
-      instituteId = fallbackMembership.instituteId;
-    } else {
-      const studentProfile = await prisma.student.findFirst({
-        where: { userId: req.user.userId, status: 'ACTIVE' },
+    // For institute-bound roles, verify active membership
+    let instituteId = (req.headers['x-institute-id'] as string) || (req.query.instituteId as string) || req.user.instituteId;
+    if (!instituteId) {
+      const fallbackMembership = await prisma.instituteMembership.findFirst({
+        where: { userId: req.user.userId, isActive: true },
         select: { instituteId: true },
       });
-      if (studentProfile) {
-        instituteId = studentProfile.instituteId;
+      if (fallbackMembership) {
+        instituteId = fallbackMembership.instituteId;
+      } else {
+        const studentProfile = await prisma.student.findFirst({
+          where: { userId: req.user.userId, status: 'ACTIVE' },
+          select: { instituteId: true },
+        });
+        if (studentProfile) {
+          instituteId = studentProfile.instituteId;
+        }
       }
     }
-  }
-  if (!instituteId) {
-    return res.status(400).json({
-      success: false,
-      error: 'Institute context required',
-      timestamp: new Date().toISOString(),
-    });
-  }
-
-  try {
-    const membership = await prisma.instituteMembership.findUnique({
-      where: {
-        instituteId_userId: {
-          instituteId,
-          userId: req.user.userId,
-        },
-      },
-      include: {
-        institute: true,
-      },
-    });
-
-    if (!membership || !membership.isActive || membership.institute.status !== 'ACTIVE') {
-      return res.status(403).json({
+    if (!instituteId) {
+      return res.status(400).json({
         success: false,
-        error: 'Forbidden: Active institute membership required',
+        error: 'Institute context required',
         timestamp: new Date().toISOString(),
       });
     }
 
-    req.instituteId = instituteId;
-    next();
-  } catch (err: any) {
-    return res.status(500).json({
-      success: false,
-      error: 'Error validating institute context',
-      timestamp: new Date().toISOString(),
-    });
+    try {
+      const membership = await prisma.instituteMembership.findUnique({
+        where: {
+          instituteId_userId: {
+            instituteId,
+            userId: req.user.userId,
+          },
+        },
+        include: {
+          institute: true,
+        },
+      });
+
+      if (!membership || !membership.isActive || membership.institute.status !== 'ACTIVE') {
+        return res.status(403).json({
+          success: false,
+          error: 'Forbidden: Active institute membership required',
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      req.instituteId = instituteId;
+      next();
+    } catch (err: any) {
+      return res.status(500).json({
+        success: false,
+        error: 'Error validating institute context',
+        timestamp: new Date().toISOString(),
+      });
+    }
   }
-}

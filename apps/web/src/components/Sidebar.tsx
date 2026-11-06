@@ -68,14 +68,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab }) => 
           </>
         )}
 
-        {/* Franchise Owner Nav Items */}
+        {/* Franchisee Admin Nav Items */}
         {role === 'FRANCHISE_OWNER' && (
           <>
             <button
               onClick={() => onSelectTab('franchise_owner_dashboard')}
               className={navItemClass('franchise_owner_dashboard')}
             >
-              <LayoutDashboard className="w-4 h-4 text-[#FEDC32]" /> Franchise Dashboard
+              <LayoutDashboard className="w-4 h-4 text-[#FEDC32]" /> Franchisee Dashboard
             </button>
             <button
               onClick={() => onSelectTab('academics')}
@@ -88,6 +88,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab }) => 
               className={navItemClass('staff')}
             >
               <Users className="w-4 h-4" /> Staff Management
+            </button>
+            <button
+              onClick={() => onSelectTab('staff_attendance')}
+              className={navItemClass('staff_attendance')}
+            >
+              <Calendar className="w-4 h-4" /> Staff GPS Attendance
             </button>
             <button
               onClick={() => onSelectTab('students')}
@@ -118,6 +124,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab }) => 
               className={navItemClass('materials')}
             >
               <BookOpen className="w-4 h-4" /> Learning Materials
+            </button>
+            <button
+              onClick={() => onSelectTab('homework')}
+              className={navItemClass('homework')}
+            >
+              <FileText className="w-4 h-4" /> Homework & Tasks
             </button>
             <button
               onClick={() => onSelectTab('messaging')}

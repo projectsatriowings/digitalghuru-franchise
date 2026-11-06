@@ -800,13 +800,39 @@ export async function addBranchToFranchise(req: AuthenticatedRequest, res: Respo
     if (req.user?.role !== 'SUPER_ADMIN') {
       return res.status(403).json({
         success: false,
-        error: 'Forbidden: Franchise Owners cannot create or add branches. Only Super Admin has this privilege.',
+        error: 'Forbidden: Franchisee Admins cannot create or add branches. Only Super Admin has this privilege.',
       });
     }
 
     const { id: franchiseId } = req.params;
-    const { instituteId, name, code, city, state, address, phone, email, createNew } = req.body;
+    const { instituteId, instituteIds, name, code, city, state, address, phone, email, createNew } = req.body;
 
+    // Verify franchise exists
+    const targetFranchise = await prisma.franchise.findUnique({
+      where: { id: franchiseId },
+      select: { id: true, name: true, code: true },
+    });
+    if (!targetFranchise) {
+      return res.status(404).json({ success: false, error: 'Franchise not found' });
+    }
+
+    // Case 1: Bulk assign multiple existing branches
+    if (Array.isArray(instituteIds) && instituteIds.length > 0) {
+      await prisma.institute.updateMany({
+        where: { id: { in: instituteIds } },
+        data: { franchiseId },
+      });
+      const updatedBranches = await prisma.institute.findMany({
+        where: { id: { in: instituteIds } },
+      });
+      return res.status(200).json({
+        success: true,
+        message: `${updatedBranches.length} branch(es) successfully assigned to ${targetFranchise.name}`,
+        data: { branches: updatedBranches },
+      });
+    }
+
+    // Case 2: Create brand new branch and attach
     let branch;
     if (createNew || (!instituteId && name)) {
       let branchCode = code;
@@ -836,8 +862,9 @@ export async function addBranchToFranchise(req: AuthenticatedRequest, res: Respo
         },
       });
     } else {
+      // Case 3: Attach single existing branch
       if (!instituteId) {
-        return res.status(400).json({ success: false, error: 'instituteId is required to attach an existing branch' });
+        return res.status(400).json({ success: false, error: 'instituteId or instituteIds is required to attach existing branches' });
       }
 
       branch = await prisma.institute.update({
@@ -913,6 +940,129 @@ export async function removeBranchFromFranchise(req: AuthenticatedRequest, res: 
   } catch (err: any) {
     console.error('[Remove Branch Error]', err);
     return res.status(500).json({ success: false, error: 'Failed to remove branch' });
+  }
+}
+
+export async function getMyAssignedBranches(req: AuthenticatedRequest, res: Response) {
+  try {
+    const userId = req.user!.userId;
+    const userRole = req.user!.role;
+
+    if (userRole === 'SUPER_ADMIN') {
+      const targetFranchiseId = req.query.franchiseId as string;
+      const where: any = {};
+      if (targetFranchiseId) {
+        where.franchiseId = targetFranchiseId;
+      }
+      const branches = await prisma.institute.findMany({
+        where,
+        select: {
+          id: true,
+          code: true,
+          name: true,
+          city: true,
+          state: true,
+          status: true,
+          address: true,
+          phone: true,
+          email: true,
+          franchiseId: true,
+          franchise: { select: { id: true, code: true, name: true } },
+          _count: { select: { students: true, batches: true, staffProfiles: true } },
+        },
+        orderBy: { name: 'asc' },
+      });
+      return res.json({
+        success: true,
+        data: {
+          branches,
+          total: branches.length,
+        },
+      });
+    }
+
+    // For FRANCHISE_OWNER (Franchisee Admin):
+    const franchise = await prisma.franchise.findFirst({
+      where: { ownerUserId: userId },
+      include: {
+        branches: {
+          select: {
+            id: true,
+            code: true,
+            name: true,
+            city: true,
+            state: true,
+            status: true,
+            address: true,
+            phone: true,
+            email: true,
+            _count: { select: { students: true, batches: true, staffProfiles: true } },
+          },
+          orderBy: { name: 'asc' },
+        },
+      },
+    });
+
+    if (!franchise) {
+      return res.status(404).json({
+        success: false,
+        error: 'No franchise associated with your user account',
+      });
+    }
+
+    return res.json({
+      success: true,
+      data: {
+        franchise: {
+          id: franchise.id,
+          code: franchise.code,
+          name: franchise.name,
+          ownerName: franchise.ownerName,
+          status: franchise.status,
+        },
+        branches: franchise.branches,
+        total: franchise.branches.length,
+      },
+    });
+  } catch (err: any) {
+    console.error('[Get My Assigned Branches Error]', err);
+    return res.status(500).json({ success: false, error: 'Failed to retrieve assigned branches' });
+  }
+}
+
+export async function getUnassignedBranches(req: AuthenticatedRequest, res: Response) {
+  try {
+    if (req.user?.role !== 'SUPER_ADMIN') {
+      return res.status(403).json({ success: false, error: 'Forbidden' });
+    }
+
+    const branches = await prisma.institute.findMany({
+      where: {
+        franchiseId: null,
+      },
+      select: {
+        id: true,
+        code: true,
+        name: true,
+        city: true,
+        state: true,
+        address: true,
+        status: true,
+        _count: { select: { students: true, batches: true, staffProfiles: true } },
+      },
+      orderBy: { name: 'asc' },
+    });
+
+    return res.json({
+      success: true,
+      data: {
+        branches,
+        total: branches.length,
+      },
+    });
+  } catch (err: any) {
+    console.error('[Get Unassigned Branches Error]', err);
+    return res.status(500).json({ success: false, error: 'Failed to retrieve unassigned branches' });
   }
 }
 
@@ -1604,17 +1754,17 @@ export async function getRoyaltyPaymentReceipt(req: AuthenticatedRequest, res: R
         },
         installment: payment.installment
           ? {
-              installmentNumber: payment.installment.installmentNumber,
-              periodLabel: payment.installment.periodLabel,
-              installmentAmount: Number(payment.installment.amount),
-              totalPaidToDate: Number(payment.installment.paidAmount),
-              outstandingBalance: Number(payment.installment.outstandingBalance),
-              status: payment.installment.status,
-              agreementNumber: payment.installment.agreement?.agreementNumber,
-              agreementTitle: payment.installment.agreement?.title,
-              calculationBasis: payment.installment.calculationBasis,
-              calculationBreakdown: payment.installment.calculationBreakdown,
-            }
+            installmentNumber: payment.installment.installmentNumber,
+            periodLabel: payment.installment.periodLabel,
+            installmentAmount: Number(payment.installment.amount),
+            totalPaidToDate: Number(payment.installment.paidAmount),
+            outstandingBalance: Number(payment.installment.outstandingBalance),
+            status: payment.installment.status,
+            agreementNumber: payment.installment.agreement?.agreementNumber,
+            agreementTitle: payment.installment.agreement?.title,
+            calculationBasis: payment.installment.calculationBasis,
+            calculationBreakdown: payment.installment.calculationBreakdown,
+          }
           : null,
         issuer: {
           organization: 'Digital Guru Franchise Enterprise',
@@ -1704,10 +1854,10 @@ export async function calculateRoyalty(req: AuthenticatedRequest, res: Response)
         outstanding <= 0
           ? 'PAID'
           : Number(record.royaltyPaid) > 0
-          ? 'PARTIALLY_PAID'
-          : new Date() > dueDate
-          ? 'OVERDUE'
-          : 'PENDING';
+            ? 'PARTIALLY_PAID'
+            : new Date() > dueDate
+              ? 'OVERDUE'
+              : 'PENDING';
 
       record = await prisma.franchiseRoyaltyRecord.update({
         where: { id: record.id },
@@ -1982,8 +2132,8 @@ export async function getSuperAdminFranchiseDashboard(req: AuthenticatedRequest,
       data = await fetchDashboard();
     } catch (transientErr) {
       console.warn('[Dashboard Warning] Reconnecting to Neon...');
-      await prisma.$disconnect().catch(() => {});
-      await prisma.$connect().catch(() => {});
+      await prisma.$disconnect().catch(() => { });
+      await prisma.$connect().catch(() => { });
       data = await fetchDashboard();
     }
 
@@ -2000,9 +2150,16 @@ export async function getSuperAdminFranchiseDashboard(req: AuthenticatedRequest,
 export async function getFranchiseOwnerDashboard(req: AuthenticatedRequest, res: Response) {
   try {
     const userId = req.user!.userId;
+    const userRole = req.user!.role;
+
+    // Support Super Admin inspecting a franchise, or Franchise Owner inspecting their own franchise
+    let franchiseWhere: any = { ownerUserId: userId };
+    if (userRole === 'SUPER_ADMIN' && req.query.franchiseId) {
+      franchiseWhere = { id: req.query.franchiseId as string };
+    }
 
     const franchise = await prisma.franchise.findFirst({
-      where: { ownerUserId: userId },
+      where: franchiseWhere,
       include: {
         branches: {
           select: {
@@ -2010,9 +2167,14 @@ export async function getFranchiseOwnerDashboard(req: AuthenticatedRequest, res:
             code: true,
             name: true,
             city: true,
+            state: true,
+            address: true,
+            phone: true,
+            email: true,
             status: true,
-            _count: { select: { students: true, batches: true } },
+            _count: { select: { students: true, batches: true, staffProfiles: true } },
           },
+          orderBy: { name: 'asc' },
         },
         agreements: {
           orderBy: { createdAt: 'desc' },
@@ -2044,69 +2206,279 @@ export async function getFranchiseOwnerDashboard(req: AuthenticatedRequest, res:
       });
     }
 
-    const branchIds = franchise.branches.map((b) => b.id);
+    // Branch scoping: check query param or header
+    const rawBranchId = (req.query.branchId as string) || (req.headers['x-institute-id'] as string) || undefined;
+    const allBranchIds = franchise.branches.map((b) => b.id);
+
+    let targetBranchIds: string[] = allBranchIds;
+    let selectedBranch: any = null;
+    let isConsolidated = true;
+
+    if (rawBranchId && rawBranchId !== 'ALL' && rawBranchId !== 'all') {
+      const matched = franchise.branches.find((b) => b.id === rawBranchId);
+      if (!matched) {
+        return res.status(403).json({
+          success: false,
+          error: 'Forbidden: You do not have authorization to access this campus branch',
+          timestamp: new Date().toISOString(),
+        });
+      }
+      targetBranchIds = [rawBranchId];
+      selectedBranch = matched;
+      isConsolidated = false;
+    }
+
+    // 1. Student Count
     const totalStudents = await prisma.student.count({
-      where: { instituteId: { in: branchIds }, status: 'ACTIVE' },
+      where: { instituteId: { in: targetBranchIds }, status: 'ACTIVE' },
     });
 
-    const paymentAgg = await prisma.payment.aggregate({
-      where: { instituteId: { in: branchIds }, status: 'SUCCESS' },
-      _sum: { amountPaid: true },
-    });
-    const totalRevenue = Number(paymentAgg._sum.amountPaid || 0);
+      // 2. Staff Count
+      const totalStaff = await prisma.staffProfile.count({
+        where: { instituteId: { in: targetBranchIds }, user: { isActive: true } },
+      });
 
-    const activeAgreement = franchise.agreements.find((a) => a.status === 'ACTIVE');
+      // 3. Batches Count
+      const activeBatches = await prisma.batch.count({
+        where: { instituteId: { in: targetBranchIds }, isActive: true },
+      });
 
-    const installmentsWithStatus = franchise.installments.map((inst) => ({
-      ...inst,
-      liveStatus: computeInstallmentLiveStatus(inst),
-    }));
+      // 4. Today's Student Attendance
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+      const todayEnd = new Date();
+      todayEnd.setHours(23, 59, 59, 999);
 
-    const totalObligations = installmentsWithStatus.reduce((sum, i) => sum + Number(i.amount), 0);
-    const totalPaid = installmentsWithStatus.reduce((sum, i) => sum + Number(i.paidAmount), 0);
-    const totalOutstanding = installmentsWithStatus.reduce((sum, i) => sum + Number(i.outstandingBalance), 0);
-    const totalOverdue = installmentsWithStatus
-      .filter((i) => i.liveStatus === 'OVERDUE')
-      .reduce((sum, i) => sum + Number(i.outstandingBalance), 0);
-
-    return res.json({
-      success: true,
-      data: {
-        franchise: {
-          id: franchise.id,
-          code: franchise.code,
-          name: franchise.name,
-          ownerName: franchise.ownerName,
-          email: franchise.email,
-          phone: franchise.phone,
-          address: franchise.address,
-          city: franchise.city,
-          state: franchise.state,
-          postalCode: franchise.postalCode,
-          country: franchise.country,
-          authorizedContact: franchise.authorizedContact,
-          status: franchise.status,
+      const todayPresent = await prisma.attendanceEvent.count({
+        where: {
+          instituteId: { in: targetBranchIds },
+          eventDate: { gte: todayStart, lte: todayEnd },
+          eventType: 'CHECK_IN',
         },
-        activeAgreement,
-        agreements: franchise.agreements,
-        installments: installmentsWithStatus,
-        metrics: {
-          totalBranches: franchise.branches.length,
-          totalStudents,
-          totalRevenue,
-          annualRoyaltyAmount: activeAgreement?.annualRoyaltyAmount ? Number(activeAgreement.annualRoyaltyAmount) : totalObligations,
-          calculationMethod: activeAgreement?.calculationMethod || 'FIXED_ANNUAL',
-          totalRoyaltyObligations: totalObligations,
-          totalRoyaltyPaid: totalPaid,
-          outstandingRoyalty: totalOutstanding,
-          overdueRoyalty: totalOverdue,
+      });
+
+      const todayLate = await prisma.attendanceEvent.count({
+        where: {
+          instituteId: { in: targetBranchIds },
+          eventDate: { gte: todayStart, lte: todayEnd },
+          eventType: 'CHECK_IN',
+          isLate: true,
         },
-        branches: franchise.branches,
-        recentPayments: franchise.royaltyPayments,
-      },
-    });
-  } catch (err: any) {
-    console.error('[Franchise Owner Dashboard Error]', err);
-    return res.status(500).json({ success: false, error: 'Failed to load Franchise Owner Dashboard' });
+      });
+
+      const todayAbsent = Math.max(0, totalStudents - todayPresent);
+      const todayTotalMarked = totalStudents > 0 ? totalStudents : todayPresent;
+      const attendanceRate = todayTotalMarked > 0 ? Number(((todayPresent / todayTotalMarked) * 100).toFixed(1)) : 100.0;
+
+      // 5. Monthly & Total Fee Collections
+      const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+      const monthlyPaymentAgg = await prisma.payment.aggregate({
+        where: {
+          instituteId: { in: targetBranchIds },
+          status: 'SUCCESS',
+          paidAt: { gte: startOfMonth },
+        },
+        _sum: { amountPaid: true },
+      });
+      const monthlyFeeCollection = Number(monthlyPaymentAgg._sum?.amountPaid || 0);
+
+      const totalPaymentAgg = await prisma.payment.aggregate({
+        where: {
+          instituteId: { in: targetBranchIds },
+          status: 'SUCCESS',
+        },
+        _sum: { amountPaid: true },
+      });
+      const totalRevenue = Number(totalPaymentAgg._sum?.amountPaid || 0);
+
+      // 6. Pending Fees
+      const pendingAssignments = await prisma.studentFeeAssignment.findMany({
+        where: {
+          student: { instituteId: { in: targetBranchIds } },
+          status: { in: ['PENDING', 'PARTIALLY_PAID', 'OVERDUE'] },
+        },
+        include: {
+          payments: { where: { status: 'SUCCESS' }, select: { amountPaid: true } },
+        },
+      });
+      let pendingFees = 0;
+      for(const a of pendingAssignments) {
+        const paidSum = a.payments.reduce((acc, p) => acc + Number(p.amountPaid), 0);
+        pendingFees += Math.max(0, Number(a.finalAmount) - paidSum);
+      }
+
+    // 7. Upcoming Examinations
+    const upcomingExamsList = await prisma.examination.findMany({
+        where: {
+          instituteId: { in: targetBranchIds },
+          examDate: { gte: todayStart },
+        },
+        include: {
+          subject: { select: { name: true, code: true } },
+          institute: { select: { id: true, name: true, code: true } },
+        },
+        orderBy: { examDate: 'asc' },
+        take: 5,
+      });
+      const upcomingExamsCount = await prisma.examination.count({
+        where: {
+          instituteId: { in: targetBranchIds },
+          examDate: { gte: todayStart },
+        },
+      });
+
+      // 8. Homework & Learning Activity
+      const homeworkCount = await prisma.learningMaterial.count({
+        where: { instituteId: { in: targetBranchIds }, type: 'HOMEWORK' },
+      });
+      const materialsCount = await prisma.learningMaterial.count({
+        where: { instituteId: { in: targetBranchIds }, type: { not: 'HOMEWORK' } },
+      });
+
+      // 9. Branch Performance Cards (Individual Branch Statistics for Comparison)
+      const branchCards = await Promise.all(
+        franchise.branches.map(async (b) => {
+          const bStudents = await prisma.student.count({
+            where: { instituteId: b.id, status: 'ACTIVE' },
+          });
+          const bStaff = await prisma.staffProfile.count({
+            where: { instituteId: b.id, user: { isActive: true } },
+          });
+          const bBatches = await prisma.batch.count({
+            where: { instituteId: b.id, isActive: true },
+          });
+          const bPayment = await prisma.payment.aggregate({
+            where: { instituteId: b.id, status: 'SUCCESS' },
+            _sum: { amountPaid: true },
+          });
+          const bMonthly = await prisma.payment.aggregate({
+            where: { instituteId: b.id, status: 'SUCCESS', paidAt: { gte: startOfMonth } },
+            _sum: { amountPaid: true },
+          });
+          const bPresent = await prisma.attendanceEvent.count({
+            where: {
+              instituteId: b.id,
+              eventDate: { gte: todayStart, lte: todayEnd },
+              eventType: 'CHECK_IN',
+            },
+          });
+          const bAbsent = Math.max(0, bStudents - bPresent);
+          const bTotalMarked = bStudents > 0 ? bStudents : bPresent;
+          const bRate = bTotalMarked > 0 ? Number(((bPresent / bTotalMarked) * 100).toFixed(1)) : 100.0;
+
+          const bAssignments = await prisma.studentFeeAssignment.findMany({
+            where: {
+              student: { instituteId: b.id },
+              status: { in: ['PENDING', 'PARTIALLY_PAID', 'OVERDUE'] },
+            },
+            include: { payments: { where: { status: 'SUCCESS' }, select: { amountPaid: true } } },
+          });
+          let bPending = 0;
+          for (const a of bAssignments) {
+            const pSum = a.payments.reduce((acc, p) => acc + Number(p.amountPaid), 0);
+            bPending += Math.max(0, Number(a.finalAmount) - pSum);
+          }
+
+          return {
+            id: b.id,
+            code: b.code,
+            name: b.name,
+            city: b.city,
+            state: b.state,
+            address: b.address,
+            phone: b.phone,
+            email: b.email,
+            status: b.status,
+            activeStudents: bStudents,
+            staffCount: bStaff,
+            activeBatches: bBatches,
+            totalRevenue: Number(bPayment._sum?.amountPaid || 0),
+            monthlyRevenue: Number(bMonthly._sum?.amountPaid || 0),
+            pendingFees: bPending,
+            attendanceRate: bRate,
+            todayAttendance: {
+              present: bPresent,
+              absent: bAbsent,
+              totalMarked: bTotalMarked,
+              rate: bRate,
+            },
+          };
+        })
+      );
+
+      // 10. Franchise Agreement & Two-Installment Schedule
+      const activeAgreement = franchise.agreements.find((a) => a.status === 'ACTIVE');
+      const installmentsWithStatus = franchise.installments.map((inst) => ({
+        ...inst,
+        liveStatus: computeInstallmentLiveStatus(inst),
+      }));
+
+      const totalObligations = installmentsWithStatus.reduce((sum, i) => sum + Number(i.amount), 0);
+      const totalPaid = installmentsWithStatus.reduce((sum, i) => sum + Number(i.paidAmount), 0);
+      const totalOutstanding = installmentsWithStatus.reduce((sum, i) => sum + Number(i.outstandingBalance), 0);
+      const totalOverdue = installmentsWithStatus
+        .filter((i) => i.liveStatus === 'OVERDUE')
+        .reduce((sum, i) => sum + Number(i.outstandingBalance), 0);
+
+      return res.json({
+        success: true,
+        data: {
+          franchise: {
+            id: franchise.id,
+            code: franchise.code,
+            name: franchise.name,
+            ownerName: franchise.ownerName,
+            email: franchise.email,
+            phone: franchise.phone,
+            address: franchise.address,
+            city: franchise.city,
+            state: franchise.state,
+            postalCode: franchise.postalCode,
+            country: franchise.country,
+            authorizedContact: franchise.authorizedContact,
+            status: franchise.status,
+          },
+          selectedBranch,
+          isConsolidated,
+          activeAgreement,
+          agreements: franchise.agreements,
+          installments: installmentsWithStatus,
+          metrics: {
+            totalBranches: franchise.branches.length,
+            activeBranchesCount: franchise.branches.filter((b) => b.status === 'ACTIVE').length,
+            totalStudents,
+            totalStaff,
+            activeBatches,
+            todayAttendance: {
+              present: todayPresent,
+              absent: todayAbsent,
+              late: todayLate,
+              totalMarked: todayTotalMarked,
+              rate: attendanceRate,
+            },
+            monthlyFeeCollection,
+            totalRevenue,
+            pendingFees,
+            upcomingExamsCount,
+            homeworkCount,
+            materialsCount,
+            annualRoyaltyAmount: activeAgreement?.annualRoyaltyAmount
+              ? Number(activeAgreement.annualRoyaltyAmount)
+              : totalObligations,
+            calculationMethod: activeAgreement?.calculationMethod || 'FIXED_ANNUAL',
+            totalRoyaltyObligations: totalObligations,
+            totalRoyaltyPaid: totalPaid,
+            outstandingRoyalty: totalOutstanding,
+            overdueRoyalty: totalOverdue,
+          },
+          upcomingExaminations: upcomingExamsList,
+          branches: franchise.branches,
+          branchCards,
+          recentPayments: franchise.royaltyPayments,
+        },
+      });
+    } catch (err: any) {
+      console.error('[Franchise Owner Dashboard Error]', err);
+      return res.status(500).json({ success: false, error: 'Failed to load Franchisee Admin Dashboard' });
+    }
   }
-}
