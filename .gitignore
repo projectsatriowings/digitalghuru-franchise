@@ -61,7 +61,9 @@ scratch/
 
 
 
-# Database Backups & Dumps
+# Uploads / Local files
+uploads/
+server/uploads/
 backups/
 server/backups/
 *.dump

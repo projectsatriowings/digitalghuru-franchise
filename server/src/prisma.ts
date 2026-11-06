@@ -39,6 +39,19 @@ prisma.$use(async (params, next) => {
   }
 });
 
+// Configure default interactive transaction timeouts for cloud WAN latency (Neon DB)
+const originalTransaction = prisma.$transaction.bind(prisma);
+prisma.$transaction = ((arg: any, options?: any) => {
+  if (typeof arg === 'function') {
+    return originalTransaction(arg, {
+      maxWait: 15000,
+      timeout: 30000,
+      ...options,
+    });
+  }
+  return originalTransaction(arg, options);
+}) as any;
+
 if (process.env.NODE_ENV !== 'production') {
   global.__tuition_prisma__ = prisma;
 }
