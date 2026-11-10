@@ -9,8 +9,10 @@ import {
   addBranchToFranchise,
   listFranchiseBranches,
   removeBranchFromFranchise,
+  getAgreementTemplates,
   createAgreement,
   renewAgreement,
+  reviseAgreement,
   listAgreements,
   updateAgreementStatus,
   addAgreementAmendment,
@@ -41,6 +43,7 @@ router.get('/dashboard/super-admin', requireRole('SUPER_ADMIN'), getSuperAdminFr
 router.get('/dashboard/owner', requireRole('SUPER_ADMIN', 'FRANCHISE_OWNER'), getFranchiseOwnerDashboard);
 router.get('/my-branches', requireRole('SUPER_ADMIN', 'FRANCHISE_OWNER'), getMyAssignedBranches);
 router.get('/unassigned-branches', requireRole('SUPER_ADMIN'), getUnassignedBranches);
+router.get('/agreement-templates', requireRole('SUPER_ADMIN', 'FRANCHISE_OWNER'), getAgreementTemplates);
 
 // -------------------------------------------------------------
 // CORE FRANCHISE CRUD
@@ -64,6 +67,7 @@ router.delete('/:id/branches/:branchId', requireRole('SUPER_ADMIN'), removeBranc
 // -------------------------------------------------------------
 router.post('/:id/agreements', requireRole('SUPER_ADMIN'), createAgreement);
 router.post('/:id/agreements/:agreementId/renew', requireRole('SUPER_ADMIN'), renewAgreement);
+router.post('/:id/agreements/:agreementId/revise', requireRole('SUPER_ADMIN'), reviseAgreement);
 router.get('/:id/agreements', requireRole('SUPER_ADMIN', 'FRANCHISE_OWNER'), listAgreements);
 router.patch('/:id/agreements/:agreementId/status', requireRole('SUPER_ADMIN'), updateAgreementStatus);
 router.post('/:id/agreements/:agreementId/amendments', requireRole('SUPER_ADMIN'), addAgreementAmendment);

@@ -1180,7 +1180,7 @@ export const FeesManagement: React.FC = () => {
               <div className="flex flex-col sm:flex-row sm:items-start justify-between border-b border-[#E2E8F0] pb-4 gap-4">
                 <div>
                   <h2 className="text-xl font-black text-[#0F172A]">{activeReceipt.institute?.name}</h2>
-                  <p className="text-xs text-[#64748B] mt-0.5">{activeReceipt.institute?.address || 'Tuition Center'}</p>
+                  <p className="text-xs text-[#64748B] mt-0.5">{activeReceipt.institute?.address || 'Course Center'}</p>
                   <p className="text-xs text-[#64748B]">
                     Phone: {activeReceipt.institute?.phone || 'N/A'} &bull; Email: {activeReceipt.institute?.email || 'N/A'}
                   </p>
@@ -1322,7 +1322,7 @@ export const FeesManagement: React.FC = () => {
                 <input
                   type="text"
                   required
-                  placeholder="e.g., Monthly Tuition - Class 10"
+                  placeholder="e.g., Monthly Course Fee - Class 10"
                   value={newStructure.name}
                   onChange={(e) => setNewStructure({ ...newStructure, name: e.target.value })}
                   className="w-full bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl px-3 py-2 text-[#0F172A] focus:ring-2 focus:ring-[#006FFF]/20"

@@ -23,6 +23,31 @@ export const AgreementStatus = {
     SUSPENDED: 'SUSPENDED',
     TERMINATED: 'TERMINATED',
 };
+// Agreement Business Models
+export const AgreementBusinessModel = {
+    NEW_CENTRE_JOINT_INVESTMENT: 'NEW_CENTRE_JOINT_INVESTMENT',
+    EXISTING_CENTRE: 'EXISTING_CENTRE',
+    BRAND_AND_COURSE_SUPPORT: 'BRAND_AND_COURSE_SUPPORT',
+    CUSTOM_AGREEMENT: 'CUSTOM_AGREEMENT',
+};
+// Revenue Calculation Basis
+export const RevenueCalculationBasis = {
+    GROSS_COURSE_FEES: 'GROSS_COURSE_FEES',
+    NET_COURSE_REVENUE: 'NET_COURSE_REVENUE',
+    PROFIT_AFTER_EXPENSES: 'PROFIT_AFTER_EXPENSES',
+};
+// Settlement Frequency
+export const SettlementFrequency = {
+    MONTHLY: 'MONTHLY',
+    YEARLY: 'YEARLY',
+};
+// Expense Payer Role
+export const ExpensePayerRole = {
+    DIGITAL_GURU: 'DIGITAL_GURU',
+    PARTNER: 'PARTNER',
+    SHARED: 'SHARED',
+    CUSTOM: 'CUSTOM',
+};
 // Royalty Frequency
 export const RoyaltyFrequency = {
     MONTHLY: 'MONTHLY',

@@ -281,7 +281,7 @@ if (loading && !data) {
 
               {/* Metric 6: Pending Fees */}
               <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-                <div className="text-xs font-semibold text-slate-500 uppercase">Pending Tuition Fees</div>
+                <div className="text-xs font-semibold text-slate-500 uppercase">Pending Course Fees</div>
                 <div className="text-2xl font-black text-amber-600 mt-1">
                   ₹{Number(metrics.pendingFees || 0).toLocaleString('en-IN')}
                 </div>
@@ -326,45 +326,51 @@ if (loading && !data) {
                 </div>
 
                 {/* Tabs Bar */}
-                  <div className="flex border-b border-slate-200 bg-white px-4 rounded-t-xl gap-6 overflow-x-auto">
-                    <button
-                      onClick={() => setActiveTab('overview')}
-                            ? 'border-[#006FFF] text-[#006FFF]'
-                            : 'border-transparent text-slate-600 hover:text-slate-900'
-                          }`}
-        >
-          <Layers className="w-4 h-4" /> Overview & Campus Performance
-        </button>
-
-        <button
-          onClick={() => setActiveTab('branches')}
-                    className={`py-3.5 px-2 text-sm font-bold border-b-2 whitespace-nowrap transition-all flex items-center gap-2 ${activeTab === 'branches'
+                <div className="flex border-b border-slate-200 bg-white px-4 rounded-t-xl gap-6 overflow-x-auto">
+                  <button
+                    onClick={() => setActiveTab('overview')}
+                    className={`py-3.5 px-2 text-sm font-bold border-b-2 whitespace-nowrap transition-all flex items-center gap-2 ${
+                      activeTab === 'overview'
                         ? 'border-[#006FFF] text-[#006FFF]'
                         : 'border-transparent text-slate-600 hover:text-slate-900'
-                      }`}
-        >
+                    }`}
+                  >
+                    <Layers className="w-4 h-4" /> Overview & Campus Performance
+                  </button>
+
+                  <button
+                    onClick={() => setActiveTab('branches')}
+                    className={`py-3.5 px-2 text-sm font-bold border-b-2 whitespace-nowrap transition-all flex items-center gap-2 ${
+                      activeTab === 'branches'
+                        ? 'border-[#006FFF] text-[#006FFF]'
+                        : 'border-transparent text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
                     <Building2 className="w-4 h-4" /> Assigned Campuses ({branches.length})
                   </button>
 
                   <button
-          onClick={() => setActiveTab('installments')}
-                    className={`py-3.5 px-2 text-sm font-bold border-b-2 whitespace-nowrap transition-all flex items-center gap-2 ${activeTab === 'installments'
+                    onClick={() => setActiveTab('installments')}
+                    className={`py-3.5 px-2 text-sm font-bold border-b-2 whitespace-nowrap transition-all flex items-center gap-2 ${
+                      activeTab === 'installments'
                         ? 'border-[#006FFF] text-[#006FFF]'
                         : 'border-transparent text-slate-600 hover:text-slate-900'
-                      }`}
+                    }`}
                   >
                     <DollarSign className="w-4 h-4" /> 2-Installment Royalty ({installments.length})
                   </button>
 
                   <button
                     onClick={() => setActiveTab('agreement')}
-                          ? 'border-[#006FFF] text-[#006FFF]'
-                          : 'border-transparent text-slate-600 hover:text-slate-900'
-                        }`}
-        >
-          <FileText className="w-4 h-4" /> Master Agreement
-        </button>
-      </div>
+                    className={`py-3.5 px-2 text-sm font-bold border-b-2 whitespace-nowrap transition-all flex items-center gap-2 ${
+                      activeTab === 'agreement'
+                        ? 'border-[#006FFF] text-[#006FFF]'
+                        : 'border-transparent text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    <FileText className="w-4 h-4" /> Master Agreement
+                  </button>
+                </div>
 
       {/* TAB 1: OVERVIEW & BRANCH CARDS (REQUIREMENT 3C) */}
       {activeTab === 'overview' && (
@@ -769,9 +775,19 @@ if (loading && !data) {
               </p>
             </div>
             {activeAgreement && (
-              <span className="px-3 py-1 bg-emerald-100 text-emerald-800 text-xs font-bold rounded-full">
-                {activeAgreement.status}
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="px-2.5 py-1 bg-blue-100 text-[#006FFF] text-xs font-bold rounded-full">
+                  v{activeAgreement.version || 1}
+                </span>
+                {activeAgreement.agreementType && (
+                  <span className="px-2.5 py-1 bg-purple-100 text-purple-800 text-xs font-bold rounded-full">
+                    {activeAgreement.agreementType.replace(/_/g, ' ')}
+                  </span>
+                )}
+                <span className="px-3 py-1 bg-emerald-100 text-emerald-800 text-xs font-bold rounded-full">
+                  {activeAgreement.status}
+                </span>
+              </div>
             )}
           </div>
 
@@ -797,10 +813,83 @@ if (loading && !data) {
                 <div>
                   <div className="text-slate-400 font-semibold uppercase">Calculation Basis:</div>
                   <div className="font-bold text-[#006FFF] mt-0.5">
-                    {activeAgreement.calculationMethod || 'FIXED_ANNUAL'}
+                    {activeAgreement.revenueCalculationBasis || activeAgreement.calculationMethod || 'GROSS_COURSE_FEES'}
                   </div>
                 </div>
               </div>
+
+              {/* Revenue & Settlement Terms */}
+              <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 grid grid-cols-2 md:grid-cols-3 gap-4">
+                <div>
+                  <div className="text-slate-400 font-semibold uppercase">Revenue Split:</div>
+                  <div className="font-bold text-slate-900 mt-0.5">
+                    DG: {Number(activeAgreement.digitalGuruRevenuePercentage || activeAgreement.royaltyPercentage || 50)}% | Partner: {Number(activeAgreement.partnerRevenuePercentage || (100 - (activeAgreement.royaltyPercentage || 50)))}%
+                  </div>
+                </div>
+                <div>
+                  <div className="text-slate-400 font-semibold uppercase">Settlement Frequency:</div>
+                  <div className="font-bold text-indigo-600 mt-0.5">
+                    {activeAgreement.settlementFrequency || 'YEARLY'}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-slate-400 font-semibold uppercase">Course Software Access:</div>
+                  <div className="mt-0.5">
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${activeAgreement.courseSoftwareAccessEnabled !== false ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}`}>
+                      {activeAgreement.courseSoftwareAccessEnabled !== false ? 'Licensed / Enabled' : 'Disabled'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Investment & Expense Responsibility Summary */}
+              {(activeAgreement.totalInvestment || activeAgreement.expenseResponsibilities || activeAgreement.marketingResponsibleParty) && (
+                <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3">
+                  <div className="font-bold text-slate-900 text-sm">Investment & Support Model</div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {activeAgreement.totalInvestment && (
+                      <div className="space-y-1">
+                        <div className="text-slate-500 font-semibold">Initial Investment Contribution:</div>
+                        <div className="text-slate-800 font-medium">
+                          Total: ₹{Number(activeAgreement.totalInvestment).toLocaleString('en-IN')} (DG: {Number(activeAgreement.digitalGuruInvestmentPercentage || 50)}% / Partner: {Number(activeAgreement.partnerInvestmentPercentage || 50)}%)
+                        </div>
+                        {activeAgreement.operationalSetupContribution && (
+                          <div className="text-slate-500 text-[11px]">
+                            Initial Setup: ₹{Number(activeAgreement.operationalSetupContribution).toLocaleString('en-IN')}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {activeAgreement.marketingResponsibleParty && (
+                      <div className="space-y-1">
+                        <div className="text-slate-500 font-semibold">Marketing Support:</div>
+                        <div className="text-slate-800 font-medium">
+                          {activeAgreement.marketingResponsibleParty} ({activeAgreement.marketingSupportDurationMonths || 3} months), followed by {activeAgreement.marketingPostSupportParty || 'PARTNER'}
+                        </div>
+                        {activeAgreement.marketingBudget && (
+                          <div className="text-slate-500 text-[11px]">
+                            Budget: ₹{Number(activeAgreement.marketingBudget).toLocaleString('en-IN')}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {activeAgreement.expenseResponsibilities && typeof activeAgreement.expenseResponsibilities === 'object' && (
+                    <div className="pt-2 border-t border-slate-200">
+                      <div className="text-slate-500 font-semibold mb-1">Operational Expense Responsibilities:</div>
+                      <div className="flex flex-wrap gap-2">
+                        {Object.entries(activeAgreement.expenseResponsibilities).map(([key, value]) => (
+                          <span key={key} className="px-2 py-0.5 rounded bg-white border border-slate-200 text-[11px] text-slate-700">
+                            <strong>{key.replace(/([A-Z])/g, ' $1').replace(/^./, (s) => s.toUpperCase())}:</strong> {String(value)}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2">
                 <div className="font-bold text-slate-900 text-sm">Key Operating Terms</div>
@@ -808,7 +897,7 @@ if (loading && !data) {
                   1. <strong>Two-Installment Royalty:</strong> Exactly two installments are due per agreement year according to the schedule in the portal.
                 </p>
                 <p>
-                  2. <strong>Franchise Operation:</strong> The Franchisee Admin is authorized to manage students, admissions, staff, class schedules, exams, and tuition fees within their authorized campus locations.
+                  2. <strong>Franchise Operation:</strong> The Franchisee Admin is authorized to manage students, admissions, staff, class schedules, exams, and course fees within their authorized campus locations.
                 </p>
                 <p>
                   3. <strong>Brand & Integrity:</strong> Official Digital Guru materials, badges, and learning systems are licensed for use during the active agreement term.

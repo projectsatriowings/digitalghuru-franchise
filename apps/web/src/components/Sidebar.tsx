@@ -117,7 +117,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab }) => 
               onClick={() => onSelectTab('fees')}
               className={navItemClass('fees')}
             >
-              <CreditCard className="w-4 h-4" /> Branch Tuition Fees
+              <CreditCard className="w-4 h-4" /> Branch Course Fees
             </button>
             <button
               onClick={() => onSelectTab('materials')}

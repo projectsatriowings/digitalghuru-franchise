@@ -1,3 +1,4 @@
+import './db-bridge.js';
 import { PrismaClient } from '@prisma/client';
 
 // Global singleton pattern to avoid multiple connection pools in Node/TypeScript development

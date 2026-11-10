@@ -124,7 +124,7 @@ export const ParentProfileView: React.FC<ParentProfileViewProps> = ({ student, p
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
               <div className="p-4 rounded-2xl bg-[#F8FAFC] border border-[#E2E8F0]/60 space-y-1">
-                <span className="text-[10px] text-[#94A3B8] uppercase font-bold block">Tuition Institute</span>
+                <span className="text-[10px] text-[#94A3B8] uppercase font-bold block">Course Centre</span>
                 <strong className="text-sm font-bold text-[#0F172A] block">
                   {student?.institute?.name || 'Digital Guru Center'}
                 </strong>

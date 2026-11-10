@@ -63,7 +63,7 @@ export const QuestionGenerator: React.FC = () => {
 
   // Default Blueprint
   const [blueprint, setBlueprint] = useState<QuestionPaperBlueprint>({
-    instituteName: activeInstitute?.name || 'Tuition Academy',
+    instituteName: activeInstitute?.name || 'Course Academy',
     academicYear: '2026-2027',
     educationLevel: 'SCHOOL',
     board: 'Tamil Nadu State Board (Samacheer Kalvi)',

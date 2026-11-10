@@ -1775,7 +1775,7 @@ export const StaffAttendanceAdmin: React.FC<StaffAttendanceAdminProps> = () => {
                       setFormLat(lat);
                       setFormLng(lng);
                     }}
-                    instituteName={config?.name || 'Tuition Institute'}
+                    instituteName={config?.name || 'Course Centre'}
                   />
                 </div>
               </div>

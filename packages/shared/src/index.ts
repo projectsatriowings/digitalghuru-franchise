@@ -29,6 +29,39 @@ export const AgreementStatus = {
 } as const;
 export type AgreementStatus = (typeof AgreementStatus)[keyof typeof AgreementStatus];
 
+// Agreement Business Models
+export const AgreementBusinessModel = {
+  NEW_CENTRE_JOINT_INVESTMENT: 'NEW_CENTRE_JOINT_INVESTMENT',
+  EXISTING_CENTRE: 'EXISTING_CENTRE',
+  BRAND_AND_COURSE_SUPPORT: 'BRAND_AND_COURSE_SUPPORT',
+  CUSTOM_AGREEMENT: 'CUSTOM_AGREEMENT',
+} as const;
+export type AgreementBusinessModel = (typeof AgreementBusinessModel)[keyof typeof AgreementBusinessModel];
+
+// Revenue Calculation Basis
+export const RevenueCalculationBasis = {
+  GROSS_COURSE_FEES: 'GROSS_COURSE_FEES',
+  NET_COURSE_REVENUE: 'NET_COURSE_REVENUE',
+  PROFIT_AFTER_EXPENSES: 'PROFIT_AFTER_EXPENSES',
+} as const;
+export type RevenueCalculationBasis = (typeof RevenueCalculationBasis)[keyof typeof RevenueCalculationBasis];
+
+// Settlement Frequency
+export const SettlementFrequency = {
+  MONTHLY: 'MONTHLY',
+  YEARLY: 'YEARLY',
+} as const;
+export type SettlementFrequency = (typeof SettlementFrequency)[keyof typeof SettlementFrequency];
+
+// Expense Payer Role
+export const ExpensePayerRole = {
+  DIGITAL_GURU: 'DIGITAL_GURU',
+  PARTNER: 'PARTNER',
+  SHARED: 'SHARED',
+  CUSTOM: 'CUSTOM',
+} as const;
+export type ExpensePayerRole = (typeof ExpensePayerRole)[keyof typeof ExpensePayerRole];
+
 // Royalty Frequency
 export const RoyaltyFrequency = {
   MONTHLY: 'MONTHLY',

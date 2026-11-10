@@ -1234,7 +1234,7 @@ export const ProgressReviewsManagement: React.FC = () => {
                     >
                       <option value="ACADEMIC">Academic Progress</option>
                       <option value="SCHEDULE">Class Timetable</option>
-                      <option value="FACILITIES">Tuition Center Facilities</option>
+                      <option value="FACILITIES">Course Center Facilities</option>
                       <option value="BEHAVIOR">Student Behavior / Attendance</option>
                       <option value="BILLING">Fee & Finances</option>
                       <option value="GENERAL">General Feedback</option>

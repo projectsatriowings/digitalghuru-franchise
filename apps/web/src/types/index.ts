@@ -52,6 +52,29 @@ export interface FranchiseAgreement {
   notes?: string | null;
   createdAt: string;
   installments?: FranchiseRoyaltyInstallment[];
+  agreementType?: 'NEW_CENTRE_JOINT_INVESTMENT' | 'EXISTING_CENTRE' | 'BRAND_AND_COURSE_SUPPORT' | 'CUSTOM_AGREEMENT';
+  totalInvestment?: number | null;
+  digitalGuruInvestmentAmount?: number | null;
+  partnerInvestmentAmount?: number | null;
+  digitalGuruInvestmentPercentage?: number | null;
+  partnerInvestmentPercentage?: number | null;
+  operationalSetupContribution?: number | null;
+  investmentNotes?: string | null;
+  digitalGuruRevenuePercentage?: number | null;
+  partnerRevenuePercentage?: number | null;
+  revenueCalculationBasis?: 'GROSS_COURSE_FEES' | 'NET_COURSE_REVENUE' | 'PROFIT_AFTER_EXPENSES';
+  settlementFrequency?: 'MONTHLY' | 'YEARLY';
+  expenseResponsibilities?: Record<string, string> | null;
+  marketingResponsibleParty?: string | null;
+  marketingSupportDurationMonths?: number | null;
+  marketingPostSupportParty?: string | null;
+  marketingBudget?: number | null;
+  marketingEffectiveStartDate?: string | null;
+  marketingNotes?: string | null;
+  courseSoftwareAccessEnabled?: boolean | null;
+  courseSoftwarePricingNotes?: string | null;
+  version?: number;
+  parentAgreementId?: string | null;
 }
 
 export type InstallmentStatus = 'UPCOMING' | 'DUE' | 'PARTIALLY_PAID' | 'PAID' | 'OVERDUE';

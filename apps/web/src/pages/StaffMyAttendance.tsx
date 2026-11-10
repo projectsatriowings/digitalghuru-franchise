@@ -521,7 +521,7 @@ export const StaffMyAttendance: React.FC = () => {
                 <span>•</span>
                 <span>{data?.staff?.designation || 'Faculty'}</span>
                 <span>•</span>
-                <span>{institute?.name || 'Tuition Institute'}</span>
+                <span>{institute?.name || 'Course Centre'}</span>
               </div>
             </div>
           </div>

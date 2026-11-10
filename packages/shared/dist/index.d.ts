@@ -23,6 +23,31 @@ export declare const AgreementStatus: {
     readonly TERMINATED: "TERMINATED";
 };
 export type AgreementStatus = (typeof AgreementStatus)[keyof typeof AgreementStatus];
+export declare const AgreementBusinessModel: {
+    readonly NEW_CENTRE_JOINT_INVESTMENT: "NEW_CENTRE_JOINT_INVESTMENT";
+    readonly EXISTING_CENTRE: "EXISTING_CENTRE";
+    readonly BRAND_AND_COURSE_SUPPORT: "BRAND_AND_COURSE_SUPPORT";
+    readonly CUSTOM_AGREEMENT: "CUSTOM_AGREEMENT";
+};
+export type AgreementBusinessModel = (typeof AgreementBusinessModel)[keyof typeof AgreementBusinessModel];
+export declare const RevenueCalculationBasis: {
+    readonly GROSS_COURSE_FEES: "GROSS_COURSE_FEES";
+    readonly NET_COURSE_REVENUE: "NET_COURSE_REVENUE";
+    readonly PROFIT_AFTER_EXPENSES: "PROFIT_AFTER_EXPENSES";
+};
+export type RevenueCalculationBasis = (typeof RevenueCalculationBasis)[keyof typeof RevenueCalculationBasis];
+export declare const SettlementFrequency: {
+    readonly MONTHLY: "MONTHLY";
+    readonly YEARLY: "YEARLY";
+};
+export type SettlementFrequency = (typeof SettlementFrequency)[keyof typeof SettlementFrequency];
+export declare const ExpensePayerRole: {
+    readonly DIGITAL_GURU: "DIGITAL_GURU";
+    readonly PARTNER: "PARTNER";
+    readonly SHARED: "SHARED";
+    readonly CUSTOM: "CUSTOM";
+};
+export type ExpensePayerRole = (typeof ExpensePayerRole)[keyof typeof ExpensePayerRole];
 export declare const RoyaltyFrequency: {
     readonly MONTHLY: "MONTHLY";
     readonly QUARTERLY: "QUARTERLY";

@@ -171,7 +171,7 @@ export const ParentFeesView: React.FC<ParentFeesViewProps> = ({
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-xl font-bold text-[#0F172A] flex items-center gap-2">
-            <CreditCard className="w-5 h-5 text-[#64748B]" /> Tuition Fees & Online Payment Gateway
+            <CreditCard className="w-5 h-5 text-[#64748B]" /> Course Fees & Online Payment Gateway
           </h2>
           <p className="text-xs text-[#64748B] mt-0.5">
             Transparent fee structure, instant online payment, and downloadable tax receipts for{' '}
@@ -322,7 +322,7 @@ export const ParentFeesView: React.FC<ParentFeesViewProps> = ({
                   <CreditCard className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-[#0F172A]">Secure Online Tuition Payment</h3>
+                  <h3 className="text-base font-bold text-[#0F172A]">Secure Online Course Fee Payment</h3>
                   <span className="text-xs text-[#94A3B8]">256-Bit SSL Encrypted Transaction</span>
                 </div>
               </div>

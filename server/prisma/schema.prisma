@@ -36,6 +36,31 @@ enum AgreementStatus {
   TERMINATED
 }
 
+enum AgreementBusinessModel {
+  NEW_CENTRE_JOINT_INVESTMENT
+  EXISTING_CENTRE
+  BRAND_AND_COURSE_SUPPORT
+  CUSTOM_AGREEMENT
+}
+
+enum RevenueCalculationBasis {
+  GROSS_COURSE_FEES
+  NET_COURSE_REVENUE
+  PROFIT_AFTER_EXPENSES
+}
+
+enum SettlementFrequency {
+  MONTHLY
+  YEARLY
+}
+
+enum ExpensePayerRole {
+  DIGITAL_GURU
+  PARTNER
+  SHARED
+  CUSTOM
+}
+
 enum RoyaltyFrequency {
   MONTHLY
   QUARTERLY
@@ -1594,12 +1619,53 @@ model FranchiseAgreement {
   createdAt           DateTime        @default(now())
   updatedAt           DateTime        @updatedAt
 
+  // 1. Business Model Classification
+  agreementType       AgreementBusinessModel @default(CUSTOM_AGREEMENT)
+
+  // 2. Initial Investment Configuration
+  totalInvestment                 Decimal?  @db.Decimal(12, 2)
+  digitalGuruInvestmentAmount     Decimal?  @db.Decimal(12, 2)
+  partnerInvestmentAmount         Decimal?  @db.Decimal(12, 2)
+  digitalGuruInvestmentPercentage Decimal?  @db.Decimal(5, 2)
+  partnerInvestmentPercentage     Decimal?  @db.Decimal(5, 2)
+  operationalSetupContribution    Decimal?  @db.Decimal(12, 2)
+  investmentNotes                 String?   @db.Text
+
+  // 3. Revenue Sharing Configuration
+  digitalGuruRevenuePercentage Decimal?                 @default(50.00) @db.Decimal(5, 2)
+  partnerRevenuePercentage     Decimal?                 @default(50.00) @db.Decimal(5, 2)
+  revenueCalculationBasis      RevenueCalculationBasis? @default(GROSS_COURSE_FEES)
+  settlementFrequency          SettlementFrequency?     @default(YEARLY)
+
+  // 4. Operational Expense Responsibilities (Structured JSON)
+  expenseResponsibilities      Json?
+
+  // 5. Marketing Support Configuration
+  marketingResponsibleParty       ExpensePayerRole? @default(DIGITAL_GURU)
+  marketingSupportDurationMonths  Int?              @default(3)
+  marketingPostSupportParty       ExpensePayerRole? @default(PARTNER)
+  marketingBudget                 Decimal?          @db.Decimal(12, 2)
+  marketingEffectiveStartDate     DateTime?         @db.Date
+  marketingNotes                  String?           @db.Text
+
+  // 6. Course Software Access Entitlement
+  courseSoftwareAccessEnabled Boolean  @default(true)
+  courseSoftwarePricingNotes  String?  @db.Text
+
+  // 7. Agreement Versioning & Revision History
+  version             Int                   @default(1)
+  parentAgreementId   String?
+  parentAgreement     FranchiseAgreement?   @relation("AgreementVersions", fields: [parentAgreementId], references: [id], onDelete: SetNull)
+  childAgreements     FranchiseAgreement[]  @relation("AgreementVersions")
+
   installments        FranchiseRoyaltyInstallment[]
 
   @@index([franchiseId])
   @@index([status])
   @@index([agreementNumber])
   @@index([endDate])
+  @@index([agreementType])
+  @@index([parentAgreementId])
 }
 
 model FranchiseRoyaltyInstallment {

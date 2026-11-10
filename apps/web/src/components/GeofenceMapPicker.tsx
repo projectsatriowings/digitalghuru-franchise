@@ -44,7 +44,7 @@ export const GeofenceMapPicker: React.FC<GeofenceMapPickerProps> = ({
   longitude,
   radius,
   onLocationChange,
-  instituteName = 'Tuition Institute',
+  instituteName = 'Course Centre',
   readOnly = false,
 }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
@@ -618,7 +618,7 @@ export const GeofenceMapPicker: React.FC<GeofenceMapPickerProps> = ({
                   <div className="font-semibold text-amber-950">How to get your 100% exact location:</div>
                   <ul className="list-disc list-inside space-y-0.5 text-amber-900">
                     <li>Type your actual town name in the search bar above (e.g. <em>"Kumbakonam"</em>, <em>"Thanjavur"</em>, <em>"Cuddalore"</em>).</li>
-                    <li>Or open Google Maps, find your tuition building, right-click to copy coordinates (e.g. <code>10.7867, 79.1378</code>), and paste them into the box.</li>
+                    <li>Or open Google Maps, find your course centre building, right-click to copy coordinates (e.g. <code>10.7867, 79.1378</code>), and paste them into the box.</li>
                     <li>Or switch the map to <strong>"🛰️ Satellite"</strong> and drag the brown pin directly onto your building.</li>
                   </ul>
                 </div>

@@ -1,11 +1,12 @@
+import '../db-bridge.js';
 import pg from 'pg';
 import { config } from './index.js';
 
 const { Pool } = pg;
 
 export const dbPool = new Pool({
-  connectionString: config.databaseUrl,
-  ssl: { rejectUnauthorized: false },
+  connectionString: process.env.DATABASE_URL || config.databaseUrl,
+  ssl: { rejectUnauthorized: false, checkServerIdentity: () => undefined },
   max: 10,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 5000,

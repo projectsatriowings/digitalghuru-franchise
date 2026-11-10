@@ -215,7 +215,7 @@ export const ParentPortal: React.FC<ParentPortalProps> = ({ initialTab = 'dashbo
         </div>
         <h3 className="font-bold text-base text-[#0F172A]">No Linked Students Found</h3>
         <p className="text-xs text-[#64748B] leading-relaxed">
-          No student records are currently linked to your verified parent account. Please contact your tuition institute administration with your registered phone number to establish the guardian relationship.
+          No student records are currently linked to your verified parent account. Please contact your course centre administration with your registered phone number to establish the guardian relationship.
         </p>
       </div>
     );

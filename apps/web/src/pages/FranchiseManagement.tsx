@@ -34,7 +34,7 @@ import { useToast } from '../context/ToastContext';
 
 export const FranchiseManagement: React.FC = () => {
   const { showToast } = useToast();
-  const [activeTab, setActiveTab] = useState<'franchises' | 'agreements' | 'installments'>('franchises');
+  const [activeTab, setActiveTab] = useState<'franchises' | 'agreements' | 'installments' | 'monthly_settlements'>('franchises');
   const [loading, setLoading] = useState(true);
 
   // Dashboard Stats
@@ -45,6 +45,20 @@ export const FranchiseManagement: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [installments, setInstallments] = useState<any[]>([]);
   const [selectedFranchiseFilter, setSelectedFranchiseFilter] = useState<string>('ALL');
+
+  // Monthly Royalty Records & Calculations
+  const [monthlyRecords, setMonthlyRecords] = useState<any[]>([]);
+  const [loadingMonthly, setLoadingMonthly] = useState(false);
+  const [showCalculateModal, setShowCalculateModal] = useState(false);
+  const [calculateForm, setCalculateForm] = useState({
+    franchiseId: '',
+    periodLabel: new Date().toISOString().slice(0, 7),
+    startDate: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
+    endDate: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).toISOString().split('T')[0],
+    revenueCalculationBasis: 'GROSS_COURSE_FEES',
+    deductibleExpenses: 0,
+    deductions: 0,
+  });
 
   // Modals
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -73,6 +87,72 @@ export const FranchiseManagement: React.FC = () => {
   const [showAmendModal, setShowAmendModal] = useState(false);
   const [selectedAgreementForAmend, setSelectedAgreementForAmend] = useState<any>(null);
 
+  // Revision Modal State
+  const [showReviseModal, setShowReviseModal] = useState(false);
+  const [selectedAgreementForRevise, setSelectedAgreementForRevise] = useState<any>(null);
+  const [selectedFranchiseForRevise, setSelectedFranchiseForRevise] = useState<any>(null);
+  const [reviseForm, setReviseForm] = useState({
+    title: '',
+    startDate: '',
+    endDate: '',
+    agreementType: 'NEW_CENTRE_JOINT_INVESTMENT' as any,
+    calculationMethod: 'PERCENTAGE_REVENUE' as any,
+    annualRoyaltyAmount: 200000,
+    royaltyPercentage: 50.0,
+    digitalGuruRevenuePercentage: 50.0,
+    partnerRevenuePercentage: 50.0,
+    revenueCalculationBasis: 'GROSS_COURSE_FEES',
+    settlementFrequency: 'MONTHLY',
+    totalInvestment: 200000,
+    digitalGuruInvestmentAmount: 100000,
+    partnerInvestmentAmount: 100000,
+    digitalGuruInvestmentPercentage: 50.0,
+    partnerInvestmentPercentage: 50.0,
+    operationalSetupContribution: 50000,
+    investmentNotes: '',
+    expenseResponsibilities: {
+      rent: 'PARTNER',
+      trainerSalaries: 'DIGITAL_GURU',
+      staffSalaries: 'PARTNER',
+      operationalSetup: 'SHARED',
+      utilities: 'PARTNER',
+      marketing: 'DIGITAL_GURU',
+      other: 'PARTNER',
+    } as Record<string, string>,
+    marketingResponsibleParty: 'DIGITAL_GURU',
+    marketingSupportDurationMonths: 3,
+    marketingPostSupportParty: 'PARTNER',
+    marketingBudget: 50000,
+    marketingEffectiveStartDate: '',
+    marketingNotes: '',
+    courseSoftwareAccessEnabled: true,
+    courseSoftwarePricingNotes: '',
+    terms: '',
+    notes: '',
+  });
+
+  // Agreement Model Templates dynamically loaded from backend
+  const [agreementTemplates, setAgreementTemplates] = useState<any[]>([]);
+  const [templatesLoading, setTemplatesLoading] = useState<boolean>(true);
+  const [templatesError, setTemplatesError] = useState<string | null>(null);
+
+  const loadAgreementTemplates = async () => {
+    setTemplatesLoading(true);
+    setTemplatesError(null);
+    try {
+      const res = await apiFetch('/franchises/agreement-templates');
+      if (res.success && Array.isArray(res.data?.templates)) {
+        setAgreementTemplates(res.data.templates);
+      } else {
+        setTemplatesError(res.error || 'Failed to load agreement templates from server.');
+      }
+    } catch (err: any) {
+      setTemplatesError(err.message || 'Network error loading agreement templates.');
+    } finally {
+      setTemplatesLoading(false);
+    }
+  };
+
   // Forms
   const [createForm, setCreateForm] = useState({
     name: '',
@@ -94,12 +174,39 @@ export const FranchiseManagement: React.FC = () => {
     gstin: '',
     pan: '',
     initialAgreement: {
+      agreementType: 'NEW_CENTRE_JOINT_INVESTMENT' as any,
       title: 'Annual Master Franchise Agreement',
       startDate: new Date().toISOString().split('T')[0],
       endDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-      calculationMethod: 'FIXED_ANNUAL' as 'FIXED_ANNUAL' | 'PERCENTAGE_REVENUE' | 'PER_STUDENT',
+      calculationMethod: 'PERCENTAGE_REVENUE' as 'FIXED_ANNUAL' | 'PERCENTAGE_REVENUE' | 'PER_STUDENT',
       annualRoyaltyAmount: 200000,
       royaltyPercentage: 50.0,
+      digitalGuruRevenuePercentage: 50.0,
+      partnerRevenuePercentage: 50.0,
+      revenueCalculationBasis: 'GROSS_COURSE_FEES' as any,
+      settlementFrequency: 'MONTHLY' as any,
+      totalInvestment: 200000,
+      digitalGuruInvestmentAmount: 100000,
+      partnerInvestmentAmount: 100000,
+      digitalGuruInvestmentPercentage: 50.0,
+      partnerInvestmentPercentage: 50.0,
+      operationalSetupContribution: 50000,
+      investmentNotes: 'Illustrative 50:50 joint initial setup and capital expenditure contribution (editable)',
+      expenseResponsibilities: {
+        rent: 'PARTNER',
+        trainerSalaries: 'DIGITAL_GURU',
+        staffSalaries: 'PARTNER',
+        operationalSetup: 'SHARED',
+        utilities: 'PARTNER',
+        marketing: 'DIGITAL_GURU',
+        other: 'PARTNER',
+      } as Record<string, string>,
+      marketingResponsibleParty: 'DIGITAL_GURU',
+      marketingSupportDurationMonths: 3,
+      marketingPostSupportParty: 'PARTNER',
+      marketingBudget: 50000,
+      courseSoftwareAccessEnabled: true,
+      courseSoftwarePricingNotes: 'Full Course Management Software access included',
       royaltyBasis: 'TOTAL_COLLECTIONS',
       perStudentFee: 2000,
       dueDay: 10,
@@ -190,6 +297,7 @@ export const FranchiseManagement: React.FC = () => {
 
   useEffect(() => {
     loadData();
+    loadAgreementTemplates();
   }, []);
 
   // Filter Franchises
@@ -241,24 +349,37 @@ export const FranchiseManagement: React.FC = () => {
           pan: createForm.pan,
         },
         initialAgreement: {
+          agreementType: createForm.initialAgreement.agreementType,
           title: createForm.initialAgreement.title,
           startDate: createForm.initialAgreement.startDate,
           endDate: createForm.initialAgreement.endDate,
           calculationMethod: createForm.initialAgreement.calculationMethod,
-          annualRoyaltyAmount:
-            createForm.initialAgreement.calculationMethod === 'FIXED_ANNUAL'
-              ? Number(createForm.initialAgreement.annualRoyaltyAmount)
-              : undefined,
-          royaltyPercentage:
-            createForm.initialAgreement.calculationMethod === 'PERCENTAGE_REVENUE'
-              ? Number(createForm.initialAgreement.royaltyPercentage)
-              : 50.0,
+          annualRoyaltyAmount: Number(createForm.initialAgreement.annualRoyaltyAmount || 0),
+          royaltyPercentage: Number(createForm.initialAgreement.digitalGuruRevenuePercentage || 50),
+          digitalGuruRevenuePercentage: Number(createForm.initialAgreement.digitalGuruRevenuePercentage || 50),
+          partnerRevenuePercentage: Number(createForm.initialAgreement.partnerRevenuePercentage || 50),
+          revenueCalculationBasis: createForm.initialAgreement.revenueCalculationBasis,
+          settlementFrequency: createForm.initialAgreement.settlementFrequency,
+          totalInvestment: Number(createForm.initialAgreement.totalInvestment || 0),
+          digitalGuruInvestmentAmount: Number(createForm.initialAgreement.digitalGuruInvestmentAmount || 0),
+          partnerInvestmentAmount: Number(createForm.initialAgreement.partnerInvestmentAmount || 0),
+          digitalGuruInvestmentPercentage: Number(createForm.initialAgreement.digitalGuruInvestmentPercentage || 0),
+          partnerInvestmentPercentage: Number(createForm.initialAgreement.partnerInvestmentPercentage || 0),
+          operationalSetupContribution: Number(createForm.initialAgreement.operationalSetupContribution || 0),
+          investmentNotes: createForm.initialAgreement.investmentNotes,
+          expenseResponsibilities: createForm.initialAgreement.expenseResponsibilities,
+          marketingResponsibleParty: createForm.initialAgreement.marketingResponsibleParty,
+          marketingSupportDurationMonths: Number(createForm.initialAgreement.marketingSupportDurationMonths || 0),
+          marketingPostSupportParty: createForm.initialAgreement.marketingPostSupportParty,
+          marketingBudget: Number(createForm.initialAgreement.marketingBudget || 0),
+          courseSoftwareAccessEnabled: Boolean(createForm.initialAgreement.courseSoftwareAccessEnabled),
+          courseSoftwarePricingNotes: createForm.initialAgreement.courseSoftwarePricingNotes,
           royaltyBasis: createForm.initialAgreement.royaltyBasis,
           perStudentFee:
             createForm.initialAgreement.calculationMethod === 'PER_STUDENT'
               ? Number(createForm.initialAgreement.perStudentFee)
               : undefined,
-          dueDay: Number(createForm.initialAgreement.dueDay),
+          dueDay: Number(createForm.initialAgreement.dueDay || 10),
           terms: createForm.initialAgreement.terms,
           notes: createForm.initialAgreement.notes,
         },
@@ -270,13 +391,66 @@ export const FranchiseManagement: React.FC = () => {
       });
 
       if (res.success) {
-        showToast('Franchise, Owner Account, and 2 Annual Installments created successfully!', 'success');
+        showToast(
+          createForm.initialAgreement.settlementFrequency === 'YEARLY'
+            ? 'Franchise, Owner Account, and 2 Annual Installments created successfully!'
+            : 'Franchise, Owner Account, and Monthly Settlement Agreement created successfully!',
+          'success'
+        );
         setShowCreateModal(false);
         setCreatedResultModal(res.data);
         loadData();
       }
     } catch (err: any) {
       showToast(err.message || 'Failed to create franchise', 'error');
+    }
+  };
+
+  const handleReviseAgreement = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedFranchiseForRevise || !selectedAgreementForRevise) return;
+    try {
+      const res = await apiFetch(`/franchises/${selectedFranchiseForRevise.id}/agreements/${selectedAgreementForRevise.id}/revise`, {
+        method: 'POST',
+        body: JSON.stringify({
+          title: reviseForm.title,
+          startDate: reviseForm.startDate,
+          endDate: reviseForm.endDate,
+          agreementType: reviseForm.agreementType,
+          calculationMethod: reviseForm.calculationMethod,
+          annualRoyaltyAmount: Number(reviseForm.annualRoyaltyAmount || 0),
+          digitalGuruRevenuePercentage: Number(reviseForm.digitalGuruRevenuePercentage || 50),
+          partnerRevenuePercentage: Number(reviseForm.partnerRevenuePercentage || 50),
+          royaltyPercentage: Number(reviseForm.digitalGuruRevenuePercentage || 50),
+          revenueCalculationBasis: reviseForm.revenueCalculationBasis,
+          settlementFrequency: reviseForm.settlementFrequency,
+          totalInvestment: Number(reviseForm.totalInvestment || 0),
+          digitalGuruInvestmentAmount: Number(reviseForm.digitalGuruInvestmentAmount || 0),
+          partnerInvestmentAmount: Number(reviseForm.partnerInvestmentAmount || 0),
+          digitalGuruInvestmentPercentage: Number(reviseForm.digitalGuruInvestmentPercentage || 0),
+          partnerInvestmentPercentage: Number(reviseForm.partnerInvestmentPercentage || 0),
+          operationalSetupContribution: Number(reviseForm.operationalSetupContribution || 0),
+          investmentNotes: reviseForm.investmentNotes,
+          expenseResponsibilities: reviseForm.expenseResponsibilities,
+          marketingResponsibleParty: reviseForm.marketingResponsibleParty,
+          marketingSupportDurationMonths: Number(reviseForm.marketingSupportDurationMonths || 0),
+          marketingPostSupportParty: reviseForm.marketingPostSupportParty,
+          marketingBudget: Number(reviseForm.marketingBudget || 0),
+          marketingEffectiveStartDate: reviseForm.marketingEffectiveStartDate || undefined,
+          marketingNotes: reviseForm.marketingNotes,
+          courseSoftwareAccessEnabled: Boolean(reviseForm.courseSoftwareAccessEnabled),
+          courseSoftwarePricingNotes: reviseForm.courseSoftwarePricingNotes,
+          terms: reviseForm.terms,
+          notes: reviseForm.notes,
+        }),
+      });
+      if (res.success) {
+        showToast(res.message || 'Agreement revised successfully!', 'success');
+        setShowReviseModal(false);
+        loadData();
+      }
+    } catch (err: any) {
+      showToast(err.message || 'Failed to revise agreement', 'error');
     }
   };
 
@@ -629,8 +803,8 @@ export const FranchiseManagement: React.FC = () => {
         <button
           onClick={() => setActiveTab('franchises')}
           className={`py-3.5 px-2 text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${activeTab === 'franchises'
-              ? 'border-[#006FFF] text-[#006FFF]'
-              : 'border-transparent text-slate-600 hover:text-slate-900'
+            ? 'border-[#006FFF] text-[#006FFF]'
+            : 'border-transparent text-slate-600 hover:text-slate-900'
             }`}
         >
           <Building2 className="w-4 h-4" /> Franchises & Owners ({franchises.length})
@@ -639,8 +813,8 @@ export const FranchiseManagement: React.FC = () => {
         <button
           onClick={() => setActiveTab('installments')}
           className={`py-3.5 px-2 text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${activeTab === 'installments'
-              ? 'border-[#006FFF] text-[#006FFF]'
-              : 'border-transparent text-slate-600 hover:text-slate-900'
+            ? 'border-[#006FFF] text-[#006FFF]'
+            : 'border-transparent text-slate-600 hover:text-slate-900'
             }`}
         >
           <DollarSign className="w-4 h-4" /> 2-Installment Royalty Schedule ({installments.length})
@@ -649,8 +823,8 @@ export const FranchiseManagement: React.FC = () => {
         <button
           onClick={() => setActiveTab('agreements')}
           className={`py-3.5 px-2 text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${activeTab === 'agreements'
-              ? 'border-[#006FFF] text-[#006FFF]'
-              : 'border-transparent text-slate-600 hover:text-slate-900'
+            ? 'border-[#006FFF] text-[#006FFF]'
+            : 'border-transparent text-slate-600 hover:text-slate-900'
             }`}
         >
           <FileText className="w-4 h-4" /> Agreements & Renewals
@@ -728,11 +902,10 @@ export const FranchiseManagement: React.FC = () => {
                         </td>
                         <td className="px-4 py-3.5">
                           <span
-                            className={`px-2.5 py-1 text-xs font-bold rounded-full ${
-                              fr.status === 'ACTIVE'
+                            className={`px-2.5 py-1 text-xs font-bold rounded-full ${fr.status === 'ACTIVE'
                                 ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                                 : 'bg-rose-50 text-rose-700 border border-rose-200'
-                            }`}
+                              }`}
                           >
                             {fr.status}
                           </span>
@@ -753,11 +926,10 @@ export const FranchiseManagement: React.FC = () => {
                           </button>
                           <button
                             onClick={() => handleStatusToggle(fr.id, fr.status)}
-                            className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-all ${
-                              fr.status === 'ACTIVE'
+                            className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-all ${fr.status === 'ACTIVE'
                                 ? 'bg-rose-50 hover:bg-rose-100 text-rose-700'
                                 : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700'
-                            }`}
+                              }`}
                           >
                             {fr.status === 'ACTIVE' ? 'Suspend' : 'Activate'}
                           </button>
@@ -1040,8 +1212,8 @@ export const FranchiseManagement: React.FC = () => {
                             <span>{agr.agreementNumber}</span>
                             <span
                               className={`px-2 py-0.5 rounded text-[10px] font-bold ${agr.status === 'ACTIVE'
-                                  ? 'bg-emerald-100 text-emerald-800'
-                                  : 'bg-slate-200 text-slate-700'
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : 'bg-slate-200 text-slate-700'
                                 }`}
                             >
                               {agr.status}
@@ -1076,6 +1248,59 @@ export const FranchiseManagement: React.FC = () => {
                             <div className="text-[10px] text-slate-500">2 Installments</div>
                           </div>
 
+                          {agr.status === 'ACTIVE' && (
+                            <button
+                              onClick={() => {
+                                setSelectedAgreementForRevise(agr);
+                                setSelectedFranchiseForRevise(fr);
+                                setReviseForm({
+                                  title: `${agr.title} (Rev v${(agr.version || 1) + 1})`,
+                                  startDate: new Date().toISOString().split('T')[0],
+                                  endDate: agr.endDate ? new Date(agr.endDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+                                  agreementType: agr.agreementType || 'NEW_CENTRE_JOINT_INVESTMENT',
+                                  calculationMethod: agr.calculationMethod || 'PERCENTAGE_REVENUE',
+                                  annualRoyaltyAmount: Number(agr.annualRoyaltyAmount || 200000),
+                                  royaltyPercentage: Number(agr.digitalGuruRevenuePercentage || agr.royaltyPercentage || 50),
+                                  digitalGuruRevenuePercentage: Number(agr.digitalGuruRevenuePercentage || agr.royaltyPercentage || 50),
+                                  partnerRevenuePercentage: Number(agr.partnerRevenuePercentage || 50),
+                                  revenueCalculationBasis: agr.revenueCalculationBasis || 'GROSS_COURSE_FEES',
+                                  settlementFrequency: agr.settlementFrequency || 'MONTHLY',
+                                  totalInvestment: Number(agr.totalInvestment || 0),
+                                  digitalGuruInvestmentAmount: Number(agr.digitalGuruInvestmentAmount || 0),
+                                  partnerInvestmentAmount: Number(agr.partnerInvestmentAmount || 0),
+                                  digitalGuruInvestmentPercentage: Number(agr.digitalGuruInvestmentPercentage || 0),
+                                  partnerInvestmentPercentage: Number(agr.partnerInvestmentPercentage || 0),
+                                  operationalSetupContribution: Number(agr.operationalSetupContribution || 0),
+                                  investmentNotes: agr.investmentNotes || '',
+                                  expenseResponsibilities: (agr.expenseResponsibilities && typeof agr.expenseResponsibilities === 'object') ? agr.expenseResponsibilities : {
+                                    rent: 'PARTNER',
+                                    trainerSalaries: 'DIGITAL_GURU',
+                                    staffSalaries: 'PARTNER',
+                                    operationalSetup: 'SHARED',
+                                    utilities: 'PARTNER',
+                                    marketing: 'DIGITAL_GURU',
+                                    other: 'PARTNER',
+                                  },
+                                  marketingResponsibleParty: agr.marketingResponsibleParty || 'DIGITAL_GURU',
+                                  marketingSupportDurationMonths: Number(agr.marketingSupportDurationMonths || 3),
+                                  marketingPostSupportParty: agr.marketingPostSupportParty || 'PARTNER',
+                                  marketingBudget: Number(agr.marketingBudget || 50000),
+                                  marketingEffectiveStartDate: agr.marketingEffectiveStartDate ? new Date(agr.marketingEffectiveStartDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+                                  marketingNotes: agr.marketingNotes || '',
+                                  courseSoftwareAccessEnabled: agr.courseSoftwareAccessEnabled !== false,
+                                  courseSoftwarePricingNotes: agr.courseSoftwarePricingNotes || '',
+                                  terms: agr.terms || '',
+                                  notes: agr.notes || '',
+                                });
+                                setShowReviseModal(true);
+                              }}
+                              className="px-2.5 py-1 text-[#006FFF] hover:text-blue-800 font-semibold bg-white border border-blue-200 rounded text-xs"
+                              title="Create revision version N+1 linked via parent agreement"
+                            >
+                              Revise (v{(agr.version || 1) + 1})
+                            </button>
+                          )}
+
                           <button
                             onClick={() => {
                               setSelectedAgreementForAmend(agr);
@@ -1097,6 +1322,137 @@ export const FranchiseManagement: React.FC = () => {
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* TAB 4: MONTHLY ROYALTY SETTLEMENTS & RECORDS */}
+      {activeTab === 'monthly_settlements' && (
+        <div className="bg-white rounded-b-xl border border-slate-200 shadow-sm p-6 space-y-4">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b pb-4">
+            <div>
+              <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                <Layers className="w-5 h-5 text-[#006FFF]" /> Monthly Royalty Statements & Collections
+              </h3>
+              <p className="text-xs text-slate-500">
+                Monthly royalty settlements recorded on actual course fee collections, deductible operating expenses, and agreed sharing percentages.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={loadMonthlyRecords}
+                className="px-3 py-1.5 text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg transition"
+              >
+                Refresh
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (franchises.length > 0 && !calculateForm.franchiseId) {
+                    setCalculateForm({ ...calculateForm, franchiseId: franchises[0].id });
+                  }
+                  setShowCalculateModal(true);
+                }}
+                className="px-3.5 py-1.5 text-xs font-bold bg-[#FEDC32] hover:bg-[#FEDC32]/90 text-slate-900 rounded-lg shadow transition flex items-center gap-1.5"
+              >
+                <Plus className="w-4 h-4" /> Calculate Monthly Royalty
+              </button>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto rounded-lg border border-slate-200">
+            <table className="w-full text-left text-sm text-slate-700">
+              <thead className="bg-slate-50 text-xs font-semibold text-slate-600 uppercase border-b border-slate-200">
+                <tr>
+                  <th className="px-4 py-3">Period</th>
+                  <th className="px-4 py-3">Franchise & Campus</th>
+                  <th className="px-4 py-3">Collections</th>
+                  <th className="px-4 py-3">Calculation Basis</th>
+                  <th className="px-4 py-3">Deductible / Net</th>
+                  <th className="px-4 py-3">Digital Guru Share</th>
+                  <th className="px-4 py-3">Partner Share</th>
+                  <th className="px-4 py-3">Due Date</th>
+                  <th className="px-4 py-3">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {monthlyRecords.length === 0 ? (
+                  <tr>
+                    <td colSpan={9} className="text-center py-8 text-slate-400 text-xs">
+                      {loadingMonthly ? 'Loading monthly royalty statements...' : 'No monthly royalty records found. Click "+ Calculate Monthly Royalty" to generate monthly statements.'}
+                    </td>
+                  </tr>
+                ) : (
+                  monthlyRecords.map((rec) => {
+                    const dgShare = Number(rec.royaltyPayable || 0);
+                    const gross = Number(rec.grossCollection || 0);
+                    const net = Number(rec.eligibleRevenue || 0);
+                    const partnerShare = Math.round((net - dgShare) * 100) / 100;
+                    return (
+                      <tr key={rec.id} className="hover:bg-slate-50 transition-colors text-xs">
+                        <td className="px-4 py-3 font-mono font-bold text-[#006FFF]">
+                          {rec.periodLabel}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="font-bold text-slate-900">{rec.franchise?.name || 'Franchise'}</div>
+                          <div className="text-[11px] text-slate-500 font-mono">
+                            {rec.institute?.name ? `Campus: ${rec.institute.name}` : 'All Assigned Campuses'}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 font-bold text-slate-900">
+                          ₹{gross.toLocaleString('en-IN')}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-700 text-[10px] font-mono font-semibold">
+                            {rec.calculationDetails?.calculationBasis || 'GROSS_COURSE_FEES'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-slate-700">
+                          <div>Distributable: ₹{net.toLocaleString('en-IN')}</div>
+                          {rec.calculationDetails?.deductibleExpenses > 0 && (
+                            <div className="text-[10px] text-rose-600">
+                              -₹{Number(rec.calculationDetails.deductibleExpenses).toLocaleString('en-IN')} Exp
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="font-bold text-emerald-700">
+                            ₹{dgShare.toLocaleString('en-IN')}
+                          </div>
+                          <div className="text-[10px] text-slate-500">
+                            {Number(rec.royaltyPercentage)}% DG Share
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="font-bold text-sky-700">
+                            ₹{partnerShare.toLocaleString('en-IN')}
+                          </div>
+                          <div className="text-[10px] text-slate-500">
+                            {100 - Number(rec.royaltyPercentage)}% Retained
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-slate-600 font-mono">
+                          {new Date(rec.dueDate).toLocaleDateString('en-IN')}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span
+                            className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${rec.status === 'PAID'
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : rec.status === 'OVERDUE'
+                                  ? 'bg-rose-100 text-rose-800'
+                                  : 'bg-amber-100 text-amber-800'
+                              }`}
+                          >
+                            {rec.status}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
       )}
@@ -1265,11 +1621,109 @@ export const FranchiseManagement: React.FC = () => {
                 </div>
               </div>
 
-              {/* Section 3: Annual Agreement & 2-Installment Royalty */}
-              <div className="space-y-3">
-                <div className="text-xs font-bold uppercase tracking-wider text-slate-600 border-b pb-1">
-                  3. Annual Master Agreement & Royalty Calculation Basis
+              {/* Section 3: Master Agreement & Business Model Configuration */}
+              <div className="space-y-4">
+                <div className="text-xs font-bold uppercase tracking-wider text-slate-600 border-b pb-1 flex items-center justify-between">
+                  <span>3. Master Agreement & Business Model Configuration</span>
+                  <span className="text-[10px] text-[#006FFF] font-semibold">Four Dynamic Commercial Models</span>
                 </div>
+
+                {/* Preset Business Model Selector (Dynamically Loaded from Backend) */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-xs font-semibold text-slate-700">
+                      Select Agreement Business Model Preset:
+                    </label>
+                    {agreementTemplates.length > 0 && (
+                      <span className="text-[10px] text-emerald-600 font-medium">✓ Authoritative API Templates Loaded</span>
+                    )}
+                  </div>
+
+                  {templatesLoading ? (
+                    <div className="flex items-center gap-2.5 p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-500">
+                      <div className="w-4 h-4 border-2 border-[#006FFF] border-t-transparent rounded-full animate-spin"></div>
+                      <span>Loading agreement templates from server...</span>
+                    </div>
+                  ) : templatesError ? (
+                    <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 flex items-center justify-between">
+                      <span className="font-medium">Failed to load templates: {templatesError}</span>
+                      <button
+                        type="button"
+                        onClick={loadAgreementTemplates}
+                        className="px-2.5 py-1 bg-rose-600 text-white rounded-lg font-semibold hover:bg-rose-700 transition text-[11px]"
+                      >
+                        Retry Loading
+                      </button>
+                    </div>
+                  ) : agreementTemplates.length === 0 ? (
+                    <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-700">
+                      No agreement templates available on server.
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                      {agreementTemplates.map((tmpl: any) => {
+                        const isSelected = createForm.initialAgreement.agreementType === tmpl.type;
+                        const defs = tmpl.defaults || {};
+                        return (
+                          <button
+                            key={tmpl.type}
+                            type="button"
+                            onClick={() => {
+                              const normExpenses: Record<string, string> = {};
+                              if (defs.expenseResponsibilities && typeof defs.expenseResponsibilities === 'object') {
+                                for (const [k, v] of Object.entries(defs.expenseResponsibilities)) {
+                                  normExpenses[k] = typeof v === 'object' && v !== null && (v as any).payer ? (v as any).payer : String(v);
+                                }
+                              }
+                              setCreateForm({
+                                ...createForm,
+                                initialAgreement: {
+                                  ...createForm.initialAgreement,
+                                  agreementType: tmpl.type as any,
+                                  title: defs.title || createForm.initialAgreement.title,
+                                  calculationMethod: defs.calculationMethod || createForm.initialAgreement.calculationMethod,
+                                  annualRoyaltyAmount: defs.annualRoyaltyAmount !== undefined ? defs.annualRoyaltyAmount : createForm.initialAgreement.annualRoyaltyAmount,
+                                  digitalGuruRevenuePercentage: defs.digitalGuruRevenuePercentage !== undefined ? defs.digitalGuruRevenuePercentage : 50,
+                                  partnerRevenuePercentage: defs.partnerRevenuePercentage !== undefined ? defs.partnerRevenuePercentage : 50,
+                                  royaltyPercentage: defs.digitalGuruRevenuePercentage !== undefined ? defs.digitalGuruRevenuePercentage : 50,
+                                  revenueCalculationBasis: defs.revenueCalculationBasis || 'GROSS_COURSE_FEES',
+                                  settlementFrequency: defs.settlementFrequency || 'MONTHLY',
+                                  totalInvestment: defs.totalInvestment !== undefined ? defs.totalInvestment : 0,
+                                  digitalGuruInvestmentAmount: defs.digitalGuruInvestmentAmount !== undefined ? defs.digitalGuruInvestmentAmount : 0,
+                                  partnerInvestmentAmount: defs.partnerInvestmentAmount !== undefined ? defs.partnerInvestmentAmount : 0,
+                                  digitalGuruInvestmentPercentage: defs.digitalGuruInvestmentPercentage !== undefined ? defs.digitalGuruInvestmentPercentage : 0,
+                                  partnerInvestmentPercentage: defs.partnerInvestmentPercentage !== undefined ? defs.partnerInvestmentPercentage : 0,
+                                  operationalSetupContribution: defs.operationalSetupContribution !== undefined ? defs.operationalSetupContribution : 0,
+                                  investmentNotes: defs.investmentNotes || '',
+                                  expenseResponsibilities: Object.keys(normExpenses).length > 0 ? normExpenses : createForm.initialAgreement.expenseResponsibilities,
+                                  marketingResponsibleParty: defs.marketingResponsibleParty || 'DIGITAL_GURU',
+                                  marketingSupportDurationMonths: defs.marketingSupportDurationMonths !== undefined ? defs.marketingSupportDurationMonths : 0,
+                                  marketingPostSupportParty: defs.marketingPostSupportParty || 'PARTNER',
+                                  marketingBudget: defs.marketingBudget !== undefined ? defs.marketingBudget : 0,
+                                  courseSoftwareAccessEnabled: defs.courseSoftwareAccessEnabled !== undefined ? defs.courseSoftwareAccessEnabled : true,
+                                  courseSoftwarePricingNotes: defs.courseSoftwarePricingNotes || '',
+                                },
+                              });
+                            }}
+                            className={`p-2.5 rounded-xl text-left border text-xs transition-all ${isSelected
+                                ? 'bg-blue-50 border-[#006FFF] text-[#006FFF] font-bold shadow-sm ring-1 ring-[#006FFF]'
+                                : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300'
+                              }`}
+                          >
+                            <div className="font-bold text-[11px] leading-tight">{tmpl.label}</div>
+                            <div className="text-[10px] text-slate-500 mt-1">
+                              {defs.digitalGuruRevenuePercentage ?? 50}:{defs.partnerRevenuePercentage ?? 50} Rev • {defs.settlementFrequency || 'MONTHLY'}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                  <p className="text-[10px] text-slate-400 mt-1 italic">
+                    Presets provide illustrative defaults only. All values are independent and fully editable below.
+                  </p>
+                </div>
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-medium text-slate-700">Agreement Start Date *</label>
@@ -1302,97 +1756,422 @@ export const FranchiseManagement: React.FC = () => {
                       className="mt-1 w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-[#006FFF]"
                     />
                   </div>
+                </div>
 
-                  <div>
-                    <label className="block text-xs font-medium text-slate-700">Royalty Calculation Method *</label>
-                    <select
-                      value={createForm.initialAgreement.calculationMethod}
-                      onChange={(e: any) =>
-                        setCreateForm({
-                          ...createForm,
-                          initialAgreement: { ...createForm.initialAgreement, calculationMethod: e.target.value },
-                        })
-                      }
-                      className="mt-1 w-full px-3 py-2 border rounded-lg text-sm font-medium focus:ring-2 focus:ring-[#006FFF]"
-                    >
-                      <option value="FIXED_ANNUAL">Fixed Annual Fee (Split into 2 Equal Installments)</option>
-                      <option value="PERCENTAGE_REVENUE">Percentage of Gross Revenue (50/50 Split)</option>
-                      <option value="PER_STUDENT">Per Enrolled Active Student</option>
-                    </select>
-                  </div>
-
-                  {createForm.initialAgreement.calculationMethod === 'FIXED_ANNUAL' && (
+                {/* Initial Setup Investment Configuration */}
+                <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
+                  <div className="text-xs font-bold text-slate-800">Initial Setup Investment Configuration (Independent of Revenue Split)</div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                     <div>
-                      <label className="block text-xs font-medium text-slate-700">
-                        Annual Agreed Royalty Amount (₹) *
-                      </label>
+                      <label className="block text-xs font-medium text-slate-700">Total Setup Investment (₹)</label>
                       <input
                         type="number"
                         min="0"
-                        required
-                        placeholder="200000"
-                        value={createForm.initialAgreement.annualRoyaltyAmount}
-                        onChange={(e) =>
+                        value={createForm.initialAgreement.totalInvestment || ''}
+                        onChange={(e) => {
+                          const total = Number(e.target.value);
+                          const dgPct = Number(createForm.initialAgreement.digitalGuruInvestmentPercentage || 50);
+                          const dgAmt = Math.round((total * dgPct) / 100);
                           setCreateForm({
                             ...createForm,
                             initialAgreement: {
                               ...createForm.initialAgreement,
-                              annualRoyaltyAmount: Number(e.target.value),
+                              totalInvestment: total,
+                              digitalGuruInvestmentAmount: dgAmt,
+                              partnerInvestmentAmount: total - dgAmt,
                             },
-                          })
-                        }
-                        className="mt-1 w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-[#006FFF]"
+                          });
+                        }}
+                        className="mt-1 w-full px-3 py-1.5 border rounded-lg text-sm"
+                        placeholder="200000"
                       />
-                      <span className="text-[11px] text-slate-500 mt-0.5 block">
-                        Will generate 2 installments of ₹{(Number(createForm.initialAgreement.annualRoyaltyAmount) / 2).toLocaleString('en-IN')} each.
-                      </span>
                     </div>
-                  )}
-
-                  {createForm.initialAgreement.calculationMethod === 'PERCENTAGE_REVENUE' && (
                     <div>
-                      <label className="block text-xs font-medium text-slate-700">Royalty Percentage (%) *</label>
+                      <label className="block text-xs font-medium text-slate-700">Digital Guru Investment (%)</label>
                       <input
                         type="number"
-                        min="1"
+                        min="0"
+                        max="100"
+                        value={createForm.initialAgreement.digitalGuruInvestmentPercentage || ''}
+                        onChange={(e) => {
+                          const dgPct = Number(e.target.value);
+                          const partnerPct = 100 - dgPct;
+                          const total = Number(createForm.initialAgreement.totalInvestment || 0);
+                          setCreateForm({
+                            ...createForm,
+                            initialAgreement: {
+                              ...createForm.initialAgreement,
+                              digitalGuruInvestmentPercentage: dgPct,
+                              partnerInvestmentPercentage: partnerPct,
+                              digitalGuruInvestmentAmount: Math.round((total * dgPct) / 100),
+                              partnerInvestmentAmount: Math.round((total * partnerPct) / 100),
+                            },
+                          });
+                        }}
+                        className="mt-1 w-full px-3 py-1.5 border rounded-lg text-sm"
+                        placeholder="50"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-700">Partner Investment (%)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        value={createForm.initialAgreement.partnerInvestmentPercentage || ''}
+                        onChange={(e) => {
+                          const partnerPct = Number(e.target.value);
+                          const dgPct = 100 - partnerPct;
+                          const total = Number(createForm.initialAgreement.totalInvestment || 0);
+                          setCreateForm({
+                            ...createForm,
+                            initialAgreement: {
+                              ...createForm.initialAgreement,
+                              partnerInvestmentPercentage: partnerPct,
+                              digitalGuruInvestmentPercentage: dgPct,
+                              digitalGuruInvestmentAmount: Math.round((total * dgPct) / 100),
+                              partnerInvestmentAmount: Math.round((total * partnerPct) / 100),
+                            },
+                          });
+                        }}
+                        className="mt-1 w-full px-3 py-1.5 border rounded-lg text-sm"
+                        placeholder="50"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-700">Operational Setup Contribution (₹)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={createForm.initialAgreement.operationalSetupContribution || ''}
+                      onChange={(e) =>
+                        setCreateForm({
+                          ...createForm,
+                          initialAgreement: {
+                            ...createForm.initialAgreement,
+                            operationalSetupContribution: Number(e.target.value),
+                          },
+                        })
+                      }
+                      className="mt-1 w-full px-3 py-1.5 border rounded-lg text-sm"
+                      placeholder="50000"
+                    />
+                  </div>
+                </div>
+
+                {/* Revenue Sharing & Calculation Basis */}
+                <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-800">Revenue Sharing Configuration</span>
+                    <span
+                      className={`px-2 py-0.5 rounded text-[10px] font-bold ${Number(createForm.initialAgreement.digitalGuruRevenuePercentage) +
+                          Number(createForm.initialAgreement.partnerRevenuePercentage) ===
+                          100
+                          ? 'bg-emerald-100 text-emerald-800'
+                          : 'bg-rose-100 text-rose-800'
+                        }`}
+                    >
+                      Total:{' '}
+                      {Number(createForm.initialAgreement.digitalGuruRevenuePercentage || 0) +
+                        Number(createForm.initialAgreement.partnerRevenuePercentage || 0)}
+                      % (Must = 100%)
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-slate-700">Digital Guru Revenue Share (%) *</label>
+                      <input
+                        type="number"
+                        min="0"
                         max="100"
                         required
-                        value={createForm.initialAgreement.royaltyPercentage}
-                        onChange={(e) =>
+                        value={createForm.initialAgreement.digitalGuruRevenuePercentage}
+                        onChange={(e) => {
+                          const dg = Number(e.target.value);
                           setCreateForm({
                             ...createForm,
                             initialAgreement: {
                               ...createForm.initialAgreement,
-                              royaltyPercentage: Number(e.target.value),
+                              digitalGuruRevenuePercentage: dg,
+                              partnerRevenuePercentage: 100 - dg,
+                              royaltyPercentage: dg,
                             },
-                          })
-                        }
-                        className="mt-1 w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-[#006FFF]"
+                          });
+                        }}
+                        className="mt-1 w-full px-3 py-1.5 border rounded-lg text-sm"
                       />
                     </div>
-                  )}
-
-                  {createForm.initialAgreement.calculationMethod === 'PER_STUDENT' && (
                     <div>
-                      <label className="block text-xs font-medium text-slate-700">Fee Per Student (₹ / yr) *</label>
+                      <label className="block text-xs font-medium text-slate-700">Franchise Partner Revenue Share (%) *</label>
                       <input
                         type="number"
-                        min="1"
+                        min="0"
+                        max="100"
                         required
-                        value={createForm.initialAgreement.perStudentFee}
+                        value={createForm.initialAgreement.partnerRevenuePercentage}
+                        onChange={(e) => {
+                          const pt = Number(e.target.value);
+                          setCreateForm({
+                            ...createForm,
+                            initialAgreement: {
+                              ...createForm.initialAgreement,
+                              partnerRevenuePercentage: pt,
+                              digitalGuruRevenuePercentage: 100 - pt,
+                              royaltyPercentage: 100 - pt,
+                            },
+                          });
+                        }}
+                        className="mt-1 w-full px-3 py-1.5 border rounded-lg text-sm"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-slate-700">Revenue Calculation Basis *</label>
+                      <select
+                        value={createForm.initialAgreement.revenueCalculationBasis}
+                        onChange={(e: any) =>
+                          setCreateForm({
+                            ...createForm,
+                            initialAgreement: {
+                              ...createForm.initialAgreement,
+                              revenueCalculationBasis: e.target.value,
+                            },
+                          })
+                        }
+                        className="mt-1 w-full px-3 py-1.5 border rounded-lg text-sm font-medium"
+                      >
+                        <option value="GROSS_COURSE_FEES">Gross Course Fees Collected</option>
+                        <option value="NET_COURSE_REVENUE">Net Course Revenue (After Refunds/Adjustments)</option>
+                        <option value="PROFIT_AFTER_EXPENSES">Profit After Deductible Operating Expenses</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-medium text-slate-700">Settlement Frequency *</label>
+                      <select
+                        value={createForm.initialAgreement.settlementFrequency}
+                        onChange={(e: any) =>
+                          setCreateForm({
+                            ...createForm,
+                            initialAgreement: {
+                              ...createForm.initialAgreement,
+                              settlementFrequency: e.target.value,
+                            },
+                          })
+                        }
+                        className="mt-1 w-full px-3 py-1.5 border rounded-lg text-sm font-medium"
+                      >
+                        <option value="MONTHLY">Monthly Settlement</option>
+                        <option value="YEARLY">Yearly Settlement (2 Equal Installments)</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Operational Expense Responsibilities */}
+                <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                  <div className="text-xs font-bold text-slate-800">Operational Expense Responsibilities</div>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                    {[
+                      { key: 'rent', label: 'Centre Rent' },
+                      { key: 'trainerSalaries', label: 'Trainer Salaries' },
+                      { key: 'staffSalaries', label: 'Staff Salaries' },
+                      { key: 'operationalSetup', label: 'Operational Setup' },
+                      { key: 'utilities', label: 'Utilities (Electricity/Net)' },
+                      { key: 'marketing', label: 'Marketing Campaigns' },
+                      { key: 'other', label: 'Other Sundry Expenses' },
+                    ].map(({ key, label }) => (
+                      <div key={key}>
+                        <label className="block text-[11px] font-medium text-slate-600">{label}</label>
+                        <select
+                          value={createForm.initialAgreement.expenseResponsibilities[key] || 'PARTNER'}
+                          onChange={(e) =>
+                            setCreateForm({
+                              ...createForm,
+                              initialAgreement: {
+                                ...createForm.initialAgreement,
+                                expenseResponsibilities: {
+                                  ...createForm.initialAgreement.expenseResponsibilities,
+                                  [key]: e.target.value,
+                                },
+                              },
+                            })
+                          }
+                          className="mt-0.5 w-full px-2 py-1 border rounded text-xs bg-white"
+                        >
+                          <option value="PARTNER">Partner</option>
+                          <option value="DIGITAL_GURU">Digital Guru</option>
+                          <option value="SHARED">Shared (50:50)</option>
+                          <option value="CUSTOM">Custom</option>
+                        </select>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Marketing & Course Software Access */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                    <div className="text-xs font-bold text-slate-800">Marketing Support</div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-[11px] font-medium text-slate-600">Responsible Party</label>
+                        <select
+                          value={createForm.initialAgreement.marketingResponsibleParty}
+                          onChange={(e) =>
+                            setCreateForm({
+                              ...createForm,
+                              initialAgreement: {
+                                ...createForm.initialAgreement,
+                                marketingResponsibleParty: e.target.value,
+                              },
+                            })
+                          }
+                          className="mt-0.5 w-full px-2 py-1 border rounded text-xs bg-white"
+                        >
+                          <option value="DIGITAL_GURU">Digital Guru</option>
+                          <option value="PARTNER">Partner</option>
+                          <option value="SHARED">Shared</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-medium text-slate-600">Duration (Months)</label>
+                        <input
+                          type="number"
+                          min="0"
+                          value={createForm.initialAgreement.marketingSupportDurationMonths}
+                          onChange={(e) =>
+                            setCreateForm({
+                              ...createForm,
+                              initialAgreement: {
+                                ...createForm.initialAgreement,
+                                marketingSupportDurationMonths: Number(e.target.value),
+                              },
+                            })
+                          }
+                          className="mt-0.5 w-full px-2 py-1 border rounded text-xs"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                    <div className="text-xs font-bold text-slate-800">Course Software Access</div>
+                    <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer pt-1">
+                      <input
+                        type="checkbox"
+                        checked={createForm.initialAgreement.courseSoftwareAccessEnabled}
                         onChange={(e) =>
                           setCreateForm({
                             ...createForm,
                             initialAgreement: {
                               ...createForm.initialAgreement,
-                              perStudentFee: Number(e.target.value),
+                              courseSoftwareAccessEnabled: e.target.checked,
                             },
                           })
                         }
-                        className="mt-1 w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-[#006FFF]"
+                        className="rounded text-[#006FFF] focus:ring-[#006FFF] w-4 h-4"
                       />
+                      <span className="font-semibold">Course Software Access Enabled</span>
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Software pricing notes / terms"
+                      value={createForm.initialAgreement.courseSoftwarePricingNotes}
+                      onChange={(e) =>
+                        setCreateForm({
+                          ...createForm,
+                          initialAgreement: {
+                            ...createForm.initialAgreement,
+                            courseSoftwarePricingNotes: e.target.value,
+                          },
+                        })
+                      }
+                      className="mt-1 w-full px-2 py-1 border rounded text-xs"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Commercial Agreement Summary (Pre-Submission Review) */}
+              <div className="bg-slate-900 text-white p-4 rounded-xl space-y-3 shadow-md border border-slate-700">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                  <div className="flex items-center gap-2">
+                    <FileText className="w-4 h-4 text-[#FEDC32]" />
+                    <span className="font-bold text-xs uppercase tracking-wider text-[#FEDC32]">Commercial Agreement Summary (Pre-Submission Review)</span>
+                  </div>
+                  <span className="text-[10px] px-2 py-0.5 rounded bg-blue-900 text-blue-200 font-mono font-semibold">
+                    {createForm.initialAgreement.settlementFrequency} • {createForm.initialAgreement.revenueCalculationBasis}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                  {/* Digital Guru Column */}
+                  <div className="bg-slate-800/80 p-3 rounded-lg border border-slate-700 space-y-2">
+                    <div className="font-bold text-sm text-[#FEDC32] flex items-center justify-between">
+                      <span>Digital Guru (Franchisor)</span>
+                      <span className="text-emerald-400 font-black">{createForm.initialAgreement.digitalGuruRevenuePercentage}% Rev</span>
                     </div>
-                  )}
+                    <div className="space-y-1 text-slate-300 text-[11px]">
+                      <div>
+                        <span className="text-slate-400">Setup Capital Investment:</span>{' '}
+                        <strong className="text-white">₹{Number(createForm.initialAgreement.digitalGuruInvestmentAmount || 0).toLocaleString('en-IN')}</strong> ({createForm.initialAgreement.digitalGuruInvestmentPercentage}%)
+                      </div>
+                      <div>
+                        <span className="text-slate-400">Direct Expenses Paid:</span>{' '}
+                        <span className="text-amber-200">
+                          {Object.entries(createForm.initialAgreement.expenseResponsibilities || {})
+                            .filter(([_, v]) => v === 'DIGITAL_GURU' || (typeof v === 'object' && (v as any)?.payer === 'DIGITAL_GURU'))
+                            .map(([k]) => k === 'trainerSalaries' ? 'Certified Trainers' : k === 'marketing' ? 'Initial Marketing' : k)
+                            .join(', ') || 'Direct Trainer Salaries & Marketing'}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400">Support Responsibilities:</span>{' '}
+                        <span className="text-white">
+                          {createForm.initialAgreement.marketingSupportDurationMonths || 0} Mos Marketing Support (₹{Number(createForm.initialAgreement.marketingBudget || 0).toLocaleString('en-IN')}), Certified Course Trainers, Software Access ({createForm.initialAgreement.courseSoftwareAccessEnabled ? 'Enabled' : 'Disabled'})
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Franchise Partner Column */}
+                  <div className="bg-slate-800/80 p-3 rounded-lg border border-slate-700 space-y-2">
+                    <div className="font-bold text-sm text-sky-400 flex items-center justify-between">
+                      <span>Franchise Partner (Centre Operator)</span>
+                      <span className="text-sky-300 font-black">{createForm.initialAgreement.partnerRevenuePercentage}% Rev</span>
+                    </div>
+                    <div className="space-y-1 text-slate-300 text-[11px]">
+                      <div>
+                        <span className="text-slate-400">Setup Capital Investment:</span>{' '}
+                        <strong className="text-white">₹{Number(createForm.initialAgreement.partnerInvestmentAmount || 0).toLocaleString('en-IN')}</strong> ({createForm.initialAgreement.partnerInvestmentPercentage}%)
+                      </div>
+                      <div>
+                        <span className="text-slate-400">Direct Expenses Paid:</span>{' '}
+                        <span className="text-sky-200">
+                          {Object.entries(createForm.initialAgreement.expenseResponsibilities || {})
+                            .filter(([_, v]) => v === 'PARTNER' || (typeof v === 'object' && (v as any)?.payer === 'PARTNER'))
+                            .map(([k]) => k === 'rent' ? 'Building Rent' : k === 'staffSalaries' ? 'Staff Salaries' : k === 'utilities' ? 'Utilities' : k)
+                            .join(', ') || 'Building Rent & Centre Operations'}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400">Role & Operations:</span>{' '}
+                        <span className="text-white">Campus Infrastructure, Local Operations, Post-Support Marketing</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-2.5 bg-blue-950/70 border border-blue-800 rounded-lg text-[11px] text-blue-200 flex items-start gap-2">
+                  <Info className="w-4 h-4 text-blue-400 mt-0.5 flex-shrink-0" />
+                  <span>
+                    <strong>DIRECT EXPENSE RULE:</strong> Direct expenses (such as Rent paid by Partner or Trainer Salaries paid by Digital Guru) are borne directly by each party and are <strong>NEVER</strong> automatically deducted from gross revenue collections. Deductions occur only when calculation basis is set to <em>Profit After Expenses</em> with approved deductible receipts.
+                  </span>
                 </div>
               </div>
 
@@ -1416,7 +2195,9 @@ export const FranchiseManagement: React.FC = () => {
                   type="submit"
                   className="px-6 py-2 bg-[#FEDC32] hover:bg-[#FEDC32]/90 text-slate-900 font-bold rounded-lg text-sm shadow transition-all"
                 >
-                  Create Franchise & Generate 2 Installments
+                  {createForm.initialAgreement.settlementFrequency === 'YEARLY'
+                    ? 'Create Franchise & Generate 2 Annual Installments'
+                    : 'Create Franchise (Monthly Settlement)'}
                 </button>
               </div>
             </form>
@@ -1882,79 +2663,79 @@ export const FranchiseManagement: React.FC = () => {
               </button>
             </div>
 
-              {/* Mode Selector Tabs */}
-              <div className="flex bg-slate-100 p-1 rounded-xl mb-4 text-xs font-semibold">
-                <button
-                  type="button"
-                  onClick={() => setBranchModalMode('existing')}
-                  className={`flex-1 py-1.5 rounded-lg transition-all ${branchModalMode === 'existing'
-                      ? 'bg-white text-[#006FFF] shadow-sm font-bold'
-                      : 'text-slate-600 hover:text-slate-900'
-                    }`}
-                >
-                  Assign Existing ({unassignedBranches.length} Available)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setBranchModalMode('new')}
-                  className={`flex-1 py-1.5 rounded-lg transition-all ${branchModalMode === 'new'
-                      ? 'bg-white text-[#006FFF] shadow-sm font-bold'
-                      : 'text-slate-600 hover:text-slate-900'
-                    }`}
-                >
-                  Create & Attach New
-                </button>
-              </div>
+            {/* Mode Selector Tabs */}
+            <div className="flex bg-slate-100 p-1 rounded-xl mb-4 text-xs font-semibold">
+              <button
+                type="button"
+                onClick={() => setBranchModalMode('existing')}
+                className={`flex-1 py-1.5 rounded-lg transition-all ${branchModalMode === 'existing'
+                  ? 'bg-white text-[#006FFF] shadow-sm font-bold'
+                  : 'text-slate-600 hover:text-slate-900'
+                  }`}
+              >
+                Assign Existing ({unassignedBranches.length} Available)
+              </button>
+              <button
+                type="button"
+                onClick={() => setBranchModalMode('new')}
+                className={`flex-1 py-1.5 rounded-lg transition-all ${branchModalMode === 'new'
+                  ? 'bg-white text-[#006FFF] shadow-sm font-bold'
+                  : 'text-slate-600 hover:text-slate-900'
+                  }`}
+              >
+                Create & Attach New
+              </button>
+            </div>
 
-                {/* MODE 1: ASSIGN EXISTING BRANCH */}
-                {branchModalMode === 'existing' ? (
-                  <form onSubmit={handleAssignExistingBranch} className="space-y-4">
-                    {unassignedBranches.length === 0 ? (
-                      <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-xs">
-                        No unassigned campus branches are currently available. Please use &ldquo;Create & Attach New&rdquo; to establish a new campus for this franchise.
-                      </div>
-                    ) : (
-                      <div>
-                        <label className="block text-xs font-medium text-slate-700 mb-1">
-                          Select Available Campus Branch *
-                        </label>
-                        <select
-                          required
-                          value={selectedExistingBranchId}
-                          onChange={(e) => setSelectedExistingBranchId(e.target.value)}
-                          className="w-full px-3 py-2 border rounded-lg text-sm bg-white"
-                        >
-                          <option value="">-- Choose an unassigned campus branch --</option>
-                          {unassignedBranches.map((b) => (
-                            <option key={b.id} value={b.id}>
-                              {b.name} ({b.code}) - {b.city || 'Tamil Nadu'}
-                            </option>
-                          ))}
-                        </select>
-                        <p className="text-[11px] text-slate-500 mt-1">
-                          Assigning this branch will grant the Franchisee Admin full operational access while preserving all historical students, staff, and tuition payments.
-                        </p>
-                      </div>
-                    )}
-
-                    <div className="flex justify-end gap-3 pt-3 border-t">
-                      <button
-                        type="button"
-                        onClick={() => setShowAddBranchModal(false)}
-                        className="px-4 py-2 border text-slate-600 rounded-lg text-sm font-semibold"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="submit"
-                        disabled={unassignedBranches.length === 0 || !selectedExistingBranchId}
-                        className="px-6 py-2 bg-[#006FFF] hover:bg-[#0055CC] disabled:opacity-50 text-white font-bold rounded-lg text-sm shadow"
-                      >
-                        Assign Branch to Franchise
-                      </button>
-                    </div>
-                  </form>
+            {/* MODE 1: ASSIGN EXISTING BRANCH */}
+            {branchModalMode === 'existing' ? (
+              <form onSubmit={handleAssignExistingBranch} className="space-y-4">
+                {unassignedBranches.length === 0 ? (
+                  <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-xs">
+                    No unassigned campus branches are currently available. Please use &ldquo;Create & Attach New&rdquo; to establish a new campus for this franchise.
+                  </div>
                 ) : (
+                  <div>
+                    <label className="block text-xs font-medium text-slate-700 mb-1">
+                      Select Available Campus Branch *
+                    </label>
+                    <select
+                      required
+                      value={selectedExistingBranchId}
+                      onChange={(e) => setSelectedExistingBranchId(e.target.value)}
+                      className="w-full px-3 py-2 border rounded-lg text-sm bg-white"
+                    >
+                      <option value="">-- Choose an unassigned campus branch --</option>
+                      {unassignedBranches.map((b) => (
+                        <option key={b.id} value={b.id}>
+                          {b.name} ({b.code}) - {b.city || 'Tamil Nadu'}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-[11px] text-slate-500 mt-1">
+                      Assigning this branch will grant the Franchisee Admin full operational access while preserving all historical students, staff, and tuition payments.
+                    </p>
+                  </div>
+                )}
+
+                <div className="flex justify-end gap-3 pt-3 border-t">
+                  <button
+                    type="button"
+                    onClick={() => setShowAddBranchModal(false)}
+                    className="px-4 py-2 border text-slate-600 rounded-lg text-sm font-semibold"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={unassignedBranches.length === 0 || !selectedExistingBranchId}
+                    className="px-6 py-2 bg-[#006FFF] hover:bg-[#0055CC] disabled:opacity-50 text-white font-bold rounded-lg text-sm shadow"
+                  >
+                    Assign Branch to Franchise
+                  </button>
+                </div>
+              </form>
+            ) : (
               /* MODE 2: CREATE & ATTACH NEW BRANCH */
               <form onSubmit={handleAddBranch} className="space-y-4">
                 <div>
@@ -2005,27 +2786,393 @@ export const FranchiseManagement: React.FC = () => {
                   />
                 </div>
 
-            <div className="flex justify-end gap-3 pt-3 border-t">
-              <button
-                type="button"
-                onClick={() => setShowAddBranchModal(false)}
-                className="px-4 py-2 border text-slate-600 rounded-lg text-sm font-semibold"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                className="px-6 py-2 bg-[#006FFF] hover:bg-[#0055CC] text-white font-bold rounded-lg text-sm shadow"
-              >
-                Create & Attach Campus
+                <div className="flex justify-end gap-3 pt-3 border-t">
+                  <button
+                    type="button"
+                    onClick={() => setShowAddBranchModal(false)}
+                    className="px-4 py-2 border text-slate-600 rounded-lg text-sm font-semibold"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-6 py-2 bg-[#006FFF] hover:bg-[#0055CC] text-white font-bold rounded-lg text-sm shadow"
+                  >
+                    Create & Attach Campus
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )
+      }
+
+      {/* ============================================================= */}
+      {/* MODAL 8: REVISE AGREEMENT (NEW VERSION N+1)                   */}
+      {/* ============================================================= */}
+      {showReviseModal && selectedAgreementForRevise && selectedFranchiseForRevise && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl max-w-3xl w-full p-6 shadow-2xl my-8 border border-slate-200">
+            <div className="flex justify-between items-center border-b pb-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-lg font-bold text-slate-900">Revise Franchise Agreement</h3>
+                  <span className="px-2 py-0.5 rounded text-xs font-bold bg-blue-100 text-[#006FFF]">
+                    Creates v{(selectedAgreementForRevise.version || 1) + 1}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Revises agreement for {selectedFranchiseForRevise.name}. Previous version {selectedAgreementForRevise.agreementNumber} (v{selectedAgreementForRevise.version || 1}) will be marked EXPIRED with all historical payments preserved.
+                </p>
+              </div>
+              <button onClick={() => setShowReviseModal(false)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-5 h-5" />
               </button>
             </div>
-          </form>
-            )}
+
+            <form onSubmit={handleReviseAgreement} className="space-y-4 mt-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-slate-700">Revision Title *</label>
+                  <input
+                    type="text"
+                    required
+                    value={reviseForm.title}
+                    onChange={(e) => setReviseForm({ ...reviseForm, title: e.target.value })}
+                    className="mt-1 w-full px-3 py-2 border rounded-lg text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-700">Business Model *</label>
+                  <select
+                    value={reviseForm.agreementType}
+                    onChange={(e: any) => setReviseForm({ ...reviseForm, agreementType: e.target.value })}
+                    className="mt-1 w-full px-3 py-2 border rounded-lg text-sm bg-white"
+                  >
+                    <option value="NEW_CENTRE_JOINT_INVESTMENT">New Centre Joint Investment</option>
+                    <option value="EXISTING_CENTRE">Existing Centre</option>
+                    <option value="BRAND_AND_COURSE_SUPPORT">Brand & Course Support</option>
+                    <option value="CUSTOM_AGREEMENT">Custom Agreement</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Revenue Sharing Split */}
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-800">Revenue Sharing Split & Basis</span>
+                  <span
+                    className={`px-2 py-0.5 rounded text-[10px] font-bold ${Number(reviseForm.digitalGuruRevenuePercentage) + Number(reviseForm.partnerRevenuePercentage) === 100
+                        ? 'bg-emerald-100 text-emerald-800'
+                        : 'bg-rose-100 text-rose-800'
+                      }`}
+                  >
+                    Total: {Number(reviseForm.digitalGuruRevenuePercentage || 0) + Number(reviseForm.partnerRevenuePercentage || 0)}% (Must = 100%)
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-700">Digital Guru Revenue Share (%) *</label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      required
+                      value={reviseForm.digitalGuruRevenuePercentage}
+                      onChange={(e) => {
+                        const dg = Number(e.target.value);
+                        setReviseForm({
+                          ...reviseForm,
+                          digitalGuruRevenuePercentage: dg,
+                          partnerRevenuePercentage: 100 - dg,
+                          royaltyPercentage: dg,
+                        });
+                      }}
+                      className="mt-1 w-full px-3 py-1.5 border rounded-lg text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-700">Partner Revenue Share (%) *</label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      required
+                      value={reviseForm.partnerRevenuePercentage}
+                      onChange={(e) => {
+                        const pt = Number(e.target.value);
+                        setReviseForm({
+                          ...reviseForm,
+                          partnerRevenuePercentage: pt,
+                          digitalGuruRevenuePercentage: 100 - pt,
+                          royaltyPercentage: 100 - pt,
+                        });
+                      }}
+                      className="mt-1 w-full px-3 py-1.5 border rounded-lg text-sm"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-700">Calculation Basis *</label>
+                    <select
+                      value={reviseForm.revenueCalculationBasis}
+                      onChange={(e: any) => setReviseForm({ ...reviseForm, revenueCalculationBasis: e.target.value })}
+                      className="mt-1 w-full px-3 py-1.5 border rounded-lg text-sm font-medium"
+                    >
+                      <option value="GROSS_COURSE_FEES">Gross Course Fees Collected</option>
+                      <option value="NET_COURSE_REVENUE">Net Course Revenue</option>
+                      <option value="PROFIT_AFTER_EXPENSES">Profit After Deductible Expenses</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-700">Settlement Frequency *</label>
+                    <select
+                      value={reviseForm.settlementFrequency}
+                      onChange={(e: any) => setReviseForm({ ...reviseForm, settlementFrequency: e.target.value })}
+                      className="mt-1 w-full px-3 py-1.5 border rounded-lg text-sm font-medium"
+                    >
+                      <option value="MONTHLY">Monthly</option>
+                      <option value="YEARLY">Yearly (2 Equal Installments)</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Marketing & Software Entitlement */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                  <div className="text-xs font-bold text-slate-800">Marketing Support</div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[11px] font-medium text-slate-600">Responsible</label>
+                      <select
+                        value={reviseForm.marketingResponsibleParty}
+                        onChange={(e) => setReviseForm({ ...reviseForm, marketingResponsibleParty: e.target.value })}
+                        className="mt-0.5 w-full px-2 py-1 border rounded text-xs bg-white"
+                      >
+                        <option value="DIGITAL_GURU">Digital Guru</option>
+                        <option value="PARTNER">Partner</option>
+                        <option value="SHARED">Shared</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-medium text-slate-600">Months</label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={reviseForm.marketingSupportDurationMonths}
+                        onChange={(e) => setReviseForm({ ...reviseForm, marketingSupportDurationMonths: Number(e.target.value) })}
+                        className="mt-0.5 w-full px-2 py-1 border rounded text-xs"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                  <div className="text-xs font-bold text-slate-800">Course Software Access</div>
+                  <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer pt-1">
+                    <input
+                      type="checkbox"
+                      checked={reviseForm.courseSoftwareAccessEnabled}
+                      onChange={(e) => setReviseForm({ ...reviseForm, courseSoftwareAccessEnabled: e.target.checked })}
+                      className="rounded text-[#006FFF] w-4 h-4"
+                    />
+                    <span className="font-semibold">Software Access Enabled</span>
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Pricing notes"
+                    value={reviseForm.courseSoftwarePricingNotes}
+                    onChange={(e) => setReviseForm({ ...reviseForm, courseSoftwarePricingNotes: e.target.value })}
+                    className="mt-1 w-full px-2 py-1 border rounded text-xs"
+                  />
+                </div>
+              </div>
+
+              {/* Revision Commercial Summary Box */}
+              <div className="bg-slate-900 text-white p-4 rounded-xl space-y-3 shadow-md border border-slate-700">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                  <span className="font-bold text-xs uppercase tracking-wider text-[#FEDC32]">Revision Commercial Summary (v{(selectedAgreementForRevise.version || 1) + 1})</span>
+                  <span className="text-[10px] px-2 py-0.5 rounded bg-blue-900 text-blue-200 font-mono font-semibold">
+                    {reviseForm.settlementFrequency} • {reviseForm.revenueCalculationBasis}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                  <div className="bg-slate-800/80 p-3 rounded-lg border border-slate-700 space-y-1 text-[11px] text-slate-300">
+                    <div className="font-bold text-sm text-[#FEDC32]">Digital Guru: {reviseForm.digitalGuruRevenuePercentage}% Rev</div>
+                    <div>Marketing: {reviseForm.marketingSupportDurationMonths || 0} Months Support</div>
+                    <div>Software: {reviseForm.courseSoftwareAccessEnabled ? 'Enabled' : 'Disabled'}</div>
+                  </div>
+                  <div className="bg-slate-800/80 p-3 rounded-lg border border-slate-700 space-y-1 text-[11px] text-slate-300">
+                    <div className="font-bold text-sm text-sky-400">Partner: {reviseForm.partnerRevenuePercentage}% Rev</div>
+                    <div>Post-Support Marketing: {reviseForm.marketingPostSupportParty}</div>
+                    <div>Role: Campus Premise & Direct Operations</div>
+                  </div>
+                </div>
+
+                <div className="p-2 bg-blue-950/70 border border-blue-800 rounded-lg text-[10px] text-blue-200">
+                  <strong>DIRECT EXPENSE RULE:</strong> Direct expenses (rent, trainers) are not deducted from gross fees unless basis is Profit After Expenses. Historical installments, receipts and payments from v{selectedAgreementForRevise.version || 1} remain permanently preserved.
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-3 border-t">
+                <button
+                  type="button"
+                  onClick={() => setShowReviseModal(false)}
+                  className="px-4 py-2 border text-slate-600 rounded-lg text-sm font-semibold hover:bg-slate-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-6 py-2 bg-[#006FFF] hover:bg-[#0055CC] text-white font-bold rounded-lg text-sm shadow transition-all"
+                >
+                  {reviseForm.settlementFrequency === 'YEARLY'
+                    ? `Confirm Revision (v${(selectedAgreementForRevise.version || 1) + 1} & 2 Annual Installments)`
+                    : `Confirm Revision (v${(selectedAgreementForRevise.version || 1) + 1} - Monthly Settlement)`}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
+      )}
+
+      {/* MODAL: CALCULATE MONTHLY ROYALTY */}
+      {showCalculateModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200">
+            <div className="flex justify-between items-center border-b pb-3 mb-4">
+              <div>
+                <h3 className="text-base font-bold text-slate-900">Calculate Monthly Royalty Statement</h3>
+                <p className="text-xs text-slate-500">
+                  Runs royalty calculation against actual payment collections for the specified month.
+                </p>
+              </div>
+              <button onClick={() => setShowCalculateModal(false)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCalculateMonthlyRoyalty} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Select Franchise *</label>
+                <select
+                  required
+                  value={calculateForm.franchiseId}
+                  onChange={(e) => setCalculateForm({ ...calculateForm, franchiseId: e.target.value })}
+                  className="w-full px-3 py-2 border rounded-lg text-sm bg-white"
+                >
+                  <option value="">-- Choose Franchise --</option>
+                  {franchises.map((fr) => (
+                    <option key={fr.id} value={fr.id}>
+                      {fr.name} ({fr.code})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Period (YYYY-MM) *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="2026-11"
+                    value={calculateForm.periodLabel}
+                    onChange={(e) => setCalculateForm({ ...calculateForm, periodLabel: e.target.value })}
+                    className="w-full px-3 py-1.5 border rounded-lg text-sm font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Start Date *</label>
+                  <input
+                    type="date"
+                    required
+                    value={calculateForm.startDate}
+                    onChange={(e) => setCalculateForm({ ...calculateForm, startDate: e.target.value })}
+                    className="w-full px-2 py-1.5 border rounded-lg text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">End Date *</label>
+                  <input
+                    type="date"
+                    required
+                    value={calculateForm.endDate}
+                    onChange={(e) => setCalculateForm({ ...calculateForm, endDate: e.target.value })}
+                    className="w-full px-2 py-1.5 border rounded-lg text-xs"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Calculation Basis *</label>
+                <select
+                  value={calculateForm.revenueCalculationBasis}
+                  onChange={(e) => setCalculateForm({ ...calculateForm, revenueCalculationBasis: e.target.value })}
+                  className="w-full px-3 py-2 border rounded-lg text-sm bg-white"
+                >
+                  <option value="GROSS_COURSE_FEES">Gross Course Fees Collected</option>
+                  <option value="NET_COURSE_REVENUE">Net Course Revenue (After Refunds/Adjustments)</option>
+                  <option value="PROFIT_AFTER_EXPENSES">Profit After Deductible Expenses</option>
+                </select>
+              </div>
+
+              {calculateForm.revenueCalculationBasis === 'PROFIT_AFTER_EXPENSES' && (
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Approved Deductible Expenses (₹)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={calculateForm.deductibleExpenses}
+                    onChange={(e) => setCalculateForm({ ...calculateForm, deductibleExpenses: Number(e.target.value) })}
+                    className="w-full px-3 py-1.5 border rounded-lg text-sm"
+                    placeholder="e.g. 25000"
+                  />
+                  <div className="text-[11px] text-amber-700 mt-1">
+                    Note: Direct payer commitments (rent paid by partner, trainers paid by DG) are NOT deductible from gross collections unless contractually shared.
+                  </div>
+                </div>
+              )}
+
+              {calculateForm.revenueCalculationBasis === 'NET_COURSE_REVENUE' && (
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Refunds & Fee Adjustments (₹)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={calculateForm.deductions}
+                    onChange={(e) => setCalculateForm({ ...calculateForm, deductions: Number(e.target.value) })}
+                    className="w-full px-3 py-1.5 border rounded-lg text-sm"
+                    placeholder="e.g. 5000"
+                  />
+                </div>
+              )}
+
+              <div className="flex justify-end gap-3 pt-3 border-t">
+                <button
+                  type="button"
+                  onClick={() => setShowCalculateModal(false)}
+                  className="px-4 py-2 border text-slate-600 rounded-lg text-xs font-semibold hover:bg-slate-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-[#006FFF] hover:bg-[#0055CC] text-white font-bold rounded-lg text-xs shadow transition-all"
+                >
+                  Calculate Royalty Statement
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
-  )
-}
+      )}
     </div >
   );
 };

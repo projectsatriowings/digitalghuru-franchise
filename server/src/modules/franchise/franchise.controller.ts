@@ -173,7 +173,9 @@ export async function generateAnnualInstallments(params: {
   dueDay?: number;
   installment1DueDate?: Date | string | null;
   installment2DueDate?: Date | string | null;
+  prismaClient?: any;
 }) {
+  const db = params.prismaClient || prisma;
   const {
     franchiseId,
     agreementId,
@@ -217,12 +219,12 @@ export async function generateAnnualInstallments(params: {
     };
   } else if (calculationMethod === 'PER_STUDENT') {
     const feePerStudent = Number(perStudentFee || 0);
-    const franchiseBranches = await prisma.institute.findMany({
+    const franchiseBranches = await db.institute.findMany({
       where: { franchiseId },
       select: { id: true },
     });
-    const branchIds = franchiseBranches.map((b) => b.id);
-    const activeStudentCount = await prisma.student.count({
+    const branchIds = franchiseBranches.map((b: any) => b.id);
+    const activeStudentCount = await db.student.count({
       where: { instituteId: { in: branchIds }, status: 'ACTIVE' },
     });
     const annual = activeStudentCount * feePerStudent;
@@ -285,7 +287,7 @@ export async function generateAnnualInstallments(params: {
   const status1 = computeInstallmentLiveStatus({ amount: inst1Amount, paidAmount: 0, dueDate: due1 });
   const status2 = computeInstallmentLiveStatus({ amount: inst2Amount, paidAmount: 0, dueDate: due2 });
 
-  const inst1 = await prisma.franchiseRoyaltyInstallment.create({
+  const inst1 = await db.franchiseRoyaltyInstallment.create({
     data: {
       franchiseId,
       agreementId,
@@ -303,7 +305,7 @@ export async function generateAnnualInstallments(params: {
     },
   });
 
-  const inst2 = await prisma.franchiseRoyaltyInstallment.create({
+  const inst2 = await db.franchiseRoyaltyInstallment.create({
     data: {
       franchiseId,
       agreementId,
@@ -352,9 +354,30 @@ const createFranchiseSchema = z.object({
     title: z.string().default('Annual Master Franchise Agreement'),
     startDate: z.string(),
     endDate: z.string(),
+    agreementType: z.string().optional(),
     calculationMethod: z.enum(['FIXED_ANNUAL', 'PERCENTAGE_REVENUE', 'PER_STUDENT']).default('FIXED_ANNUAL'),
     annualRoyaltyAmount: z.number().min(0).optional(),
     royaltyPercentage: z.number().min(0).max(100).default(50.0),
+    digitalGuruRevenuePercentage: z.number().min(0).max(100).optional(),
+    partnerRevenuePercentage: z.number().min(0).max(100).optional(),
+    revenueCalculationBasis: z.string().optional(),
+    settlementFrequency: z.string().optional(),
+    totalInvestment: z.number().min(0).optional(),
+    digitalGuruInvestmentAmount: z.number().min(0).optional(),
+    partnerInvestmentAmount: z.number().min(0).optional(),
+    digitalGuruInvestmentPercentage: z.number().min(0).max(100).optional(),
+    partnerInvestmentPercentage: z.number().min(0).max(100).optional(),
+    operationalSetupContribution: z.number().min(0).optional(),
+    investmentNotes: z.string().optional(),
+    expenseResponsibilities: z.record(z.any()).optional(),
+    marketingResponsibleParty: z.string().optional(),
+    marketingSupportDurationMonths: z.number().int().min(0).optional(),
+    marketingPostSupportParty: z.string().optional(),
+    marketingBudget: z.number().min(0).optional(),
+    marketingEffectiveStartDate: z.string().optional(),
+    marketingNotes: z.string().optional(),
+    courseSoftwareAccessEnabled: z.boolean().optional(),
+    courseSoftwarePricingNotes: z.string().optional(),
     royaltyBasis: z.enum(['TOTAL_COLLECTIONS', 'TUITION_FEES_ONLY', 'NET_REVENUE']).default('TOTAL_COLLECTIONS'),
     paymentFrequency: z.enum(['MONTHLY', 'QUARTERLY', 'ANNUAL']).default('ANNUAL').optional(),
     perStudentFee: z.number().min(0).optional(),
@@ -462,6 +485,25 @@ export async function createFranchise(req: AuthenticatedRequest, res: Response) 
       : null;
     const dueDay = data.initialAgreement?.dueDay || 10;
 
+    const dgPct = data.initialAgreement?.digitalGuruRevenuePercentage !== undefined
+      ? Number(data.initialAgreement.digitalGuruRevenuePercentage)
+      : Number(data.initialAgreement?.royaltyPercentage ?? 50.0);
+    const partnerPct = data.initialAgreement?.partnerRevenuePercentage !== undefined
+      ? Number(data.initialAgreement.partnerRevenuePercentage)
+      : (100 - dgPct);
+
+    if (calculationMethod === 'PERCENTAGE_REVENUE') {
+      if (Math.round((dgPct + partnerPct) * 100) / 100 !== 100) {
+        return res.status(400).json({
+          success: false,
+          error: `Revenue sharing percentages must total 100% (currently Digital Guru: ${dgPct}%, Partner: ${partnerPct}%)`,
+        });
+      }
+    }
+
+    const isMonthly = data.initialAgreement?.settlementFrequency === 'MONTHLY';
+    const installmentCount = isMonthly ? 0 : 2;
+
     const agreement = await prisma.franchiseAgreement.create({
       data: {
         franchiseId: franchise.id,
@@ -469,14 +511,36 @@ export async function createFranchise(req: AuthenticatedRequest, res: Response) 
         title: data.initialAgreement?.title || 'Annual Master Franchise Agreement',
         startDate: agreementStartDate,
         endDate: agreementEndDate,
+        agreementType: (data.initialAgreement?.agreementType as any) || 'CUSTOM_AGREEMENT',
         annualRoyaltyAmount,
         calculationMethod,
         perStudentFee,
         royaltyPercentage,
+        digitalGuruRevenuePercentage: new Prisma.Decimal(dgPct),
+        partnerRevenuePercentage: new Prisma.Decimal(partnerPct),
+        revenueCalculationBasis: (data.initialAgreement?.revenueCalculationBasis as any) || 'GROSS_COURSE_FEES',
+        settlementFrequency: (data.initialAgreement?.settlementFrequency as any) || (isMonthly ? 'MONTHLY' : 'YEARLY'),
+        totalInvestment: data.initialAgreement?.totalInvestment !== undefined ? new Prisma.Decimal(data.initialAgreement.totalInvestment) : null,
+        digitalGuruInvestmentAmount: data.initialAgreement?.digitalGuruInvestmentAmount !== undefined ? new Prisma.Decimal(data.initialAgreement.digitalGuruInvestmentAmount) : null,
+        partnerInvestmentAmount: data.initialAgreement?.partnerInvestmentAmount !== undefined ? new Prisma.Decimal(data.initialAgreement.partnerInvestmentAmount) : null,
+        digitalGuruInvestmentPercentage: data.initialAgreement?.digitalGuruInvestmentPercentage !== undefined ? new Prisma.Decimal(data.initialAgreement.digitalGuruInvestmentPercentage) : null,
+        partnerInvestmentPercentage: data.initialAgreement?.partnerInvestmentPercentage !== undefined ? new Prisma.Decimal(data.initialAgreement.partnerInvestmentPercentage) : null,
+        operationalSetupContribution: data.initialAgreement?.operationalSetupContribution !== undefined ? new Prisma.Decimal(data.initialAgreement.operationalSetupContribution) : null,
+        investmentNotes: data.initialAgreement?.investmentNotes || null,
+        expenseResponsibilities: (data.initialAgreement?.expenseResponsibilities as any) ?? Prisma.DbNull,
+        marketingResponsibleParty: (data.initialAgreement?.marketingResponsibleParty as any) || 'DIGITAL_GURU',
+        marketingSupportDurationMonths: data.initialAgreement?.marketingSupportDurationMonths !== undefined ? Number(data.initialAgreement.marketingSupportDurationMonths) : 3,
+        marketingPostSupportParty: (data.initialAgreement?.marketingPostSupportParty as any) || 'PARTNER',
+        marketingBudget: data.initialAgreement?.marketingBudget !== undefined ? new Prisma.Decimal(data.initialAgreement.marketingBudget) : null,
+        marketingEffectiveStartDate: data.initialAgreement?.marketingEffectiveStartDate ? new Date(data.initialAgreement.marketingEffectiveStartDate) : null,
+        marketingNotes: data.initialAgreement?.marketingNotes || null,
+        courseSoftwareAccessEnabled: data.initialAgreement?.courseSoftwareAccessEnabled !== undefined ? Boolean(data.initialAgreement.courseSoftwareAccessEnabled) : true,
+        courseSoftwarePricingNotes: data.initialAgreement?.courseSoftwarePricingNotes || null,
+        version: 1,
         royaltyBasis,
-        paymentFrequency: 'ANNUAL',
+        paymentFrequency: isMonthly ? 'MONTHLY' : 'ANNUAL',
         dueDay,
-        installmentCount: 2,
+        installmentCount,
         status: 'ACTIVE',
         terms: data.initialAgreement?.terms,
         notes: data.initialAgreement?.notes,
@@ -484,25 +548,30 @@ export async function createFranchise(req: AuthenticatedRequest, res: Response) 
       },
     });
 
-    // 4. Generate Exactly TWO Installments for the Agreement Year
-    const installments = await generateAnnualInstallments({
-      franchiseId: franchise.id,
-      agreementId: agreement.id,
-      startDate: agreementStartDate,
-      endDate: agreementEndDate,
-      calculationMethod,
-      annualRoyaltyAmount: Number(annualRoyaltyAmount),
-      royaltyPercentage: Number(royaltyPercentage),
-      royaltyBasis,
-      perStudentFee: perStudentFee ? Number(perStudentFee) : null,
-      dueDay,
-      installment1DueDate: data.initialAgreement?.installment1DueDate,
-      installment2DueDate: data.initialAgreement?.installment2DueDate,
-    });
+    // 4. Generate installments ONLY for YEARLY settlement frequency
+    let installments: any[] = [];
+    if (!isMonthly) {
+      installments = await generateAnnualInstallments({
+        franchiseId: franchise.id,
+        agreementId: agreement.id,
+        startDate: agreementStartDate,
+        endDate: agreementEndDate,
+        calculationMethod,
+        annualRoyaltyAmount: Number(annualRoyaltyAmount),
+        royaltyPercentage: Number(royaltyPercentage),
+        royaltyBasis,
+        perStudentFee: perStudentFee ? Number(perStudentFee) : null,
+        dueDay,
+        installment1DueDate: data.initialAgreement?.installment1DueDate,
+        installment2DueDate: data.initialAgreement?.installment2DueDate,
+      });
+    }
 
     return res.status(201).json({
       success: true,
-      message: 'Franchise, Owner Account, and 2 Annual Installments created successfully',
+      message: isMonthly
+        ? 'Franchise, Owner Account, and Agreement created successfully with monthly settlement'
+        : 'Franchise, Owner Account, and 2 Annual Installments created successfully',
       data: {
         franchise,
         agreement,
@@ -1067,8 +1136,153 @@ export async function getUnassignedBranches(req: AuthenticatedRequest, res: Resp
 }
 
 // ============================================================================
-// 3. AGREEMENTS & ANNUAL TWO-INSTALLMENT RENEWALS
+// 3. AGREEMENTS & ANNUAL TWO-INSTALLMENT RENEWALS / REVISIONS
 // ============================================================================
+
+export async function getAgreementTemplates(req: AuthenticatedRequest, res: Response) {
+  try {
+    const templates = [
+      {
+        type: 'NEW_CENTRE_JOINT_INVESTMENT',
+        label: 'New Centre (Joint Investment)',
+        description: 'Joint establishment of new centre. 50:50 initial setup investment (e.g. ₹1–2 Lakh illustrative default), shared revenue, Digital Guru supplies & pays trainers, initial 3 months marketing support.',
+        defaults: {
+          title: 'New Centre Joint Investment Master Agreement',
+          agreementType: 'NEW_CENTRE_JOINT_INVESTMENT',
+          calculationMethod: 'PERCENTAGE_REVENUE',
+          totalInvestment: 200000,
+          digitalGuruInvestmentAmount: 100000,
+          partnerInvestmentAmount: 100000,
+          digitalGuruInvestmentPercentage: 50.00,
+          partnerInvestmentPercentage: 50.00,
+          operationalSetupContribution: 50000,
+          investmentNotes: 'Illustrative 50:50 joint initial setup and capital expenditure contribution (editable)',
+          digitalGuruRevenuePercentage: 50.00,
+          partnerRevenuePercentage: 50.00,
+          revenueCalculationBasis: 'GROSS_COURSE_FEES',
+          settlementFrequency: 'MONTHLY',
+          expenseResponsibilities: {
+            rent: { payer: 'PARTNER', notes: 'Partner pays building rent & lease deposit directly' },
+            trainerSalaries: { payer: 'DIGITAL_GURU', notes: 'Digital Guru supplies trainers and bears trainer costs directly' },
+            staffSalaries: { payer: 'PARTNER', notes: 'Partner pays administrative staff salaries directly' },
+            operationalSetup: { payer: 'SHARED', sharedDgPercentage: 50, sharedPartnerPercentage: 50, notes: '50:50 shared initial operational setup' },
+            utilitiesMaintenance: { payer: 'PARTNER', notes: 'Utilities, power, water, internet borne directly by Partner' },
+            marketingAdvertising: { payer: 'DIGITAL_GURU', notes: 'Digital Guru supports initial 3 months marketing directly' },
+            other: { payer: 'PARTNER', notes: 'Local compliance and center operations borne directly by Partner' },
+          },
+          marketingResponsibleParty: 'DIGITAL_GURU',
+          marketingSupportDurationMonths: 3,
+          marketingPostSupportParty: 'PARTNER',
+          marketingBudget: 50000,
+          courseSoftwareAccessEnabled: true,
+          courseSoftwarePricingNotes: 'Full Course Management Software access included',
+        },
+      },
+      {
+        type: 'EXISTING_CENTRE',
+        label: 'Existing Centre (Conversion)',
+        description: 'Existing centre onboarded with active infrastructure. Digital Guru supplies certified trainers and covers initial 3 months marketing; partner handles premises rent and operations. Revenue share 45:55 or 55:45 (fully editable).',
+        defaults: {
+          title: 'Existing Centre Conversion Agreement',
+          agreementType: 'EXISTING_CENTRE',
+          calculationMethod: 'PERCENTAGE_REVENUE',
+          totalInvestment: 0,
+          digitalGuruInvestmentAmount: 0,
+          partnerInvestmentAmount: 0,
+          digitalGuruInvestmentPercentage: 0,
+          partnerInvestmentPercentage: 0,
+          operationalSetupContribution: 0,
+          investmentNotes: 'Existing centre infrastructure utilized',
+          digitalGuruRevenuePercentage: 45.00,
+          partnerRevenuePercentage: 55.00,
+          revenueCalculationBasis: 'GROSS_COURSE_FEES',
+          settlementFrequency: 'MONTHLY',
+          expenseResponsibilities: {
+            rent: { payer: 'PARTNER', notes: 'Partner bears existing building rent directly' },
+            trainerSalaries: { payer: 'DIGITAL_GURU', notes: 'Digital Guru supplies certified course trainers and bears trainer costs directly' },
+            staffSalaries: { payer: 'PARTNER', notes: 'Partner pays center staff salaries directly' },
+            operationalSetup: { payer: 'PARTNER', notes: 'Existing setup utilized' },
+            utilitiesMaintenance: { payer: 'PARTNER', notes: 'Partner pays utilities directly' },
+            marketingAdvertising: { payer: 'DIGITAL_GURU', notes: 'Digital Guru supports initial 3 months marketing directly' },
+            other: { payer: 'PARTNER' },
+          },
+          marketingResponsibleParty: 'DIGITAL_GURU',
+          marketingSupportDurationMonths: 3,
+          marketingPostSupportParty: 'PARTNER',
+          marketingBudget: 30000,
+          courseSoftwareAccessEnabled: true,
+          courseSoftwarePricingNotes: 'Course Management Software access enabled',
+        },
+      },
+      {
+        type: 'BRAND_AND_COURSE_SUPPORT',
+        label: 'Brand & Course Support',
+        description: 'Brand licensing, curriculum, exams, and LMS support. Partner operates centre independently with fixed annual commercial royalty (e.g. ₹2,00,000) or revenue share.',
+        defaults: {
+          title: 'Brand Licensing & Course Support Agreement',
+          agreementType: 'BRAND_AND_COURSE_SUPPORT',
+          calculationMethod: 'FIXED_ANNUAL',
+          annualRoyaltyAmount: 200000,
+          totalInvestment: 0,
+          digitalGuruInvestmentAmount: 0,
+          partnerInvestmentAmount: 0,
+          digitalGuruInvestmentPercentage: 0,
+          partnerInvestmentPercentage: 0,
+          operationalSetupContribution: 0,
+          digitalGuruRevenuePercentage: 50.00,
+          partnerRevenuePercentage: 50.00,
+          revenueCalculationBasis: 'GROSS_COURSE_FEES',
+          settlementFrequency: 'YEARLY',
+          expenseResponsibilities: {
+            rent: { payer: 'PARTNER', notes: 'Partner bears building rent directly' },
+            trainerSalaries: { payer: 'PARTNER', notes: 'Partner handles trainer salaries directly' },
+            staffSalaries: { payer: 'PARTNER', notes: 'Partner handles staff salaries directly' },
+            operationalSetup: { payer: 'PARTNER', notes: 'Partner handles centre setup' },
+            utilitiesMaintenance: { payer: 'PARTNER', notes: 'Partner pays utilities directly' },
+            marketingAdvertising: { payer: 'PARTNER', notes: 'Partner funds local marketing directly' },
+            other: { payer: 'PARTNER' },
+          },
+          marketingResponsibleParty: 'PARTNER',
+          marketingSupportDurationMonths: 0,
+          marketingPostSupportParty: 'PARTNER',
+          marketingBudget: 0,
+          courseSoftwareAccessEnabled: true,
+          courseSoftwarePricingNotes: 'Digital Guru LMS & Course Management Software license (standard terms apply)',
+        },
+      },
+      {
+        type: 'CUSTOM_AGREEMENT',
+        label: 'Custom Agreement',
+        description: 'Fully custom agreement where all investment, revenue share, direct expense allocations, marketing, and settlement frequency are tailored with zero hidden dependencies.',
+        defaults: {
+          title: 'Custom Franchise Agreement',
+          agreementType: 'CUSTOM_AGREEMENT',
+          calculationMethod: 'PERCENTAGE_REVENUE',
+          totalInvestment: 0,
+          digitalGuruInvestmentAmount: 0,
+          partnerInvestmentAmount: 0,
+          digitalGuruInvestmentPercentage: 0,
+          partnerInvestmentPercentage: 0,
+          operationalSetupContribution: 0,
+          digitalGuruRevenuePercentage: 50.00,
+          partnerRevenuePercentage: 50.00,
+          revenueCalculationBasis: 'GROSS_COURSE_FEES',
+          settlementFrequency: 'MONTHLY',
+          expenseResponsibilities: {},
+          marketingResponsibleParty: 'DIGITAL_GURU',
+          marketingSupportDurationMonths: 3,
+          marketingPostSupportParty: 'PARTNER',
+          courseSoftwareAccessEnabled: true,
+        },
+      },
+    ];
+
+    return res.json({ success: true, data: { templates } });
+  } catch (err: any) {
+    console.error('[Get Agreement Templates Error]', err);
+    return res.status(500).json({ success: false, error: 'Failed to retrieve agreement templates' });
+  }
+}
 
 export async function createAgreement(req: AuthenticatedRequest, res: Response) {
   try {
@@ -1081,9 +1295,30 @@ export async function createAgreement(req: AuthenticatedRequest, res: Response) 
       title,
       startDate,
       endDate,
-      calculationMethod,
+      agreementType,
+      calculationMethod: requestedCalculationMethod,
       annualRoyaltyAmount,
       royaltyPercentage,
+      digitalGuruRevenuePercentage,
+      partnerRevenuePercentage,
+      revenueCalculationBasis,
+      settlementFrequency,
+      totalInvestment,
+      digitalGuruInvestmentAmount,
+      partnerInvestmentAmount,
+      digitalGuruInvestmentPercentage,
+      partnerInvestmentPercentage,
+      operationalSetupContribution,
+      investmentNotes,
+      expenseResponsibilities,
+      marketingResponsibleParty,
+      marketingSupportDurationMonths,
+      marketingPostSupportParty,
+      marketingBudget,
+      marketingEffectiveStartDate,
+      marketingNotes,
+      courseSoftwareAccessEnabled,
+      courseSoftwarePricingNotes,
       royaltyBasis,
       perStudentFee,
       dueDay,
@@ -1097,11 +1332,34 @@ export async function createAgreement(req: AuthenticatedRequest, res: Response) 
       return res.status(400).json({ success: false, error: 'Title, start date, and end date are required' });
     }
 
-    if (!calculationMethod || !['FIXED_ANNUAL', 'PERCENTAGE_REVENUE', 'PER_STUDENT'].includes(calculationMethod)) {
+    // Default calculation method based on agreementType if not explicitly passed
+    const calculationMethod = requestedCalculationMethod || (
+      agreementType === 'BRAND_AND_COURSE_SUPPORT' ? 'FIXED_ANNUAL' : 'PERCENTAGE_REVENUE'
+    );
+
+    if (!['FIXED_ANNUAL', 'PERCENTAGE_REVENUE', 'PER_STUDENT'].includes(calculationMethod)) {
       return res.status(400).json({
         success: false,
         error: 'Calculation method is mandatory: choose FIXED_ANNUAL, PERCENTAGE_REVENUE, or PER_STUDENT',
       });
+    }
+
+    // Revenue Sharing Validation
+    const effectiveDgRevenuePct = digitalGuruRevenuePercentage !== undefined
+      ? Number(digitalGuruRevenuePercentage)
+      : (royaltyPercentage !== undefined ? Number(royaltyPercentage) : 50.0);
+
+    const effectivePartnerRevenuePct = partnerRevenuePercentage !== undefined
+      ? Number(partnerRevenuePercentage)
+      : (100 - effectiveDgRevenuePct);
+
+    if (digitalGuruRevenuePercentage !== undefined || partnerRevenuePercentage !== undefined) {
+      if (Math.round((effectiveDgRevenuePct + effectivePartnerRevenuePct) * 100) / 100 !== 100) {
+        return res.status(400).json({
+          success: false,
+          error: `Revenue sharing percentages must total 100% (currently Digital Guru: ${effectiveDgRevenuePct}%, Partner: ${effectivePartnerRevenuePct}%)`,
+        });
+      }
     }
 
     if (calculationMethod === 'FIXED_ANNUAL' && (annualRoyaltyAmount === undefined || Number(annualRoyaltyAmount) <= 0)) {
@@ -1111,10 +1369,10 @@ export async function createAgreement(req: AuthenticatedRequest, res: Response) 
       });
     }
 
-    if (calculationMethod === 'PERCENTAGE_REVENUE' && (royaltyPercentage === undefined || Number(royaltyPercentage) <= 0)) {
+    if (calculationMethod === 'PERCENTAGE_REVENUE' && effectiveDgRevenuePct <= 0) {
       return res.status(400).json({
         success: false,
-        error: 'PERCENTAGE_REVENUE calculation method requires an explicit positive royaltyPercentage',
+        error: 'PERCENTAGE_REVENUE calculation method requires an explicit positive royaltyPercentage or digitalGuruRevenuePercentage',
       });
     }
 
@@ -1142,14 +1400,36 @@ export async function createAgreement(req: AuthenticatedRequest, res: Response) 
         title,
         startDate: new Date(startDate),
         endDate: new Date(endDate),
+        agreementType: agreementType || 'CUSTOM_AGREEMENT',
         calculationMethod,
         annualRoyaltyAmount: annualRoyaltyAmount !== undefined ? new Prisma.Decimal(annualRoyaltyAmount) : null,
         perStudentFee: perStudentFee !== undefined ? new Prisma.Decimal(perStudentFee) : null,
-        royaltyPercentage: new Prisma.Decimal(royaltyPercentage ?? 50.0),
-        royaltyBasis: royaltyBasis || 'TOTAL_COLLECTIONS',
-        paymentFrequency: 'ANNUAL',
+        royaltyPercentage: new Prisma.Decimal(effectiveDgRevenuePct),
+        digitalGuruRevenuePercentage: new Prisma.Decimal(effectiveDgRevenuePct),
+        partnerRevenuePercentage: new Prisma.Decimal(effectivePartnerRevenuePct),
+        revenueCalculationBasis: revenueCalculationBasis || (royaltyBasis as any) || 'GROSS_COURSE_FEES',
+        settlementFrequency: settlementFrequency || 'YEARLY',
+        totalInvestment: totalInvestment !== undefined ? new Prisma.Decimal(totalInvestment) : null,
+        digitalGuruInvestmentAmount: digitalGuruInvestmentAmount !== undefined ? new Prisma.Decimal(digitalGuruInvestmentAmount) : null,
+        partnerInvestmentAmount: partnerInvestmentAmount !== undefined ? new Prisma.Decimal(partnerInvestmentAmount) : null,
+        digitalGuruInvestmentPercentage: digitalGuruInvestmentPercentage !== undefined ? new Prisma.Decimal(digitalGuruInvestmentPercentage) : null,
+        partnerInvestmentPercentage: partnerInvestmentPercentage !== undefined ? new Prisma.Decimal(partnerInvestmentPercentage) : null,
+        operationalSetupContribution: operationalSetupContribution !== undefined ? new Prisma.Decimal(operationalSetupContribution) : null,
+        investmentNotes: investmentNotes || null,
+        expenseResponsibilities: (expenseResponsibilities as any) ?? Prisma.DbNull,
+        marketingResponsibleParty: marketingResponsibleParty || 'DIGITAL_GURU',
+        marketingSupportDurationMonths: marketingSupportDurationMonths !== undefined ? Number(marketingSupportDurationMonths) : 3,
+        marketingPostSupportParty: marketingPostSupportParty || 'PARTNER',
+        marketingBudget: marketingBudget !== undefined ? new Prisma.Decimal(marketingBudget) : null,
+        marketingEffectiveStartDate: marketingEffectiveStartDate ? new Date(marketingEffectiveStartDate) : null,
+        marketingNotes: marketingNotes || null,
+        courseSoftwareAccessEnabled: courseSoftwareAccessEnabled !== undefined ? Boolean(courseSoftwareAccessEnabled) : true,
+        courseSoftwarePricingNotes: courseSoftwarePricingNotes || null,
+        version: 1,
+        royaltyBasis: (royaltyBasis as any) || 'TOTAL_COLLECTIONS',
+        paymentFrequency: settlementFrequency === 'MONTHLY' ? 'MONTHLY' : 'ANNUAL',
         dueDay: dueDay ? Number(dueDay) : 10,
-        installmentCount: 2,
+        installmentCount: settlementFrequency === 'MONTHLY' ? 0 : 2,
         status: 'ACTIVE',
         terms,
         notes,
@@ -1157,30 +1437,216 @@ export async function createAgreement(req: AuthenticatedRequest, res: Response) 
       },
     });
 
-    // Generate the two installments
-    const installments = await generateAnnualInstallments({
-      franchiseId,
-      agreementId: agreement.id,
-      startDate: new Date(startDate),
-      endDate: new Date(endDate),
-      calculationMethod: agreement.calculationMethod || 'FIXED_ANNUAL',
-      annualRoyaltyAmount: agreement.annualRoyaltyAmount ? Number(agreement.annualRoyaltyAmount) : null,
-      royaltyPercentage: Number(agreement.royaltyPercentage),
-      royaltyBasis: agreement.royaltyBasis,
-      perStudentFee: agreement.perStudentFee ? Number(agreement.perStudentFee) : null,
-      dueDay: agreement.dueDay,
-      installment1DueDate,
-      installment2DueDate,
-    });
+    const isMonthly = settlementFrequency === 'MONTHLY';
+    let installments: any[] = [];
+    if (!isMonthly) {
+      installments = await generateAnnualInstallments({
+        franchiseId,
+        agreementId: agreement.id,
+        startDate: new Date(startDate),
+        endDate: new Date(endDate),
+        calculationMethod: agreement.calculationMethod || 'FIXED_ANNUAL',
+        annualRoyaltyAmount: agreement.annualRoyaltyAmount ? Number(agreement.annualRoyaltyAmount) : null,
+        royaltyPercentage: Number(agreement.royaltyPercentage),
+        royaltyBasis: agreement.royaltyBasis,
+        perStudentFee: agreement.perStudentFee ? Number(agreement.perStudentFee) : null,
+        dueDay: agreement.dueDay,
+        installment1DueDate,
+        installment2DueDate,
+      });
+    }
 
     return res.status(201).json({
       success: true,
-      message: 'Franchise agreement and 2 annual installments created successfully',
+      message: isMonthly
+        ? 'Franchise agreement created successfully with monthly settlement'
+        : 'Franchise agreement and 2 annual installments created successfully',
       data: { agreement, installments },
     });
   } catch (err: any) {
     console.error('[Create Agreement Error]', err);
     return res.status(500).json({ success: false, error: 'Failed to create agreement' });
+  }
+}
+
+// Revise agreement: creates version N+1 linked via parentAgreementId, preserving previous agreement history
+export async function reviseAgreement(req: AuthenticatedRequest, res: Response) {
+  try {
+    if (req.user?.role !== 'SUPER_ADMIN') {
+      return res.status(403).json({ success: false, error: 'Forbidden: Only Super Admin can revise agreements' });
+    }
+
+    const { id: franchiseId, agreementId } = req.params;
+    const previousAgreement = await prisma.franchiseAgreement.findUnique({
+      where: { id: agreementId },
+    });
+
+    if (!previousAgreement) {
+      return res.status(404).json({ success: false, error: 'Previous agreement not found' });
+    }
+
+    const {
+      title,
+      startDate,
+      endDate,
+      agreementType,
+      calculationMethod,
+      annualRoyaltyAmount,
+      perStudentFee,
+      royaltyPercentage,
+      digitalGuruRevenuePercentage,
+      partnerRevenuePercentage,
+      revenueCalculationBasis,
+      settlementFrequency,
+      totalInvestment,
+      digitalGuruInvestmentAmount,
+      partnerInvestmentAmount,
+      digitalGuruInvestmentPercentage,
+      partnerInvestmentPercentage,
+      operationalSetupContribution,
+      investmentNotes,
+      expenseResponsibilities,
+      marketingResponsibleParty,
+      marketingSupportDurationMonths,
+      marketingPostSupportParty,
+      marketingBudget,
+      marketingEffectiveStartDate,
+      marketingNotes,
+      courseSoftwareAccessEnabled,
+      courseSoftwarePricingNotes,
+      dueDay,
+      terms,
+      notes,
+      revisionReason,
+    } = req.body;
+
+    const effectiveDgPct = digitalGuruRevenuePercentage !== undefined
+      ? Number(digitalGuruRevenuePercentage)
+      : (royaltyPercentage !== undefined ? Number(royaltyPercentage) : Number(previousAgreement.digitalGuruRevenuePercentage ?? 50.0));
+
+    const effectivePartnerPct = partnerRevenuePercentage !== undefined
+      ? Number(partnerRevenuePercentage)
+      : (100 - effectiveDgPct);
+
+    if (Math.round((effectiveDgPct + effectivePartnerPct) * 100) / 100 !== 100) {
+      return res.status(400).json({
+        success: false,
+        error: `Revenue sharing percentages must total 100% (currently Digital Guru: ${effectiveDgPct}%, Partner: ${effectivePartnerPct}%)`,
+      });
+    }
+
+    const effSettlementFreq = settlementFrequency || previousAgreement.settlementFrequency || 'YEARLY';
+    const isMonthly = effSettlementFreq === 'MONTHLY';
+    const installmentCount = isMonthly ? 0 : 2;
+
+    const newVersion = (previousAgreement.version || 1) + 1;
+    const baseNumber = previousAgreement.agreementNumber.split('-v')[0];
+    const agreementNumber = `${baseNumber}-v${newVersion}`;
+
+    const { newAgreement, installments } = await prisma.$transaction(async (tx: any) => {
+      // 1. Mark previous agreement as EXPIRED (preserving all historical installments, payments, and receipts)
+      await tx.franchiseAgreement.update({
+        where: { id: agreementId },
+        data: { status: 'EXPIRED' },
+      });
+
+      // 2. Create revised agreement version
+      const createdAgreement = await tx.franchiseAgreement.create({
+        data: {
+          franchiseId,
+          agreementNumber,
+          title: title || `${previousAgreement.title} (Rev v${newVersion})`,
+          startDate: new Date(startDate || previousAgreement.startDate),
+          endDate: new Date(endDate || previousAgreement.endDate),
+          agreementType: agreementType || previousAgreement.agreementType,
+          calculationMethod: calculationMethod || previousAgreement.calculationMethod || 'PERCENTAGE_REVENUE',
+          annualRoyaltyAmount: annualRoyaltyAmount !== undefined
+            ? new Prisma.Decimal(annualRoyaltyAmount)
+            : previousAgreement.annualRoyaltyAmount,
+          perStudentFee: perStudentFee !== undefined
+            ? new Prisma.Decimal(perStudentFee)
+            : previousAgreement.perStudentFee,
+          royaltyPercentage: new Prisma.Decimal(effectiveDgPct),
+          digitalGuruRevenuePercentage: new Prisma.Decimal(effectiveDgPct),
+          partnerRevenuePercentage: new Prisma.Decimal(effectivePartnerPct),
+          revenueCalculationBasis: revenueCalculationBasis || previousAgreement.revenueCalculationBasis,
+          settlementFrequency: effSettlementFreq,
+          totalInvestment: totalInvestment !== undefined
+            ? new Prisma.Decimal(totalInvestment)
+            : previousAgreement.totalInvestment,
+          digitalGuruInvestmentAmount: digitalGuruInvestmentAmount !== undefined
+            ? new Prisma.Decimal(digitalGuruInvestmentAmount)
+            : previousAgreement.digitalGuruInvestmentAmount,
+          partnerInvestmentAmount: partnerInvestmentAmount !== undefined
+            ? new Prisma.Decimal(partnerInvestmentAmount)
+            : previousAgreement.partnerInvestmentAmount,
+          digitalGuruInvestmentPercentage: digitalGuruInvestmentPercentage !== undefined
+            ? new Prisma.Decimal(digitalGuruInvestmentPercentage)
+            : previousAgreement.digitalGuruInvestmentPercentage,
+          partnerInvestmentPercentage: partnerInvestmentPercentage !== undefined
+            ? new Prisma.Decimal(partnerInvestmentPercentage)
+            : previousAgreement.partnerInvestmentPercentage,
+          operationalSetupContribution: operationalSetupContribution !== undefined
+            ? new Prisma.Decimal(operationalSetupContribution)
+            : previousAgreement.operationalSetupContribution,
+          investmentNotes: investmentNotes !== undefined ? investmentNotes : previousAgreement.investmentNotes,
+          expenseResponsibilities: (expenseResponsibilities as any) ?? previousAgreement.expenseResponsibilities ?? Prisma.DbNull,
+          marketingResponsibleParty: marketingResponsibleParty || previousAgreement.marketingResponsibleParty,
+          marketingSupportDurationMonths: marketingSupportDurationMonths !== undefined
+            ? Number(marketingSupportDurationMonths)
+            : previousAgreement.marketingSupportDurationMonths,
+          marketingPostSupportParty: marketingPostSupportParty || previousAgreement.marketingPostSupportParty,
+          marketingBudget: marketingBudget !== undefined ? new Prisma.Decimal(marketingBudget) : previousAgreement.marketingBudget,
+          marketingEffectiveStartDate: marketingEffectiveStartDate ? new Date(marketingEffectiveStartDate) : previousAgreement.marketingEffectiveStartDate,
+          marketingNotes: marketingNotes !== undefined ? marketingNotes : previousAgreement.marketingNotes,
+          courseSoftwareAccessEnabled: courseSoftwareAccessEnabled !== undefined ? Boolean(courseSoftwareAccessEnabled) : previousAgreement.courseSoftwareAccessEnabled,
+          courseSoftwarePricingNotes: courseSoftwarePricingNotes !== undefined ? courseSoftwarePricingNotes : previousAgreement.courseSoftwarePricingNotes,
+          version: newVersion,
+          parentAgreementId: previousAgreement.id,
+          paymentFrequency: isMonthly ? 'MONTHLY' : 'ANNUAL',
+          dueDay: dueDay ? Number(dueDay) : previousAgreement.dueDay,
+          installmentCount,
+          status: 'ACTIVE',
+          terms: terms || previousAgreement.terms,
+          notes: notes || (revisionReason ? `[Revision v${newVersion}]: ${revisionReason}` : `Revised from ${previousAgreement.agreementNumber}`),
+          createdById: req.user?.userId,
+        },
+      });
+
+      // 3. Generate installments for revised agreement ONLY IF YEARLY
+      let createdInstallments: any[] = [];
+      if (!isMonthly) {
+        createdInstallments = await generateAnnualInstallments({
+          franchiseId,
+          agreementId: createdAgreement.id,
+          startDate: createdAgreement.startDate,
+          endDate: createdAgreement.endDate,
+          calculationMethod: createdAgreement.calculationMethod || 'FIXED_ANNUAL',
+          annualRoyaltyAmount: createdAgreement.annualRoyaltyAmount ? Number(createdAgreement.annualRoyaltyAmount) : null,
+          royaltyPercentage: Number(createdAgreement.royaltyPercentage),
+          royaltyBasis: createdAgreement.royaltyBasis,
+          perStudentFee: createdAgreement.perStudentFee ? Number(createdAgreement.perStudentFee) : null,
+          dueDay: createdAgreement.dueDay,
+          prismaClient: tx,
+        });
+      }
+
+      return { newAgreement: createdAgreement, installments: createdInstallments };
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: `Agreement revised successfully to version ${newVersion}. Historical agreement ${previousAgreement.agreementNumber} preserved.`,
+      data: {
+        agreement: newAgreement,
+        installments,
+        previousAgreementId: previousAgreement.id,
+        version: newVersion,
+      },
+    });
+  } catch (err: any) {
+    console.error('[Revise Agreement Error]', err);
+    return res.status(500).json({ success: false, error: 'Failed to revise agreement' });
   }
 }
 
@@ -1196,9 +1662,30 @@ export async function renewAgreement(req: AuthenticatedRequest, res: Response) {
       title,
       startDate,
       endDate,
+      agreementType,
       calculationMethod,
       annualRoyaltyAmount,
       royaltyPercentage,
+      digitalGuruRevenuePercentage,
+      partnerRevenuePercentage,
+      revenueCalculationBasis,
+      settlementFrequency,
+      totalInvestment,
+      digitalGuruInvestmentAmount,
+      partnerInvestmentAmount,
+      digitalGuruInvestmentPercentage,
+      partnerInvestmentPercentage,
+      operationalSetupContribution,
+      investmentNotes,
+      expenseResponsibilities,
+      marketingResponsibleParty,
+      marketingSupportDurationMonths,
+      marketingPostSupportParty,
+      marketingBudget,
+      marketingEffectiveStartDate,
+      marketingNotes,
+      courseSoftwareAccessEnabled,
+      courseSoftwarePricingNotes,
       royaltyBasis,
       perStudentFee,
       dueDay,
@@ -1217,58 +1704,122 @@ export async function renewAgreement(req: AuthenticatedRequest, res: Response) {
       return res.status(404).json({ success: false, error: 'Previous agreement not found' });
     }
 
-    // 1. Mark previous agreement as EXPIRED (retaining all history, installments, and receipts)
-    await prisma.franchiseAgreement.update({
-      where: { id: agreementId },
-      data: { status: 'EXPIRED' },
-    });
+    // Revenue Sharing Validation
+    const effectiveDgRevenuePct = digitalGuruRevenuePercentage !== undefined
+      ? Number(digitalGuruRevenuePercentage)
+      : (royaltyPercentage !== undefined ? Number(royaltyPercentage) : Number(previousAgreement.digitalGuruRevenuePercentage ?? previousAgreement.royaltyPercentage ?? 50.0));
 
-    // 2. Create renewed agreement
+    const effectivePartnerRevenuePct = partnerRevenuePercentage !== undefined
+      ? Number(partnerRevenuePercentage)
+      : (100 - effectiveDgRevenuePct);
+
+    if (digitalGuruRevenuePercentage !== undefined || partnerRevenuePercentage !== undefined) {
+      if (Math.round((effectiveDgRevenuePct + effectivePartnerRevenuePct) * 100) / 100 !== 100) {
+        return res.status(400).json({
+          success: false,
+          error: `Revenue sharing percentages must total 100% (currently Digital Guru: ${effectiveDgRevenuePct}%, Partner: ${effectivePartnerRevenuePct}%)`,
+        });
+      }
+    }
+
+    const effSettlementFreq = settlementFrequency || previousAgreement.settlementFrequency || 'YEARLY';
+    const isMonthly = effSettlementFreq === 'MONTHLY';
+    const installmentCount = isMonthly ? 0 : 2;
+
     const year = new Date(startDate || Date.now()).getFullYear();
     const agreementNumber = await generateUniqueAgreementNumber(year);
 
-    const newAgreement = await prisma.franchiseAgreement.create({
-      data: {
-        franchiseId,
-        agreementNumber,
-        title: title || `Annual Master Agreement (${year})`,
-        startDate: new Date(startDate),
-        endDate: new Date(endDate),
-        annualRoyaltyAmount: annualRoyaltyAmount !== undefined
-          ? new Prisma.Decimal(annualRoyaltyAmount)
-          : previousAgreement.annualRoyaltyAmount,
-        calculationMethod: calculationMethod || previousAgreement.calculationMethod || 'FIXED_ANNUAL',
-        perStudentFee: perStudentFee !== undefined
-          ? new Prisma.Decimal(perStudentFee)
-          : previousAgreement.perStudentFee,
-        royaltyPercentage: royaltyPercentage !== undefined
-          ? new Prisma.Decimal(royaltyPercentage)
-          : previousAgreement.royaltyPercentage,
-        royaltyBasis: royaltyBasis || previousAgreement.royaltyBasis,
-        paymentFrequency: 'ANNUAL',
-        dueDay: dueDay ? Number(dueDay) : previousAgreement.dueDay,
-        installmentCount: 2,
-        status: 'ACTIVE',
-        terms: terms || previousAgreement.terms,
-        notes: notes ? `[Renewed from ${previousAgreement.agreementNumber}]: ${notes}` : `Renewed from ${previousAgreement.agreementNumber}`,
-        createdById: req.user?.userId,
-      },
-    });
+    const { newAgreement, installments } = await prisma.$transaction(async (tx: any) => {
+      // 1. Mark previous agreement as EXPIRED (retaining all history, installments, and receipts)
+      await tx.franchiseAgreement.update({
+        where: { id: agreementId },
+        data: { status: 'EXPIRED' },
+      });
 
-    // 3. Generate 2 fresh installments for the renewed year
-    const installments = await generateAnnualInstallments({
-      franchiseId,
-      agreementId: newAgreement.id,
-      startDate: new Date(startDate),
-      endDate: new Date(endDate),
-      calculationMethod: newAgreement.calculationMethod || 'FIXED_ANNUAL',
-      annualRoyaltyAmount: newAgreement.annualRoyaltyAmount ? Number(newAgreement.annualRoyaltyAmount) : null,
-      royaltyPercentage: Number(newAgreement.royaltyPercentage),
-      royaltyBasis: newAgreement.royaltyBasis,
-      perStudentFee: newAgreement.perStudentFee ? Number(newAgreement.perStudentFee) : null,
-      dueDay: newAgreement.dueDay,
-      installment1DueDate,
-      installment2DueDate,
+      // 2. Create renewed agreement
+      const createdAgreement = await tx.franchiseAgreement.create({
+        data: {
+          franchiseId,
+          agreementNumber,
+          title: title || `Annual Master Agreement (${year})`,
+          startDate: new Date(startDate),
+          endDate: new Date(endDate),
+          agreementType: agreementType || previousAgreement.agreementType,
+          annualRoyaltyAmount: annualRoyaltyAmount !== undefined
+            ? new Prisma.Decimal(annualRoyaltyAmount)
+            : previousAgreement.annualRoyaltyAmount,
+          calculationMethod: calculationMethod || previousAgreement.calculationMethod || 'FIXED_ANNUAL',
+          perStudentFee: perStudentFee !== undefined
+            ? new Prisma.Decimal(perStudentFee)
+            : previousAgreement.perStudentFee,
+          royaltyPercentage: new Prisma.Decimal(effectiveDgRevenuePct),
+          digitalGuruRevenuePercentage: new Prisma.Decimal(effectiveDgRevenuePct),
+          partnerRevenuePercentage: new Prisma.Decimal(effectivePartnerRevenuePct),
+          revenueCalculationBasis: revenueCalculationBasis || previousAgreement.revenueCalculationBasis,
+          settlementFrequency: effSettlementFreq,
+          totalInvestment: totalInvestment !== undefined
+            ? new Prisma.Decimal(totalInvestment)
+            : previousAgreement.totalInvestment,
+          digitalGuruInvestmentAmount: digitalGuruInvestmentAmount !== undefined
+            ? new Prisma.Decimal(digitalGuruInvestmentAmount)
+            : previousAgreement.digitalGuruInvestmentAmount,
+          partnerInvestmentAmount: partnerInvestmentAmount !== undefined
+            ? new Prisma.Decimal(partnerInvestmentAmount)
+            : previousAgreement.partnerInvestmentAmount,
+          digitalGuruInvestmentPercentage: digitalGuruInvestmentPercentage !== undefined
+            ? new Prisma.Decimal(digitalGuruInvestmentPercentage)
+            : previousAgreement.digitalGuruInvestmentPercentage,
+          partnerInvestmentPercentage: partnerInvestmentPercentage !== undefined
+            ? new Prisma.Decimal(partnerInvestmentPercentage)
+            : previousAgreement.partnerInvestmentPercentage,
+          operationalSetupContribution: operationalSetupContribution !== undefined
+            ? new Prisma.Decimal(operationalSetupContribution)
+            : previousAgreement.operationalSetupContribution,
+          investmentNotes: investmentNotes !== undefined ? investmentNotes : previousAgreement.investmentNotes,
+          expenseResponsibilities: (expenseResponsibilities as any) ?? previousAgreement.expenseResponsibilities ?? Prisma.DbNull,
+          marketingResponsibleParty: marketingResponsibleParty || previousAgreement.marketingResponsibleParty,
+          marketingSupportDurationMonths: marketingSupportDurationMonths !== undefined
+            ? Number(marketingSupportDurationMonths)
+            : previousAgreement.marketingSupportDurationMonths,
+          marketingPostSupportParty: marketingPostSupportParty || previousAgreement.marketingPostSupportParty,
+          marketingBudget: marketingBudget !== undefined ? new Prisma.Decimal(marketingBudget) : previousAgreement.marketingBudget,
+          marketingEffectiveStartDate: marketingEffectiveStartDate ? new Date(marketingEffectiveStartDate) : previousAgreement.marketingEffectiveStartDate,
+          marketingNotes: marketingNotes !== undefined ? marketingNotes : previousAgreement.marketingNotes,
+          courseSoftwareAccessEnabled: courseSoftwareAccessEnabled !== undefined ? Boolean(courseSoftwareAccessEnabled) : previousAgreement.courseSoftwareAccessEnabled,
+          courseSoftwarePricingNotes: courseSoftwarePricingNotes !== undefined ? courseSoftwarePricingNotes : previousAgreement.courseSoftwarePricingNotes,
+          version: 1,
+          royaltyBasis: (royaltyBasis as any) || previousAgreement.royaltyBasis,
+          paymentFrequency: isMonthly ? 'MONTHLY' : 'ANNUAL',
+          dueDay: dueDay ? Number(dueDay) : previousAgreement.dueDay,
+          installmentCount,
+          status: 'ACTIVE',
+          terms: terms || previousAgreement.terms,
+          notes: notes ? `[Renewed from ${previousAgreement.agreementNumber}]: ${notes}` : `Renewed from ${previousAgreement.agreementNumber}`,
+          createdById: req.user?.userId,
+        },
+      });
+
+      // 3. Generate installments only for YEARLY settlement frequency
+      let createdInstallments: any[] = [];
+      if (!isMonthly) {
+        createdInstallments = await generateAnnualInstallments({
+          franchiseId,
+          agreementId: createdAgreement.id,
+          startDate: new Date(startDate),
+          endDate: new Date(endDate),
+          calculationMethod: createdAgreement.calculationMethod || 'FIXED_ANNUAL',
+          annualRoyaltyAmount: createdAgreement.annualRoyaltyAmount ? Number(createdAgreement.annualRoyaltyAmount) : null,
+          royaltyPercentage: Number(createdAgreement.royaltyPercentage),
+          royaltyBasis: createdAgreement.royaltyBasis,
+          perStudentFee: createdAgreement.perStudentFee ? Number(createdAgreement.perStudentFee) : null,
+          dueDay: createdAgreement.dueDay,
+          installment1DueDate,
+          installment2DueDate,
+          prismaClient: tx,
+        });
+      }
+
+      return { newAgreement: createdAgreement, installments: createdInstallments };
     });
 
     return res.status(201).json({
@@ -1276,8 +1827,9 @@ export async function renewAgreement(req: AuthenticatedRequest, res: Response) {
       message: 'Agreement renewed successfully. Previous agreement and installments preserved.',
       data: {
         newAgreement,
-        previousAgreementId: agreementId,
+        agreement: newAgreement,
         installments,
+        previousAgreementId: previousAgreement.id,
       },
     });
   } catch (err: any) {
@@ -1810,7 +2362,18 @@ export async function calculateRoyalty(req: AuthenticatedRequest, res: Response)
 
     const branchIds = instituteId ? [instituteId] : franchise.branches.map((b) => b.id);
     const activeAgreement = franchise.agreements[0];
-    const royaltyPercentage = activeAgreement ? Number(activeAgreement.royaltyPercentage) : 50.0;
+    
+    // Revenue sharing percentages & calculation basis resolution
+    const dgPercentage = activeAgreement?.digitalGuruRevenuePercentage
+      ? Number(activeAgreement.digitalGuruRevenuePercentage)
+      : (activeAgreement?.royaltyPercentage ? Number(activeAgreement.royaltyPercentage) : 50.0);
+    const partnerPercentage = activeAgreement?.partnerRevenuePercentage
+      ? Number(activeAgreement.partnerRevenuePercentage)
+      : (100 - dgPercentage);
+    
+    const calculationBasis = (req.body.revenueCalculationBasis as string) || 
+      activeAgreement?.revenueCalculationBasis || 
+      'GROSS_COURSE_FEES';
 
     const start = new Date(startDate);
     const end = new Date(endDate);
@@ -1833,8 +2396,56 @@ export async function calculateRoyalty(req: AuthenticatedRequest, res: Response)
     });
 
     const grossCollection = payments.reduce((sum, p) => sum + Number(p.amountPaid), 0);
-    const eligibleRevenue = grossCollection;
-    const royaltyPayable = (eligibleRevenue * royaltyPercentage) / 100;
+    
+    // Determine eligible revenue / profit based on calculationBasis
+    let eligibleRevenue = grossCollection;
+    let deductionsOrExpenses = 0;
+
+    if (calculationBasis === 'NET_COURSE_REVENUE') {
+      const adjustments = await prisma.paymentAdjustment.findMany({
+        where: {
+          payment: {
+            instituteId: { in: branchIds },
+            paidAt: { gte: start, lte: end },
+          },
+        },
+        select: { amount: true },
+      });
+      deductionsOrExpenses = adjustments.reduce((sum, a) => sum + Number(a.amount), 0) + Number(req.body.deductions || 0);
+      eligibleRevenue = Math.max(0, grossCollection - deductionsOrExpenses);
+    } else if (calculationBasis === 'PROFIT_AFTER_EXPENSES') {
+      deductionsOrExpenses = Number(req.body.deductibleExpenses ?? req.body.operatingExpenses ?? req.body.expenses ?? 0);
+      eligibleRevenue = Math.max(0, grossCollection - deductionsOrExpenses);
+    }
+
+    const royaltyPayable = Math.round(((eligibleRevenue * dgPercentage) / 100) * 100) / 100;
+    const partnerShare = Math.round((eligibleRevenue - royaltyPayable) * 100) / 100;
+
+    const calculationDetailsPayload = {
+      paymentCount: payments.length,
+      calculationBasis,
+      periodLabel,
+      agreementId: activeAgreement?.id || null,
+      agreementVersion: activeAgreement?.version || 1,
+      agreementType: activeAgreement?.agreementType || 'CUSTOM_AGREEMENT',
+      grossCollection,
+      deductionsOrExpenses,
+      deductibleExpenses: calculationBasis === 'PROFIT_AFTER_EXPENSES' ? deductionsOrExpenses : 0,
+      refundsAndAdjustments: calculationBasis === 'NET_COURSE_REVENUE' ? deductionsOrExpenses : 0,
+      eligibleRevenue,
+      distributableAmount: eligibleRevenue,
+      digitalGuruPercentage: dgPercentage,
+      partnerPercentage,
+      digitalGuruShare: royaltyPayable,
+      partnerShare,
+      settlementFrequency: activeAgreement?.settlementFrequency || 'MONTHLY',
+      directPayerExpensesIgnored: true,
+      zeroProfitFloorApplied: grossCollection < deductionsOrExpenses,
+      paymentsSummary: payments.slice(0, 50),
+      calculatedAt: new Date().toISOString(),
+      calculatedById: req.user?.userId || null,
+      calculatedByEmail: req.user?.email || null,
+    };
 
     let record = await prisma.franchiseRoyaltyRecord.findFirst({
       where: {
@@ -1864,15 +2475,11 @@ export async function calculateRoyalty(req: AuthenticatedRequest, res: Response)
         data: {
           grossCollection: new Prisma.Decimal(grossCollection),
           eligibleRevenue: new Prisma.Decimal(eligibleRevenue),
-          royaltyPercentage: new Prisma.Decimal(royaltyPercentage),
+          royaltyPercentage: new Prisma.Decimal(dgPercentage),
           royaltyPayable: new Prisma.Decimal(royaltyPayable),
           outstandingBalance: new Prisma.Decimal(outstanding),
           status: status as any,
-          calculationDetails: {
-            paymentCount: payments.length,
-            paymentsSummary: payments.slice(0, 50),
-            calculatedAt: new Date().toISOString(),
-          },
+          calculationDetails: calculationDetailsPayload,
         },
       });
     } else {
@@ -1886,35 +2493,49 @@ export async function calculateRoyalty(req: AuthenticatedRequest, res: Response)
           endDate: end,
           grossCollection: new Prisma.Decimal(grossCollection),
           eligibleRevenue: new Prisma.Decimal(eligibleRevenue),
-          royaltyPercentage: new Prisma.Decimal(royaltyPercentage),
+          royaltyPercentage: new Prisma.Decimal(dgPercentage),
           royaltyPayable: new Prisma.Decimal(royaltyPayable),
           royaltyPaid: new Prisma.Decimal(0.0),
           outstandingBalance: new Prisma.Decimal(royaltyPayable),
           status: status as any,
           dueDate,
-          calculationDetails: {
-            paymentCount: payments.length,
-            paymentsSummary: payments.slice(0, 50),
-            calculatedAt: new Date().toISOString(),
-          },
+          calculationDetails: calculationDetailsPayload,
         },
       });
     }
 
     return res.json({
       success: true,
-      message: `Monthly royalty for ${periodLabel} calculated successfully at ${royaltyPercentage}%`,
+      message: `Settlement for ${periodLabel} calculated successfully at ${dgPercentage}% (DG) : ${partnerPercentage}% (Partner) on ${calculationBasis}`,
       data: {
         royaltyRecord: record,
         summary: {
           periodLabel,
+          franchiseId,
+          branchId: instituteId || null,
+          agreementVersion: activeAgreement?.version || 1,
+          agreementType: activeAgreement?.agreementType || 'CUSTOM_AGREEMENT',
           branchesCovered: branchIds.length,
           paymentsCount: payments.length,
           grossCollection,
-          royaltyPercentage,
+          calculationBasis,
+          deductionsOrExpenses,
+          deductibleExpenses: calculationBasis === 'PROFIT_AFTER_EXPENSES' ? deductionsOrExpenses : 0,
+          refundsAndAdjustments: calculationBasis === 'NET_COURSE_REVENUE' ? deductionsOrExpenses : 0,
+          eligibleRevenue,
+          distributableAmount: eligibleRevenue,
+          royaltyPercentage: dgPercentage,
+          digitalGuruRevenuePercentage: dgPercentage,
+          partnerRevenuePercentage: partnerPercentage,
           royaltyPayable,
+          digitalGuruShare: royaltyPayable,
           superAdminShare: royaltyPayable,
-          franchiseOwnerShare: eligibleRevenue - royaltyPayable,
+          partnerShare,
+          franchiseOwnerShare: partnerShare,
+          settlementFrequency: activeAgreement?.settlementFrequency || 'MONTHLY',
+          directPayerExpensesIgnored: true,
+          calculatedAt: new Date().toISOString(),
+          calculatedBy: req.user?.email || req.user?.userId,
         },
       },
     });
@@ -1927,15 +2548,21 @@ export async function calculateRoyalty(req: AuthenticatedRequest, res: Response)
 export async function listRoyaltyRecords(req: AuthenticatedRequest, res: Response) {
   try {
     const { id: franchiseId } = req.params;
-    const { authorized } = await verifyFranchiseAccess(req.user!.userId, req.user!.role, franchiseId);
+    const isSuperAdminAll = franchiseId === 'all' && req.user!.role === 'SUPER_ADMIN';
 
-    if (!authorized) {
-      return res.status(403).json({ success: false, error: 'Forbidden' });
+    if (!isSuperAdminAll) {
+      const { authorized } = await verifyFranchiseAccess(req.user!.userId, req.user!.role, franchiseId);
+      if (!authorized) {
+        return res.status(403).json({ success: false, error: 'Forbidden' });
+      }
     }
 
+    const whereClause = isSuperAdminAll ? {} : { franchiseId };
+
     const records = await prisma.franchiseRoyaltyRecord.findMany({
-      where: { franchiseId },
+      where: whereClause,
       include: {
+        franchise: { select: { id: true, name: true, code: true, ownerName: true } },
         institute: { select: { id: true, name: true, code: true } },
         payments: true,
       },
@@ -2195,6 +2822,16 @@ export async function getFranchiseOwnerDashboard(req: AuthenticatedRequest, res:
         royaltyPayments: {
           orderBy: { paymentDate: 'desc' },
           take: 6,
+        },
+        royaltyRecords: {
+          orderBy: { startDate: 'desc' },
+          take: 24,
+          include: {
+            institute: { select: { id: true, name: true, code: true } },
+            payments: {
+              orderBy: { paymentDate: 'desc' },
+            },
+          },
         },
       },
     });
@@ -2475,6 +3112,7 @@ export async function getFranchiseOwnerDashboard(req: AuthenticatedRequest, res:
           branches: franchise.branches,
           branchCards,
           recentPayments: franchise.royaltyPayments,
+          royaltyRecords: franchise.royaltyRecords || [],
         },
       });
     } catch (err: any) {

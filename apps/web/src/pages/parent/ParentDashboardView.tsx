@@ -171,11 +171,11 @@ export const ParentDashboardView: React.FC<ParentDashboardViewProps> = ({
           </button>
         </div>
 
-        {/* Pending Tuition Fees Card */}
+        {/* Pending Course Fees Card */}
         <div className="p-5 rounded-3xl bg-white border border-[#E2E8F0] shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between text-[#94A3B8] text-xs font-bold uppercase tracking-wider">
-              <span>Pending Tuition Fees</span>
+              <span>Pending Course Fees</span>
               <CreditCard className="w-4 h-4 text-[#64748B]" />
             </div>
             <div className="mt-3">
@@ -361,7 +361,7 @@ export const ParentDashboardView: React.FC<ParentDashboardViewProps> = ({
             <div className="p-3 rounded-2xl bg-[#F8FAFC] border border-[#F1F5F9]">
               <span className="text-[#94A3B8] text-[10px] uppercase font-bold block">Institute</span>
               <span className="text-[#0F172A] font-medium mt-0.5 block truncate">
-                {activeStudent?.institute?.name || 'Tuition Institute'}
+                {activeStudent?.institute?.name || 'Course Centre'}
               </span>
             </div>
           </div>

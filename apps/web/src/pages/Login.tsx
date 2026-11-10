@@ -176,7 +176,7 @@ export const Login: React.FC = () => {
             Digital Guru <span className="text-[#FEDC32]">Franchise</span>
           </h1>
           <p className="text-xs sm:text-sm text-slate-300 mt-1 font-medium">
-            Tuition & Franchise Enterprise Management Platform
+            Course & Franchise Enterprise Management Platform
           </p>
         </div>
 

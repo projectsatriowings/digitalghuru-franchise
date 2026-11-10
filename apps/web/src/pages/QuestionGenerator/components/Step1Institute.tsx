@@ -16,7 +16,7 @@ export const Step1Institute: React.FC<Step1Props> = ({ blueprint, onChange }) =>
           Step 1: Institute & Examination Header Details
         </h2>
         <p className="text-xs text-[#64748B] mt-1">
-          Specify your tuition centre or college details. These will appear on the printed question paper header.
+          Specify your course centre or college details. These will appear on the printed question paper header.
         </p>
       </div>
 
@@ -24,14 +24,14 @@ export const Step1Institute: React.FC<Step1Props> = ({ blueprint, onChange }) =>
         {/* Institute Name */}
         <div className="md:col-span-2">
           <label className="block text-xs font-bold text-[#006FFF] uppercase tracking-wider mb-1.5">
-            Institute / Tuition Centre Name <span className="text-rose-500">*</span>
+            Institute / Course Centre Name <span className="text-rose-500">*</span>
           </label>
           <div className="relative">
             <input
               type="text"
               value={blueprint.instituteName}
               onChange={(e) => onChange({ instituteName: e.target.value })}
-              placeholder="e.g. Sri Krishna Tuition Centre / Department of Computer Science"
+              placeholder="e.g. Sri Krishna Course Centre / Department of Computer Science"
               className="w-full bg-white border border-[#E2E8F0] rounded-xl px-4 py-2.5 text-xs text-[#0F172A] placeholder:text-[#94A3B8] focus:outline-none focus:ring-2 focus:ring-[#6D4C41]/30 focus:border-[#6D4C41] shadow-sm font-medium"
               required
             />

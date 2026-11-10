@@ -1,3 +1,4 @@
+import '../src/db-bridge.js';
 import { Client } from 'pg';
 import dotenv from 'dotenv';
 import path from 'path';
@@ -17,7 +18,7 @@ async function inspectDatabase() {
 
   const client = new Client({
     connectionString,
-    ssl: { rejectUnauthorized: false },
+    ssl: { rejectUnauthorized: false, checkServerIdentity: () => undefined },
   });
 
   try {
@@ -39,6 +40,18 @@ async function inspectDatabase() {
         console.log(` -> Table: ${row.table_name}`);
       }
     }
+
+    console.log('\n--- Record Counts Baseline ---');
+    const fCount = await client.query('SELECT COUNT(*) FROM "Franchise"');
+    const aCount = await client.query('SELECT COUNT(*) FROM "FranchiseAgreement"');
+    const iCount = await client.query('SELECT COUNT(*) FROM "FranchiseRoyaltyInstallment"');
+    const pCount = await client.query('SELECT COUNT(*) FROM "FranchiseRoyaltyPayment"');
+    const rCount = await client.query('SELECT COUNT(*) FROM "FranchiseRoyaltyRecord"');
+    console.log(`Franchises: ${fCount.rows[0].count}`);
+    console.log(`Agreements: ${aCount.rows[0].count}`);
+    console.log(`Installments: ${iCount.rows[0].count}`);
+    console.log(`Payments: ${pCount.rows[0].count}`);
+    console.log(`Royalty Records: ${rCount.rows[0].count}`);
   } catch (err: any) {
     console.error('[Error] Database connection failed:', err.message);
   } finally {
