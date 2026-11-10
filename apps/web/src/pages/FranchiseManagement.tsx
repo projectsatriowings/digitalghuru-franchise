@@ -288,8 +288,56 @@ export const FranchiseManagement: React.FC = () => {
         }
         setInstallments(allInsts);
       }
+      await loadMonthlyRecords();
     } catch (err: any) {
       showToast(err.message || 'Failed to load franchise data', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadMonthlyRecords = async () => {
+    try {
+      setLoadingMonthly(true);
+      const res = await apiFetch('/franchises/all/royalties');
+      if (res.success && res.data?.royaltyRecords) {
+        setMonthlyRecords(res.data.royaltyRecords);
+      }
+    } catch (err: any) {
+      // Non-blocking
+    } finally {
+      setLoadingMonthly(false);
+    }
+  };
+
+  const handleCalculateMonthlyRoyalty = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!calculateForm.franchiseId) {
+      showToast('Please select a franchise to calculate royalty for.', 'warning');
+      return;
+    }
+    try {
+      setLoading(true);
+      const payload = {
+        periodLabel: calculateForm.periodLabel,
+        startDate: calculateForm.startDate,
+        endDate: calculateForm.endDate,
+        revenueCalculationBasis: calculateForm.revenueCalculationBasis,
+        deductibleExpenses: Number(calculateForm.deductibleExpenses || 0),
+        deductions: Number(calculateForm.deductions || 0),
+      };
+      const res = await apiFetch(`/franchises/${calculateForm.franchiseId}/royalties/calculate`, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+      if (res.success) {
+        showToast('Monthly royalty calculated and statement recorded successfully!', 'success');
+        setShowCalculateModal(false);
+        await loadMonthlyRecords();
+        await loadData();
+      }
+    } catch (err: any) {
+      showToast(err.message || 'Failed to calculate monthly royalty', 'error');
     } finally {
       setLoading(false);
     }

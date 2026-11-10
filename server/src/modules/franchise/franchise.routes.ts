@@ -85,7 +85,10 @@ router.get('/:id/payments/:paymentId/receipt', requireRole('SUPER_ADMIN', 'FRANC
 // LEGACY / MONTHLY ROYALTY MANAGEMENT & PAYMENTS
 // -------------------------------------------------------------
 router.post('/:id/royalty/calculate', requireRole('SUPER_ADMIN'), calculateRoyalty);
+router.post('/:id/royalties/calculate', requireRole('SUPER_ADMIN'), calculateRoyalty);
 router.get('/:id/royalty', requireRole('SUPER_ADMIN', 'FRANCHISE_OWNER'), listRoyaltyRecords);
+router.get('/:id/royalties', requireRole('SUPER_ADMIN', 'FRANCHISE_OWNER'), listRoyaltyRecords);
 router.post('/:id/royalty/payments', requireRole('SUPER_ADMIN'), recordRoyaltyPayment);
+router.post('/:id/royalties/payments', requireRole('SUPER_ADMIN'), recordRoyaltyPayment);
 
 export default router;

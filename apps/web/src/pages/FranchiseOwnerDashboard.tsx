@@ -37,7 +37,7 @@ export const FranchiseOwnerDashboard: React.FC = () => {
   const [data, setData] = useState<any>(null);
 
   // Active view tab inside franchisee portal
-  const [activeTab, setActiveTab] = useState<'overview' | 'branches' | 'installments' | 'agreement'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'branches' | 'installments' | 'monthly_statements' | 'agreement'>('overview');
 
   // Receipt modal
   const [showReceiptModal, setShowReceiptModal] = useState(false);
@@ -88,6 +88,7 @@ if (loading && !data) {
       const metrics = data?.metrics || { };
       const activeAgreement = data?.activeAgreement;
       const installments = data?.installments || [];
+      const royaltyRecords = data?.royaltyRecords || [];
       const branches = data?.branches || [];
       const branchCards = data?.branchCards || [];
       const recentPayments = data?.recentPayments || [];
@@ -349,16 +350,31 @@ if (loading && !data) {
                     <Building2 className="w-4 h-4" /> Assigned Campuses ({branches.length})
                   </button>
 
-                  <button
-                    onClick={() => setActiveTab('installments')}
-                    className={`py-3.5 px-2 text-sm font-bold border-b-2 whitespace-nowrap transition-all flex items-center gap-2 ${
-                      activeTab === 'installments'
-                        ? 'border-[#006FFF] text-[#006FFF]'
-                        : 'border-transparent text-slate-600 hover:text-slate-900'
-                    }`}
-                  >
-                    <DollarSign className="w-4 h-4" /> 2-Installment Royalty ({installments.length})
-                  </button>
+                  {(activeAgreement?.settlementFrequency === 'MONTHLY' || royaltyRecords.length > 0) && (
+                    <button
+                      onClick={() => setActiveTab('monthly_statements')}
+                      className={`py-3.5 px-2 text-sm font-bold border-b-2 whitespace-nowrap transition-all flex items-center gap-2 ${
+                        activeTab === 'monthly_statements'
+                          ? 'border-[#006FFF] text-[#006FFF]'
+                          : 'border-transparent text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      <DollarSign className="w-4 h-4" /> Monthly Royalty Statements ({royaltyRecords.length})
+                    </button>
+                  )}
+
+                  {(activeAgreement?.settlementFrequency !== 'MONTHLY' || installments.length > 0) && (
+                    <button
+                      onClick={() => setActiveTab('installments')}
+                      className={`py-3.5 px-2 text-sm font-bold border-b-2 whitespace-nowrap transition-all flex items-center gap-2 ${
+                        activeTab === 'installments'
+                          ? 'border-[#006FFF] text-[#006FFF]'
+                          : 'border-transparent text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      <DollarSign className="w-4 h-4" /> 2-Installment Royalty ({installments.length})
+                    </button>
+                  )}
 
                   <button
                     onClick={() => setActiveTab('agreement')}
@@ -756,6 +772,128 @@ if (loading && !data) {
                         </td>
                       </tr>
                     ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TAB: MONTHLY ROYALTY STATEMENTS */}
+      {activeTab === 'monthly_statements' && (
+        <div className="space-y-6">
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 space-y-4">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200 pb-4">
+              <div>
+                <h3 className="font-bold text-slate-900 text-base">Monthly Royalty Statements & Revenue Settlement</h3>
+                <p className="text-xs text-slate-500">
+                  Periodic royalty statements calculated based on registered course fee collections and active commercial agreement terms.
+                </p>
+              </div>
+              {activeAgreement && (
+                <div className="flex flex-wrap items-center gap-2 text-xs">
+                  <span className="px-2.5 py-1 rounded bg-blue-50 text-[#006FFF] font-bold border border-blue-200">
+                    Model: {activeAgreement.agreementType?.replace(/_/g, ' ') || 'A'} (v{activeAgreement.version || 1})
+                  </span>
+                  <span className="px-2.5 py-1 rounded bg-purple-50 text-purple-700 font-semibold border border-purple-200">
+                    Split: DG {Number(activeAgreement.digitalGuruRevenuePercentage || 50)}% / Partner {Number(activeAgreement.partnerRevenuePercentage || 50)}%
+                  </span>
+                  <span className="px-2.5 py-1 rounded bg-slate-100 text-slate-700 font-medium">
+                    Basis: {activeAgreement.revenueCalculationBasis || 'GROSS_COURSE_FEES'}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            <div className="overflow-x-auto rounded-lg border border-slate-200">
+              <table className="w-full text-left text-sm text-slate-700">
+                <thead className="bg-slate-50 text-xs font-semibold text-slate-600 uppercase border-b border-slate-200">
+                  <tr>
+                    <th className="px-4 py-3">Statement Period</th>
+                    <th className="px-4 py-3">Campus</th>
+                    <th className="px-4 py-3">Gross Fees</th>
+                    <th className="px-4 py-3">Distributable Pool</th>
+                    <th className="px-4 py-3">DG Share</th>
+                    <th className="px-4 py-3">Partner Share</th>
+                    <th className="px-4 py-3">Due Date</th>
+                    <th className="px-4 py-3">Status</th>
+                    <th className="px-4 py-3 text-right">Receipt</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {royaltyRecords.length === 0 ? (
+                    <tr>
+                      <td colSpan={9} className="text-center py-10 text-slate-400 text-xs">
+                        <DollarSign className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                        No monthly royalty statements recorded yet.
+                        <div className="text-[11px] text-slate-400 mt-1">
+                          Statements are generated at the conclusion of each monthly billing cycle by Super Admin.
+                        </div>
+                      </td>
+                    </tr>
+                  ) : (
+                    royaltyRecords.map((r: any) => {
+                      const basis = r.calculationBasis || activeAgreement?.revenueCalculationBasis || 'GROSS_FEES';
+                      const gross = Number(r.totalRevenueCollected || 0);
+                      const deductions = Number(r.deductibleExpenses || 0);
+                      const pool = Number(r.distributableRevenue ?? (gross - deductions));
+                      const dgShare = Number(r.calculatedRoyalty || 0);
+                      const partnerShare = Number(r.partnerRetainedAmount ?? Math.max(0, pool - dgShare));
+
+                      return (
+                        <tr key={r.id} className="hover:bg-slate-50 transition-colors">
+                          <td className="px-4 py-3">
+                            <div className="font-bold text-slate-900 text-xs">
+                              {new Date(r.startDate).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })}
+                            </div>
+                            <div className="text-[11px] text-slate-500">
+                              {new Date(r.startDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })} – {new Date(r.endDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 text-xs">
+                            <span className="font-semibold text-slate-800">{r.institute?.name || 'All Assigned Campuses'}</span>
+                            <span className="block text-[11px] text-slate-400">{basis.replace(/_/g, ' ')}</span>
+                          </td>
+                          <td className="px-4 py-3 text-xs font-semibold text-slate-900">
+                            ₹{gross.toLocaleString('en-IN')}
+                          </td>
+                          <td className="px-4 py-3 text-xs">
+                            <span className="font-bold text-slate-900">₹{pool.toLocaleString('en-IN')}</span>
+                            {deductions > 0 && (
+                              <span className="block text-[10px] text-amber-700 font-medium">
+                                -₹{deductions.toLocaleString('en-IN')} expenses
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-xs font-bold text-[#006FFF]">
+                            ₹{dgShare.toLocaleString('en-IN')}
+                            <span className="block text-[10px] text-slate-400 font-normal">({r.royaltyPercentage}%)</span>
+                          </td>
+                          <td className="px-4 py-3 text-xs font-bold text-emerald-700">
+                            ₹{partnerShare.toLocaleString('en-IN')}
+                          </td>
+                          <td className="px-4 py-3 text-xs text-slate-600">
+                            {new Date(r.dueDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                          </td>
+                          <td className="px-4 py-3">
+                            {renderStatusBadge(r.status)}
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            {r.payments && r.payments.length > 0 ? (
+                              <button
+                                onClick={() => handleOpenReceipt(r.payments[0].id)}
+                                className="px-2.5 py-1 text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-800 rounded inline-flex items-center gap-1 transition-all"
+                              >
+                                <Receipt className="w-3 h-3" /> Receipt
+                              </button>
+                            ) : (
+                              <span className="text-slate-400 text-xs italic">—</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })
                   )}
                 </tbody>
               </table>
