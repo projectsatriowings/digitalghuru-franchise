@@ -803,8 +803,8 @@ export const FranchiseManagement: React.FC = () => {
         <button
           onClick={() => setActiveTab('franchises')}
           className={`py-3.5 px-2 text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${activeTab === 'franchises'
-            ? 'border-[#006FFF] text-[#006FFF]'
-            : 'border-transparent text-slate-600 hover:text-slate-900'
+              ? 'border-[#006FFF] text-[#006FFF]'
+              : 'border-transparent text-slate-600 hover:text-slate-900'
             }`}
         >
           <Building2 className="w-4 h-4" /> Franchises & Owners ({franchises.length})
@@ -813,8 +813,8 @@ export const FranchiseManagement: React.FC = () => {
         <button
           onClick={() => setActiveTab('installments')}
           className={`py-3.5 px-2 text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${activeTab === 'installments'
-            ? 'border-[#006FFF] text-[#006FFF]'
-            : 'border-transparent text-slate-600 hover:text-slate-900'
+              ? 'border-[#006FFF] text-[#006FFF]'
+              : 'border-transparent text-slate-600 hover:text-slate-900'
             }`}
         >
           <DollarSign className="w-4 h-4" /> 2-Installment Royalty Schedule ({installments.length})
@@ -823,8 +823,8 @@ export const FranchiseManagement: React.FC = () => {
         <button
           onClick={() => setActiveTab('agreements')}
           className={`py-3.5 px-2 text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${activeTab === 'agreements'
-            ? 'border-[#006FFF] text-[#006FFF]'
-            : 'border-transparent text-slate-600 hover:text-slate-900'
+              ? 'border-[#006FFF] text-[#006FFF]'
+              : 'border-transparent text-slate-600 hover:text-slate-900'
             }`}
         >
           <FileText className="w-4 h-4" /> Agreements & Renewals
@@ -902,10 +902,11 @@ export const FranchiseManagement: React.FC = () => {
                         </td>
                         <td className="px-4 py-3.5">
                           <span
-                            className={`px-2.5 py-1 text-xs font-bold rounded-full ${fr.status === 'ACTIVE'
+                            className={`px-2.5 py-1 text-xs font-bold rounded-full ${
+                              fr.status === 'ACTIVE'
                                 ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                                 : 'bg-rose-50 text-rose-700 border border-rose-200'
-                              }`}
+                            }`}
                           >
                             {fr.status}
                           </span>
@@ -926,10 +927,11 @@ export const FranchiseManagement: React.FC = () => {
                           </button>
                           <button
                             onClick={() => handleStatusToggle(fr.id, fr.status)}
-                            className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-all ${fr.status === 'ACTIVE'
+                            className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-all ${
+                              fr.status === 'ACTIVE'
                                 ? 'bg-rose-50 hover:bg-rose-100 text-rose-700'
                                 : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700'
-                              }`}
+                            }`}
                           >
                             {fr.status === 'ACTIVE' ? 'Suspend' : 'Activate'}
                           </button>
@@ -1212,8 +1214,8 @@ export const FranchiseManagement: React.FC = () => {
                             <span>{agr.agreementNumber}</span>
                             <span
                               className={`px-2 py-0.5 rounded text-[10px] font-bold ${agr.status === 'ACTIVE'
-                                ? 'bg-emerald-100 text-emerald-800'
-                                : 'bg-slate-200 text-slate-700'
+                                  ? 'bg-emerald-100 text-emerald-800'
+                                  : 'bg-slate-200 text-slate-700'
                                 }`}
                             >
                               {agr.status}
@@ -1437,12 +1439,13 @@ export const FranchiseManagement: React.FC = () => {
                         </td>
                         <td className="px-4 py-3">
                           <span
-                            className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${rec.status === 'PAID'
+                            className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${
+                              rec.status === 'PAID'
                                 ? 'bg-emerald-100 text-emerald-800'
                                 : rec.status === 'OVERDUE'
                                   ? 'bg-rose-100 text-rose-800'
                                   : 'bg-amber-100 text-amber-800'
-                              }`}
+                            }`}
                           >
                             {rec.status}
                           </span>
@@ -1705,10 +1708,11 @@ export const FranchiseManagement: React.FC = () => {
                                 },
                               });
                             }}
-                            className={`p-2.5 rounded-xl text-left border text-xs transition-all ${isSelected
+                            className={`p-2.5 rounded-xl text-left border text-xs transition-all ${
+                              isSelected
                                 ? 'bg-blue-50 border-[#006FFF] text-[#006FFF] font-bold shadow-sm ring-1 ring-[#006FFF]'
                                 : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300'
-                              }`}
+                            }`}
                           >
                             <div className="font-bold text-[11px] leading-tight">{tmpl.label}</div>
                             <div className="text-[10px] text-slate-500 mt-1">
@@ -1865,12 +1869,13 @@ export const FranchiseManagement: React.FC = () => {
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-bold text-slate-800">Revenue Sharing Configuration</span>
                     <span
-                      className={`px-2 py-0.5 rounded text-[10px] font-bold ${Number(createForm.initialAgreement.digitalGuruRevenuePercentage) +
+                      className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                        Number(createForm.initialAgreement.digitalGuruRevenuePercentage) +
                           Number(createForm.initialAgreement.partnerRevenuePercentage) ===
-                          100
+                        100
                           ? 'bg-emerald-100 text-emerald-800'
                           : 'bg-rose-100 text-rose-800'
-                        }`}
+                      }`}
                     >
                       Total:{' '}
                       {Number(createForm.initialAgreement.digitalGuruRevenuePercentage || 0) +
@@ -2663,79 +2668,79 @@ export const FranchiseManagement: React.FC = () => {
               </button>
             </div>
 
-            {/* Mode Selector Tabs */}
-            <div className="flex bg-slate-100 p-1 rounded-xl mb-4 text-xs font-semibold">
-              <button
-                type="button"
-                onClick={() => setBranchModalMode('existing')}
-                className={`flex-1 py-1.5 rounded-lg transition-all ${branchModalMode === 'existing'
-                  ? 'bg-white text-[#006FFF] shadow-sm font-bold'
-                  : 'text-slate-600 hover:text-slate-900'
-                  }`}
-              >
-                Assign Existing ({unassignedBranches.length} Available)
-              </button>
-              <button
-                type="button"
-                onClick={() => setBranchModalMode('new')}
-                className={`flex-1 py-1.5 rounded-lg transition-all ${branchModalMode === 'new'
-                  ? 'bg-white text-[#006FFF] shadow-sm font-bold'
-                  : 'text-slate-600 hover:text-slate-900'
-                  }`}
-              >
-                Create & Attach New
-              </button>
-            </div>
+              {/* Mode Selector Tabs */}
+              <div className="flex bg-slate-100 p-1 rounded-xl mb-4 text-xs font-semibold">
+                <button
+                  type="button"
+                  onClick={() => setBranchModalMode('existing')}
+                  className={`flex-1 py-1.5 rounded-lg transition-all ${branchModalMode === 'existing'
+                      ? 'bg-white text-[#006FFF] shadow-sm font-bold'
+                      : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                >
+                  Assign Existing ({unassignedBranches.length} Available)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBranchModalMode('new')}
+                  className={`flex-1 py-1.5 rounded-lg transition-all ${branchModalMode === 'new'
+                      ? 'bg-white text-[#006FFF] shadow-sm font-bold'
+                      : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                >
+                  Create & Attach New
+                </button>
+              </div>
 
-            {/* MODE 1: ASSIGN EXISTING BRANCH */}
-            {branchModalMode === 'existing' ? (
-              <form onSubmit={handleAssignExistingBranch} className="space-y-4">
-                {unassignedBranches.length === 0 ? (
-                  <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-xs">
-                    No unassigned campus branches are currently available. Please use &ldquo;Create & Attach New&rdquo; to establish a new campus for this franchise.
-                  </div>
+                {/* MODE 1: ASSIGN EXISTING BRANCH */}
+                {branchModalMode === 'existing' ? (
+                  <form onSubmit={handleAssignExistingBranch} className="space-y-4">
+                    {unassignedBranches.length === 0 ? (
+                      <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-xs">
+                        No unassigned campus branches are currently available. Please use &ldquo;Create & Attach New&rdquo; to establish a new campus for this franchise.
+                      </div>
+                    ) : (
+                      <div>
+                        <label className="block text-xs font-medium text-slate-700 mb-1">
+                          Select Available Campus Branch *
+                        </label>
+                        <select
+                          required
+                          value={selectedExistingBranchId}
+                          onChange={(e) => setSelectedExistingBranchId(e.target.value)}
+                          className="w-full px-3 py-2 border rounded-lg text-sm bg-white"
+                        >
+                          <option value="">-- Choose an unassigned campus branch --</option>
+                          {unassignedBranches.map((b) => (
+                            <option key={b.id} value={b.id}>
+                              {b.name} ({b.code}) - {b.city || 'Tamil Nadu'}
+                            </option>
+                          ))}
+                        </select>
+                        <p className="text-[11px] text-slate-500 mt-1">
+                          Assigning this branch will grant the Franchisee Admin full operational access while preserving all historical students, staff, and tuition payments.
+                        </p>
+                      </div>
+                    )}
+
+                    <div className="flex justify-end gap-3 pt-3 border-t">
+                      <button
+                        type="button"
+                        onClick={() => setShowAddBranchModal(false)}
+                        className="px-4 py-2 border text-slate-600 rounded-lg text-sm font-semibold"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={unassignedBranches.length === 0 || !selectedExistingBranchId}
+                        className="px-6 py-2 bg-[#006FFF] hover:bg-[#0055CC] disabled:opacity-50 text-white font-bold rounded-lg text-sm shadow"
+                      >
+                        Assign Branch to Franchise
+                      </button>
+                    </div>
+                  </form>
                 ) : (
-                  <div>
-                    <label className="block text-xs font-medium text-slate-700 mb-1">
-                      Select Available Campus Branch *
-                    </label>
-                    <select
-                      required
-                      value={selectedExistingBranchId}
-                      onChange={(e) => setSelectedExistingBranchId(e.target.value)}
-                      className="w-full px-3 py-2 border rounded-lg text-sm bg-white"
-                    >
-                      <option value="">-- Choose an unassigned campus branch --</option>
-                      {unassignedBranches.map((b) => (
-                        <option key={b.id} value={b.id}>
-                          {b.name} ({b.code}) - {b.city || 'Tamil Nadu'}
-                        </option>
-                      ))}
-                    </select>
-                    <p className="text-[11px] text-slate-500 mt-1">
-                      Assigning this branch will grant the Franchisee Admin full operational access while preserving all historical students, staff, and tuition payments.
-                    </p>
-                  </div>
-                )}
-
-                <div className="flex justify-end gap-3 pt-3 border-t">
-                  <button
-                    type="button"
-                    onClick={() => setShowAddBranchModal(false)}
-                    className="px-4 py-2 border text-slate-600 rounded-lg text-sm font-semibold"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={unassignedBranches.length === 0 || !selectedExistingBranchId}
-                    className="px-6 py-2 bg-[#006FFF] hover:bg-[#0055CC] disabled:opacity-50 text-white font-bold rounded-lg text-sm shadow"
-                  >
-                    Assign Branch to Franchise
-                  </button>
-                </div>
-              </form>
-            ) : (
               /* MODE 2: CREATE & ATTACH NEW BRANCH */
               <form onSubmit={handleAddBranch} className="space-y-4">
                 <div>
@@ -2786,27 +2791,27 @@ export const FranchiseManagement: React.FC = () => {
                   />
                 </div>
 
-                <div className="flex justify-end gap-3 pt-3 border-t">
-                  <button
-                    type="button"
-                    onClick={() => setShowAddBranchModal(false)}
-                    className="px-4 py-2 border text-slate-600 rounded-lg text-sm font-semibold"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="px-6 py-2 bg-[#006FFF] hover:bg-[#0055CC] text-white font-bold rounded-lg text-sm shadow"
-                  >
-                    Create & Attach Campus
-                  </button>
-                </div>
-              </form>
+            <div className="flex justify-end gap-3 pt-3 border-t">
+              <button
+                type="button"
+                onClick={() => setShowAddBranchModal(false)}
+                className="px-4 py-2 border text-slate-600 rounded-lg text-sm font-semibold"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="px-6 py-2 bg-[#006FFF] hover:bg-[#0055CC] text-white font-bold rounded-lg text-sm shadow"
+              >
+                Create & Attach Campus
+              </button>
+            </div>
+          </form>
             )}
-          </div>
         </div>
-      )
-      }
+        </div>
+  )
+}
 
       {/* ============================================================= */}
       {/* MODAL 8: REVISE AGREEMENT (NEW VERSION N+1)                   */}
@@ -2863,10 +2868,11 @@ export const FranchiseManagement: React.FC = () => {
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-slate-800">Revenue Sharing Split & Basis</span>
                   <span
-                    className={`px-2 py-0.5 rounded text-[10px] font-bold ${Number(reviseForm.digitalGuruRevenuePercentage) + Number(reviseForm.partnerRevenuePercentage) === 100
+                    className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                      Number(reviseForm.digitalGuruRevenuePercentage) + Number(reviseForm.partnerRevenuePercentage) === 100
                         ? 'bg-emerald-100 text-emerald-800'
                         : 'bg-rose-100 text-rose-800'
-                      }`}
+                    }`}
                   >
                     Total: {Number(reviseForm.digitalGuruRevenuePercentage || 0) + Number(reviseForm.partnerRevenuePercentage || 0)}% (Must = 100%)
                   </span>
