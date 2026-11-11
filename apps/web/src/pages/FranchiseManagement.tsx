@@ -62,6 +62,7 @@ export const FranchiseManagement: React.FC = () => {
 
   // Modals
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [createModalTab, setCreateModalTab] = useState<'profile' | 'model' | 'financials' | 'review'>('profile');
   const [createdResultModal, setCreatedResultModal] = useState<any>(null);
 
   const [showAddBranchModal, setShowAddBranchModal] = useState(false);
@@ -98,6 +99,7 @@ export const FranchiseManagement: React.FC = () => {
     agreementType: 'NEW_CENTRE_JOINT_INVESTMENT' as any,
     calculationMethod: 'PERCENTAGE_REVENUE' as any,
     annualRoyaltyAmount: 200000,
+    perStudentFee: 2000,
     royaltyPercentage: 50.0,
     digitalGuruRevenuePercentage: 50.0,
     partnerRevenuePercentage: 50.0,
@@ -377,6 +379,72 @@ export const FranchiseManagement: React.FC = () => {
   // ACTIONS
   // -------------------------------------------------------------
 
+  const validateProfileStep = () => {
+    if (!createForm.name?.trim()) {
+      showToast('Franchise / Center Name is required', 'error');
+      return false;
+    }
+    if (!createForm.ownerName?.trim()) {
+      showToast('Owner Full Name is required', 'error');
+      return false;
+    }
+    if (!createForm.email?.trim()) {
+      showToast('Owner Email Address is required', 'error');
+      return false;
+    }
+    if (!createForm.phone?.trim()) {
+      showToast('Primary Mobile Number is required', 'error');
+      return false;
+    }
+    if (!createForm.address?.trim()) {
+      showToast('Full Business Address is required', 'error');
+      return false;
+    }
+    if (!createForm.city?.trim()) {
+      showToast('City is required', 'error');
+      return false;
+    }
+    if (!createForm.state?.trim()) {
+      showToast('State is required', 'error');
+      return false;
+    }
+    if (!createForm.postalCode?.trim()) {
+      showToast('Postal / PIN Code is required', 'error');
+      return false;
+    }
+    return true;
+  };
+
+  const validateModelStep = () => {
+    if (!createForm.initialAgreement.startDate) {
+      showToast('Agreement Start Date is required', 'error');
+      return false;
+    }
+    if (!createForm.initialAgreement.endDate) {
+      showToast('Agreement End Date is required', 'error');
+      return false;
+    }
+    return true;
+  };
+
+  const validateFinancialsStep = () => {
+    const dg = Number(createForm.initialAgreement.digitalGuruRevenuePercentage || 0);
+    const pt = Number(createForm.initialAgreement.partnerRevenuePercentage || 0);
+    if (dg + pt !== 100) {
+      showToast(`Revenue share total must equal 100% (currently ${dg + pt}%)`, 'error');
+      return false;
+    }
+    if (createForm.initialAgreement.calculationMethod === 'FIXED_ANNUAL' && !Number(createForm.initialAgreement.annualRoyaltyAmount)) {
+      showToast('Please specify the agreed Annual Commercial Fee', 'error');
+      return false;
+    }
+    if (createForm.initialAgreement.calculationMethod === 'PER_STUDENT' && !Number(createForm.initialAgreement.perStudentFee)) {
+      showToast('Please specify the fee per active student', 'error');
+      return false;
+    }
+    return true;
+  };
+
   const handleCreateFranchise = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
@@ -467,6 +535,7 @@ export const FranchiseManagement: React.FC = () => {
           agreementType: reviseForm.agreementType,
           calculationMethod: reviseForm.calculationMethod,
           annualRoyaltyAmount: Number(reviseForm.annualRoyaltyAmount || 0),
+          perStudentFee: reviseForm.calculationMethod === 'PER_STUDENT' ? Number(reviseForm.perStudentFee || 0) : undefined,
           digitalGuruRevenuePercentage: Number(reviseForm.digitalGuruRevenuePercentage || 50),
           partnerRevenuePercentage: Number(reviseForm.partnerRevenuePercentage || 50),
           royaltyPercentage: Number(reviseForm.digitalGuruRevenuePercentage || 50),
@@ -781,7 +850,10 @@ export const FranchiseManagement: React.FC = () => {
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
           <button
-            onClick={() => setShowCreateModal(true)}
+            onClick={() => {
+              setCreateModalTab('profile');
+              setShowCreateModal(true);
+            }}
             className="flex items-center gap-2 px-5 py-2.5 bg-[#FEDC32] hover:bg-[#FEDC32]/90 text-slate-900 font-bold rounded-xl shadow-lg transition-all"
           >
             <Plus className="w-4 h-4" /> Register Franchisee Admin
@@ -789,57 +861,110 @@ export const FranchiseManagement: React.FC = () => {
         </div>
       </div>
 
-      {/* KPI Stats Grid */}
+      {/* KPI Stats Grid - Balanced Alignment & Unified Card Heights */}
       {dashboardStats?.summary && (
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-            <div className="text-xs font-semibold text-slate-500 uppercase">Franchises</div>
-            <div className="text-2xl font-black text-slate-900 mt-1">{dashboardStats.summary.totalFranchises}</div>
-            <div className="text-[11px] text-emerald-600 font-medium mt-1">
+        <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3.5">
+          {/* 1. Total Franchises */}
+          <div className="bg-white p-4 rounded-xl border border-slate-200/90 shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between h-full min-h-[116px]">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Franchises</span>
+              <div className="w-7 h-7 rounded-lg bg-blue-50 text-[#006FFF] flex items-center justify-center">
+                <Building2 className="w-4 h-4" />
+              </div>
+            </div>
+            <div className="my-1">
+              <div className="text-2xl font-black text-slate-900 tracking-tight" title={String(dashboardStats.summary.totalFranchises)}>
+                {dashboardStats.summary.totalFranchises}
+              </div>
+            </div>
+            <div className="text-[11px] text-emerald-600 font-semibold flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
               {dashboardStats.summary.activeFranchises} Active
             </div>
           </div>
 
-          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-            <div className="text-xs font-semibold text-slate-500 uppercase">Branch Campuses</div>
-            <div className="text-2xl font-black text-slate-900 mt-1">{dashboardStats.summary.totalBranches}</div>
-            <div className="text-[11px] text-slate-500 font-medium mt-1">
+          {/* 2. Branch Campuses */}
+          <div className="bg-white p-4 rounded-xl border border-slate-200/90 shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between h-full min-h-[116px]">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Campuses</span>
+              <div className="w-7 h-7 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                <MapPin className="w-4 h-4" />
+              </div>
+            </div>
+            <div className="my-1">
+              <div className="text-2xl font-black text-slate-900 tracking-tight" title={String(dashboardStats.summary.totalBranches)}>
+                {dashboardStats.summary.totalBranches}
+              </div>
+            </div>
+            <div className="text-[11px] text-slate-500 font-medium truncate" title={`${dashboardStats.summary.totalStudents} Active Students`}>
               {dashboardStats.summary.totalStudents} Active Students
             </div>
           </div>
 
-          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-            <div className="text-xs font-semibold text-slate-500 uppercase">Total Royalty</div>
-            <div className="text-2xl font-black text-[#006FFF] mt-1">
-              ₹{Number(dashboardStats.summary.totalRoyaltyObligations || 0).toLocaleString('en-IN')}
+          {/* 3. Total Royalty */}
+          <div className="bg-white p-4 rounded-xl border border-slate-200/90 shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between h-full min-h-[116px]">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Total Royalty</span>
+              <div className="w-7 h-7 rounded-lg bg-blue-50 text-[#006FFF] flex items-center justify-center">
+                <FileText className="w-4 h-4" />
+              </div>
             </div>
-            <div className="text-[11px] text-slate-500 font-medium mt-1">2-Installment Schedule</div>
+            <div className="my-1">
+              <div className="text-xl sm:text-2xl font-black text-[#006FFF] tracking-tight truncate" title={`₹${Number(dashboardStats.summary.totalRoyaltyObligations || 0).toLocaleString('en-IN')}`}>
+                ₹{Number(dashboardStats.summary.totalRoyaltyObligations || 0).toLocaleString('en-IN')}
+              </div>
+            </div>
+            <div className="text-[11px] text-slate-500 font-medium">2-Installment Sched.</div>
           </div>
 
-          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-            <div className="text-xs font-semibold text-slate-500 uppercase">Royalty Received</div>
-            <div className="text-2xl font-black text-emerald-600 mt-1">
-              ₹{Number(dashboardStats.summary.totalRoyaltyReceived || 0).toLocaleString('en-IN')}
+          {/* 4. Royalty Received */}
+          <div className="bg-white p-4 rounded-xl border border-slate-200/90 shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between h-full min-h-[116px]">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Received</span>
+              <div className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                <CheckCircle2 className="w-4 h-4" />
+              </div>
             </div>
-            <div className="text-[11px] text-emerald-600 font-medium mt-1">Verified Receipts</div>
+            <div className="my-1">
+              <div className="text-xl sm:text-2xl font-black text-emerald-600 tracking-tight truncate" title={`₹${Number(dashboardStats.summary.totalRoyaltyReceived || 0).toLocaleString('en-IN')}`}>
+                ₹{Number(dashboardStats.summary.totalRoyaltyReceived || 0).toLocaleString('en-IN')}
+              </div>
+            </div>
+            <div className="text-[11px] text-emerald-600 font-semibold">Verified Receipts</div>
           </div>
 
-          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-            <div className="text-xs font-semibold text-slate-500 uppercase">Outstanding</div>
-            <div className="text-2xl font-black text-amber-600 mt-1">
-              ₹{Number(dashboardStats.summary.outstandingRoyalty || 0).toLocaleString('en-IN')}
+          {/* 5. Outstanding */}
+          <div className="bg-white p-4 rounded-xl border border-slate-200/90 shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between h-full min-h-[116px]">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Outstanding</span>
+              <div className="w-7 h-7 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center">
+                <Clock className="w-4 h-4" />
+              </div>
             </div>
-            <div className="text-[11px] text-amber-600 font-medium mt-1">
+            <div className="my-1">
+              <div className="text-xl sm:text-2xl font-black text-amber-600 tracking-tight truncate" title={`₹${Number(dashboardStats.summary.outstandingRoyalty || 0).toLocaleString('en-IN')}`}>
+                ₹{Number(dashboardStats.summary.outstandingRoyalty || 0).toLocaleString('en-IN')}
+              </div>
+            </div>
+            <div className="text-[11px] text-amber-600 font-medium">
               {dashboardStats.summary.dueInstallmentsCount || 0} Installments Due
             </div>
           </div>
 
-          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-            <div className="text-xs font-semibold text-slate-500 uppercase">Overdue Amount</div>
-            <div className="text-2xl font-black text-rose-600 mt-1">
-              ₹{Number(dashboardStats.summary.overdueRoyalty || 0).toLocaleString('en-IN')}
+          {/* 6. Overdue Amount */}
+          <div className="bg-white p-4 rounded-xl border border-slate-200/90 shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between h-full min-h-[116px]">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Overdue</span>
+              <div className="w-7 h-7 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center">
+                <AlertTriangle className="w-4 h-4" />
+              </div>
             </div>
-            <div className="text-[11px] text-rose-600 font-medium mt-1">
+            <div className="my-1">
+              <div className="text-xl sm:text-2xl font-black text-rose-600 tracking-tight truncate" title={`₹${Number(dashboardStats.summary.overdueRoyalty || 0).toLocaleString('en-IN')}`}>
+                ₹{Number(dashboardStats.summary.overdueRoyalty || 0).toLocaleString('en-IN')}
+              </div>
+            </div>
+            <div className="text-[11px] text-rose-600 font-medium">
               {dashboardStats.summary.overdueInstallmentsCount || 0} Overdue
             </div>
           </div>
@@ -902,7 +1027,8 @@ export const FranchiseManagement: React.FC = () => {
             <table className="w-full text-left text-sm text-slate-700">
               <thead className="bg-slate-50 text-xs font-semibold text-slate-600 uppercase border-b border-slate-200">
                 <tr>
-                  <th className="px-4 py-3">Code & Name</th>
+                  <th className="px-4 py-3 whitespace-nowrap w-28">Code</th>
+                  <th className="px-4 py-3">Franchise Center</th>
                   <th className="px-4 py-3">Owner Contact</th>
                   <th className="px-4 py-3">Location & Address</th>
                   <th className="px-4 py-3">Campuses</th>
@@ -913,7 +1039,7 @@ export const FranchiseManagement: React.FC = () => {
               <tbody className="divide-y divide-slate-100">
                 {filteredFranchises.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="text-center py-8 text-slate-400 text-sm">
+                    <td colSpan={7} className="text-center py-8 text-slate-400 text-sm">
                       No franchises found matching criteria.
                     </td>
                   </tr>
@@ -921,9 +1047,13 @@ export const FranchiseManagement: React.FC = () => {
                   filteredFranchises.map((fr) => (
                     <React.Fragment key={fr.id}>
                       <tr className="hover:bg-slate-50 transition-colors">
+                        <td className="px-4 py-3.5 whitespace-nowrap">
+                          <span className="font-mono font-bold text-xs bg-blue-50 text-[#006FFF] px-2.5 py-1 rounded border border-blue-200 whitespace-nowrap inline-block tracking-wide">
+                            {fr.code}
+                          </span>
+                        </td>
                         <td className="px-4 py-3.5">
                           <div className="font-bold text-slate-900">{fr.name}</div>
-                          <div className="text-xs font-mono font-semibold text-[#006FFF]">{fr.code}</div>
                         </td>
                         <td className="px-4 py-3.5">
                           <div className="font-medium text-slate-900">{fr.ownerName}</div>
@@ -987,7 +1117,7 @@ export const FranchiseManagement: React.FC = () => {
                       </tr>
                       {expandedFranchiseId === fr.id && (
                         <tr className="bg-slate-50/80 border-b border-slate-200">
-                          <td colSpan={6} className="p-4">
+                          <td colSpan={7} className="p-4">
                             <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
                               <div className="flex items-center justify-between mb-3">
                                 <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-2">
@@ -1108,9 +1238,9 @@ export const FranchiseManagement: React.FC = () => {
                     const isFullyPaid = Number(inst.outstandingBalance) <= 0;
                     return (
                       <tr key={inst.id} className="hover:bg-slate-50 transition-colors">
-                        <td className="px-4 py-3.5">
+                        <td className="px-4 py-3.5 whitespace-nowrap">
                           <div className="font-bold text-slate-900">{inst.franchiseName}</div>
-                          <div className="text-xs font-mono text-[#006FFF]">{inst.franchiseCode}</div>
+                          <div className="text-xs font-mono text-[#006FFF] whitespace-nowrap">{inst.franchiseCode}</div>
                         </td>
                         <td className="px-4 py-3.5">
                           <div className="font-semibold text-slate-900">{inst.periodLabel}</div>
@@ -1310,6 +1440,7 @@ export const FranchiseManagement: React.FC = () => {
                                   agreementType: agr.agreementType || 'NEW_CENTRE_JOINT_INVESTMENT',
                                   calculationMethod: agr.calculationMethod || 'PERCENTAGE_REVENUE',
                                   annualRoyaltyAmount: Number(agr.annualRoyaltyAmount || 200000),
+                                  perStudentFee: Number(agr.perStudentFee || 2000),
                                   royaltyPercentage: Number(agr.digitalGuruRevenuePercentage || agr.royaltyPercentage || 50),
                                   digitalGuruRevenuePercentage: Number(agr.digitalGuruRevenuePercentage || agr.royaltyPercentage || 50),
                                   partnerRevenuePercentage: Number(agr.partnerRevenuePercentage || 50),
@@ -1509,749 +1640,969 @@ export const FranchiseManagement: React.FC = () => {
       )}
 
       {/* ============================================================= */}
-      {/* MODAL 1: REGISTER FRANCHISE OWNER                             */}
+      {/* MODAL 1: REGISTER FRANCHISE OWNER (SECTION-BY-SECTION WIZARD) */}
       {/* ============================================================= */}
       {showCreateModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-2xl max-w-3xl w-full p-6 shadow-2xl my-8 border border-slate-200">
-            <div className="flex justify-between items-center border-b border-slate-200 pb-4">
-              <div>
-                <h3 className="text-lg font-bold text-slate-900">Register Franchisee Admin</h3>
-                <p className="text-xs text-slate-500">
-                  Collects full contact details, configures annual agreement, and generates two installments.
-                </p>
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-start justify-center p-3 sm:p-6 overflow-y-auto min-h-screen">
+          <div className="bg-white rounded-2xl max-w-4xl w-full shadow-2xl my-4 sm:my-8 border border-slate-200 overflow-hidden flex flex-col max-h-[92vh]">
+            {/* Modal Header with Stepper Tabs */}
+            <div className="p-5 sm:p-6 border-b border-slate-200 bg-white shrink-0">
+              <div className="flex justify-between items-start">
+                <div>
+                  <h3 className="text-lg sm:text-xl font-bold text-slate-900 font-display flex items-center gap-2">
+                    <Building2 className="w-5 h-5 text-[#006FFF]" />
+                    Register Franchisee Admin
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Multi-step setup for franchise profile, agreement model, financial terms, and pre-submission review.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowCreateModal(false)}
+                  className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-100 transition-colors"
+                  aria-label="Close"
+                >
+                  <X className="w-5 h-5" />
+                </button>
               </div>
-              <button onClick={() => setShowCreateModal(false)} className="text-slate-400 hover:text-slate-600">
-                <X className="w-5 h-5" />
-              </button>
+
+              {/* Wizard Tabs / Stepper */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-4 pt-1">
+                {[
+                  { id: 'profile', step: '1', title: 'Business Profile', desc: 'Owner & Address' },
+                  { id: 'model', step: '2', title: 'Agreement Model', desc: 'Preset & Duration' },
+                  { id: 'financials', step: '3', title: 'Financial Terms', desc: 'Investment & Rev Share' },
+                  { id: 'review', step: '4', title: 'Review & Submit', desc: 'Summary & Confirm' },
+                ].map((t) => {
+                  const isActive = createModalTab === t.id;
+                  return (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => setCreateModalTab(t.id as any)}
+                      className={`text-left p-2.5 rounded-xl border transition-all ${
+                        isActive
+                          ? 'bg-blue-50/90 border-[#006FFF] shadow-xs ring-1 ring-[#006FFF]'
+                          : 'bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-600'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold ${
+                            isActive ? 'bg-[#006FFF] text-white' : 'bg-slate-200 text-slate-700'
+                          }`}
+                        >
+                          {t.step}
+                        </span>
+                        <span className={`text-xs font-bold leading-tight ${isActive ? 'text-[#006FFF]' : 'text-slate-800'}`}>
+                          {t.title}
+                        </span>
+                      </div>
+                      <div className="text-[10px] text-slate-400 mt-1 pl-7 hidden sm:block truncate">
+                        {t.desc}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
-            <form onSubmit={handleCreateFranchise} className="space-y-5 mt-4">
-              {/* Section 1: Business Details */}
-              <div className="space-y-3">
-                <div className="text-xs font-bold uppercase tracking-wider text-slate-600 border-b pb-1">
-                  1. Franchise Business Profile
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-medium text-slate-700">Franchise / Center Name *</label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="e.g. Digital Guru Chennai Central"
-                      value={createForm.name}
-                      onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })}
-                      className="mt-1 w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-[#006FFF]"
-                    />
-                  </div>
+            <form onSubmit={handleCreateFranchise} className="flex flex-col flex-1 min-h-0">
+              <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-5">
+                {/* --------------------------------------------------------- */}
+                {/* STEP 1: BUSINESS PROFILE & OWNER DETAILS                  */}
+                {/* --------------------------------------------------------- */}
+                {createModalTab === 'profile' && (
+                  <div className="space-y-5">
+                    {/* Subsection 1: Business Profile */}
+                    <div className="space-y-3">
+                      <div className="text-xs font-bold uppercase tracking-wider text-slate-600 border-b pb-1">
+                        1. Franchise Business Profile
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs font-medium text-slate-700">Franchise / Center Name *</label>
+                          <input
+                            type="text"
+                            required
+                            placeholder="e.g. Digital Guru Chennai Central"
+                            value={createForm.name}
+                            onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })}
+                            className="mt-1 w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-[#006FFF]"
+                          />
+                        </div>
 
-                  <div>
-                    <label className="block text-xs font-medium text-slate-700">Owner Full Name *</label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="e.g. Rajesh Kannan"
-                      value={createForm.ownerName}
-                      onChange={(e) => setCreateForm({ ...createForm, ownerName: e.target.value })}
-                      className="mt-1 w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-[#006FFF]"
-                    />
-                  </div>
+                        <div>
+                          <label className="block text-xs font-medium text-slate-700">Owner Full Name *</label>
+                          <input
+                            type="text"
+                            required
+                            placeholder="e.g. Rajesh Kannan"
+                            value={createForm.ownerName}
+                            onChange={(e) => setCreateForm({ ...createForm, ownerName: e.target.value })}
+                            className="mt-1 w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-[#006FFF]"
+                          />
+                        </div>
 
-                  <div>
-                    <label className="block text-xs font-medium text-slate-700">Owner Email Address *</label>
-                    <input
-                      type="email"
-                      required
-                      placeholder="owner@dgchennai.com"
-                      value={createForm.email}
-                      onChange={(e) => setCreateForm({ ...createForm, email: e.target.value })}
-                      className="mt-1 w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-[#006FFF]"
-                    />
-                  </div>
+                        <div>
+                          <label className="block text-xs font-medium text-slate-700">Owner Email Address *</label>
+                          <input
+                            type="email"
+                            required
+                            placeholder="owner@dgchennai.com"
+                            value={createForm.email}
+                            onChange={(e) => setCreateForm({ ...createForm, email: e.target.value })}
+                            className="mt-1 w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-[#006FFF]"
+                          />
+                        </div>
 
-                  <div>
-                    <label className="block text-xs font-medium text-slate-700">Primary Mobile Number *</label>
-                    <input
-                      type="tel"
-                      required
-                      placeholder="+91 98765 43210"
-                      value={createForm.phone}
-                      onChange={(e) => setCreateForm({ ...createForm, phone: e.target.value })}
-                      className="mt-1 w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-[#006FFF]"
-                    />
-                  </div>
-                </div>
+                        <div>
+                          <label className="block text-xs font-medium text-slate-700">Primary Mobile Number *</label>
+                          <input
+                            type="tel"
+                            required
+                            placeholder="+91 98765 43210"
+                            value={createForm.phone}
+                            onChange={(e) => setCreateForm({ ...createForm, phone: e.target.value })}
+                            className="mt-1 w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-[#006FFF]"
+                          />
+                        </div>
+                      </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  <div className="md:col-span-3">
-                    <label className="block text-xs font-medium text-slate-700">Full Business Address *</label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="e.g. Suite 402, Anna Salai Commercial Complex"
-                      value={createForm.address}
-                      onChange={(e) => setCreateForm({ ...createForm, address: e.target.value })}
-                      className="mt-1 w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-[#006FFF]"
-                    />
-                  </div>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <div className="md:col-span-3">
+                          <label className="block text-xs font-medium text-slate-700">Full Business Address *</label>
+                          <input
+                            type="text"
+                            required
+                            placeholder="e.g. Suite 402, Anna Salai Commercial Complex"
+                            value={createForm.address}
+                            onChange={(e) => setCreateForm({ ...createForm, address: e.target.value })}
+                            className="mt-1 w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-[#006FFF]"
+                          />
+                        </div>
 
-                  <div>
-                    <label className="block text-xs font-medium text-slate-700">City *</label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="Chennai"
-                      value={createForm.city}
-                      onChange={(e) => setCreateForm({ ...createForm, city: e.target.value })}
-                      className="mt-1 w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-[#006FFF]"
-                    />
-                  </div>
+                        <div>
+                          <label className="block text-xs font-medium text-slate-700">City *</label>
+                          <input
+                            type="text"
+                            required
+                            placeholder="Chennai"
+                            value={createForm.city}
+                            onChange={(e) => setCreateForm({ ...createForm, city: e.target.value })}
+                            className="mt-1 w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-[#006FFF]"
+                          />
+                        </div>
 
-                  <div>
-                    <label className="block text-xs font-medium text-slate-700">State *</label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="Tamil Nadu"
-                      value={createForm.state}
-                      onChange={(e) => setCreateForm({ ...createForm, state: e.target.value })}
-                      className="mt-1 w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-[#006FFF]"
-                    />
-                  </div>
+                        <div>
+                          <label className="block text-xs font-medium text-slate-700">State *</label>
+                          <input
+                            type="text"
+                            required
+                            placeholder="Tamil Nadu"
+                            value={createForm.state}
+                            onChange={(e) => setCreateForm({ ...createForm, state: e.target.value })}
+                            className="mt-1 w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-[#006FFF]"
+                          />
+                        </div>
 
-                  <div>
-                    <label className="block text-xs font-medium text-slate-700">Postal / PIN Code *</label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="600002"
-                      value={createForm.postalCode}
-                      onChange={(e) => setCreateForm({ ...createForm, postalCode: e.target.value })}
-                      className="mt-1 w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-[#006FFF]"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Section 2: Authorized Alternate Contact */}
-              <div className="space-y-3">
-                <div className="text-xs font-bold uppercase tracking-wider text-slate-600 border-b pb-1">
-                  2. Authorized Contact Person (If Different from Owner)
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-medium text-slate-700">Contact Person Name</label>
-                    <input
-                      type="text"
-                      placeholder="e.g. Priya Sharma"
-                      value={createForm.authorizedContact.name}
-                      onChange={(e) =>
-                        setCreateForm({
-                          ...createForm,
-                          authorizedContact: { ...createForm.authorizedContact, name: e.target.value },
-                        })
-                      }
-                      className="mt-1 w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-[#006FFF]"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-slate-700">Designation / Role</label>
-                    <input
-                      type="text"
-                      placeholder="e.g. Managing Partner / Director"
-                      value={createForm.authorizedContact.designation}
-                      onChange={(e) =>
-                        setCreateForm({
-                          ...createForm,
-                          authorizedContact: { ...createForm.authorizedContact, designation: e.target.value },
-                        })
-                      }
-                      className="mt-1 w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-[#006FFF]"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Section 3: Master Agreement & Business Model Configuration */}
-              <div className="space-y-4">
-                <div className="text-xs font-bold uppercase tracking-wider text-slate-600 border-b pb-1 flex items-center justify-between">
-                  <span>3. Master Agreement & Business Model Configuration</span>
-                  <span className="text-[10px] text-[#006FFF] font-semibold">Four Dynamic Commercial Models</span>
-                </div>
-
-                {/* Preset Business Model Selector (Dynamically Loaded from Backend) */}
-                <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <label className="block text-xs font-semibold text-slate-700">
-                      Select Agreement Business Model Preset:
-                    </label>
-                    {agreementTemplates.length > 0 && (
-                      <span className="text-[10px] text-emerald-600 font-medium">✓ Authoritative API Templates Loaded</span>
-                    )}
-                  </div>
-
-                  {templatesLoading ? (
-                    <div className="flex items-center gap-2.5 p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-500">
-                      <div className="w-4 h-4 border-2 border-[#006FFF] border-t-transparent rounded-full animate-spin"></div>
-                      <span>Loading agreement templates from server...</span>
+                        <div>
+                          <label className="block text-xs font-medium text-slate-700">Postal / PIN Code *</label>
+                          <input
+                            type="text"
+                            required
+                            placeholder="600002"
+                            value={createForm.postalCode}
+                            onChange={(e) => setCreateForm({ ...createForm, postalCode: e.target.value })}
+                            className="mt-1 w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-[#006FFF]"
+                          />
+                        </div>
+                      </div>
                     </div>
-                  ) : templatesError ? (
-                    <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 flex items-center justify-between">
-                      <span className="font-medium">Failed to load templates: {templatesError}</span>
-                      <button
-                        type="button"
-                        onClick={loadAgreementTemplates}
-                        className="px-2.5 py-1 bg-rose-600 text-white rounded-lg font-semibold hover:bg-rose-700 transition text-[11px]"
-                      >
-                        Retry Loading
-                      </button>
+
+                    {/* Subsection 2: Authorized Alternate Contact */}
+                    <div className="space-y-3 pt-3 border-t">
+                      <div className="text-xs font-bold uppercase tracking-wider text-slate-600 border-b pb-1">
+                        2. Authorized Contact Person (If Different from Owner)
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs font-medium text-slate-700">Contact Person Name</label>
+                          <input
+                            type="text"
+                            placeholder="e.g. Priya Sharma"
+                            value={createForm.authorizedContact.name}
+                            onChange={(e) =>
+                              setCreateForm({
+                                ...createForm,
+                                authorizedContact: { ...createForm.authorizedContact, name: e.target.value },
+                              })
+                            }
+                            className="mt-1 w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-[#006FFF]"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-slate-700">Designation / Role</label>
+                          <input
+                            type="text"
+                            placeholder="e.g. Managing Partner / Director"
+                            value={createForm.authorizedContact.designation}
+                            onChange={(e) =>
+                              setCreateForm({
+                                ...createForm,
+                                authorizedContact: { ...createForm.authorizedContact, designation: e.target.value },
+                              })
+                            }
+                            className="mt-1 w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-[#006FFF]"
+                          />
+                        </div>
+                      </div>
                     </div>
-                  ) : agreementTemplates.length === 0 ? (
-                    <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-700">
-                      No agreement templates available on server.
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                      {agreementTemplates.map((tmpl: any) => {
-                        const isSelected = createForm.initialAgreement.agreementType === tmpl.type;
-                        const defs = tmpl.defaults || {};
-                        return (
-                          <button
-                            key={tmpl.type}
-                            type="button"
-                            onClick={() => {
-                              const normExpenses: Record<string, string> = {};
-                              if (defs.expenseResponsibilities && typeof defs.expenseResponsibilities === 'object') {
-                                for (const [k, v] of Object.entries(defs.expenseResponsibilities)) {
-                                  normExpenses[k] = typeof v === 'object' && v !== null && (v as any).payer ? (v as any).payer : String(v);
-                                }
-                              }
+                  </div>
+                )}
+
+                {/* --------------------------------------------------------- */}
+                {/* STEP 2: MASTER AGREEMENT & BUSINESS MODEL PRESET          */}
+                {/* --------------------------------------------------------- */}
+                {createModalTab === 'model' && (
+                  <div className="space-y-5">
+                    <div className="space-y-4">
+                      <div className="text-xs font-bold uppercase tracking-wider text-slate-600 border-b pb-1 flex items-center justify-between">
+                        <span>Select Agreement Business Model Preset</span>
+                        <span className="text-[10px] text-[#006FFF] font-semibold">Authoritative Dynamic Templates</span>
+                      </div>
+
+                      {/* Preset Business Model Selector */}
+                      <div>
+                        {templatesLoading ? (
+                          <div className="flex items-center gap-2.5 p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-500">
+                            <div className="w-4 h-4 border-2 border-[#006FFF] border-t-transparent rounded-full animate-spin"></div>
+                            <span>Loading agreement templates from server...</span>
+                          </div>
+                        ) : templatesError ? (
+                          <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 flex items-center justify-between">
+                            <span className="font-medium">Failed to load templates: {templatesError}</span>
+                            <button
+                              type="button"
+                              onClick={loadAgreementTemplates}
+                              className="px-2.5 py-1 bg-rose-600 text-white rounded-lg font-semibold hover:bg-rose-700 transition text-[11px]"
+                            >
+                              Retry Loading
+                            </button>
+                          </div>
+                        ) : agreementTemplates.length === 0 ? (
+                          <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-700">
+                            No agreement templates available on server.
+                          </div>
+                        ) : (
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
+                            {agreementTemplates.map((tmpl: any) => {
+                              const isSelected = createForm.initialAgreement.agreementType === tmpl.type;
+                              const defs = tmpl.defaults || {};
+                              return (
+                                <button
+                                  key={tmpl.type}
+                                  type="button"
+                                  onClick={() => {
+                                    const normExpenses: Record<string, string> = {};
+                                    if (defs.expenseResponsibilities && typeof defs.expenseResponsibilities === 'object') {
+                                      for (const [k, v] of Object.entries(defs.expenseResponsibilities)) {
+                                        normExpenses[k] = typeof v === 'object' && v !== null && (v as any).payer ? (v as any).payer : String(v);
+                                      }
+                                    }
+                                    setCreateForm({
+                                      ...createForm,
+                                      initialAgreement: {
+                                        ...createForm.initialAgreement,
+                                        agreementType: tmpl.type as any,
+                                        title: defs.title || createForm.initialAgreement.title,
+                                        calculationMethod: defs.calculationMethod || createForm.initialAgreement.calculationMethod,
+                                        annualRoyaltyAmount: defs.annualRoyaltyAmount !== undefined ? defs.annualRoyaltyAmount : createForm.initialAgreement.annualRoyaltyAmount,
+                                        digitalGuruRevenuePercentage: defs.digitalGuruRevenuePercentage !== undefined ? defs.digitalGuruRevenuePercentage : 50,
+                                        partnerRevenuePercentage: defs.partnerRevenuePercentage !== undefined ? defs.partnerRevenuePercentage : 50,
+                                        royaltyPercentage: defs.digitalGuruRevenuePercentage !== undefined ? defs.digitalGuruRevenuePercentage : 50,
+                                        revenueCalculationBasis: defs.revenueCalculationBasis || 'GROSS_COURSE_FEES',
+                                        settlementFrequency: defs.settlementFrequency || 'MONTHLY',
+                                        totalInvestment: defs.totalInvestment !== undefined ? defs.totalInvestment : 0,
+                                        digitalGuruInvestmentAmount: defs.digitalGuruInvestmentAmount !== undefined ? defs.digitalGuruInvestmentAmount : 0,
+                                        partnerInvestmentAmount: defs.partnerInvestmentAmount !== undefined ? defs.partnerInvestmentAmount : 0,
+                                        digitalGuruInvestmentPercentage: defs.digitalGuruInvestmentPercentage !== undefined ? defs.digitalGuruInvestmentPercentage : 0,
+                                        partnerInvestmentPercentage: defs.partnerInvestmentPercentage !== undefined ? defs.partnerInvestmentPercentage : 0,
+                                        operationalSetupContribution: defs.operationalSetupContribution !== undefined ? defs.operationalSetupContribution : 0,
+                                        investmentNotes: defs.investmentNotes || '',
+                                        expenseResponsibilities: Object.keys(normExpenses).length > 0 ? normExpenses : createForm.initialAgreement.expenseResponsibilities,
+                                        marketingResponsibleParty: defs.marketingResponsibleParty || 'DIGITAL_GURU',
+                                        marketingSupportDurationMonths: defs.marketingSupportDurationMonths !== undefined ? defs.marketingSupportDurationMonths : 0,
+                                        marketingPostSupportParty: defs.marketingPostSupportParty || 'PARTNER',
+                                        marketingBudget: defs.marketingBudget !== undefined ? defs.marketingBudget : 0,
+                                        courseSoftwareAccessEnabled: defs.courseSoftwareAccessEnabled !== undefined ? defs.courseSoftwareAccessEnabled : true,
+                                        courseSoftwarePricingNotes: defs.courseSoftwarePricingNotes || '',
+                                      },
+                                    });
+                                  }}
+                                  className={`p-3 rounded-xl text-left border text-xs transition-all ${
+                                    isSelected
+                                      ? 'bg-blue-50 border-[#006FFF] text-[#006FFF] font-bold shadow-sm ring-1 ring-[#006FFF]'
+                                      : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300'
+                                  }`}
+                                >
+                                  <div className="font-bold text-[12px] leading-tight">{tmpl.label}</div>
+                                  <div className="text-[10px] text-slate-500 mt-1">
+                                    {defs.digitalGuruRevenuePercentage ?? 50}:{defs.partnerRevenuePercentage ?? 50} Rev • {defs.settlementFrequency || 'MONTHLY'}
+                                  </div>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+                        <p className="text-[10px] text-slate-400 mt-1.5 italic">
+                          Presets provide illustrative defaults only. All values are independent and fully editable in the next step.
+                        </p>
+                      </div>
+
+                      {/* Dates & Settlement Frequency */}
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2">
+                        <div>
+                          <label className="block text-xs font-medium text-slate-700">Agreement Start Date *</label>
+                          <input
+                            type="date"
+                            required
+                            value={createForm.initialAgreement.startDate}
+                            onChange={(e) =>
+                              setCreateForm({
+                                ...createForm,
+                                initialAgreement: { ...createForm.initialAgreement, startDate: e.target.value },
+                              })
+                            }
+                            className="mt-1 w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-[#006FFF]"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-medium text-slate-700">Agreement End Date (1 Year) *</label>
+                          <input
+                            type="date"
+                            required
+                            value={createForm.initialAgreement.endDate}
+                            onChange={(e) =>
+                              setCreateForm({
+                                ...createForm,
+                                initialAgreement: { ...createForm.initialAgreement, endDate: e.target.value },
+                              })
+                            }
+                            className="mt-1 w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-[#006FFF]"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-medium text-slate-700">Settlement Frequency *</label>
+                          <select
+                            value={createForm.initialAgreement.settlementFrequency}
+                            onChange={(e: any) =>
                               setCreateForm({
                                 ...createForm,
                                 initialAgreement: {
                                   ...createForm.initialAgreement,
-                                  agreementType: tmpl.type as any,
-                                  title: defs.title || createForm.initialAgreement.title,
-                                  calculationMethod: defs.calculationMethod || createForm.initialAgreement.calculationMethod,
-                                  annualRoyaltyAmount: defs.annualRoyaltyAmount !== undefined ? defs.annualRoyaltyAmount : createForm.initialAgreement.annualRoyaltyAmount,
-                                  digitalGuruRevenuePercentage: defs.digitalGuruRevenuePercentage !== undefined ? defs.digitalGuruRevenuePercentage : 50,
-                                  partnerRevenuePercentage: defs.partnerRevenuePercentage !== undefined ? defs.partnerRevenuePercentage : 50,
-                                  royaltyPercentage: defs.digitalGuruRevenuePercentage !== undefined ? defs.digitalGuruRevenuePercentage : 50,
-                                  revenueCalculationBasis: defs.revenueCalculationBasis || 'GROSS_COURSE_FEES',
-                                  settlementFrequency: defs.settlementFrequency || 'MONTHLY',
-                                  totalInvestment: defs.totalInvestment !== undefined ? defs.totalInvestment : 0,
-                                  digitalGuruInvestmentAmount: defs.digitalGuruInvestmentAmount !== undefined ? defs.digitalGuruInvestmentAmount : 0,
-                                  partnerInvestmentAmount: defs.partnerInvestmentAmount !== undefined ? defs.partnerInvestmentAmount : 0,
-                                  digitalGuruInvestmentPercentage: defs.digitalGuruInvestmentPercentage !== undefined ? defs.digitalGuruInvestmentPercentage : 0,
-                                  partnerInvestmentPercentage: defs.partnerInvestmentPercentage !== undefined ? defs.partnerInvestmentPercentage : 0,
-                                  operationalSetupContribution: defs.operationalSetupContribution !== undefined ? defs.operationalSetupContribution : 0,
-                                  investmentNotes: defs.investmentNotes || '',
-                                  expenseResponsibilities: Object.keys(normExpenses).length > 0 ? normExpenses : createForm.initialAgreement.expenseResponsibilities,
-                                  marketingResponsibleParty: defs.marketingResponsibleParty || 'DIGITAL_GURU',
-                                  marketingSupportDurationMonths: defs.marketingSupportDurationMonths !== undefined ? defs.marketingSupportDurationMonths : 0,
-                                  marketingPostSupportParty: defs.marketingPostSupportParty || 'PARTNER',
-                                  marketingBudget: defs.marketingBudget !== undefined ? defs.marketingBudget : 0,
-                                  courseSoftwareAccessEnabled: defs.courseSoftwareAccessEnabled !== undefined ? defs.courseSoftwareAccessEnabled : true,
-                                  courseSoftwarePricingNotes: defs.courseSoftwarePricingNotes || '',
+                                  settlementFrequency: e.target.value,
+                                },
+                              })
+                            }
+                            className="mt-1 w-full px-3 py-2 border rounded-lg text-sm font-medium focus:ring-2 focus:ring-[#006FFF]"
+                          >
+                            <option value="MONTHLY">Monthly Settlement</option>
+                            <option value="YEARLY">Yearly Settlement (2 Equal Installments)</option>
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* --------------------------------------------------------- */}
+                {/* STEP 3: FINANCIAL TERMS & OPERATIONAL RESPONSIBILITIES   */}
+                {/* --------------------------------------------------------- */}
+                {createModalTab === 'financials' && (
+                  <div className="space-y-4">
+                    {/* Setup Investment */}
+                    <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
+                      <div className="text-xs font-bold text-slate-800">Initial Setup Investment Configuration (Independent of Revenue Split)</div>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <div>
+                          <label className="block text-xs font-medium text-slate-700">Total Setup Investment (₹)</label>
+                          <input
+                            type="number"
+                            min="0"
+                            value={createForm.initialAgreement.totalInvestment || ''}
+                            onChange={(e) => {
+                              const total = Number(e.target.value);
+                              const dgPct = Number(createForm.initialAgreement.digitalGuruInvestmentPercentage || 50);
+                              const dgAmt = Math.round((total * dgPct) / 100);
+                              setCreateForm({
+                                ...createForm,
+                                initialAgreement: {
+                                  ...createForm.initialAgreement,
+                                  totalInvestment: total,
+                                  digitalGuruInvestmentAmount: dgAmt,
+                                  partnerInvestmentAmount: total - dgAmt,
                                 },
                               });
                             }}
-                            className={`p-2.5 rounded-xl text-left border text-xs transition-all ${
-                              isSelected
-                                ? 'bg-blue-50 border-[#006FFF] text-[#006FFF] font-bold shadow-sm ring-1 ring-[#006FFF]'
-                                : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300'
-                            }`}
-                          >
-                            <div className="font-bold text-[11px] leading-tight">{tmpl.label}</div>
-                            <div className="text-[10px] text-slate-500 mt-1">
-                              {defs.digitalGuruRevenuePercentage ?? 50}:{defs.partnerRevenuePercentage ?? 50} Rev • {defs.settlementFrequency || 'MONTHLY'}
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-                  <p className="text-[10px] text-slate-400 mt-1 italic">
-                    Presets provide illustrative defaults only. All values are independent and fully editable below.
-                  </p>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-medium text-slate-700">Agreement Start Date *</label>
-                    <input
-                      type="date"
-                      required
-                      value={createForm.initialAgreement.startDate}
-                      onChange={(e) =>
-                        setCreateForm({
-                          ...createForm,
-                          initialAgreement: { ...createForm.initialAgreement, startDate: e.target.value },
-                        })
-                      }
-                      className="mt-1 w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-[#006FFF]"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-medium text-slate-700">Agreement End Date (1 Year) *</label>
-                    <input
-                      type="date"
-                      required
-                      value={createForm.initialAgreement.endDate}
-                      onChange={(e) =>
-                        setCreateForm({
-                          ...createForm,
-                          initialAgreement: { ...createForm.initialAgreement, endDate: e.target.value },
-                        })
-                      }
-                      className="mt-1 w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-[#006FFF]"
-                    />
-                  </div>
-                </div>
-
-                {/* Initial Setup Investment Configuration */}
-                <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
-                  <div className="text-xs font-bold text-slate-800">Initial Setup Investment Configuration (Independent of Revenue Split)</div>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                    <div>
-                      <label className="block text-xs font-medium text-slate-700">Total Setup Investment (₹)</label>
-                      <input
-                        type="number"
-                        min="0"
-                        value={createForm.initialAgreement.totalInvestment || ''}
-                        onChange={(e) => {
-                          const total = Number(e.target.value);
-                          const dgPct = Number(createForm.initialAgreement.digitalGuruInvestmentPercentage || 50);
-                          const dgAmt = Math.round((total * dgPct) / 100);
-                          setCreateForm({
-                            ...createForm,
-                            initialAgreement: {
-                              ...createForm.initialAgreement,
-                              totalInvestment: total,
-                              digitalGuruInvestmentAmount: dgAmt,
-                              partnerInvestmentAmount: total - dgAmt,
-                            },
-                          });
-                        }}
-                        className="mt-1 w-full px-3 py-1.5 border rounded-lg text-sm"
-                        placeholder="200000"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-slate-700">Digital Guru Investment (%)</label>
-                      <input
-                        type="number"
-                        min="0"
-                        max="100"
-                        value={createForm.initialAgreement.digitalGuruInvestmentPercentage || ''}
-                        onChange={(e) => {
-                          const dgPct = Number(e.target.value);
-                          const partnerPct = 100 - dgPct;
-                          const total = Number(createForm.initialAgreement.totalInvestment || 0);
-                          setCreateForm({
-                            ...createForm,
-                            initialAgreement: {
-                              ...createForm.initialAgreement,
-                              digitalGuruInvestmentPercentage: dgPct,
-                              partnerInvestmentPercentage: partnerPct,
-                              digitalGuruInvestmentAmount: Math.round((total * dgPct) / 100),
-                              partnerInvestmentAmount: Math.round((total * partnerPct) / 100),
-                            },
-                          });
-                        }}
-                        className="mt-1 w-full px-3 py-1.5 border rounded-lg text-sm"
-                        placeholder="50"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-slate-700">Partner Investment (%)</label>
-                      <input
-                        type="number"
-                        min="0"
-                        max="100"
-                        value={createForm.initialAgreement.partnerInvestmentPercentage || ''}
-                        onChange={(e) => {
-                          const partnerPct = Number(e.target.value);
-                          const dgPct = 100 - partnerPct;
-                          const total = Number(createForm.initialAgreement.totalInvestment || 0);
-                          setCreateForm({
-                            ...createForm,
-                            initialAgreement: {
-                              ...createForm.initialAgreement,
-                              partnerInvestmentPercentage: partnerPct,
-                              digitalGuruInvestmentPercentage: dgPct,
-                              digitalGuruInvestmentAmount: Math.round((total * dgPct) / 100),
-                              partnerInvestmentAmount: Math.round((total * partnerPct) / 100),
-                            },
-                          });
-                        }}
-                        className="mt-1 w-full px-3 py-1.5 border rounded-lg text-sm"
-                        placeholder="50"
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-slate-700">Operational Setup Contribution (₹)</label>
-                    <input
-                      type="number"
-                      min="0"
-                      value={createForm.initialAgreement.operationalSetupContribution || ''}
-                      onChange={(e) =>
-                        setCreateForm({
-                          ...createForm,
-                          initialAgreement: {
-                            ...createForm.initialAgreement,
-                            operationalSetupContribution: Number(e.target.value),
-                          },
-                        })
-                      }
-                      className="mt-1 w-full px-3 py-1.5 border rounded-lg text-sm"
-                      placeholder="50000"
-                    />
-                  </div>
-                </div>
-
-                {/* Revenue Sharing & Calculation Basis */}
-                <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-slate-800">Revenue Sharing Configuration</span>
-                    <span
-                      className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                        Number(createForm.initialAgreement.digitalGuruRevenuePercentage) +
-                          Number(createForm.initialAgreement.partnerRevenuePercentage) ===
-                        100
-                          ? 'bg-emerald-100 text-emerald-800'
-                          : 'bg-rose-100 text-rose-800'
-                      }`}
-                    >
-                      Total:{' '}
-                      {Number(createForm.initialAgreement.digitalGuruRevenuePercentage || 0) +
-                        Number(createForm.initialAgreement.partnerRevenuePercentage || 0)}
-                      % (Must = 100%)
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-medium text-slate-700">Digital Guru Revenue Share (%) *</label>
-                      <input
-                        type="number"
-                        min="0"
-                        max="100"
-                        required
-                        value={createForm.initialAgreement.digitalGuruRevenuePercentage}
-                        onChange={(e) => {
-                          const dg = Number(e.target.value);
-                          setCreateForm({
-                            ...createForm,
-                            initialAgreement: {
-                              ...createForm.initialAgreement,
-                              digitalGuruRevenuePercentage: dg,
-                              partnerRevenuePercentage: 100 - dg,
-                              royaltyPercentage: dg,
-                            },
-                          });
-                        }}
-                        className="mt-1 w-full px-3 py-1.5 border rounded-lg text-sm"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-slate-700">Franchise Partner Revenue Share (%) *</label>
-                      <input
-                        type="number"
-                        min="0"
-                        max="100"
-                        required
-                        value={createForm.initialAgreement.partnerRevenuePercentage}
-                        onChange={(e) => {
-                          const pt = Number(e.target.value);
-                          setCreateForm({
-                            ...createForm,
-                            initialAgreement: {
-                              ...createForm.initialAgreement,
-                              partnerRevenuePercentage: pt,
-                              digitalGuruRevenuePercentage: 100 - pt,
-                              royaltyPercentage: 100 - pt,
-                            },
-                          });
-                        }}
-                        className="mt-1 w-full px-3 py-1.5 border rounded-lg text-sm"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-medium text-slate-700">Revenue Calculation Basis *</label>
-                      <select
-                        value={createForm.initialAgreement.revenueCalculationBasis}
-                        onChange={(e: any) =>
-                          setCreateForm({
-                            ...createForm,
-                            initialAgreement: {
-                              ...createForm.initialAgreement,
-                              revenueCalculationBasis: e.target.value,
-                            },
-                          })
-                        }
-                        className="mt-1 w-full px-3 py-1.5 border rounded-lg text-sm font-medium"
-                      >
-                        <option value="GROSS_COURSE_FEES">Gross Course Fees Collected</option>
-                        <option value="NET_COURSE_REVENUE">Net Course Revenue (After Refunds/Adjustments)</option>
-                        <option value="PROFIT_AFTER_EXPENSES">Profit After Deductible Operating Expenses</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-medium text-slate-700">Settlement Frequency *</label>
-                      <select
-                        value={createForm.initialAgreement.settlementFrequency}
-                        onChange={(e: any) =>
-                          setCreateForm({
-                            ...createForm,
-                            initialAgreement: {
-                              ...createForm.initialAgreement,
-                              settlementFrequency: e.target.value,
-                            },
-                          })
-                        }
-                        className="mt-1 w-full px-3 py-1.5 border rounded-lg text-sm font-medium"
-                      >
-                        <option value="MONTHLY">Monthly Settlement</option>
-                        <option value="YEARLY">Yearly Settlement (2 Equal Installments)</option>
-                      </select>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Operational Expense Responsibilities */}
-                <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
-                  <div className="text-xs font-bold text-slate-800">Operational Expense Responsibilities</div>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                    {[
-                      { key: 'rent', label: 'Centre Rent' },
-                      { key: 'trainerSalaries', label: 'Trainer Salaries' },
-                      { key: 'staffSalaries', label: 'Staff Salaries' },
-                      { key: 'operationalSetup', label: 'Operational Setup' },
-                      { key: 'utilities', label: 'Utilities (Electricity/Net)' },
-                      { key: 'marketing', label: 'Marketing Campaigns' },
-                      { key: 'other', label: 'Other Sundry Expenses' },
-                    ].map(({ key, label }) => (
-                      <div key={key}>
-                        <label className="block text-[11px] font-medium text-slate-600">{label}</label>
-                        <select
-                          value={createForm.initialAgreement.expenseResponsibilities[key] || 'PARTNER'}
-                          onChange={(e) =>
-                            setCreateForm({
-                              ...createForm,
-                              initialAgreement: {
-                                ...createForm.initialAgreement,
-                                expenseResponsibilities: {
-                                  ...createForm.initialAgreement.expenseResponsibilities,
-                                  [key]: e.target.value,
+                            className="mt-1 w-full px-3 py-1.5 border rounded-lg text-sm"
+                            placeholder="200000"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-slate-700">Digital Guru Investment (%)</label>
+                          <input
+                            type="number"
+                            min="0"
+                            max="100"
+                            value={createForm.initialAgreement.digitalGuruInvestmentPercentage || ''}
+                            onChange={(e) => {
+                              const dgPct = Number(e.target.value);
+                              const partnerPct = 100 - dgPct;
+                              const total = Number(createForm.initialAgreement.totalInvestment || 0);
+                              setCreateForm({
+                                ...createForm,
+                                initialAgreement: {
+                                  ...createForm.initialAgreement,
+                                  digitalGuruInvestmentPercentage: dgPct,
+                                  partnerInvestmentPercentage: partnerPct,
+                                  digitalGuruInvestmentAmount: Math.round((total * dgPct) / 100),
+                                  partnerInvestmentAmount: Math.round((total * partnerPct) / 100),
                                 },
-                              },
-                            })
-                          }
-                          className="mt-0.5 w-full px-2 py-1 border rounded text-xs bg-white"
-                        >
-                          <option value="PARTNER">Partner</option>
-                          <option value="DIGITAL_GURU">Digital Guru</option>
-                          <option value="SHARED">Shared (50:50)</option>
-                          <option value="CUSTOM">Custom</option>
-                        </select>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Marketing & Course Software Access */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
-                    <div className="text-xs font-bold text-slate-800">Marketing Support</div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="block text-[11px] font-medium text-slate-600">Responsible Party</label>
-                        <select
-                          value={createForm.initialAgreement.marketingResponsibleParty}
-                          onChange={(e) =>
-                            setCreateForm({
-                              ...createForm,
-                              initialAgreement: {
-                                ...createForm.initialAgreement,
-                                marketingResponsibleParty: e.target.value,
-                              },
-                            })
-                          }
-                          className="mt-0.5 w-full px-2 py-1 border rounded text-xs bg-white"
-                        >
-                          <option value="DIGITAL_GURU">Digital Guru</option>
-                          <option value="PARTNER">Partner</option>
-                          <option value="SHARED">Shared</option>
-                        </select>
+                              });
+                            }}
+                            className="mt-1 w-full px-3 py-1.5 border rounded-lg text-sm"
+                            placeholder="50"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-slate-700">Partner Investment (%)</label>
+                          <input
+                            type="number"
+                            min="0"
+                            max="100"
+                            value={createForm.initialAgreement.partnerInvestmentPercentage || ''}
+                            onChange={(e) => {
+                              const partnerPct = Number(e.target.value);
+                              const dgPct = 100 - partnerPct;
+                              const total = Number(createForm.initialAgreement.totalInvestment || 0);
+                              setCreateForm({
+                                ...createForm,
+                                initialAgreement: {
+                                  ...createForm.initialAgreement,
+                                  partnerInvestmentPercentage: partnerPct,
+                                  digitalGuruInvestmentPercentage: dgPct,
+                                  digitalGuruInvestmentAmount: Math.round((total * dgPct) / 100),
+                                  partnerInvestmentAmount: Math.round((total * partnerPct) / 100),
+                                },
+                              });
+                            }}
+                            className="mt-1 w-full px-3 py-1.5 border rounded-lg text-sm"
+                            placeholder="50"
+                          />
+                        </div>
                       </div>
                       <div>
-                        <label className="block text-[11px] font-medium text-slate-600">Duration (Months)</label>
+                        <label className="block text-xs font-medium text-slate-700">Operational Setup Contribution (₹)</label>
                         <input
                           type="number"
                           min="0"
-                          value={createForm.initialAgreement.marketingSupportDurationMonths}
+                          value={createForm.initialAgreement.operationalSetupContribution || ''}
                           onChange={(e) =>
                             setCreateForm({
                               ...createForm,
                               initialAgreement: {
                                 ...createForm.initialAgreement,
-                                marketingSupportDurationMonths: Number(e.target.value),
+                                operationalSetupContribution: Number(e.target.value),
                               },
                             })
                           }
-                          className="mt-0.5 w-full px-2 py-1 border rounded text-xs"
+                          className="mt-1 w-full px-3 py-1.5 border rounded-lg text-sm"
+                          placeholder="50000"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Revenue Sharing & Calculation Basis */}
+                    <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-slate-800">Revenue Sharing Configuration</span>
+                        <span
+                          className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                            Number(createForm.initialAgreement.digitalGuruRevenuePercentage) +
+                              Number(createForm.initialAgreement.partnerRevenuePercentage) ===
+                            100
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : 'bg-rose-100 text-rose-800'
+                          }`}
+                        >
+                          Total:{' '}
+                          {Number(createForm.initialAgreement.digitalGuruRevenuePercentage || 0) +
+                            Number(createForm.initialAgreement.partnerRevenuePercentage || 0)}
+                          % (Must = 100%)
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs font-medium text-slate-700">Digital Guru Revenue Share (%) *</label>
+                          <input
+                            type="number"
+                            min="0"
+                            max="100"
+                            required
+                            value={createForm.initialAgreement.digitalGuruRevenuePercentage}
+                            onChange={(e) => {
+                              const dg = Number(e.target.value);
+                              setCreateForm({
+                                ...createForm,
+                                initialAgreement: {
+                                  ...createForm.initialAgreement,
+                                  digitalGuruRevenuePercentage: dg,
+                                  partnerRevenuePercentage: 100 - dg,
+                                  royaltyPercentage: dg,
+                                },
+                              });
+                            }}
+                            className="mt-1 w-full px-3 py-1.5 border rounded-lg text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-slate-700">Franchise Partner Revenue Share (%) *</label>
+                          <input
+                            type="number"
+                            min="0"
+                            max="100"
+                            required
+                            value={createForm.initialAgreement.partnerRevenuePercentage}
+                            onChange={(e) => {
+                              const pt = Number(e.target.value);
+                              setCreateForm({
+                                ...createForm,
+                                initialAgreement: {
+                                  ...createForm.initialAgreement,
+                                  partnerRevenuePercentage: pt,
+                                  digitalGuruRevenuePercentage: 100 - pt,
+                                  royaltyPercentage: 100 - pt,
+                                },
+                              });
+                            }}
+                            className="mt-1 w-full px-3 py-1.5 border rounded-lg text-sm"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs font-medium text-slate-700">Commercial Model *</label>
+                          <select
+                            value={createForm.initialAgreement.calculationMethod}
+                            onChange={(e: any) =>
+                              setCreateForm({
+                                ...createForm,
+                                initialAgreement: {
+                                  ...createForm.initialAgreement,
+                                  calculationMethod: e.target.value,
+                                },
+                              })
+                            }
+                            className="mt-1 w-full px-3 py-1.5 border rounded-lg text-sm font-medium"
+                          >
+                            <option value="PERCENTAGE_REVENUE">Percentage of Revenue Collections</option>
+                            <option value="FIXED_ANNUAL">Fixed Annual Commercial Fee</option>
+                            <option value="PER_STUDENT">Per Enrolled Student Fee</option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-medium text-slate-700">Revenue Calculation Basis *</label>
+                          <select
+                            value={createForm.initialAgreement.revenueCalculationBasis}
+                            onChange={(e: any) =>
+                              setCreateForm({
+                                ...createForm,
+                                initialAgreement: {
+                                  ...createForm.initialAgreement,
+                                  revenueCalculationBasis: e.target.value,
+                                },
+                              })
+                            }
+                            className="mt-1 w-full px-3 py-1.5 border rounded-lg text-sm font-medium"
+                          >
+                            <option value="GROSS_COURSE_FEES">Gross Course Fees Collected</option>
+                            <option value="NET_COURSE_REVENUE">Net Course Revenue (After Refunds/Adjustments)</option>
+                            <option value="PROFIT_AFTER_EXPENSES">Profit After Deductible Operating Expenses</option>
+                          </select>
+                        </div>
+
+                        {createForm.initialAgreement.calculationMethod === 'FIXED_ANNUAL' && (
+                          <div className="md:col-span-2">
+                            <label className="block text-xs font-medium text-slate-700">
+                              Annual Agreed Commercial Fee (₹) *
+                              <span className="text-[10px] text-slate-500 font-normal ml-1">
+                                (Generates 2 equal H1/H2 installments of ₹{Math.round(Number(createForm.initialAgreement.annualRoyaltyAmount || 0) / 2).toLocaleString('en-IN')} each when Yearly settlement is active)
+                              </span>
+                            </label>
+                            <input
+                              type="number"
+                              min="0"
+                              required
+                              value={createForm.initialAgreement.annualRoyaltyAmount || ''}
+                              onChange={(e) =>
+                                setCreateForm({
+                                  ...createForm,
+                                  initialAgreement: {
+                                    ...createForm.initialAgreement,
+                                    annualRoyaltyAmount: Number(e.target.value),
+                                  },
+                                })
+                              }
+                              className="mt-1 w-full px-3 py-1.5 border rounded-lg text-sm font-semibold text-slate-900 bg-white"
+                              placeholder="e.g. 200000"
+                            />
+                          </div>
+                        )}
+
+                        {createForm.initialAgreement.calculationMethod === 'PER_STUDENT' && (
+                          <div className="md:col-span-2">
+                            <label className="block text-xs font-medium text-slate-700">
+                              Fee Per Active Enrolled Student (₹) *
+                            </label>
+                            <input
+                              type="number"
+                              min="0"
+                              required
+                              value={createForm.initialAgreement.perStudentFee || ''}
+                              onChange={(e) =>
+                                setCreateForm({
+                                  ...createForm,
+                                  initialAgreement: {
+                                    ...createForm.initialAgreement,
+                                    perStudentFee: Number(e.target.value),
+                                  },
+                                })
+                              }
+                              className="mt-1 w-full px-3 py-1.5 border rounded-lg text-sm font-semibold text-slate-900 bg-white"
+                              placeholder="e.g. 2000"
+                            />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Operational Expense Responsibilities */}
+                    <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                      <div className="text-xs font-bold text-slate-800">Operational Expense Responsibilities</div>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                        {[
+                          { key: 'rent', label: 'Centre Rent' },
+                          { key: 'trainerSalaries', label: 'Trainer Salaries' },
+                          { key: 'staffSalaries', label: 'Staff Salaries' },
+                          { key: 'operationalSetup', label: 'Operational Setup' },
+                          { key: 'utilities', label: 'Utilities (Electricity/Net)' },
+                          { key: 'marketing', label: 'Marketing Campaigns' },
+                          { key: 'other', label: 'Other Sundry Expenses' },
+                        ].map(({ key, label }) => (
+                          <div key={key}>
+                            <label className="block text-[11px] font-medium text-slate-600">{label}</label>
+                            <select
+                              value={createForm.initialAgreement.expenseResponsibilities[key] || 'PARTNER'}
+                              onChange={(e) =>
+                                setCreateForm({
+                                  ...createForm,
+                                  initialAgreement: {
+                                    ...createForm.initialAgreement,
+                                    expenseResponsibilities: {
+                                      ...createForm.initialAgreement.expenseResponsibilities,
+                                      [key]: e.target.value,
+                                    },
+                                  },
+                                })
+                              }
+                              className="mt-0.5 w-full px-2 py-1 border rounded text-xs bg-white"
+                            >
+                              <option value="PARTNER">Partner</option>
+                              <option value="DIGITAL_GURU">Digital Guru</option>
+                              <option value="SHARED">Shared (50:50)</option>
+                              <option value="CUSTOM">Custom</option>
+                            </select>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Marketing & Course Software Access */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                        <div className="text-xs font-bold text-slate-800">Marketing Support</div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="block text-[11px] font-medium text-slate-600">Responsible Party</label>
+                            <select
+                              value={createForm.initialAgreement.marketingResponsibleParty}
+                              onChange={(e) =>
+                                setCreateForm({
+                                  ...createForm,
+                                  initialAgreement: {
+                                    ...createForm.initialAgreement,
+                                    marketingResponsibleParty: e.target.value,
+                                  },
+                                })
+                              }
+                              className="mt-0.5 w-full px-2 py-1 border rounded text-xs bg-white"
+                            >
+                              <option value="DIGITAL_GURU">Digital Guru</option>
+                              <option value="PARTNER">Partner</option>
+                              <option value="SHARED">Shared</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-[11px] font-medium text-slate-600">Duration (Months)</label>
+                            <input
+                              type="number"
+                              min="0"
+                              value={createForm.initialAgreement.marketingSupportDurationMonths}
+                              onChange={(e) =>
+                                setCreateForm({
+                                  ...createForm,
+                                  initialAgreement: {
+                                    ...createForm.initialAgreement,
+                                    marketingSupportDurationMonths: Number(e.target.value),
+                                  },
+                                })
+                              }
+                              className="mt-0.5 w-full px-2 py-1 border rounded text-xs"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                        <div className="text-xs font-bold text-slate-800">Course Software Access</div>
+                        <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer pt-1">
+                          <input
+                            type="checkbox"
+                            checked={createForm.initialAgreement.courseSoftwareAccessEnabled}
+                            onChange={(e) =>
+                              setCreateForm({
+                                ...createForm,
+                                initialAgreement: {
+                                  ...createForm.initialAgreement,
+                                  courseSoftwareAccessEnabled: e.target.checked,
+                                },
+                              })
+                            }
+                            className="rounded text-[#006FFF] focus:ring-[#006FFF] w-4 h-4"
+                          />
+                          <span className="font-semibold">Course Software Access Enabled</span>
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="Software pricing notes / terms"
+                          value={createForm.initialAgreement.courseSoftwarePricingNotes}
+                          onChange={(e) =>
+                            setCreateForm({
+                              ...createForm,
+                              initialAgreement: {
+                                ...createForm.initialAgreement,
+                                courseSoftwarePricingNotes: e.target.value,
+                              },
+                            })
+                          }
+                          className="mt-1 w-full px-2 py-1 border rounded text-xs"
                         />
                       </div>
                     </div>
                   </div>
+                )}
 
-                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
-                    <div className="text-xs font-bold text-slate-800">Course Software Access</div>
-                    <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer pt-1">
-                      <input
-                        type="checkbox"
-                        checked={createForm.initialAgreement.courseSoftwareAccessEnabled}
-                        onChange={(e) =>
-                          setCreateForm({
-                            ...createForm,
-                            initialAgreement: {
-                              ...createForm.initialAgreement,
-                              courseSoftwareAccessEnabled: e.target.checked,
-                            },
-                          })
+                {/* --------------------------------------------------------- */}
+                {/* STEP 4: PRE-SUBMISSION REVIEW & SUMMARY                  */}
+                {/* --------------------------------------------------------- */}
+                {createModalTab === 'review' && (
+                  <div className="space-y-4">
+                    {/* Commercial Agreement Summary */}
+                    <div className="bg-slate-900 text-white p-4 rounded-xl space-y-3 shadow-md border border-slate-700">
+                      <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                        <div className="flex items-center gap-2">
+                          <FileText className="w-4 h-4 text-[#FEDC32]" />
+                          <span className="font-bold text-xs uppercase tracking-wider text-[#FEDC32]">Commercial Agreement Summary (Pre-Submission Review)</span>
+                        </div>
+                        <span className="text-[10px] px-2 py-0.5 rounded bg-blue-900 text-blue-200 font-mono font-semibold">
+                          {createForm.initialAgreement.settlementFrequency} • {createForm.initialAgreement.revenueCalculationBasis}
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                        {/* Digital Guru Column */}
+                        <div className="bg-slate-800/80 p-3 rounded-lg border border-slate-700 space-y-2">
+                          <div className="font-bold text-sm text-[#FEDC32] flex items-center justify-between">
+                            <span>Digital Guru (Franchisor)</span>
+                            <span className="text-emerald-400 font-black">{createForm.initialAgreement.digitalGuruRevenuePercentage}% Rev</span>
+                          </div>
+                          <div className="space-y-1 text-slate-300 text-[11px]">
+                            <div>
+                              <span className="text-slate-400">Setup Capital Investment:</span>{' '}
+                              <strong className="text-white">₹{Number(createForm.initialAgreement.digitalGuruInvestmentAmount || 0).toLocaleString('en-IN')}</strong> ({createForm.initialAgreement.digitalGuruInvestmentPercentage}%)
+                            </div>
+                            <div>
+                              <span className="text-slate-400">Direct Expenses Paid:</span>{' '}
+                              <span className="text-amber-200">
+                                {Object.entries(createForm.initialAgreement.expenseResponsibilities || {})
+                                  .filter(([_, v]) => v === 'DIGITAL_GURU' || (typeof v === 'object' && (v as any)?.payer === 'DIGITAL_GURU'))
+                                  .map(([k]) => k === 'trainerSalaries' ? 'Certified Trainers' : k === 'marketing' ? 'Initial Marketing' : k)
+                                  .join(', ') || 'Direct Trainer Salaries & Marketing'}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="text-slate-400">Support Responsibilities:</span>{' '}
+                              <span className="text-white">
+                                {createForm.initialAgreement.marketingSupportDurationMonths || 0} Mos Marketing Support (₹{Number(createForm.initialAgreement.marketingBudget || 0).toLocaleString('en-IN')}), Certified Course Trainers, Software Access ({createForm.initialAgreement.courseSoftwareAccessEnabled ? 'Enabled' : 'Disabled'})
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Franchise Partner Column */}
+                        <div className="bg-slate-800/80 p-3 rounded-lg border border-slate-700 space-y-2">
+                          <div className="font-bold text-sm text-sky-400 flex items-center justify-between">
+                            <span>Franchise Partner (Centre Operator)</span>
+                            <span className="text-sky-300 font-black">{createForm.initialAgreement.partnerRevenuePercentage}% Rev</span>
+                          </div>
+                          <div className="space-y-1 text-slate-300 text-[11px]">
+                            <div>
+                              <span className="text-slate-400">Setup Capital Investment:</span>{' '}
+                              <strong className="text-white">₹{Number(createForm.initialAgreement.partnerInvestmentAmount || 0).toLocaleString('en-IN')}</strong> ({createForm.initialAgreement.partnerInvestmentPercentage}%)
+                            </div>
+                            <div>
+                              <span className="text-slate-400">Direct Expenses Paid:</span>{' '}
+                              <span className="text-sky-200">
+                                {Object.entries(createForm.initialAgreement.expenseResponsibilities || {})
+                                  .filter(([_, v]) => v === 'PARTNER' || (typeof v === 'object' && (v as any)?.payer === 'PARTNER'))
+                                  .map(([k]) => k === 'rent' ? 'Building Rent' : k === 'staffSalaries' ? 'Staff Salaries' : k === 'utilities' ? 'Utilities' : k)
+                                  .join(', ') || 'Building Rent & Centre Operations'}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="text-slate-400">Role & Operations:</span>{' '}
+                              <span className="text-white">Campus Infrastructure, Local Operations, Post-Support Marketing</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="p-2.5 bg-blue-950/70 border border-blue-800 rounded-lg text-[11px] text-blue-200 flex items-start gap-2">
+                        <Info className="w-4 h-4 text-blue-400 mt-0.5 flex-shrink-0" />
+                        <span>
+                          <strong>DIRECT EXPENSE RULE:</strong> Direct expenses (such as Rent paid by Partner or Trainer Salaries paid by Digital Guru) are borne directly by each party and are <strong>NEVER</strong> automatically deducted from gross revenue collections. Deductions occur only when calculation basis is set to <em>Profit After Expenses</em> with approved deductible receipts.
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Password notice */}
+                    <div className="bg-blue-50 border border-blue-200 p-3.5 rounded-xl flex items-start gap-2.5">
+                      <Info className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                      <div className="text-xs text-blue-800">
+                        A strong temporary onboarding password will be automatically generated and displayed upon creation. Stored hashes are securely protected with argon2.
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Modal Footer Controls */}
+              <div className="p-4 sm:p-5 bg-slate-50 border-t border-slate-200 flex items-center justify-between shrink-0">
+                <div>
+                  {createModalTab === 'profile' ? (
+                    <button
+                      type="button"
+                      onClick={() => setShowCreateModal(false)}
+                      className="px-4 py-2 border border-slate-300 text-slate-700 rounded-xl text-xs font-semibold hover:bg-white transition"
+                    >
+                      Cancel
+                    </button>
+                  ) : createModalTab === 'model' ? (
+                    <button
+                      type="button"
+                      onClick={() => setCreateModalTab('profile')}
+                      className="px-4 py-2 border border-slate-300 text-slate-700 rounded-xl text-xs font-semibold hover:bg-white transition"
+                    >
+                      ← Back to Profile
+                    </button>
+                  ) : createModalTab === 'financials' ? (
+                    <button
+                      type="button"
+                      onClick={() => setCreateModalTab('model')}
+                      className="px-4 py-2 border border-slate-300 text-slate-700 rounded-xl text-xs font-semibold hover:bg-white transition"
+                    >
+                      ← Back to Model
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setCreateModalTab('financials')}
+                      className="px-4 py-2 border border-slate-300 text-slate-700 rounded-xl text-xs font-semibold hover:bg-white transition"
+                    >
+                      ← Back to Financials
+                    </button>
+                  )}
+                </div>
+
+                <div className="text-xs text-slate-400 font-medium hidden sm:block">
+                  Step {createModalTab === 'profile' ? '1' : createModalTab === 'model' ? '2' : createModalTab === 'financials' ? '3' : '4'} of 4
+                </div>
+
+                <div>
+                  {createModalTab === 'profile' ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (validateProfileStep()) {
+                          setCreateModalTab('model');
                         }
-                        className="rounded text-[#006FFF] focus:ring-[#006FFF] w-4 h-4"
-                      />
-                      <span className="font-semibold">Course Software Access Enabled</span>
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="Software pricing notes / terms"
-                      value={createForm.initialAgreement.courseSoftwarePricingNotes}
-                      onChange={(e) =>
-                        setCreateForm({
-                          ...createForm,
-                          initialAgreement: {
-                            ...createForm.initialAgreement,
-                            courseSoftwarePricingNotes: e.target.value,
-                          },
-                        })
-                      }
-                      className="mt-1 w-full px-2 py-1 border rounded text-xs"
-                    />
-                  </div>
+                      }}
+                      className="px-5 py-2.5 bg-[#006FFF] hover:bg-[#0058D4] text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm"
+                    >
+                      Next: Agreement Model <ChevronRight className="w-4 h-4" />
+                    </button>
+                  ) : createModalTab === 'model' ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (validateModelStep()) {
+                          setCreateModalTab('financials');
+                        }
+                      }}
+                      className="px-5 py-2.5 bg-[#006FFF] hover:bg-[#0058D4] text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm"
+                    >
+                      Next: Financial Terms <ChevronRight className="w-4 h-4" />
+                    </button>
+                  ) : createModalTab === 'financials' ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (validateFinancialsStep()) {
+                          setCreateModalTab('review');
+                        }
+                      }}
+                      className="px-5 py-2.5 bg-[#006FFF] hover:bg-[#0058D4] text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm"
+                    >
+                      Next: Review Summary <ChevronRight className="w-4 h-4" />
+                    </button>
+                  ) : (
+                    <button
+                      type="submit"
+                      className="px-6 py-2.5 bg-[#FEDC32] hover:bg-[#FEDC32]/90 text-slate-900 font-bold rounded-xl text-xs shadow-md transition-all flex items-center gap-2"
+                    >
+                      {createForm.initialAgreement.settlementFrequency === 'YEARLY'
+                        ? 'Create Franchise & Generate 2 Annual Installments'
+                        : 'Create Franchise (Monthly Settlement)'}
+                    </button>
+                  )}
                 </div>
-              </div>
-
-              {/* Commercial Agreement Summary (Pre-Submission Review) */}
-              <div className="bg-slate-900 text-white p-4 rounded-xl space-y-3 shadow-md border border-slate-700">
-                <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-                  <div className="flex items-center gap-2">
-                    <FileText className="w-4 h-4 text-[#FEDC32]" />
-                    <span className="font-bold text-xs uppercase tracking-wider text-[#FEDC32]">Commercial Agreement Summary (Pre-Submission Review)</span>
-                  </div>
-                  <span className="text-[10px] px-2 py-0.5 rounded bg-blue-900 text-blue-200 font-mono font-semibold">
-                    {createForm.initialAgreement.settlementFrequency} • {createForm.initialAgreement.revenueCalculationBasis}
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
-                  {/* Digital Guru Column */}
-                  <div className="bg-slate-800/80 p-3 rounded-lg border border-slate-700 space-y-2">
-                    <div className="font-bold text-sm text-[#FEDC32] flex items-center justify-between">
-                      <span>Digital Guru (Franchisor)</span>
-                      <span className="text-emerald-400 font-black">{createForm.initialAgreement.digitalGuruRevenuePercentage}% Rev</span>
-                    </div>
-                    <div className="space-y-1 text-slate-300 text-[11px]">
-                      <div>
-                        <span className="text-slate-400">Setup Capital Investment:</span>{' '}
-                        <strong className="text-white">₹{Number(createForm.initialAgreement.digitalGuruInvestmentAmount || 0).toLocaleString('en-IN')}</strong> ({createForm.initialAgreement.digitalGuruInvestmentPercentage}%)
-                      </div>
-                      <div>
-                        <span className="text-slate-400">Direct Expenses Paid:</span>{' '}
-                        <span className="text-amber-200">
-                          {Object.entries(createForm.initialAgreement.expenseResponsibilities || {})
-                            .filter(([_, v]) => v === 'DIGITAL_GURU' || (typeof v === 'object' && (v as any)?.payer === 'DIGITAL_GURU'))
-                            .map(([k]) => k === 'trainerSalaries' ? 'Certified Trainers' : k === 'marketing' ? 'Initial Marketing' : k)
-                            .join(', ') || 'Direct Trainer Salaries & Marketing'}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-slate-400">Support Responsibilities:</span>{' '}
-                        <span className="text-white">
-                          {createForm.initialAgreement.marketingSupportDurationMonths || 0} Mos Marketing Support (₹{Number(createForm.initialAgreement.marketingBudget || 0).toLocaleString('en-IN')}), Certified Course Trainers, Software Access ({createForm.initialAgreement.courseSoftwareAccessEnabled ? 'Enabled' : 'Disabled'})
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Franchise Partner Column */}
-                  <div className="bg-slate-800/80 p-3 rounded-lg border border-slate-700 space-y-2">
-                    <div className="font-bold text-sm text-sky-400 flex items-center justify-between">
-                      <span>Franchise Partner (Centre Operator)</span>
-                      <span className="text-sky-300 font-black">{createForm.initialAgreement.partnerRevenuePercentage}% Rev</span>
-                    </div>
-                    <div className="space-y-1 text-slate-300 text-[11px]">
-                      <div>
-                        <span className="text-slate-400">Setup Capital Investment:</span>{' '}
-                        <strong className="text-white">₹{Number(createForm.initialAgreement.partnerInvestmentAmount || 0).toLocaleString('en-IN')}</strong> ({createForm.initialAgreement.partnerInvestmentPercentage}%)
-                      </div>
-                      <div>
-                        <span className="text-slate-400">Direct Expenses Paid:</span>{' '}
-                        <span className="text-sky-200">
-                          {Object.entries(createForm.initialAgreement.expenseResponsibilities || {})
-                            .filter(([_, v]) => v === 'PARTNER' || (typeof v === 'object' && (v as any)?.payer === 'PARTNER'))
-                            .map(([k]) => k === 'rent' ? 'Building Rent' : k === 'staffSalaries' ? 'Staff Salaries' : k === 'utilities' ? 'Utilities' : k)
-                            .join(', ') || 'Building Rent & Centre Operations'}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-slate-400">Role & Operations:</span>{' '}
-                        <span className="text-white">Campus Infrastructure, Local Operations, Post-Support Marketing</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="p-2.5 bg-blue-950/70 border border-blue-800 rounded-lg text-[11px] text-blue-200 flex items-start gap-2">
-                  <Info className="w-4 h-4 text-blue-400 mt-0.5 flex-shrink-0" />
-                  <span>
-                    <strong>DIRECT EXPENSE RULE:</strong> Direct expenses (such as Rent paid by Partner or Trainer Salaries paid by Digital Guru) are borne directly by each party and are <strong>NEVER</strong> automatically deducted from gross revenue collections. Deductions occur only when calculation basis is set to <em>Profit After Expenses</em> with approved deductible receipts.
-                  </span>
-                </div>
-              </div>
-
-              {/* Password notice */}
-              <div className="bg-blue-50 border border-blue-200 p-3 rounded-lg flex items-start gap-2.5">
-                <Info className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
-                <div className="text-xs text-blue-800">
-                  A strong temporary onboarding password will be automatically generated and displayed upon creation. Stored hashes are securely protected with argon2.
-                </div>
-              </div>
-
-              <div className="flex justify-end gap-3 pt-3 border-t">
-                <button
-                  type="button"
-                  onClick={() => setShowCreateModal(false)}
-                  className="px-4 py-2 border text-slate-600 rounded-lg text-sm font-semibold hover:bg-slate-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-6 py-2 bg-[#FEDC32] hover:bg-[#FEDC32]/90 text-slate-900 font-bold rounded-lg text-sm shadow transition-all"
-                >
-                  {createForm.initialAgreement.settlementFrequency === 'YEARLY'
-                    ? 'Create Franchise & Generate 2 Annual Installments'
-                    : 'Create Franchise (Monthly Settlement)'}
-                </button>
               </div>
             </form>
           </div>
@@ -2262,8 +2613,8 @@ export const FranchiseManagement: React.FC = () => {
       {/* MODAL 2: CREATION SUCCESS & ONBOARDING CREDENTIALS            */}
       {/* ============================================================= */}
       {createdResultModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-xl w-full p-6 shadow-2xl border border-slate-200">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-start justify-center p-4 sm:p-6 overflow-y-auto min-h-screen">
+          <div className="bg-white rounded-2xl max-w-xl w-full p-6 shadow-2xl my-6 sm:my-8 border border-slate-200">
             <div className="flex items-center gap-3 text-emerald-600 mb-3">
               <CheckCircle2 className="w-6 h-6" />
               <h3 className="text-lg font-bold text-slate-900">Franchise Registered Successfully!</h3>
@@ -2327,8 +2678,8 @@ export const FranchiseManagement: React.FC = () => {
       {/* MODAL 3: RECORD INSTALLMENT PAYMENT                           */}
       {/* ============================================================= */}
       {showRecordPaymentModal && selectedInstallmentForPayment && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-start justify-center p-4 sm:p-6 overflow-y-auto min-h-screen">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl my-6 sm:my-8 border border-slate-200">
             <div className="flex justify-between items-center border-b pb-3 mb-4">
               <div>
                 <h3 className="text-lg font-bold text-slate-900">Record Royalty Payment</h3>
@@ -2448,8 +2799,8 @@ export const FranchiseManagement: React.FC = () => {
       {/* MODAL 4: OFFICIAL ROYALTY PAYMENT RECEIPT                     */}
       {/* ============================================================= */}
       {showReceiptModal && receiptData && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-xl w-full p-8 shadow-2xl border border-slate-200 space-y-6">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-start justify-center p-4 sm:p-6 overflow-y-auto min-h-screen">
+          <div className="bg-white rounded-2xl max-w-xl w-full p-6 sm:p-8 shadow-2xl my-6 sm:my-8 border border-slate-200 space-y-6">
             {/* Printable Receipt Card */}
             <div className="border border-slate-300 rounded-xl p-6 bg-[#FCFDFE]">
               {/* Receipt Header */}
@@ -2542,8 +2893,8 @@ export const FranchiseManagement: React.FC = () => {
       {/* MODAL 5: RENEW AGREEMENT (PRESERVES PREVIOUS AGREEMENT)       */}
       {/* ============================================================= */}
       {showRenewModal && selectedAgreementForRenew && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-start justify-center p-4 sm:p-6 overflow-y-auto min-h-screen">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl my-6 sm:my-8 border border-slate-200">
             <div className="flex justify-between items-center border-b pb-3 mb-4">
               <div>
                 <h3 className="text-lg font-bold text-slate-900">Renew Annual Franchise Agreement</h3>
@@ -2642,8 +2993,8 @@ export const FranchiseManagement: React.FC = () => {
       {/* MODAL 6: RESET OWNER PASSWORD                                 */}
       {/* ============================================================= */}
       {showResetPasswordModal && selectedFranchiseForReset && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-start justify-center p-4 sm:p-6 overflow-y-auto min-h-screen">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl my-6 sm:my-8 border border-slate-200">
             <div className="flex justify-between items-center border-b pb-3 mb-4">
               <h3 className="text-lg font-bold text-slate-900">Reset Owner Password</h3>
               <button onClick={() => setShowResetPasswordModal(false)} className="text-slate-400 hover:text-slate-600">
@@ -2704,8 +3055,8 @@ export const FranchiseManagement: React.FC = () => {
       {/* MODAL 7: ASSIGN / ADD BRANCH CAMPUS (SUPER ADMIN ONLY)        */}
       {/* ============================================================= */}
       {showAddBranchModal && selectedFranchiseForBranch && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-start justify-center p-4 sm:p-6 overflow-y-auto min-h-screen">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl my-6 sm:my-8 border border-slate-200">
             <div className="flex justify-between items-center border-b pb-3 mb-4">
               <div>
                 <h3 className="text-lg font-bold text-slate-900">Assign Campus Branch</h3>
@@ -2865,8 +3216,8 @@ export const FranchiseManagement: React.FC = () => {
       {/* MODAL 8: REVISE AGREEMENT (NEW VERSION N+1)                   */}
       {/* ============================================================= */}
       {showReviseModal && selectedAgreementForRevise && selectedFranchiseForRevise && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-2xl max-w-3xl w-full p-6 shadow-2xl my-8 border border-slate-200">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-start justify-center p-4 sm:p-6 overflow-y-auto min-h-screen">
+          <div className="bg-white rounded-2xl max-w-3xl w-full p-6 shadow-2xl my-6 sm:my-8 border border-slate-200">
             <div className="flex justify-between items-center border-b pb-4">
               <div>
                 <div className="flex items-center gap-2">
@@ -2969,7 +3320,19 @@ export const FranchiseManagement: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-700">Commercial Model *</label>
+                    <select
+                      value={reviseForm.calculationMethod}
+                      onChange={(e: any) => setReviseForm({ ...reviseForm, calculationMethod: e.target.value })}
+                      className="mt-1 w-full px-3 py-1.5 border rounded-lg text-sm font-medium"
+                    >
+                      <option value="PERCENTAGE_REVENUE">Percentage of Revenue Collections</option>
+                      <option value="FIXED_ANNUAL">Fixed Annual Commercial Fee</option>
+                      <option value="PER_STUDENT">Per Enrolled Student Fee</option>
+                    </select>
+                  </div>
                   <div>
                     <label className="block text-xs font-medium text-slate-700">Calculation Basis *</label>
                     <select
@@ -2993,6 +3356,43 @@ export const FranchiseManagement: React.FC = () => {
                       <option value="YEARLY">Yearly (2 Equal Installments)</option>
                     </select>
                   </div>
+
+                  {reviseForm.calculationMethod === 'FIXED_ANNUAL' && (
+                    <div className="md:col-span-3">
+                      <label className="block text-xs font-medium text-slate-700">
+                        Annual Commercial Fee (₹) *
+                        <span className="text-[10px] text-slate-500 font-normal ml-1">
+                          (Generates 2 equal H1/H2 installments of ₹{Math.round(Number(reviseForm.annualRoyaltyAmount || 0) / 2).toLocaleString('en-IN')} each when Yearly settlement is active)
+                        </span>
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        required
+                        value={reviseForm.annualRoyaltyAmount || ''}
+                        onChange={(e) => setReviseForm({ ...reviseForm, annualRoyaltyAmount: Number(e.target.value) })}
+                        className="mt-1 w-full px-3 py-1.5 border rounded-lg text-sm font-semibold text-slate-900 bg-white"
+                        placeholder="e.g. 200000"
+                      />
+                    </div>
+                  )}
+
+                  {reviseForm.calculationMethod === 'PER_STUDENT' && (
+                    <div className="md:col-span-3">
+                      <label className="block text-xs font-medium text-slate-700">
+                        Fee Per Active Enrolled Student (₹) *
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        required
+                        value={reviseForm.perStudentFee || ''}
+                        onChange={(e) => setReviseForm({ ...reviseForm, perStudentFee: Number(e.target.value) })}
+                        className="mt-1 w-full px-3 py-1.5 border rounded-lg text-sm font-semibold text-slate-900 bg-white"
+                        placeholder="e.g. 2000"
+                      />
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -3098,8 +3498,8 @@ export const FranchiseManagement: React.FC = () => {
 
       {/* MODAL: CALCULATE MONTHLY ROYALTY */}
       {showCalculateModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-start justify-center p-4 sm:p-6 overflow-y-auto min-h-screen">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl my-6 sm:my-8 border border-slate-200">
             <div className="flex justify-between items-center border-b pb-3 mb-4">
               <div>
                 <h3 className="text-base font-bold text-slate-900">Calculate Monthly Royalty Statement</h3>

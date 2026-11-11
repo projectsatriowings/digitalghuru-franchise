@@ -633,6 +633,7 @@ async function runTests() {
         startDate: '2026-11-01',
         endDate: '2026-11-30',
         periodLabel: `2026-11-GROSS-${uniqueSuffix}`,
+        calculationMethod: 'PERCENTAGE_REVENUE',
         revenueCalculationBasis: 'GROSS_COURSE_FEES',
       }),
     });
@@ -656,6 +657,7 @@ async function runTests() {
         startDate: '2026-11-01',
         endDate: '2026-11-30',
         periodLabel: `2026-11-NET-${uniqueSuffix}`,
+        calculationMethod: 'PERCENTAGE_REVENUE',
         revenueCalculationBasis: 'NET_COURSE_REVENUE',
         deductions: 10000,
       }),
@@ -680,6 +682,7 @@ async function runTests() {
         startDate: '2026-11-01',
         endDate: '2026-11-30',
         periodLabel: `2026-11-PROFIT-${uniqueSuffix}`,
+        calculationMethod: 'PERCENTAGE_REVENUE',
         revenueCalculationBasis: 'PROFIT_AFTER_EXPENSES',
         operatingExpenses: 40000,
       }),

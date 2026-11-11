@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { apiFetch } from '../services/api';
 import { UserRole } from '../types';
@@ -152,8 +152,19 @@ export const Login: React.FC = () => {
     setError(null);
   };
 
+  useEffect(() => {
+    const originalBodyBg = document.body.style.backgroundColor;
+    const originalHtmlBg = document.documentElement.style.backgroundColor;
+    document.body.style.backgroundColor = '#0F172A';
+    document.documentElement.style.backgroundColor = '#0F172A';
+    return () => {
+      document.body.style.backgroundColor = originalBodyBg;
+      document.documentElement.style.backgroundColor = originalHtmlBg;
+    };
+  }, []);
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#0F172A] via-[#1E293B] to-[#0A2540] text-slate-100 flex flex-col justify-between items-center px-4 py-8 relative overflow-x-hidden">
+    <div className="min-h-screen min-h-[100dvh] w-full flex-1 bg-[#0F172A] bg-gradient-to-br from-[#0F172A] via-[#1E293B] to-[#0A2540] text-slate-100 flex flex-col justify-between items-center px-4 py-8 relative overflow-x-hidden">
       {/* Background brand glow accents */}
       <div className="absolute top-0 left-1/4 w-96 h-96 bg-[#006FFF]/15 rounded-full blur-3xl pointer-events-none" />
       <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-[#FEDC32]/10 rounded-full blur-3xl pointer-events-none" />

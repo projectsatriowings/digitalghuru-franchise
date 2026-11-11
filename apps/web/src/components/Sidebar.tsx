@@ -59,12 +59,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab }) => 
             >
               <Building2 className="w-4 h-4 text-[#FEDC32]" /> Franchise Management
             </button>
-            <button
-              onClick={() => onSelectTab('staff_attendance')}
-              className={navItemClass('staff_attendance')}
-            >
-              <Calendar className="w-4 h-4" /> Staff Attendance
-            </button>
           </>
         )}
 

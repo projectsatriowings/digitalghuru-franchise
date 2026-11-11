@@ -412,6 +412,38 @@ export async function createFranchise(req: AuthenticatedRequest, res: Response) 
       return res.status(400).json({ success: false, error: 'A franchise with this email address already exists' });
     }
 
+    // Pre-validate initialAgreement parameters before creating any records
+    const agreementStartDate = data.initialAgreement?.startDate
+      ? new Date(data.initialAgreement.startDate)
+      : new Date();
+    const agreementEndDate = data.initialAgreement?.endDate
+      ? new Date(data.initialAgreement.endDate)
+      : new Date(Date.now() + 365 * 24 * 60 * 60 * 1000);
+
+    if (isNaN(agreementStartDate.getTime()) || isNaN(agreementEndDate.getTime())) {
+      return res.status(400).json({ success: false, error: 'Invalid initialAgreement startDate or endDate format' });
+    }
+    if (agreementStartDate > agreementEndDate) {
+      return res.status(400).json({ success: false, error: 'initialAgreement startDate must be before or equal to endDate' });
+    }
+
+    const calculationMethod = data.initialAgreement?.calculationMethod || 'FIXED_ANNUAL';
+    const dgPct = data.initialAgreement?.digitalGuruRevenuePercentage !== undefined
+      ? Number(data.initialAgreement.digitalGuruRevenuePercentage)
+      : Number(data.initialAgreement?.royaltyPercentage ?? 50.0);
+    const partnerPct = data.initialAgreement?.partnerRevenuePercentage !== undefined
+      ? Number(data.initialAgreement.partnerRevenuePercentage)
+      : (100 - dgPct);
+
+    if (calculationMethod === 'PERCENTAGE_REVENUE') {
+      if (Math.round((dgPct + partnerPct) * 100) / 100 !== 100) {
+        return res.status(400).json({
+          success: false,
+          error: `Revenue sharing percentages must total 100% (currently Digital Guru: ${dgPct}%, Partner: ${partnerPct}%)`,
+        });
+      }
+    }
+
     const code = data.code || await generateFranchiseCode();
 
     // 1. Franchise Owner User Account & Password Handling
@@ -464,17 +496,9 @@ export async function createFranchise(req: AuthenticatedRequest, res: Response) 
     });
 
     // 3. Create Annual Franchise Agreement (or default if omitted)
-    const agreementStartDate = data.initialAgreement?.startDate
-      ? new Date(data.initialAgreement.startDate)
-      : new Date();
-    const agreementEndDate = data.initialAgreement?.endDate
-      ? new Date(data.initialAgreement.endDate)
-      : new Date(Date.now() + 365 * 24 * 60 * 60 * 1000);
-
     const year = agreementStartDate.getFullYear();
     const agreementNumber = await generateUniqueAgreementNumber(year);
 
-    const calculationMethod = data.initialAgreement?.calculationMethod || 'FIXED_ANNUAL';
     const annualRoyaltyAmount = data.initialAgreement?.annualRoyaltyAmount !== undefined
       ? new Prisma.Decimal(data.initialAgreement.annualRoyaltyAmount)
       : new Prisma.Decimal(200000);
@@ -484,22 +508,6 @@ export async function createFranchise(req: AuthenticatedRequest, res: Response) 
       ? new Prisma.Decimal(data.initialAgreement.perStudentFee)
       : null;
     const dueDay = data.initialAgreement?.dueDay || 10;
-
-    const dgPct = data.initialAgreement?.digitalGuruRevenuePercentage !== undefined
-      ? Number(data.initialAgreement.digitalGuruRevenuePercentage)
-      : Number(data.initialAgreement?.royaltyPercentage ?? 50.0);
-    const partnerPct = data.initialAgreement?.partnerRevenuePercentage !== undefined
-      ? Number(data.initialAgreement.partnerRevenuePercentage)
-      : (100 - dgPct);
-
-    if (calculationMethod === 'PERCENTAGE_REVENUE') {
-      if (Math.round((dgPct + partnerPct) * 100) / 100 !== 100) {
-        return res.status(400).json({
-          success: false,
-          error: `Revenue sharing percentages must total 100% (currently Digital Guru: ${dgPct}%, Partner: ${partnerPct}%)`,
-        });
-      }
-    }
 
     const isMonthly = data.initialAgreement?.settlementFrequency === 'MONTHLY';
     const installmentCount = isMonthly ? 0 : 2;
@@ -747,10 +755,12 @@ export async function updateFranchise(req: AuthenticatedRequest, res: Response) 
       notes,
     } = req.body;
 
+    const isSuperAdmin = req.user?.role === 'SUPER_ADMIN';
+
     const updated = await prisma.franchise.update({
       where: { id },
       data: {
-        ...(name && { name }),
+        ...(isSuperAdmin && name && { name }),
         ...(ownerName && { ownerName }),
         ...(phone && { phone }),
         ...(address !== undefined && { address }),
@@ -760,7 +770,7 @@ export async function updateFranchise(req: AuthenticatedRequest, res: Response) 
         ...(country !== undefined && { country }),
         ...(authorizedContact !== undefined && { authorizedContact }),
         ...(businessDetails !== undefined && { businessDetails }),
-        ...(notes !== undefined && { notes }),
+        ...(isSuperAdmin && notes !== undefined && { notes }),
       },
     });
 
@@ -936,6 +946,13 @@ export async function addBranchToFranchise(req: AuthenticatedRequest, res: Respo
         return res.status(400).json({ success: false, error: 'instituteId or instituteIds is required to attach existing branches' });
       }
 
+      const existingBranch = await prisma.institute.findUnique({
+        where: { id: instituteId },
+      });
+      if (!existingBranch) {
+        return res.status(404).json({ success: false, error: `Branch with ID "${instituteId}" not found` });
+      }
+
       branch = await prisma.institute.update({
         where: { id: instituteId },
         data: { franchiseId },
@@ -996,6 +1013,17 @@ export async function removeBranchFromFranchise(req: AuthenticatedRequest, res: 
     }
 
     const { id: franchiseId, branchId } = req.params;
+
+    const branch = await prisma.institute.findUnique({
+      where: { id: branchId },
+    });
+
+    if (!branch || branch.franchiseId !== franchiseId) {
+      return res.status(404).json({
+        success: false,
+        error: 'Branch not found or not assigned to this franchise',
+      });
+    }
 
     await prisma.institute.update({
       where: { id: branchId },
@@ -1332,8 +1360,22 @@ export async function createAgreement(req: AuthenticatedRequest, res: Response) 
       notes,
     } = req.body;
 
+    const franchise = await prisma.franchise.findUnique({ where: { id: franchiseId } });
+    if (!franchise) {
+      return res.status(404).json({ success: false, error: 'Franchise not found' });
+    }
+
     if (!title || !startDate || !endDate) {
       return res.status(400).json({ success: false, error: 'Title, start date, and end date are required' });
+    }
+
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      return res.status(400).json({ success: false, error: 'Invalid startDate or endDate format' });
+    }
+    if (start > end) {
+      return res.status(400).json({ success: false, error: 'startDate must be before or equal to endDate' });
     }
 
     // Default calculation method based on agreementType if not explicitly passed
@@ -1485,8 +1527,8 @@ export async function reviseAgreement(req: AuthenticatedRequest, res: Response) 
       where: { id: agreementId },
     });
 
-    if (!previousAgreement) {
-      return res.status(404).json({ success: false, error: 'Previous agreement not found' });
+    if (!previousAgreement || previousAgreement.franchiseId !== franchiseId) {
+      return res.status(404).json({ success: false, error: 'Previous agreement not found for this franchise' });
     }
 
     const {
@@ -1523,6 +1565,15 @@ export async function reviseAgreement(req: AuthenticatedRequest, res: Response) 
       notes,
       revisionReason,
     } = req.body;
+
+    const newStart = new Date(startDate || previousAgreement.startDate);
+    const newEnd = new Date(endDate || previousAgreement.endDate);
+    if (isNaN(newStart.getTime()) || isNaN(newEnd.getTime())) {
+      return res.status(400).json({ success: false, error: 'Invalid startDate or endDate format' });
+    }
+    if (newStart > newEnd) {
+      return res.status(400).json({ success: false, error: 'startDate must be before or equal to endDate' });
+    }
 
     const effectiveDgPct = digitalGuruRevenuePercentage !== undefined
       ? Number(digitalGuruRevenuePercentage)
@@ -1704,8 +1755,20 @@ export async function renewAgreement(req: AuthenticatedRequest, res: Response) {
       include: { installments: true },
     });
 
-    if (!previousAgreement) {
-      return res.status(404).json({ success: false, error: 'Previous agreement not found' });
+    if (!previousAgreement || previousAgreement.franchiseId !== franchiseId) {
+      return res.status(404).json({ success: false, error: 'Previous agreement not found for this franchise' });
+    }
+
+    if (!startDate || !endDate) {
+      return res.status(400).json({ success: false, error: 'startDate and endDate are required for agreement renewal' });
+    }
+    const newStart = new Date(startDate);
+    const newEnd = new Date(endDate);
+    if (isNaN(newStart.getTime()) || isNaN(newEnd.getTime())) {
+      return res.status(400).json({ success: false, error: 'Invalid startDate or endDate format' });
+    }
+    if (newStart > newEnd) {
+      return res.status(400).json({ success: false, error: 'startDate must be before or equal to endDate' });
     }
 
     // Revenue Sharing Validation
@@ -1874,12 +1937,23 @@ export async function listAgreements(req: AuthenticatedRequest, res: Response) {
 
 export async function updateAgreementStatus(req: AuthenticatedRequest, res: Response) {
   try {
+    if (req.user?.role !== 'SUPER_ADMIN') {
+      return res.status(403).json({ success: false, error: 'Forbidden: Only Super Admin can update agreement status' });
+    }
+
     const { id: franchiseId, agreementId } = req.params;
     const { status, note } = req.body;
 
     const validStatuses = ['DRAFT', 'PENDING_SIGNATURE', 'ACTIVE', 'EXPIRED', 'SUSPENDED', 'TERMINATED'];
     if (!validStatuses.includes(status)) {
       return res.status(400).json({ success: false, error: 'Invalid agreement status' });
+    }
+
+    const existing = await prisma.franchiseAgreement.findUnique({
+      where: { id: agreementId },
+    });
+    if (!existing || existing.franchiseId !== franchiseId) {
+      return res.status(404).json({ success: false, error: 'Agreement not found for this franchise' });
     }
 
     const updated = await prisma.franchiseAgreement.update({
@@ -1903,14 +1977,18 @@ export async function updateAgreementStatus(req: AuthenticatedRequest, res: Resp
 
 export async function addAgreementAmendment(req: AuthenticatedRequest, res: Response) {
   try {
+    if (req.user?.role !== 'SUPER_ADMIN') {
+      return res.status(403).json({ success: false, error: 'Forbidden: Only Super Admin can record amendments' });
+    }
+
     const { id: franchiseId, agreementId } = req.params;
     const { note, changes, newRoyaltyPercentage, newAnnualAmount } = req.body;
 
     const agreement = await prisma.franchiseAgreement.findUnique({
       where: { id: agreementId },
     });
-    if (!agreement) {
-      return res.status(404).json({ success: false, error: 'Agreement not found' });
+    if (!agreement || agreement.franchiseId !== franchiseId) {
+      return res.status(404).json({ success: false, error: 'Agreement not found for this franchise' });
     }
 
     const existingAmendments = Array.isArray(agreement.amendments) ? agreement.amendments : [];
@@ -1973,8 +2051,8 @@ export async function getAgreementPdfData(req: AuthenticatedRequest, res: Respon
       },
     });
 
-    if (!agreement) {
-      return res.status(404).json({ success: false, error: 'Agreement not found' });
+    if (!agreement || agreement.franchiseId !== franchiseId) {
+      return res.status(404).json({ success: false, error: 'Agreement not found for this franchise' });
     }
 
     return res.json({
@@ -2325,7 +2403,7 @@ export async function getRoyaltyPaymentReceipt(req: AuthenticatedRequest, res: R
         issuer: {
           organization: 'Digital Guru Franchise Enterprise',
           partner: 'Jaighurudeva Educational Academy',
-          recordedBy: payment.recordedBy.fullName,
+          recordedBy: payment.recordedBy?.fullName || 'Super Admin',
           verified: true,
         },
       },
@@ -2352,11 +2430,32 @@ export async function calculateRoyalty(req: AuthenticatedRequest, res: Response)
       });
     }
 
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid startDate or endDate format',
+      });
+    }
+
+    if (start > end) {
+      return res.status(400).json({
+        success: false,
+        error: 'startDate must be before or equal to endDate',
+      });
+    }
+
+    const queryEndDate = new Date(end);
+    if (typeof endDate === 'string' && endDate.length <= 10) {
+      queryEndDate.setUTCHours(23, 59, 59, 999);
+    }
+
     const franchise = await prisma.franchise.findUnique({
       where: { id: franchiseId },
       include: {
         branches: true,
-        agreements: { where: { status: 'ACTIVE' }, take: 1, orderBy: [{ createdAt: 'desc' }, { endDate: 'desc' }] },
       },
     });
 
@@ -2364,28 +2463,116 @@ export async function calculateRoyalty(req: AuthenticatedRequest, res: Response)
       return res.status(404).json({ success: false, error: 'Franchise not found' });
     }
 
+    if (instituteId && !franchise.branches.some((b) => b.id === instituteId)) {
+      return res.status(400).json({
+        success: false,
+        error: `Specified branch "${instituteId}" does not belong to this franchise.`,
+      });
+    }
+
     const branchIds = instituteId ? [instituteId] : franchise.branches.map((b) => b.id);
-    const activeAgreement = franchise.agreements[0];
-    
-    // Revenue sharing percentages & calculation basis resolution
-    const dgPercentage = activeAgreement?.digitalGuruRevenuePercentage
-      ? Number(activeAgreement.digitalGuruRevenuePercentage)
-      : (activeAgreement?.royaltyPercentage ? Number(activeAgreement.royaltyPercentage) : 50.0);
-    const partnerPercentage = activeAgreement?.partnerRevenuePercentage
-      ? Number(activeAgreement.partnerRevenuePercentage)
+
+    // 1. AGREEMENT RESOLUTION & BOUNDARY VALIDATION (AUDIT 1)
+    let applicableAgreement: any = null;
+
+    if (req.body.agreementId) {
+      applicableAgreement = await prisma.franchiseAgreement.findFirst({
+        where: { id: req.body.agreementId, franchiseId },
+      });
+      if (!applicableAgreement) {
+        return res.status(404).json({
+          success: false,
+          error: `Specified agreement "${req.body.agreementId}" not found for this franchise.`,
+        });
+      }
+      if (applicableAgreement.startDate > end || applicableAgreement.endDate < start) {
+        return res.status(400).json({
+          success: false,
+          error: `The specified agreement "${applicableAgreement.title}" does not cover the requested calculation period (${startDate} to ${endDate}).`,
+          code: 'AGREEMENT_PERIOD_MISMATCH',
+        });
+      }
+    }
+
+    if (!applicableAgreement) {
+      // Find all agreements of the franchise that overlap the requested calculation period [start, end]
+      // Overlap condition: agreement.startDate <= end AND agreement.endDate >= start
+      const overlappingAgreements = await prisma.franchiseAgreement.findMany({
+        where: {
+          franchiseId,
+          startDate: { lte: end },
+          endDate: { gte: start },
+        },
+        orderBy: [
+          { version: 'desc' },
+          { createdAt: 'desc' },
+        ],
+      });
+
+      if (overlappingAgreements.length === 0) {
+        // Audit 1 Rule: Never fall back to an unrelated ACTIVE agreement when no agreement covers the requested period
+        return res.status(400).json({
+          success: false,
+          error: `No franchise agreement covers the requested calculation period (${startDate} to ${endDate}). Please ensure a franchise agreement is effective for this period before calculating royalties.`,
+          code: 'NO_APPLICABLE_AGREEMENT',
+        });
+      }
+
+      // Check for agreements that FULLY cover the requested period: agreement.startDate <= start AND agreement.endDate >= end
+      const fullyCoveringAgreements = overlappingAgreements.filter(
+        (a) => a.startDate <= start && a.endDate >= end
+      );
+
+      // Check if any overlapping agreement starts or ends inside the requested calculation period
+      const hasMidPeriodBoundaries = overlappingAgreements.some(
+        (a) => (a.startDate > start && a.startDate <= end) || (a.endDate >= start && a.endDate < end)
+      );
+
+      // If no agreement fully covers the period, OR if there are multiple overlapping agreements with mid-period boundaries:
+      if (fullyCoveringAgreements.length === 0 || (overlappingAgreements.length > 1 && hasMidPeriodBoundaries)) {
+        // Audit 1 Rule: Reject periods that cross agreement versions or have mid-period transitions with clear validation error.
+        const spanDetails = overlappingAgreements.map((a) => ({
+          id: a.id,
+          title: a.title,
+          version: a.version,
+          status: a.status,
+          startDate: a.startDate.toISOString().split('T')[0],
+          endDate: a.endDate.toISOString().split('T')[0],
+        }));
+
+        return res.status(400).json({
+          success: false,
+          error: `The requested calculation period (${startDate} to ${endDate}) spans across multiple agreement effective periods. Segmented calculations must be run separately for each applicable agreement period.`,
+          code: 'PERIOD_SPANS_MULTIPLE_AGREEMENTS',
+          overlappingAgreements: spanDetails,
+        });
+      }
+
+      // Single fully covering agreement found
+      applicableAgreement = fullyCoveringAgreements.find((a) => a.status === 'ACTIVE') || fullyCoveringAgreements[0];
+    }
+
+    // 2. COMMERCIAL MODEL & REVENUE SHARING RESOLUTION
+    const dgPercentage = applicableAgreement?.digitalGuruRevenuePercentage
+      ? Number(applicableAgreement.digitalGuruRevenuePercentage)
+      : (applicableAgreement?.royaltyPercentage ? Number(applicableAgreement.royaltyPercentage) : 50.0);
+    const partnerPercentage = applicableAgreement?.partnerRevenuePercentage
+      ? Number(applicableAgreement.partnerRevenuePercentage)
       : (100 - dgPercentage);
-    
+
     const calculationBasis = (req.body.revenueCalculationBasis as string) || 
-      activeAgreement?.revenueCalculationBasis || 
+      applicableAgreement?.revenueCalculationBasis || 
       'GROSS_COURSE_FEES';
 
-    const start = new Date(startDate);
-    const end = new Date(endDate);
+    const calculationMethod = (req.body.calculationMethod as string) || 
+      applicableAgreement?.calculationMethod || 
+      'PERCENTAGE_REVENUE';
 
+    // Query fee payments in scope
     const payments = await prisma.payment.findMany({
       where: {
         instituteId: { in: branchIds },
-        paidAt: { gte: start, lte: end },
+        paidAt: { gte: start, lte: queryEndDate },
         status: 'SUCCESS',
       },
       select: {
@@ -2401,7 +2588,7 @@ export async function calculateRoyalty(req: AuthenticatedRequest, res: Response)
 
     const grossCollection = payments.reduce((sum, p) => sum + Number(p.amountPaid), 0);
     
-    // Determine eligible revenue / profit based on calculationBasis
+    // Determine eligible revenue / profit pool based on calculationBasis
     let eligibleRevenue = grossCollection;
     let deductionsOrExpenses = 0;
 
@@ -2410,7 +2597,7 @@ export async function calculateRoyalty(req: AuthenticatedRequest, res: Response)
         where: {
           payment: {
             instituteId: { in: branchIds },
-            paidAt: { gte: start, lte: end },
+            paidAt: { gte: start, lte: queryEndDate },
           },
         },
         select: { amount: true },
@@ -2422,16 +2609,136 @@ export async function calculateRoyalty(req: AuthenticatedRequest, res: Response)
       eligibleRevenue = Math.max(0, grossCollection - deductionsOrExpenses);
     }
 
-    const royaltyPayable = Math.round(((eligibleRevenue * dgPercentage) / 100) * 100) / 100;
-    const partnerShare = Math.round((eligibleRevenue - royaltyPayable) * 100) / 100;
+    // 3. COMMERCIAL CALCULATION & HISTORICAL STUDENT ELIGIBILITY (AUDIT 2)
+    let royaltyPayable = 0;
+    let partnerShare = 0;
+    let activeStudentCount: number | null = null;
+    let perStudentFee: number | null = null;
+    let annualRoyaltyAmount: number | null = null;
 
-    const calculationDetailsPayload = {
+    if (calculationMethod === 'PER_STUDENT') {
+      perStudentFee = Number(req.body.perStudentFee ?? applicableAgreement?.perStudentFee ?? 0);
+      
+      // Query candidate students in franchise branch(es) admitted on or before period end
+      const candidateStudents = await prisma.student.findMany({
+        where: {
+          instituteId: { in: branchIds },
+          OR: [
+            { admissionDate: { lte: queryEndDate } },
+            { createdAt: { lte: queryEndDate } },
+          ],
+        },
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          admissionNumber: true,
+          instituteId: true,
+          admissionDate: true,
+          createdAt: true,
+          updatedAt: true,
+          status: true,
+        },
+      });
+
+      // Filter students eligible during [start, end]
+      // 1. PASSED_OUT students are excluded per agreed commercial eligibility policy.
+      // 2. ACTIVE students admitted on or before end are included (full-month policy for mid-period joiners).
+      // 3. DISCONTINUED students: if they were discontinued AFTER end (e.g. discontinued in November for an August period),
+      //    they were active during [start, end] and must count. If discontinued on or before end, they are excluded.
+      const discontinuedCandidateIds = candidateStudents
+        .filter((s) => s.status === 'DISCONTINUED')
+        .map((s) => s.id);
+
+      const statusLogsMap = new Map<string, Date>();
+      if (discontinuedCandidateIds.length > 0) {
+        const statusLogs = await prisma.auditLog.findMany({
+          where: {
+            entityType: 'Student',
+            entityId: { in: discontinuedCandidateIds },
+            action: 'STUDENT_STATUS_CHANGED',
+          },
+          orderBy: { createdAt: 'desc' },
+          select: { entityId: true, createdAt: true },
+        });
+
+        for (const log of statusLogs) {
+          if (!statusLogsMap.has(log.entityId)) {
+            statusLogsMap.set(log.entityId, log.createdAt);
+          }
+        }
+      }
+
+      const eligibleStudents: any[] = [];
+      for (const s of candidateStudents) {
+        // Exclude alumni / passed out
+        if (s.status === 'PASSED_OUT') {
+          continue;
+        }
+
+        // Student admitted after period end cannot count
+        const effectiveAdmission = s.admissionDate || s.createdAt;
+        if (effectiveAdmission > queryEndDate) {
+          continue;
+        }
+
+        if (s.status === 'ACTIVE') {
+          eligibleStudents.push(s);
+        } else if (s.status === 'DISCONTINUED') {
+          // Determine when discontinuation occurred via AuditLog, fallback to updatedAt
+          const discontinuedAt = statusLogsMap.get(s.id) || s.updatedAt;
+          // If discontinuation occurred AFTER period end, student was active during this calculation period
+          if (discontinuedAt > queryEndDate) {
+            eligibleStudents.push(s);
+          }
+        }
+      }
+
+      // Deduplicate by student ID across campuses
+      const uniqueStudentMap = new Map<string, any>();
+      for (const s of eligibleStudents) {
+        uniqueStudentMap.set(s.id, s);
+      }
+      activeStudentCount = uniqueStudentMap.size;
+      royaltyPayable = Math.round(activeStudentCount * perStudentFee * 100) / 100;
+      partnerShare = Math.round(Math.max(0, eligibleRevenue - royaltyPayable) * 100) / 100;
+    } else if (calculationMethod === 'FIXED_ANNUAL') {
+      annualRoyaltyAmount = Number(req.body.annualRoyaltyAmount ?? applicableAgreement?.annualRoyaltyAmount ?? 0);
+      const monthlyFee = Math.round((annualRoyaltyAmount / 12) * 100) / 100;
+      royaltyPayable = monthlyFee;
+      partnerShare = Math.round(Math.max(0, eligibleRevenue - royaltyPayable) * 100) / 100;
+    } else {
+      // Default: PERCENTAGE_REVENUE
+      royaltyPayable = Math.round(((eligibleRevenue * dgPercentage) / 100) * 100) / 100;
+      partnerShare = Math.round((eligibleRevenue - royaltyPayable) * 100) / 100;
+    }
+
+    const dueDay = applicableAgreement?.dueDay || 10;
+    const dueDate = new Date(end);
+    if (dueDate.getDate() >= dueDay) {
+      dueDate.setMonth(dueDate.getMonth() + 1);
+    }
+    dueDate.setDate(dueDay);
+
+    const calculationDetailsPayload: any = {
       paymentCount: payments.length,
       calculationBasis,
+      calculationMethod,
+      perStudentFee,
+      activeStudentCount,
+      annualRoyaltyAmount,
+      historicalEligibilityRule: calculationMethod === 'PER_STUDENT' ? 'ADMISSION_AND_DISCONTINUATION_DATE_SCOPED' : null,
+      prorationPolicy: calculationMethod === 'PER_STUDENT' ? 'FULL_MONTH_STANDARD' : null,
+      unresolvedEligibilityNotes: calculationMethod === 'PER_STUDENT'
+        ? 'Full-period head-count applied for active students enrolled on or before period end date. Client commercial terms do not currently specify day-level proration for students joining or discontinuing mid-period. This rule requires formal client UAT sign-off.'
+        : null,
       periodLabel,
-      agreementId: activeAgreement?.id || null,
-      agreementVersion: activeAgreement?.version || 1,
-      agreementType: activeAgreement?.agreementType || 'CUSTOM_AGREEMENT',
+      agreementId: applicableAgreement?.id || null,
+      agreementVersion: applicableAgreement?.version || 1,
+      agreementNumber: applicableAgreement?.agreementNumber || null,
+      agreementType: applicableAgreement?.agreementType || 'CUSTOM_AGREEMENT',
+      effectiveStartDate: applicableAgreement?.startDate ? applicableAgreement.startDate.toISOString().split('T')[0] : null,
+      effectiveEndDate: applicableAgreement?.endDate ? applicableAgreement.endDate.toISOString().split('T')[0] : null,
       grossCollection,
       deductionsOrExpenses,
       deductibleExpenses: calculationBasis === 'PROFIT_AFTER_EXPENSES' ? deductionsOrExpenses : 0,
@@ -2442,7 +2749,7 @@ export async function calculateRoyalty(req: AuthenticatedRequest, res: Response)
       partnerPercentage,
       digitalGuruShare: royaltyPayable,
       partnerShare,
-      settlementFrequency: activeAgreement?.settlementFrequency || 'MONTHLY',
+      settlementFrequency: applicableAgreement?.settlementFrequency || 'MONTHLY',
       directPayerExpensesIgnored: true,
       zeroProfitFloorApplied: grossCollection < deductionsOrExpenses,
       paymentsSummary: payments.slice(0, 50),
@@ -2451,41 +2758,254 @@ export async function calculateRoyalty(req: AuthenticatedRequest, res: Response)
       calculatedByEmail: req.user?.email || null,
     };
 
+    // 4. STATEMENT FINALIZATION & RECALCULATION GUARD (AUDIT 3 & AUDIT 4)
     let record = await prisma.franchiseRoyaltyRecord.findFirst({
       where: {
         franchiseId,
         periodLabel,
         instituteId: instituteId || null,
       },
+      include: {
+        payments: true,
+      },
     });
 
-    const dueDay = activeAgreement?.dueDay || 10;
-    const dueDate = new Date(end);
-    dueDate.setDate(dueDay);
-
     if (record) {
-      const outstanding = royaltyPayable - Number(record.royaltyPaid);
-      const status =
-        outstanding <= 0
-          ? 'PAID'
-          : Number(record.royaltyPaid) > 0
-            ? 'PARTIALLY_PAID'
-            : new Date() > dueDate
-              ? 'OVERDUE'
-              : 'PENDING';
+      const isFinalized = Boolean(
+        record.status === 'PAID' || 
+        Number(record.royaltyPaid) > 0 || 
+        (record.payments && record.payments.length > 0)
+      );
 
-      record = await prisma.franchiseRoyaltyRecord.update({
-        where: { id: record.id },
-        data: {
-          grossCollection: new Prisma.Decimal(grossCollection),
-          eligibleRevenue: new Prisma.Decimal(eligibleRevenue),
-          royaltyPercentage: new Prisma.Decimal(dgPercentage),
-          royaltyPayable: new Prisma.Decimal(royaltyPayable),
-          outstandingBalance: new Prisma.Decimal(outstanding),
-          status: status as any,
-          calculationDetails: calculationDetailsPayload,
-        },
-      });
+      // AUDIT 4: Comprehensive comparison across every financially relevant field
+      const existingDetails = (record.calculationDetails as any) || {};
+
+      const existingAgreementId = existingDetails.agreementId || null;
+      const proposedAgreementId = applicableAgreement?.id || null;
+
+      const existingAgreementVersion = Number(existingDetails.agreementVersion || 1);
+      const proposedAgreementVersion = Number(applicableAgreement?.version || 1);
+
+      const existingCalculationBasis = existingDetails.calculationBasis || 'GROSS_COURSE_FEES';
+      const proposedCalculationBasis = calculationBasis;
+
+      const existingCalculationMethod = existingDetails.calculationMethod || 'PERCENTAGE_REVENUE';
+      const proposedCalculationMethod = calculationMethod;
+
+      const existingGrossCollection = Number(record.grossCollection);
+      const proposedGrossCollection = grossCollection;
+
+      const existingEligibleRevenue = Number(record.eligibleRevenue);
+      const proposedEligibleRevenue = eligibleRevenue;
+
+      const existingDeductibleExpenses = Number(existingDetails.deductibleExpenses ?? existingDetails.deductionsOrExpenses ?? 0);
+      const proposedDeductibleExpenses = Number(deductionsOrExpenses);
+
+      const existingDgPercentage = Number(record.royaltyPercentage);
+      const proposedDgPercentage = dgPercentage;
+
+      const existingPartnerPercentage = Number(existingDetails.partnerPercentage ?? (100 - existingDgPercentage));
+      const proposedPartnerPercentage = partnerPercentage;
+
+      const existingRoyaltyPayable = Number(record.royaltyPayable);
+      const proposedRoyaltyPayable = royaltyPayable;
+
+      const existingActiveStudentCount = existingDetails.activeStudentCount != null ? Number(existingDetails.activeStudentCount) : null;
+      const proposedActiveStudentCount = activeStudentCount != null ? Number(activeStudentCount) : null;
+
+      const existingPerStudentFee = existingDetails.perStudentFee != null ? Number(existingDetails.perStudentFee) : null;
+      const proposedPerStudentFee = perStudentFee != null ? Number(perStudentFee) : null;
+
+      const financiallyRelevantChanged =
+        existingAgreementId !== proposedAgreementId ||
+        existingAgreementVersion !== proposedAgreementVersion ||
+        existingCalculationBasis !== proposedCalculationBasis ||
+        existingCalculationMethod !== proposedCalculationMethod ||
+        Math.abs(existingGrossCollection - proposedGrossCollection) > 0.01 ||
+        Math.abs(existingEligibleRevenue - proposedEligibleRevenue) > 0.01 ||
+        Math.abs(existingDeductibleExpenses - proposedDeductibleExpenses) > 0.01 ||
+        Math.abs(existingDgPercentage - proposedDgPercentage) > 0.01 ||
+        Math.abs(existingPartnerPercentage - proposedPartnerPercentage) > 0.01 ||
+        Math.abs(existingRoyaltyPayable - proposedRoyaltyPayable) > 0.01 ||
+        existingActiveStudentCount !== proposedActiveStudentCount ||
+        (existingPerStudentFee != null && proposedPerStudentFee != null && Math.abs(existingPerStudentFee - proposedPerStudentFee) > 0.01);
+
+      if (isFinalized && financiallyRelevantChanged) {
+        const isCorrection = req.body.isCorrection === true;
+        const correctionReason = req.body.correctionReason;
+
+        if (isCorrection && req.user?.role !== 'SUPER_ADMIN') {
+          return res.status(403).json({
+            success: false,
+            error: 'Forbidden: Only Super Admin can perform authorized corrections on finalized royalty statements.',
+          });
+        }
+
+        if (!isCorrection || !correctionReason || typeof correctionReason !== 'string' || !correctionReason.trim()) {
+          return res.status(409).json({
+            success: false,
+            error: `Royalty statement for ${periodLabel} is finalized (Status: ${record.status}, Paid: ₹${Number(record.royaltyPaid)}) and cannot be modified without authorized correction. Please provide 'isCorrection: true' and a non-empty 'correctionReason'.`,
+            isFinalized: true,
+            royaltyRecord: record,
+          });
+        }
+
+        // AUDIT 3: Overpayment Accounting & Explicit Representation
+        const paidAmount = Number(record.royaltyPaid);
+        const overpaymentAmount = Math.max(0, paidAmount - royaltyPayable);
+        const outstandingBalance = Math.max(0, royaltyPayable - paidAmount);
+
+        if (overpaymentAmount > 0) {
+          calculationDetailsPayload.hasOverpayment = true;
+          calculationDetailsPayload.overpaymentAmount = overpaymentAmount;
+          calculationDetailsPayload.overpaymentStatus = 'AWAITING_CLIENT_DECISION';
+          calculationDetailsPayload.overpaymentNotes = `Overpayment of ₹${overpaymentAmount.toLocaleString('en-IN')} detected after authorized correction (Original payable: ₹${Number(record.royaltyPayable)}, Revised payable: ₹${royaltyPayable}, Remittances on record: ₹${paidAmount}). Accounting treatment is pending client commercial policy approval (credit carry-forward vs bank refund).`;
+        }
+
+        // Append to correction history
+        const priorHistory = Array.isArray(existingDetails.correctionHistory) ? existingDetails.correctionHistory : [];
+        const correctionEntry = {
+          correctionId: `CORR-${Date.now()}`,
+          correctedAt: new Date().toISOString(),
+          correctedById: req.user?.userId || null,
+          correctedByEmail: req.user?.email || null,
+          correctionReason: correctionReason.trim(),
+          previousSnapshot: {
+            grossCollection: Number(record.grossCollection),
+            eligibleRevenue: Number(record.eligibleRevenue),
+            royaltyPercentage: Number(record.royaltyPercentage),
+            royaltyPayable: Number(record.royaltyPayable),
+            royaltyPaid: paidAmount,
+            outstandingBalance: Number(record.outstandingBalance),
+            status: record.status,
+            agreementId: existingDetails.agreementId,
+            agreementVersion: existingDetails.agreementVersion,
+            calculationBasis: existingDetails.calculationBasis,
+            calculationMethod: existingDetails.calculationMethod,
+            activeStudentCount: existingDetails.activeStudentCount,
+            perStudentFee: existingDetails.perStudentFee,
+          },
+          newSnapshot: {
+            grossCollection,
+            eligibleRevenue,
+            royaltyPercentage: dgPercentage,
+            royaltyPayable,
+            royaltyPaid: paidAmount,
+            outstandingBalance,
+            overpaymentAmount,
+            overpaymentStatus: overpaymentAmount > 0 ? 'AWAITING_CLIENT_DECISION' : null,
+            status: outstandingBalance <= 0 ? 'PAID' : (paidAmount > 0 ? 'PARTIALLY_PAID' : (new Date() > dueDate ? 'OVERDUE' : 'PENDING')),
+            agreementId: applicableAgreement?.id,
+            agreementVersion: applicableAgreement?.version,
+            calculationBasis,
+            calculationMethod,
+            activeStudentCount,
+            perStudentFee,
+          },
+          accountingTreatment: overpaymentAmount > 0 ? 'AWAITING_CLIENT_DECISION' : 'STANDARD_COLLECTION',
+        };
+
+        calculationDetailsPayload.correctionHistory = [...priorHistory, correctionEntry];
+        calculationDetailsPayload.isCorrected = true;
+        calculationDetailsPayload.lastCorrectionReason = correctionReason.trim();
+        calculationDetailsPayload.lastCorrectedAt = correctionEntry.correctedAt;
+
+        // Transactional execution of correction
+        const targetRecordId = record.id;
+        record = await prisma.$transaction(async (tx) => {
+          return await tx.franchiseRoyaltyRecord.update({
+            where: { id: targetRecordId },
+            data: {
+              grossCollection: new Prisma.Decimal(grossCollection),
+              eligibleRevenue: new Prisma.Decimal(eligibleRevenue),
+              royaltyPercentage: new Prisma.Decimal(dgPercentage),
+              royaltyPayable: new Prisma.Decimal(royaltyPayable),
+              outstandingBalance: new Prisma.Decimal(outstandingBalance),
+              status: (outstandingBalance <= 0 ? 'PAID' : (paidAmount > 0 ? 'PARTIALLY_PAID' : (new Date() > dueDate ? 'OVERDUE' : 'PENDING'))) as any,
+              calculationDetails: calculationDetailsPayload,
+            },
+            include: {
+              payments: true,
+            },
+          });
+        });
+      } else if (isFinalized && !financiallyRelevantChanged) {
+        // Idempotent retrieval of finalized record without mutation
+        const paidAmount = Number(record.royaltyPaid);
+        const overpaymentAmount = Math.max(0, paidAmount - Number(record.royaltyPayable));
+
+        return res.json({
+          success: true,
+          message: `Settlement for ${periodLabel} is finalized and verified with no changes.`,
+          data: {
+            royaltyRecord: record,
+            summary: {
+              periodLabel,
+              franchiseId,
+              branchId: instituteId || null,
+              agreementVersion: (record.calculationDetails as any)?.agreementVersion || applicableAgreement?.version || 1,
+              agreementType: (record.calculationDetails as any)?.agreementType || applicableAgreement?.agreementType || 'CUSTOM_AGREEMENT',
+              branchesCovered: branchIds.length,
+              paymentsCount: payments.length,
+              grossCollection: Number(record.grossCollection),
+              calculationBasis,
+              calculationMethod,
+              perStudentFee,
+              activeStudentCount,
+              annualRoyaltyAmount,
+              deductionsOrExpenses,
+              deductibleExpenses: calculationBasis === 'PROFIT_AFTER_EXPENSES' ? deductionsOrExpenses : 0,
+              refundsAndAdjustments: calculationBasis === 'NET_COURSE_REVENUE' ? deductionsOrExpenses : 0,
+              eligibleRevenue: Number(record.eligibleRevenue),
+              distributableAmount: Number(record.eligibleRevenue),
+              royaltyPercentage: Number(record.royaltyPercentage),
+              digitalGuruRevenuePercentage: dgPercentage,
+              partnerRevenuePercentage: partnerPercentage,
+              royaltyPayable: Number(record.royaltyPayable),
+              digitalGuruShare: Number(record.royaltyPayable),
+              superAdminShare: Number(record.royaltyPayable),
+              partnerShare,
+              franchiseOwnerShare: partnerShare,
+              settlementFrequency: applicableAgreement?.settlementFrequency || 'MONTHLY',
+              directPayerExpensesIgnored: true,
+              calculatedAt: (record.calculationDetails as any)?.calculatedAt || new Date().toISOString(),
+              calculatedBy: req.user?.email || req.user?.userId,
+              isFinalized: true,
+              hasOverpayment: overpaymentAmount > 0,
+              overpaymentAmount,
+              overpaymentStatus: overpaymentAmount > 0 ? 'AWAITING_CLIENT_DECISION' : null,
+            },
+          },
+        });
+      } else {
+        // Open draft statement: update in-place idempotently
+        const paidAmount = Number(record.royaltyPaid);
+        const outstanding = Math.max(0, royaltyPayable - paidAmount);
+        const status =
+          outstanding <= 0
+            ? 'PAID'
+            : paidAmount > 0
+              ? 'PARTIALLY_PAID'
+              : new Date() > dueDate
+                ? 'OVERDUE'
+                : 'PENDING';
+
+        record = await prisma.franchiseRoyaltyRecord.update({
+          where: { id: record.id },
+          data: {
+            grossCollection: new Prisma.Decimal(grossCollection),
+            eligibleRevenue: new Prisma.Decimal(eligibleRevenue),
+            royaltyPercentage: new Prisma.Decimal(dgPercentage),
+            royaltyPayable: new Prisma.Decimal(royaltyPayable),
+            outstandingBalance: new Prisma.Decimal(outstanding),
+            status: status as any,
+            calculationDetails: calculationDetailsPayload,
+          },
+          include: {
+            payments: true,
+          },
+        });
+      }
     } else {
       const status = new Date() > dueDate ? 'OVERDUE' : 'PENDING';
       record = await prisma.franchiseRoyaltyRecord.create({
@@ -2505,8 +3025,15 @@ export async function calculateRoyalty(req: AuthenticatedRequest, res: Response)
           dueDate,
           calculationDetails: calculationDetailsPayload,
         },
+        include: {
+          payments: true,
+        },
       });
     }
+
+    const paidAmount = Number(record.royaltyPaid);
+    const overpaymentAmount = Math.max(0, paidAmount - Number(record.royaltyPayable));
+    const outstandingBalance = Number(record.outstandingBalance);
 
     return res.json({
       success: true,
@@ -2517,12 +3044,16 @@ export async function calculateRoyalty(req: AuthenticatedRequest, res: Response)
           periodLabel,
           franchiseId,
           branchId: instituteId || null,
-          agreementVersion: activeAgreement?.version || 1,
-          agreementType: activeAgreement?.agreementType || 'CUSTOM_AGREEMENT',
+          agreementVersion: applicableAgreement?.version || 1,
+          agreementType: applicableAgreement?.agreementType || 'CUSTOM_AGREEMENT',
           branchesCovered: branchIds.length,
           paymentsCount: payments.length,
           grossCollection,
           calculationBasis,
+          calculationMethod,
+          perStudentFee,
+          activeStudentCount,
+          annualRoyaltyAmount,
           deductionsOrExpenses,
           deductibleExpenses: calculationBasis === 'PROFIT_AFTER_EXPENSES' ? deductionsOrExpenses : 0,
           refundsAndAdjustments: calculationBasis === 'NET_COURSE_REVENUE' ? deductionsOrExpenses : 0,
@@ -2536,10 +3067,15 @@ export async function calculateRoyalty(req: AuthenticatedRequest, res: Response)
           superAdminShare: royaltyPayable,
           partnerShare,
           franchiseOwnerShare: partnerShare,
-          settlementFrequency: activeAgreement?.settlementFrequency || 'MONTHLY',
+          settlementFrequency: applicableAgreement?.settlementFrequency || 'MONTHLY',
           directPayerExpensesIgnored: true,
           calculatedAt: new Date().toISOString(),
           calculatedBy: req.user?.email || req.user?.userId,
+          royaltyPaid: paidAmount,
+          outstandingBalance,
+          hasOverpayment: overpaymentAmount > 0,
+          overpaymentAmount,
+          overpaymentStatus: overpaymentAmount > 0 ? 'AWAITING_CLIENT_DECISION' : null,
         },
       },
     });
@@ -2585,11 +3121,21 @@ export async function listRoyaltyRecords(req: AuthenticatedRequest, res: Respons
 
 export async function recordRoyaltyPayment(req: AuthenticatedRequest, res: Response) {
   try {
+    if (req.user?.role !== 'SUPER_ADMIN') {
+      return res.status(403).json({ success: false, error: 'Forbidden: Only Super Admin can record royalty payments' });
+    }
+
     const { id: franchiseId } = req.params;
     const { royaltyRecordId, amountPaid, paymentMethod, transactionReference, remarks, paymentDate } = req.body;
 
     if (!amountPaid || Number(amountPaid) <= 0 || isNaN(Number(amountPaid))) {
       return res.status(400).json({ success: false, error: 'Amount paid must be a valid number greater than zero' });
+    }
+    const paidAmount = Number(amountPaid);
+
+    const paymentDateTime = paymentDate ? new Date(paymentDate) : new Date();
+    if (isNaN(paymentDateTime.getTime())) {
+      return res.status(400).json({ success: false, error: 'Invalid paymentDate format' });
     }
 
     const franchise = await prisma.franchise.findUnique({ where: { id: franchiseId } });
@@ -2600,66 +3146,92 @@ export async function recordRoyaltyPayment(req: AuthenticatedRequest, res: Respo
       return res.status(400).json({ success: false, error: 'Cannot record royalty payments for a terminated franchise' });
     }
 
-    if (transactionReference && transactionReference.trim()) {
-      const existingPayment = await prisma.franchiseRoyaltyPayment.findFirst({
-        where: { franchiseId, transactionReference: transactionReference.trim() },
+    if (royaltyRecordId) {
+      const targetRecord = await prisma.franchiseRoyaltyRecord.findUnique({
+        where: { id: royaltyRecordId },
       });
-      if (existingPayment) {
-        return res.status(409).json({
-          success: false,
-          error: `Payment with transaction reference "${transactionReference.trim()}" has already been recorded for this franchise.`,
-          data: { payment: existingPayment },
-        });
+      if (!targetRecord || targetRecord.franchiseId !== franchiseId) {
+        return res.status(404).json({ success: false, error: 'Royalty statement record not found for this franchise' });
+      }
+      if (targetRecord.status === 'PAID' && Number(targetRecord.outstandingBalance) <= 0) {
+        return res.status(400).json({ success: false, error: 'This royalty statement has already been fully paid' });
       }
     }
 
-    const receiptNumber = await generateRoyaltyReceiptNumber();
-    const paidAmount = Number(amountPaid);
+    let result;
+    try {
+      result = await prisma.$transaction(
+        async (tx) => {
+          if (transactionReference && transactionReference.trim()) {
+            const existingPayment = await tx.franchiseRoyaltyPayment.findFirst({
+              where: { franchiseId, transactionReference: transactionReference.trim() },
+            });
+            if (existingPayment) {
+              throw new Error('DUPLICATE_REFERENCE');
+            }
+          }
 
-    const payment = await prisma.franchiseRoyaltyPayment.create({
-      data: {
-        franchiseId,
-        royaltyRecordId: royaltyRecordId || null,
-        receiptNumber,
-        amountPaid: new Prisma.Decimal(paidAmount),
-        paymentDate: paymentDate ? new Date(paymentDate) : new Date(),
-        paymentMethod: ['CASH', 'UPI', 'BANK_TRANSFER', 'CHEQUE', 'ONLINE'].includes(paymentMethod)
-          ? paymentMethod
-          : 'BANK_TRANSFER',
-        transactionReference: transactionReference?.trim() || null,
-        remarks: remarks || null,
-        recordedById: req.user!.userId,
-      },
-    });
+          const receiptNumber = await generateRoyaltyReceiptNumber();
 
-    if (royaltyRecordId) {
-      const record = await prisma.franchiseRoyaltyRecord.findUnique({
-        where: { id: royaltyRecordId },
-      });
+          const payment = await tx.franchiseRoyaltyPayment.create({
+            data: {
+              franchiseId,
+              royaltyRecordId: royaltyRecordId || null,
+              receiptNumber,
+              amountPaid: new Prisma.Decimal(paidAmount),
+              paymentDate: paymentDateTime,
+              paymentMethod: ['CASH', 'UPI', 'BANK_TRANSFER', 'CHEQUE', 'ONLINE'].includes(paymentMethod)
+                ? paymentMethod
+                : 'BANK_TRANSFER',
+              transactionReference: transactionReference?.trim() || null,
+              remarks: remarks || null,
+              recordedById: req.user!.userId,
+            },
+          });
 
-      if (record) {
-        if (record.franchiseId !== franchiseId) {
-          return res.status(400).json({ success: false, error: 'Royalty record does not belong to this franchise' });
+          let updatedRecord = null;
+          if (royaltyRecordId) {
+            const freshRecord = await tx.franchiseRoyaltyRecord.findUnique({
+              where: { id: royaltyRecordId },
+            });
+            if (freshRecord) {
+              const currentPaid = Number(freshRecord.royaltyPaid || 0);
+              const newPaid = Math.round((currentPaid + paidAmount) * 100) / 100;
+              const newOutstanding = Math.max(0, Math.round((Number(freshRecord.royaltyPayable) - newPaid) * 100) / 100);
+              const newStatus = newOutstanding <= 0 ? 'PAID' : 'PARTIALLY_PAID';
+
+              updatedRecord = await tx.franchiseRoyaltyRecord.update({
+                where: { id: royaltyRecordId },
+                data: {
+                  royaltyPaid: new Prisma.Decimal(newPaid),
+                  outstandingBalance: new Prisma.Decimal(newOutstanding),
+                  status: newStatus as any,
+                },
+              });
+            }
+          }
+
+          return { payment, updatedRecord };
+        },
+        {
+          maxWait: 15000,
+          timeout: 30000,
         }
-        const newPaid = Number(record.royaltyPaid) + paidAmount;
-        const newOutstanding = Math.max(0, Number(record.royaltyPayable) - newPaid);
-        const newStatus = newOutstanding <= 0 ? 'PAID' : 'PARTIALLY_PAID';
-
-        await prisma.franchiseRoyaltyRecord.update({
-          where: { id: royaltyRecordId },
-          data: {
-            royaltyPaid: new Prisma.Decimal(newPaid),
-            outstandingBalance: new Prisma.Decimal(newOutstanding),
-            status: newStatus as any,
-          },
+      );
+    } catch (txErr: any) {
+      if (txErr.message === 'DUPLICATE_REFERENCE') {
+        return res.status(409).json({
+          success: false,
+          error: `Payment with transaction reference "${transactionReference?.trim()}" has already been recorded for this franchise.`,
         });
       }
+      throw txErr;
     }
 
     return res.status(201).json({
       success: true,
       message: 'Royalty payment recorded successfully',
-      data: { payment },
+      data: { payment: result.payment, royaltyRecord: result.updatedRecord },
     });
   } catch (err: any) {
     console.error('[Record Royalty Payment Error]', err);

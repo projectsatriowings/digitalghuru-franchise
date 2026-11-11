@@ -609,7 +609,7 @@ export const SuperAdminDashboard: React.FC = () => {
             <thead>
               <tr className="border-b border-[#E2E8F0] text-[#64748B] bg-[#F8FAFC] uppercase tracking-wider">
                 <th className="py-3 px-4 font-bold">Institute</th>
-                <th className="py-3 px-4 font-bold">Code</th>
+                <th className="py-3 px-4 font-bold whitespace-nowrap w-32">Code</th>
                 <th className="py-3 px-4 font-bold">Location</th>
                 <th className="py-3 px-4 font-bold">Metrics</th>
                 <th className="py-3 px-4 font-bold">Status</th>
@@ -632,8 +632,8 @@ export const SuperAdminDashboard: React.FC = () => {
                       <div className="font-bold text-[#0F172A] text-sm">{inst.name}</div>
                       {inst.email && <div className="text-[11px] text-[#64748B]">{inst.email}</div>}
                     </td>
-                    <td className="py-3.5 px-4 font-mono font-semibold text-[#006FFF]">
-                      <span className="bg-[#F8FAFC] border border-[#E2E8F0] px-2 py-0.5 rounded text-xs">
+                    <td className="py-3.5 px-4 font-mono font-semibold text-[#006FFF] whitespace-nowrap">
+                      <span className="bg-[#F8FAFC] border border-[#E2E8F0] px-2.5 py-1 rounded text-xs whitespace-nowrap inline-block tracking-wide">
                         {inst.code}
                       </span>
                     </td>
