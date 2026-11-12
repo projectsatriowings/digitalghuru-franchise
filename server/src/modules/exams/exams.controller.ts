@@ -490,10 +490,33 @@ export async function getExamById(req: AuthenticatedRequest, res: Response) {
 
     if (!exam) return res.status(404).json({ success: false, error: 'Exam not found' });
 
-    // For students and parents: only show student's own marks if published
+    if (req.user?.role === 'STAFF') {
+      const isAssigned = await isStaffAssignedToBatch(req, exam.batchId, prisma);
+      if (!isAssigned) {
+        return res.status(403).json({ success: false, error: 'Forbidden: You are not assigned to this batch' });
+      }
+      const isAssignedSub = await isStaffAssignedToBatchSubject(req, exam.batchId, exam.subjectId, prisma);
+      if (!isAssignedSub) {
+        return res.status(403).json({ success: false, error: 'Forbidden: You are not authorized to access exams for this subject' });
+      }
+    }
+
+    // For students and parents: only show published exams and authorized child's/own marks if results published
     if (req.user?.role === 'STUDENT') {
+      if (!exam.isPublished) {
+        return res.status(403).json({ success: false, error: 'Forbidden: Exam schedule is not published yet' });
+      }
       const student = await prisma.student.findFirst({ where: { userId: req.user.userId } });
-      const myMark = exam.isResultsPublished && student ? exam.marks.find((m) => m.studentId === student.id) : null;
+      if (!student) {
+        return res.status(403).json({ success: false, error: 'Forbidden: Student profile not found' });
+      }
+      const enrolled = await prisma.studentEnrollment.findFirst({
+        where: { studentId: student.id, batchId: exam.batchId, isActive: true },
+      });
+      if (!enrolled) {
+        return res.status(403).json({ success: false, error: 'Forbidden: You are not enrolled in this batch' });
+      }
+      const myMark = exam.isResultsPublished ? exam.marks.find((m) => m.studentId === student.id) : null;
 
       return res.json({
         success: true,
@@ -503,6 +526,37 @@ export async function getExamById(req: AuthenticatedRequest, res: Response) {
             totalMarks: Number(exam.totalMarks),
             passingMarks: Number(exam.passingMarks),
             marks: myMark ? [myMark] : [],
+          },
+        },
+      });
+    }
+
+    if (req.user?.role === 'PARENT') {
+      if (!exam.isPublished) {
+        return res.status(403).json({ success: false, error: 'Forbidden: Exam schedule is not published yet' });
+      }
+      const relations = await prisma.studentParentRelation.findMany({
+        where: { parent: { userId: req.user.userId } },
+        select: { studentId: true },
+      });
+      const childIds = relations.map((r) => r.studentId);
+      const enrolled = childIds.length > 0
+        ? await prisma.studentEnrollment.findFirst({
+            where: { studentId: { in: childIds }, batchId: exam.batchId, isActive: true },
+          })
+        : null;
+      if (!enrolled) {
+        return res.status(403).json({ success: false, error: 'Forbidden: None of your linked students are enrolled in this batch' });
+      }
+      const childMarks = exam.isResultsPublished ? exam.marks.filter((m) => childIds.includes(m.studentId)) : [];
+      return res.json({
+        success: true,
+        data: {
+          exam: {
+            ...exam,
+            totalMarks: Number(exam.totalMarks),
+            passingMarks: Number(exam.passingMarks),
+            marks: childMarks,
           },
         },
       });
@@ -552,6 +606,17 @@ export async function getExamEligibleStudents(req: AuthenticatedRequest, res: Re
       where: { id: examId, instituteId },
     });
     if (!exam) return res.status(404).json({ success: false, error: 'Exam not found' });
+
+    if (req.user?.role === 'STAFF') {
+      const isAssigned = await isStaffAssignedToBatch(req, exam.batchId, prisma);
+      if (!isAssigned) {
+        return res.status(403).json({ success: false, error: 'Forbidden: You are not assigned to this batch' });
+      }
+      const isAssignedSub = await isStaffAssignedToBatchSubject(req, exam.batchId, exam.subjectId, prisma);
+      if (!isAssignedSub) {
+        return res.status(403).json({ success: false, error: 'Forbidden: You are not authorized to view eligible students for this subject' });
+      }
+    }
 
     // 1. Fetch all actively enrolled students in the exam batch
     const enrollments = await prisma.studentEnrollment.findMany({
@@ -752,6 +817,17 @@ export async function publishExamSchedule(req: AuthenticatedRequest, res: Respon
     });
     if (!exam) return res.status(404).json({ success: false, error: 'Exam not found' });
 
+    if (req.user?.role === 'STAFF') {
+      const isAssigned = await isStaffAssignedToBatch(req, exam.batchId, prisma);
+      if (!isAssigned) {
+        return res.status(403).json({ success: false, error: 'Forbidden: You are not assigned to this batch' });
+      }
+      const isAssignedSub = await isStaffAssignedToBatchSubject(req, exam.batchId, exam.subjectId, prisma);
+      if (!isAssignedSub) {
+        return res.status(403).json({ success: false, error: 'Forbidden: You are not authorized to publish this exam schedule' });
+      }
+    }
+
     const updated = await prisma.examination.update({
       where: { id: examId },
       data: {
@@ -794,6 +870,17 @@ export async function publishExamResults(req: AuthenticatedRequest, res: Respons
       include: { marks: true },
     });
     if (!exam) return res.status(404).json({ success: false, error: 'Exam not found' });
+
+    if (req.user?.role === 'STAFF') {
+      const isAssigned = await isStaffAssignedToBatch(req, exam.batchId, prisma);
+      if (!isAssigned) {
+        return res.status(403).json({ success: false, error: 'Forbidden: You are not assigned to this batch' });
+      }
+      const isAssignedSub = await isStaffAssignedToBatchSubject(req, exam.batchId, exam.subjectId, prisma);
+      if (!isAssignedSub) {
+        return res.status(403).json({ success: false, error: 'Forbidden: You are not authorized to publish exam results for this subject' });
+      }
+    }
 
     if (exam.marks.length === 0) {
       return res.status(400).json({
@@ -861,6 +948,17 @@ export async function toggleExamPublish(req: AuthenticatedRequest, res: Response
       where: { id: examId, instituteId },
     });
     if (!exam) return res.status(404).json({ success: false, error: 'Exam not found' });
+
+    if (req.user?.role === 'STAFF') {
+      const isAssigned = await isStaffAssignedToBatch(req, exam.batchId, prisma);
+      if (!isAssigned) {
+        return res.status(403).json({ success: false, error: 'Forbidden: You are not assigned to this batch' });
+      }
+      const isAssignedSub = await isStaffAssignedToBatchSubject(req, exam.batchId, exam.subjectId, prisma);
+      if (!isAssignedSub) {
+        return res.status(403).json({ success: false, error: 'Forbidden: You are not authorized to toggle publication for this exam' });
+      }
+    }
 
     const newPublished = !exam.isPublished;
 
@@ -945,6 +1043,11 @@ export async function getStudentReportCard(req: AuthenticatedRequest, res: Respo
         where: { studentId, parent: { userId: req.user.userId } },
       });
       if (!relation) {
+        return res.status(403).json({ success: false, error: 'Forbidden: You are not authorized for this student' });
+      }
+    } else if (req.user?.role === 'STAFF') {
+      const isAuth = await isStudentAuthorized(req, studentId, prisma);
+      if (!isAuth) {
         return res.status(403).json({ success: false, error: 'Forbidden: You are not authorized for this student' });
       }
     }

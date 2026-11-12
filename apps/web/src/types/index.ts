@@ -21,6 +21,7 @@ export interface Franchise {
     designation?: string;
   } | null;
   businessDetails?: any;
+  notes?: string | null;
   status: 'ACTIVE' | 'SUSPENDED' | 'TERMINATED';
   createdAt: string;
   branches?: Institute[];
@@ -156,6 +157,14 @@ export interface Institute {
   phone?: string | null;
   email?: string | null;
   status: InstituteStatus;
+  franchiseId?: string | null;
+  franchise?: {
+    id: string;
+    code: string;
+    name: string;
+    city?: string | null;
+    ownerName?: string | null;
+  } | null;
   createdAt: string;
   _count?: {
     students: number;
@@ -286,7 +295,8 @@ export interface StaffMember {
 
 export interface Student {
   id: string;
-  instituteId: string;
+  instituteId?: string | null;
+  franchiseId?: string | null;
   userId?: string | null;
   admissionNumber: string;
   rollNumber?: string | null;
@@ -303,6 +313,31 @@ export interface Student {
   notes?: string | null;
   phone?: string | null;
   user?: User | null;
+  institute?: {
+    id: string;
+    name: string;
+    code: string;
+  } | null;
+  franchise?: {
+    id: string;
+    name: string;
+    code: string;
+  } | null;
+  courseEnrollments?: Array<{
+    id: string;
+    mode: 'ONLINE' | 'OFFLINE';
+    status: string;
+    progress?: number;
+    course: {
+      id: string;
+      title: string;
+      slug: string;
+    };
+    batch?: {
+      id: string;
+      name: string;
+    } | null;
+  }>;
   enrollments?: Array<{
     id: string;
     batchId?: string;

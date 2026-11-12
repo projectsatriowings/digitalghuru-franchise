@@ -56,16 +56,16 @@ async function generateFranchiseCode(): Promise<string> {
 }
 
 // Generate unique sequential Receipt Number: ROY-REC-2026-0001
-async function generateRoyaltyReceiptNumber(): Promise<string> {
+async function generateRoyaltyReceiptNumber(dbClient: any = prisma): Promise<string> {
   const year = new Date().getFullYear();
-  const count = await prisma.franchiseRoyaltyPayment.count();
+  const count = await dbClient.franchiseRoyaltyPayment.count();
   const nextSerial = String(count + 1).padStart(4, '0');
   let receipt = `ROY-REC-${year}-${nextSerial}`;
-  let exists = await prisma.franchiseRoyaltyPayment.findUnique({ where: { receiptNumber: receipt } });
+  let exists = await dbClient.franchiseRoyaltyPayment.findUnique({ where: { receiptNumber: receipt } });
   let offset = 1;
   while (exists) {
     receipt = `ROY-REC-${year}-${String(count + 1 + offset).padStart(4, '0')}`;
-    exists = await prisma.franchiseRoyaltyPayment.findUnique({ where: { receiptNumber: receipt } });
+    exists = await dbClient.franchiseRoyaltyPayment.findUnique({ where: { receiptNumber: receipt } });
     offset++;
   }
   return receipt;
@@ -387,6 +387,18 @@ const createFranchiseSchema = z.object({
     terms: z.string().optional(),
     notes: z.string().optional(),
   }).optional(),
+  branchOption: z.enum(['NONE', 'LINK_EXISTING', 'CREATE_NEW']).optional().default('NONE'),
+  linkedInstituteIds: z.array(z.string()).optional(),
+  linkedInstituteId: z.string().optional(),
+  newBranch: z.object({
+    name: z.string().min(2, 'Branch name is required'),
+    code: z.string().optional(),
+    city: z.string().optional(),
+    state: z.string().optional(),
+    address: z.string().optional(),
+    phone: z.string().optional(),
+    email: z.string().optional(),
+  }).optional(),
 });
 
 export async function createFranchise(req: AuthenticatedRequest, res: Response) {
@@ -575,13 +587,80 @@ export async function createFranchise(req: AuthenticatedRequest, res: Response) 
       });
     }
 
+    // 4.5. Optional Institute / Campus Linking or Creation
+    let attachedBranches: any[] = [];
+    if (data.branchOption === 'LINK_EXISTING' || (data.linkedInstituteIds && data.linkedInstituteIds.length > 0) || data.linkedInstituteId) {
+      const instituteIds = data.linkedInstituteIds || (data.linkedInstituteId ? [data.linkedInstituteId] : []);
+      if (instituteIds.length > 0) {
+        await prisma.institute.updateMany({
+          where: { id: { in: instituteIds } },
+          data: { franchiseId: franchise.id },
+        });
+        attachedBranches = await prisma.institute.findMany({
+          where: { id: { in: instituteIds } },
+          select: {
+            id: true,
+            code: true,
+            name: true,
+            city: true,
+            state: true,
+            status: true,
+            _count: { select: { students: true } },
+          },
+        });
+      }
+    } else if (data.branchOption === 'CREATE_NEW' && data.newBranch?.name) {
+      const branchName = data.newBranch.name;
+      let branchCode = data.newBranch.code;
+      if (!branchCode) {
+        const count = await prisma.institute.count();
+        branchCode = `BR-${String(count + 1).padStart(3, '0')}`;
+        let exists = await prisma.institute.findUnique({ where: { code: branchCode } });
+        let offset = 1;
+        while (exists) {
+          branchCode = `BR-${String(count + 1 + offset).padStart(3, '0')}`;
+          exists = await prisma.institute.findUnique({ where: { code: branchCode } });
+          offset++;
+        }
+      }
+
+      const newInst = await prisma.institute.create({
+        data: {
+          name: branchName,
+          code: branchCode,
+          city: data.newBranch.city || data.city,
+          state: data.newBranch.state || data.state,
+          address: data.newBranch.address || data.address,
+          phone: data.newBranch.phone || data.phone,
+          email: data.newBranch.email || data.email,
+          franchiseId: franchise.id,
+          status: 'ACTIVE',
+        },
+        select: {
+          id: true,
+          code: true,
+          name: true,
+          city: true,
+          state: true,
+          status: true,
+          _count: { select: { students: true } },
+        },
+      });
+      attachedBranches = [newInst];
+    }
+
+    const franchiseWithBranches = {
+      ...franchise,
+      branches: attachedBranches,
+    };
+
     return res.status(201).json({
       success: true,
       message: isMonthly
         ? 'Franchise, Owner Account, and Agreement created successfully with monthly settlement'
         : 'Franchise, Owner Account, and 2 Annual Installments created successfully',
       data: {
-        franchise,
+        franchise: franchiseWithBranches,
         agreement,
         initialAgreement: agreement,
         installments,
@@ -753,11 +832,18 @@ export async function updateFranchise(req: AuthenticatedRequest, res: Response) 
       authorizedContact,
       businessDetails,
       notes,
+      // Optional branch linking / creation / detachment inside Edit
+      branchOption,
+      linkedInstituteIds,
+      linkedInstituteId,
+      detachInstituteId,
+      newBranch,
     } = req.body;
 
     const isSuperAdmin = req.user?.role === 'SUPER_ADMIN';
 
-    const updated = await prisma.franchise.update({
+    // 1. Update franchise profile details
+    await prisma.franchise.update({
       where: { id },
       data: {
         ...(isSuperAdmin && name && { name }),
@@ -774,9 +860,78 @@ export async function updateFranchise(req: AuthenticatedRequest, res: Response) 
       },
     });
 
+    // 2. Manage branch associations if Super Admin
+    if (isSuperAdmin) {
+      // Detach branch
+      if (detachInstituteId) {
+        await prisma.institute.updateMany({
+          where: { id: detachInstituteId, franchiseId: id },
+          data: { franchiseId: null },
+        });
+      }
+
+      // Link existing institute(s)
+      const idsToLink = linkedInstituteIds || (linkedInstituteId ? [linkedInstituteId] : []);
+      if (idsToLink.length > 0) {
+        await prisma.institute.updateMany({
+          where: { id: { in: idsToLink } },
+          data: { franchiseId: id },
+        });
+      }
+
+      // Create and attach new campus branch
+      if (newBranch && newBranch.name) {
+        let branchCode = newBranch.code;
+        if (!branchCode) {
+          const count = await prisma.institute.count();
+          branchCode = `BR-${String(count + 1).padStart(3, '0')}`;
+          let exists = await prisma.institute.findUnique({ where: { code: branchCode } });
+          let offset = 1;
+          while (exists) {
+            branchCode = `BR-${String(count + 1 + offset).padStart(3, '0')}`;
+            exists = await prisma.institute.findUnique({ where: { code: branchCode } });
+            offset++;
+          }
+        }
+
+        await prisma.institute.create({
+          data: {
+            name: newBranch.name,
+            code: branchCode,
+            city: newBranch.city || undefined,
+            state: newBranch.state || undefined,
+            address: newBranch.address || undefined,
+            phone: newBranch.phone || undefined,
+            email: newBranch.email || undefined,
+            franchiseId: id,
+            status: 'ACTIVE',
+          },
+        });
+      }
+    }
+
+    // 3. Return fresh franchise record including branches
+    const updated = await prisma.franchise.findUnique({
+      where: { id },
+      include: {
+        branches: {
+          select: {
+            id: true,
+            code: true,
+            name: true,
+            city: true,
+            state: true,
+            status: true,
+            _count: { select: { students: true } },
+          },
+        },
+        ownerUser: { select: { id: true, email: true, fullName: true, phone: true } },
+      },
+    });
+
     return res.json({
       success: true,
-      message: 'Franchise details updated successfully',
+      message: 'Franchise details and institute links updated successfully',
       data: { franchise: updated },
     });
   } catch (err: any) {
@@ -2206,8 +2361,6 @@ export async function recordInstallmentPayment(req: AuthenticatedRequest, res: R
       });
     }
 
-    const receiptNumber = await generateRoyaltyReceiptNumber();
-
     // Atomic transaction for payment creation and balance update with safe WAN latency timeouts
     let result;
     try {
@@ -2235,6 +2388,8 @@ export async function recordInstallmentPayment(req: AuthenticatedRequest, res: R
           if (paidNum > freshOutstanding) {
             throw new Error('OVERPAYMENT_CONCURRENT');
           }
+
+          const receiptNumber = await generateRoyaltyReceiptNumber(tx);
 
           const payment = await tx.franchiseRoyaltyPayment.create({
             data: {
@@ -2349,6 +2504,18 @@ export async function getRoyaltyPaymentReceipt(req: AuthenticatedRequest, res: R
             },
           },
         },
+        royaltyRecord: {
+          select: {
+            id: true,
+            periodLabel: true,
+            startDate: true,
+            endDate: true,
+            royaltyPayable: true,
+            royaltyPaid: true,
+            outstandingBalance: true,
+            status: true,
+          },
+        },
         recordedBy: { select: { id: true, fullName: true, email: true } },
       },
     });
@@ -2398,6 +2565,18 @@ export async function getRoyaltyPaymentReceipt(req: AuthenticatedRequest, res: R
             agreementTitle: payment.installment.agreement?.title,
             calculationBasis: payment.installment.calculationBasis,
             calculationBreakdown: payment.installment.calculationBreakdown,
+          }
+          : null,
+        royaltyRecord: payment.royaltyRecord
+          ? {
+            id: payment.royaltyRecord.id,
+            periodLabel: payment.royaltyRecord.periodLabel,
+            startDate: payment.royaltyRecord.startDate,
+            endDate: payment.royaltyRecord.endDate,
+            royaltyPayable: Number(payment.royaltyRecord.royaltyPayable),
+            royaltyPaid: Number(payment.royaltyRecord.royaltyPaid),
+            outstandingBalance: Number(payment.royaltyRecord.outstandingBalance),
+            status: payment.royaltyRecord.status,
           }
           : null,
         issuer: {
@@ -2586,7 +2765,7 @@ export async function calculateRoyalty(req: AuthenticatedRequest, res: Response)
       },
     });
 
-    const grossCollection = payments.reduce((sum, p) => sum + Number(p.amountPaid), 0);
+    const grossCollection = Math.round(payments.reduce((sum, p) => sum + Number(p.amountPaid), 0) * 100) / 100;
     
     // Determine eligible revenue / profit pool based on calculationBasis
     let eligibleRevenue = grossCollection;
@@ -2595,18 +2774,22 @@ export async function calculateRoyalty(req: AuthenticatedRequest, res: Response)
     if (calculationBasis === 'NET_COURSE_REVENUE') {
       const adjustments = await prisma.paymentAdjustment.findMany({
         where: {
+          adjustmentType: 'REFUND',
           payment: {
             instituteId: { in: branchIds },
             paidAt: { gte: start, lte: queryEndDate },
+            status: 'SUCCESS',
           },
         },
         select: { amount: true },
       });
-      deductionsOrExpenses = adjustments.reduce((sum, a) => sum + Number(a.amount), 0) + Number(req.body.deductions || 0);
-      eligibleRevenue = Math.max(0, grossCollection - deductionsOrExpenses);
+      deductionsOrExpenses =
+        Math.round((adjustments.reduce((sum, a) => sum + Number(a.amount), 0) + Number(req.body.deductions || 0)) * 100) / 100;
+      eligibleRevenue = Math.round(Math.max(0, grossCollection - deductionsOrExpenses) * 100) / 100;
     } else if (calculationBasis === 'PROFIT_AFTER_EXPENSES') {
-      deductionsOrExpenses = Number(req.body.deductibleExpenses ?? req.body.operatingExpenses ?? req.body.expenses ?? 0);
-      eligibleRevenue = Math.max(0, grossCollection - deductionsOrExpenses);
+      deductionsOrExpenses =
+        Math.round(Number(req.body.deductibleExpenses ?? req.body.operatingExpenses ?? req.body.expenses ?? 0) * 100) / 100;
+      eligibleRevenue = Math.round(Math.max(0, grossCollection - deductionsOrExpenses) * 100) / 100;
     }
 
     // 3. COMMERCIAL CALCULATION & HISTORICAL STUDENT ELIGIBILITY (AUDIT 2)
@@ -3156,6 +3339,12 @@ export async function recordRoyaltyPayment(req: AuthenticatedRequest, res: Respo
       if (targetRecord.status === 'PAID' && Number(targetRecord.outstandingBalance) <= 0) {
         return res.status(400).json({ success: false, error: 'This royalty statement has already been fully paid' });
       }
+      if (paidAmount > Number(targetRecord.outstandingBalance)) {
+        return res.status(400).json({
+          success: false,
+          error: `Payment amount of ₹${paidAmount.toLocaleString('en-IN')} exceeds the outstanding balance of ₹${Number(targetRecord.outstandingBalance).toLocaleString('en-IN')} for this royalty statement.`,
+        });
+      }
     }
 
     let result;
@@ -3171,7 +3360,17 @@ export async function recordRoyaltyPayment(req: AuthenticatedRequest, res: Respo
             }
           }
 
-          const receiptNumber = await generateRoyaltyReceiptNumber();
+          if (royaltyRecordId) {
+            const freshRecCheck = await tx.franchiseRoyaltyRecord.findUnique({ where: { id: royaltyRecordId } });
+            if (!freshRecCheck) {
+              throw new Error('RECORD_NOT_FOUND');
+            }
+            if (paidAmount > Number(freshRecCheck.outstandingBalance)) {
+              throw new Error('OVERPAYMENT_CONCURRENT');
+            }
+          }
+
+          const receiptNumber = await generateRoyaltyReceiptNumber(tx);
 
           const payment = await tx.franchiseRoyaltyPayment.create({
             data: {
@@ -3223,6 +3422,12 @@ export async function recordRoyaltyPayment(req: AuthenticatedRequest, res: Respo
         return res.status(409).json({
           success: false,
           error: `Payment with transaction reference "${transactionReference?.trim()}" has already been recorded for this franchise.`,
+        });
+      }
+      if (txErr.message === 'OVERPAYMENT_CONCURRENT') {
+        return res.status(400).json({
+          success: false,
+          error: 'Payment amount exceeds current outstanding balance on this royalty statement.',
         });
       }
       throw txErr;
@@ -3483,42 +3688,80 @@ export async function getFranchiseOwnerDashboard(req: AuthenticatedRequest, res:
       const todayTotalMarked = totalStudents > 0 ? totalStudents : todayPresent;
       const attendanceRate = todayTotalMarked > 0 ? Number(((todayPresent / todayTotalMarked) * 100).toFixed(1)) : 100.0;
 
-      // 5. Monthly & Total Fee Collections
+      // 5. Monthly & Total Fee Collections (net of REFUND adjustments)
       const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
-      const monthlyPaymentAgg = await prisma.payment.aggregate({
-        where: {
-          instituteId: { in: targetBranchIds },
-          status: 'SUCCESS',
-          paidAt: { gte: startOfMonth },
-        },
-        _sum: { amountPaid: true },
-      });
-      const monthlyFeeCollection = Number(monthlyPaymentAgg._sum?.amountPaid || 0);
+      const [monthlyPaymentAgg, monthlyRefundAgg, totalPaymentAgg, totalRefundAgg] = await Promise.all([
+        prisma.payment.aggregate({
+          where: {
+            instituteId: { in: targetBranchIds },
+            status: 'SUCCESS',
+            paidAt: { gte: startOfMonth },
+          },
+          _sum: { amountPaid: true },
+        }),
+        prisma.paymentAdjustment.aggregate({
+          where: {
+            adjustmentType: 'REFUND',
+            payment: {
+              instituteId: { in: targetBranchIds },
+              status: 'SUCCESS',
+              paidAt: { gte: startOfMonth },
+            },
+          },
+          _sum: { amount: true },
+        }),
+        prisma.payment.aggregate({
+          where: {
+            instituteId: { in: targetBranchIds },
+            status: 'SUCCESS',
+          },
+          _sum: { amountPaid: true },
+        }),
+        prisma.paymentAdjustment.aggregate({
+          where: {
+            adjustmentType: 'REFUND',
+            payment: {
+              instituteId: { in: targetBranchIds },
+              status: 'SUCCESS',
+            },
+          },
+          _sum: { amount: true },
+        }),
+      ]);
+      const monthlyFeeCollection = Math.max(
+        0,
+        Math.round((Number(monthlyPaymentAgg._sum?.amountPaid || 0) - Number(monthlyRefundAgg._sum?.amount || 0)) * 100) / 100
+      );
+      const totalRevenue = Math.max(
+        0,
+        Math.round((Number(totalPaymentAgg._sum?.amountPaid || 0) - Number(totalRefundAgg._sum?.amount || 0)) * 100) / 100
+      );
 
-      const totalPaymentAgg = await prisma.payment.aggregate({
-        where: {
-          instituteId: { in: targetBranchIds },
-          status: 'SUCCESS',
-        },
-        _sum: { amountPaid: true },
-      });
-      const totalRevenue = Number(totalPaymentAgg._sum?.amountPaid || 0);
-
-      // 6. Pending Fees
+      // 6. Pending Fees (net of REFUNDS)
       const pendingAssignments = await prisma.studentFeeAssignment.findMany({
         where: {
           student: { instituteId: { in: targetBranchIds } },
           status: { in: ['PENDING', 'PARTIALLY_PAID', 'OVERDUE'] },
         },
         include: {
-          payments: { where: { status: 'SUCCESS' }, select: { amountPaid: true } },
+          payments: {
+            where: { status: 'SUCCESS' },
+            select: {
+              amountPaid: true,
+              adjustments: { where: { adjustmentType: 'REFUND' }, select: { amount: true } },
+            },
+          },
         },
       });
       let pendingFees = 0;
-      for(const a of pendingAssignments) {
-        const paidSum = a.payments.reduce((acc, p) => acc + Number(p.amountPaid), 0);
-        pendingFees += Math.max(0, Number(a.finalAmount) - paidSum);
+      for (const a of pendingAssignments) {
+        const netPaidSum = a.payments.reduce((acc, p) => {
+          const refunded = (p.adjustments || []).reduce((rAcc, adj) => rAcc + Number(adj.amount), 0);
+          return acc + Number(p.amountPaid) - refunded;
+        }, 0);
+        pendingFees += Math.max(0, Number(a.finalAmount) - netPaidSum);
       }
+      pendingFees = Math.round(pendingFees * 100) / 100;
 
     // 7. Upcoming Examinations
     const upcomingExamsList = await prisma.examination.findMany({
@@ -3560,14 +3803,38 @@ export async function getFranchiseOwnerDashboard(req: AuthenticatedRequest, res:
           const bBatches = await prisma.batch.count({
             where: { instituteId: b.id, isActive: true },
           });
-          const bPayment = await prisma.payment.aggregate({
-            where: { instituteId: b.id, status: 'SUCCESS' },
-            _sum: { amountPaid: true },
-          });
-          const bMonthly = await prisma.payment.aggregate({
-            where: { instituteId: b.id, status: 'SUCCESS', paidAt: { gte: startOfMonth } },
-            _sum: { amountPaid: true },
-          });
+          const [bPayment, bRefundAgg, bMonthly, bMonthlyRefundAgg] = await Promise.all([
+            prisma.payment.aggregate({
+              where: { instituteId: b.id, status: 'SUCCESS' },
+              _sum: { amountPaid: true },
+            }),
+            prisma.paymentAdjustment.aggregate({
+              where: {
+                adjustmentType: 'REFUND',
+                payment: { instituteId: b.id, status: 'SUCCESS' },
+              },
+              _sum: { amount: true },
+            }),
+            prisma.payment.aggregate({
+              where: { instituteId: b.id, status: 'SUCCESS', paidAt: { gte: startOfMonth } },
+              _sum: { amountPaid: true },
+            }),
+            prisma.paymentAdjustment.aggregate({
+              where: {
+                adjustmentType: 'REFUND',
+                payment: { instituteId: b.id, status: 'SUCCESS', paidAt: { gte: startOfMonth } },
+              },
+              _sum: { amount: true },
+            }),
+          ]);
+          const bTotalRevenue = Math.max(
+            0,
+            Math.round((Number(bPayment._sum?.amountPaid || 0) - Number(bRefundAgg._sum?.amount || 0)) * 100) / 100
+          );
+          const bMonthlyRevenue = Math.max(
+            0,
+            Math.round((Number(bMonthly._sum?.amountPaid || 0) - Number(bMonthlyRefundAgg._sum?.amount || 0)) * 100) / 100
+          );
           const bPresent = await prisma.attendanceEvent.count({
             where: {
               instituteId: b.id,
@@ -3584,13 +3851,25 @@ export async function getFranchiseOwnerDashboard(req: AuthenticatedRequest, res:
               student: { instituteId: b.id },
               status: { in: ['PENDING', 'PARTIALLY_PAID', 'OVERDUE'] },
             },
-            include: { payments: { where: { status: 'SUCCESS' }, select: { amountPaid: true } } },
+            include: {
+              payments: {
+                where: { status: 'SUCCESS' },
+                select: {
+                  amountPaid: true,
+                  adjustments: { where: { adjustmentType: 'REFUND' }, select: { amount: true } },
+                },
+              },
+            },
           });
           let bPending = 0;
           for (const a of bAssignments) {
-            const pSum = a.payments.reduce((acc, p) => acc + Number(p.amountPaid), 0);
-            bPending += Math.max(0, Number(a.finalAmount) - pSum);
+            const pNetSum = a.payments.reduce((acc, p) => {
+              const ref = (p.adjustments || []).reduce((rAcc, adj) => rAcc + Number(adj.amount), 0);
+              return acc + Number(p.amountPaid) - ref;
+            }, 0);
+            bPending += Math.max(0, Number(a.finalAmount) - pNetSum);
           }
+          bPending = Math.round(bPending * 100) / 100;
 
           return {
             id: b.id,
@@ -3605,8 +3884,8 @@ export async function getFranchiseOwnerDashboard(req: AuthenticatedRequest, res:
             activeStudents: bStudents,
             staffCount: bStaff,
             activeBatches: bBatches,
-            totalRevenue: Number(bPayment._sum?.amountPaid || 0),
-            monthlyRevenue: Number(bMonthly._sum?.amountPaid || 0),
+            totalRevenue: bTotalRevenue,
+            monthlyRevenue: bMonthlyRevenue,
             pendingFees: bPending,
             attendanceRate: bRate,
             todayAttendance: {

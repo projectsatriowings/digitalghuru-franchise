@@ -21,6 +21,11 @@ prisma.$use(async (params, next) => {
   try {
     return await next(params);
   } catch (err: any) {
+    // Never disconnect mid-transaction; let the outer $transaction wrapper retry cleanly
+    if ((params as any).runInTransaction) {
+      throw err;
+    }
+
     const isSocketDrop =
       err?.code === 'P1017' ||
       err?.name === 'PrismaClientInitializationError' ||
@@ -40,15 +45,35 @@ prisma.$use(async (params, next) => {
   }
 });
 
-// Configure default interactive transaction timeouts for cloud WAN latency (Neon DB)
+// Configure default interactive transaction timeouts and transient socket retry for cloud WAN latency (Neon DB)
 const originalTransaction = prisma.$transaction.bind(prisma);
-prisma.$transaction = ((arg: any, options?: any) => {
+prisma.$transaction = (async (arg: any, options?: any) => {
   if (typeof arg === 'function') {
-    return originalTransaction(arg, {
-      maxWait: 15000,
-      timeout: 30000,
-      ...options,
-    });
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        return await originalTransaction(arg, {
+          maxWait: 15000,
+          timeout: 30000,
+          ...options,
+        });
+      } catch (err: any) {
+        const isTransientSocket =
+          err?.code === 'P1017' ||
+          err?.code === 'P2028' ||
+          err?.message?.includes('closed the connection') ||
+          err?.message?.includes('10054') ||
+          err?.message?.includes('ConnectionReset') ||
+          err?.message?.includes('forcibly closed');
+
+        if (attempt < 2 && isTransientSocket) {
+          console.warn(`[Prisma Transaction] Retrying transaction (attempt ${attempt + 1}) after transient connection reset...`);
+          await prisma.$disconnect().catch(() => {});
+          await prisma.$connect().catch(() => {});
+          continue;
+        }
+        throw err;
+      }
+    }
   }
   return originalTransaction(arg, options);
 }) as any;

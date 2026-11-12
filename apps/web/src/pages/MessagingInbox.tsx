@@ -31,7 +31,7 @@ import {
 } from 'lucide-react';
 
 export const MessagingInbox: React.FC = () => {
-  const { user } = useAuth();
+  const { user, activeInstitute } = useAuth();
   const [conversations, setConversations] = useState<any[]>([]);
   const [selectedConversation, setSelectedConversation] = useState<any>(null);
   const [messages, setMessages] = useState<any[]>([]);
@@ -75,8 +75,9 @@ export const MessagingInbox: React.FC = () => {
 
   // Initial load
   useEffect(() => {
+    setSelectedConversation(null);
     loadConversations();
-  }, [statusFilter]);
+  }, [statusFilter, activeInstitute?.id]);
 
   // Load messages when selected conversation changes
   useEffect(() => {

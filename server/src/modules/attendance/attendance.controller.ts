@@ -1022,6 +1022,10 @@ export async function getStudentQrPass(req: AuthenticatedRequest, res: Response)
       return res.status(404).json({ success: false, error: 'Student not found in this institute' });
     }
 
+    if (!student.instituteId || !student.institute) {
+      return res.status(400).json({ success: false, error: 'Campus QR passes are only available for offline branch students.' });
+    }
+
     const qrToken = generateQrPassToken(student.id, student.instituteId);
 
     return res.json({

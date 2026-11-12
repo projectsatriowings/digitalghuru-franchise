@@ -1,6 +1,7 @@
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 generator client {
@@ -180,6 +181,33 @@ enum SubmissionStatus {
   RESUBMISSION_REQUESTED
 }
 
+enum CourseStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum EnrollmentStatus {
+  ACTIVE
+  COMPLETED
+  TRANSFERRED
+  CANCELLED
+  EXPIRED
+}
+
+enum AttachmentType {
+  PDF
+  ZIP
+  DOCUMENT
+  EXTERNAL_LINK
+  IMAGE
+}
+
+enum LearningMode {
+  ONLINE
+  OFFLINE
+}
+
 // -------------------------------------------------------------
 // CORE & MULTI-TENANCY MODELS
 // -------------------------------------------------------------
@@ -242,6 +270,7 @@ model Institute {
   staffAttendanceSessions StaffAttendanceSession[]
   wfhAuthorizations       StaffWFHAuthorization[]
   onlineClassLogs         StaffOnlineClassLog[]
+  courseEnrollments       CourseEnrollment[]
   franchiseId             String?
   franchise               Franchise?             @relation(fields: [franchiseId], references: [id], onDelete: SetNull)
   royaltyRecords          FranchiseRoyaltyRecord[]
@@ -294,6 +323,10 @@ model User {
   wfhRequestsRevoked        StaffWFHAuthorization[]  @relation("WFHRevokedBy")
   ownedFranchises           Franchise[]              @relation("FranchiseOwner")
   recordedRoyaltyPayments   FranchiseRoyaltyPayment[] @relation("RoyaltyPaymentRecorder")
+  xpPoints                  Int                       @default(0)
+  level                     Int                       @default(1)
+  createdGlobalCourses      GlobalCourse[]            @relation("GlobalCourseCreator")
+  xpLedgerEntries           StudentXpLedger[]
 
   @@index([role])
   @@index([email])
@@ -461,7 +494,8 @@ model ParentProfile {
 
 model Student {
   id              String        @id @default(uuid())
-  instituteId     String
+  instituteId     String?
+  franchiseId     String?
   userId          String?       @unique // Optional student login account
   admissionNumber String
   rollNumber      String?
@@ -479,7 +513,8 @@ model Student {
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 
-  institute            Institute               @relation(fields: [instituteId], references: [id], onDelete: Cascade)
+  institute            Institute?              @relation(fields: [instituteId], references: [id], onDelete: SetNull)
+  franchise            Franchise?              @relation("FranchiseOnlineStudents", fields: [franchiseId], references: [id], onDelete: SetNull)
   user                 User?                   @relation(fields: [userId], references: [id], onDelete: SetNull)
   createdByUser        User?                   @relation("StudentCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
   parentRelations      StudentParentRelation[]
@@ -498,6 +533,10 @@ model Student {
   notifications        Notification[]
   onlinePaymentOrders  OnlinePaymentOrder[]
   conversations        Conversation[]
+  courseEnrollments    CourseEnrollment[]
+  lessonProgress       StudentLessonProgress[]
+  xpLedgerEntries      StudentXpLedger[]
+  certificates         CourseCertificate[]
 
   @@unique([instituteId, admissionNumber])
   @@index([instituteId])
@@ -573,6 +612,7 @@ model Batch {
   quizzes           Quiz[]
   progressFeedbacks ProgressFeedback[]
   feeStructures     FeeStructure[]
+  courseEnrollments CourseEnrollment[]
 
   @@unique([instituteId, name, academicYear])
   @@index([instituteId])
@@ -1587,6 +1627,9 @@ model Franchise {
   installments      FranchiseRoyaltyInstallment[]
   royaltyRecords    FranchiseRoyaltyRecord[]
   royaltyPayments   FranchiseRoyaltyPayment[]
+  courseSelections  FranchiseCourseSelection[]
+  courseEnrollments CourseEnrollment[]
+  onlineStudents    Student[]                 @relation("FranchiseOnlineStudents")
 
   @@index([status])
   @@index([name])
@@ -1749,4 +1792,276 @@ model FranchiseRoyaltyPayment {
   @@index([installmentId])
   @@index([paymentDate])
   @@index([receiptNumber])
+}
+
+// -------------------------------------------------------------
+// GLOBAL COURSE MANAGEMENT & HYBRID LMS MODELS
+// -------------------------------------------------------------
+
+
+// ============================================================================
+// DIGITAL GURU FRANCHISE — COMPLETE RECONCILED LMS SCHEMA (VERSION 3.5 AUDIT)
+// ============================================================================
+
+model CourseCategory {
+  id          String         @id @default(uuid())
+  name        String         @unique
+  slug        String         @unique
+  description String?
+  icon        String?
+  sortOrder   Int            @default(0)
+  courses     GlobalCourse[]
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  @@index([slug])
+}
+
+model GlobalCourse {
+  id                         String                     @id @default(uuid())
+  title                      String
+  slug                       String                     @unique
+  subTitle                   String?
+  description                String?
+  categoryId                 String?
+  category                   CourseCategory?            @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  format                     String                     @default("Hybrid (Online + Offline)")
+  duration                   String?
+  price                      Decimal                    @default(0) @db.Decimal(10, 2)
+  status                     CourseStatus               @default(DRAFT)
+  thumbnailUrl               String?
+  bannerUrl                  String?
+  brochureUrl                String?
+  level                      String                     @default("Beginner to Advanced")
+  prerequisites              String?
+  learningOutcomes           String[]                   @default([])
+  skillsCovered              String[]                   @default([])
+  targetAudience             String[]                   @default([])
+  toolsCovered               String[]                   @default([])
+  overviewJson               Json?
+  designedToHelpJson         Json?
+  numberedFeaturesJson       Json?
+  whyDigitalGhuruJson        Json?
+  topHighlightsJson          Json?
+  faqsJson                   Json?
+  activeCurriculumVersionId  String?
+  activeCurriculumVersion    CourseCurriculumVersion?   @relation("ActiveVersionPointer", fields: [activeCurriculumVersionId], references: [id], onDelete: SetNull)
+  createdById                String?
+  createdBy                  User?                      @relation("GlobalCourseCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  // Relations
+  slugAliases                CourseSlugAlias[]
+  curriculumVersions         CourseCurriculumVersion[]  @relation("CourseVersions")
+  franchiseSelections        FranchiseCourseSelection[]
+  enrollments                CourseEnrollment[]
+  certificates               CourseCertificate[]
+  lessonProgress             StudentLessonProgress[]
+  xpLedgerEntries            StudentXpLedger[]
+  createdAt                  DateTime                   @default(now())
+  updatedAt                  DateTime                   @updatedAt
+
+  @@index([slug])
+  @@index([status])
+  @@index([categoryId])
+}
+
+model CourseSlugAlias {
+  id        String       @id @default(uuid())
+  courseId  String
+  course    GlobalCourse @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  slug      String       @unique
+  createdAt DateTime     @default(now())
+
+  @@index([slug])
+}
+
+model CourseCurriculumVersion {
+  id             String                  @id @default(uuid())
+  courseId       String
+  course         GlobalCourse            @relation("CourseVersions", fields: [courseId], references: [id], onDelete: Restrict)
+  version        Int
+  title          String                  @default("Published Version")
+  isPublished    Boolean                 @default(false)
+  isLocked       Boolean                 @default(false)
+  publishedAt    DateTime?
+  modules        CourseModule[]
+  enrollments    CourseEnrollment[]
+  certificates   CourseCertificate[]
+  lessonProgress StudentLessonProgress[]
+  activeFor      GlobalCourse[]          @relation("ActiveVersionPointer")
+  createdAt      DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
+
+  @@unique([courseId, version])
+  @@index([courseId, isPublished])
+}
+
+model CourseModule {
+  id                  String                  @id @default(uuid())
+  curriculumVersionId String
+  curriculumVersion   CourseCurriculumVersion @relation(fields: [curriculumVersionId], references: [id], onDelete: Cascade)
+  title               String
+  description         String?
+  position            Int                     @default(0)
+  isArchived          Boolean                 @default(false)
+  chapters            CourseChapter[]
+  createdAt           DateTime                @default(now())
+  updatedAt           DateTime                @updatedAt
+
+  @@index([curriculumVersionId, position])
+  @@index([curriculumVersionId, isArchived])
+}
+
+model CourseChapter {
+  id          String                  @id @default(uuid())
+  moduleId    String
+  module      CourseModule            @relation(fields: [moduleId], references: [id], onDelete: Restrict)
+  title       String
+  description String?
+  videoUrl    String?
+  pdfUrl      String?
+  duration    String                  @default("15:00")
+  position    Int                     @default(0)
+  isFree      Boolean                 @default(false)
+  isPublished Boolean                 @default(true)
+  isArchived  Boolean                 @default(false)
+  attachments LessonAttachment[]
+  progress    StudentLessonProgress[]
+  createdAt   DateTime                @default(now())
+  updatedAt   DateTime                @updatedAt
+
+  @@index([moduleId, position])
+  @@index([moduleId, isArchived])
+}
+
+model LessonAttachment {
+  id          String         @id @default(uuid())
+  chapterId   String
+  chapter     CourseChapter  @relation(fields: [chapterId], references: [id], onDelete: Restrict)
+  title       String
+  fileUrl     String
+  fileType    AttachmentType @default(PDF)
+  fileSize    Int?
+  isDownload  Boolean        @default(true)
+  createdAt   DateTime       @default(now())
+
+  @@index([chapterId])
+}
+
+model FranchiseCourseSelection {
+  id                  String       @id @default(uuid())
+  franchiseId         String
+  franchise           Franchise    @relation(fields: [franchiseId], references: [id], onDelete: Restrict)
+  courseId            String
+  course              GlobalCourse @relation(fields: [courseId], references: [id], onDelete: Restrict)
+  isPermitted         Boolean      @default(true)
+  permittedAt         DateTime?
+  permittedById       String?
+  isEnabled           Boolean      @default(true)
+  localFeeOverride    Decimal?     @db.Decimal(10, 2)
+  maxCapacityPerBatch Int?
+  selectedAt          DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
+
+  @@unique([franchiseId, courseId])
+  @@index([franchiseId, isEnabled])
+  @@index([franchiseId, isPermitted, isEnabled])
+}
+
+model CourseEnrollment {
+  id                            String             @id @default(uuid())
+  studentId                     String
+  student                       Student            @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  courseId                      String
+  course                        GlobalCourse       @relation(fields: [courseId], references: [id], onDelete: Restrict)
+  curriculumVersionId           String
+  curriculumVersion             CourseCurriculumVersion @relation(fields: [curriculumVersionId], references: [id], onDelete: Restrict)
+  franchiseId                   String
+  franchise                     Franchise          @relation(fields: [franchiseId], references: [id], onDelete: Restrict)
+  mode                          LearningMode       @default(ONLINE)
+  instituteId                   String?
+  institute                     Institute?         @relation(fields: [instituteId], references: [id], onDelete: SetNull)
+  batchId                       String?
+  batch                         Batch?             @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  status                        EnrollmentStatus   @default(ACTIVE)
+  progress                      Int                @default(0) // 0 to 100%
+  enrolledAt                    DateTime           @default(now())
+  completedAt                   DateTime?
+  transferredAt                 DateTime?
+  transferredFromEnrollmentId   String?
+  transferredFromEnrollment     CourseEnrollment?  @relation("EnrollmentTransferProvenance", fields: [transferredFromEnrollmentId], references: [id], onDelete: SetNull)
+  transferredToEnrollments      CourseEnrollment[] @relation("EnrollmentTransferProvenance")
+  transferReason                String?
+  qualifyingCertificates        CourseCertificate[] @relation("QualifyingEnrollment")
+  createdAt                     DateTime           @default(now())
+  updatedAt                     DateTime           @updatedAt
+
+  @@index([studentId, courseId, mode])
+  @@index([studentId, status])
+  @@index([franchiseId, mode, status])
+  @@index([courseId, status])
+}
+
+model StudentLessonProgress {
+  id                  String                  @id @default(uuid())
+  studentId           String
+  student             Student                 @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  courseId            String
+  course              GlobalCourse            @relation(fields: [courseId], references: [id], onDelete: Restrict)
+  curriculumVersionId String
+  curriculumVersion   CourseCurriculumVersion @relation(fields: [curriculumVersionId], references: [id], onDelete: Restrict)
+  chapterId           String
+  chapter             CourseChapter           @relation(fields: [chapterId], references: [id], onDelete: Restrict)
+  isCompleted         Boolean                 @default(true)
+  completedAt         DateTime                @default(now())
+  timeSpentSec        Int                     @default(0)
+  completedViaMode    LearningMode?
+
+  @@unique([studentId, chapterId])
+  @@index([studentId, courseId, curriculumVersionId])
+  @@index([studentId, isCompleted])
+}
+
+model StudentXpLedger {
+  id          String        @id @default(uuid())
+  studentId   String
+  student     Student       @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  userId      String?
+  user        User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  courseId    String?
+  course      GlobalCourse? @relation(fields: [courseId], references: [id], onDelete: SetNull)
+  amount      Int
+  action      String        // LESSON_COMPLETION, COURSE_COMPLETION, STREAK_BONUS
+  referenceId String        // chapterId, courseId, or streak date
+  description String?
+  createdAt   DateTime      @default(now())
+
+  @@unique([studentId, action, referenceId])
+  @@index([studentId, createdAt])
+  @@index([userId])
+  @@index([courseId])
+}
+
+model CourseCertificate {
+  id                     String                  @id @default(uuid())
+  studentId              String
+  student                Student                 @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  courseId               String
+  course                 GlobalCourse            @relation(fields: [courseId], references: [id], onDelete: Restrict)
+  curriculumVersionId    String
+  curriculumVersion      CourseCurriculumVersion @relation(fields: [curriculumVersionId], references: [id], onDelete: Restrict)
+  qualifyingEnrollmentId String
+  qualifyingEnrollment   CourseEnrollment        @relation("QualifyingEnrollment", fields: [qualifyingEnrollmentId], references: [id], onDelete: Restrict)
+  certificateNumber      String                  @unique // e.g. DG-CERT-2026-00042
+  verificationCode       String                  @unique // Cryptographic HMAC token
+  recipientName          String
+  courseTitle            String
+  issuedAt               DateTime                @default(now())
+  pdfDownloadUrl         String?
+  metadataJson           Json?
+
+  @@unique([studentId, courseId])
+  @@index([certificateNumber])
+  @@index([verificationCode])
+  @@index([studentId])
 }

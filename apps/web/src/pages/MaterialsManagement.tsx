@@ -39,8 +39,13 @@ import {
 } from 'lucide-react';
 
 export const MaterialsManagement: React.FC = () => {
-  const { user } = useAuth();
-  const isStaffOrAdmin = user?.role === 'SUPER_ADMIN' || user?.role === 'ACADEMIC_ADMIN' || user?.role === 'STAFF';
+  const { user, activeInstitute } = useAuth();
+  const isStaffOrAdmin =
+    user?.role === 'SUPER_ADMIN' ||
+    user?.role === 'FRANCHISE_OWNER' ||
+    user?.role === 'BRANCH_ADMIN' ||
+    user?.role === 'ACADEMIC_ADMIN' ||
+    user?.role === 'STAFF';
 
   const [materials, setMaterials] = useState<any[]>([]);
   const [batches, setBatches] = useState<any[]>([]);
@@ -191,7 +196,7 @@ export const MaterialsManagement: React.FC = () => {
     if (isStaffOrAdmin) {
       loadBatches();
     }
-  }, []);
+  }, [activeInstitute?.id]);
 
   async function loadMaterials() {
     try {

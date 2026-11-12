@@ -36,6 +36,8 @@ import {
   Camera,
   ChevronLeft,
   ChevronRight,
+  Globe,
+  Laptop,
 } from 'lucide-react';
 
 export const StudentManagement: React.FC = () => {
@@ -43,11 +45,14 @@ export const StudentManagement: React.FC = () => {
   const { user, activeInstitute } = useAuth();
   const [students, setStudents] = useState<Student[]>([]);
   const [batches, setBatches] = useState<Batch[]>([]);
+  const [franchiseContext, setFranchiseContext] = useState<{ id: string; name: string; code: string } | null>(null);
+  const [enabledGlobalCourses, setEnabledGlobalCourses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
+  const [learningModeFilter, setLearningModeFilter] = useState<string>('ALL');
   const [batchFilter, setBatchFilter] = useState<string>('');
   const [subjectFilter, setSubjectFilter] = useState<string>('');
   const [showAdmitModal, setShowAdmitModal] = useState(false);
@@ -636,6 +641,7 @@ Please keep this login and password safe. Use your registered mobile number and 
   };
 
   // Form State
+  const isConsolidatedView = user?.role === 'FRANCHISE_OWNER' && (!activeInstitute?.id || activeInstitute?.id === 'ALL');
   const initialFormData = {
     firstName: '',
     lastName: '',
@@ -645,6 +651,9 @@ Please keep this login and password safe. Use your registered mobile number and 
     dob: '',
     gender: 'MALE' as 'MALE' | 'FEMALE' | 'OTHER',
     bloodGroup: '',
+    onlineDirect: false,
+    learningMode: 'OFFLINE' as 'ONLINE' | 'OFFLINE',
+    globalCourseId: '',
     batchId: '',
     subjectIds: [] as string[],
     notes: '',
@@ -705,6 +714,28 @@ Please keep this login and password safe. Use your registered mobile number and 
       setBatches(res.data?.batches || []);
     } catch (err: any) {
       console.warn('[StudentManagement] Failed to load batches:', err.message);
+      setBatches([]);
+    }
+  };
+
+  // Load franchise & enabled Global LMS Courses
+  const loadFranchiseCourses = async () => {
+    if (!user || !['SUPER_ADMIN', 'FRANCHISE_OWNER', 'BRANCH_ADMIN', 'ACADEMIC_ADMIN'].includes(user.role)) {
+      return;
+    }
+    try {
+      const ctxRes = await apiFetch('/courses/my-franchise-context');
+      const fr = ctxRes?.data?.franchise || null;
+      setFranchiseContext(fr);
+      if (fr?.id) {
+        const fcRes = await apiFetch(`/courses/franchise/${fr.id}`);
+        const allCourses = fcRes?.data || [];
+        setEnabledGlobalCourses(allCourses.filter((c: any) => c.isSelected));
+      } else {
+        setEnabledGlobalCourses([]);
+      }
+    } catch {
+      setEnabledGlobalCourses([]);
     }
   };
 
@@ -718,6 +749,7 @@ Please keep this login and password safe. Use your registered mobile number and 
       const query = new URLSearchParams({
         search: debouncedSearch.trim(),
         ...(statusFilter && statusFilter !== 'ALL' ? { status: statusFilter } : {}),
+        ...(learningModeFilter && learningModeFilter !== 'ALL' ? { learningMode: learningModeFilter } : {}),
         ...(batchFilter ? { batchId: batchFilter } : {}),
         ...(subjectFilter ? { subjectId: subjectFilter } : {}),
       });
@@ -741,15 +773,19 @@ Please keep this login and password safe. Use your registered mobile number and 
 
   useEffect(() => {
     loadBatches();
-  }, [activeInstitute?.id]);
+    loadFranchiseCourses();
+  }, [activeInstitute?.id, user?.role]);
 
   useEffect(() => {
     fetchData();
-  }, [debouncedSearch, statusFilter, batchFilter, subjectFilter, activeInstitute?.id]);
+  }, [debouncedSearch, statusFilter, learningModeFilter, batchFilter, subjectFilter, activeInstitute?.id]);
 
   useEffect(() => {
     if (showAdmitModal) {
-      apiFetch(`/students/admission-prefix${formData.batchId ? `?batchId=${formData.batchId}` : ''}`)
+      const prefixUrl = formData.onlineDirect
+        ? '/students/admission-prefix?onlineDirect=true'
+        : `/students/admission-prefix${formData.batchId ? `?batchId=${formData.batchId}` : ''}`;
+      apiFetch(prefixUrl)
         .then((res) => {
           if (res.success && res.data) {
             setPrefixInfo(res.data);
@@ -757,7 +793,7 @@ Please keep this login and password safe. Use your registered mobile number and 
         })
         .catch(() => {});
     }
-  }, [showAdmitModal, formData.batchId]);
+  }, [showAdmitModal, formData.batchId, formData.onlineDirect]);
 
   // Debounced parent account lookup for sibling auto-linking
   useEffect(() => {
@@ -928,6 +964,15 @@ Please keep this login and password safe. Use your registered mobile number and 
   };
 
   const handleProceedFromAdmitStep2 = () => {
+    const canOnlineDirect = user?.role === 'FRANCHISE_OWNER' || user?.role === 'SUPER_ADMIN';
+    if (!formData.onlineDirect && isConsolidatedView && canOnlineDirect) {
+      setAdmitError('In consolidated Franchise view ("All Branches"), please select "Online Direct" mode above or switch to a specific campus branch in the top header.');
+      return;
+    }
+    if (!formData.onlineDirect && formData.globalCourseId && formData.learningMode === 'OFFLINE' && !formData.batchId) {
+      setAdmitError('Please select a class batch when enrolling a student in Offline / Recorded LMS mode.');
+      return;
+    }
     setAdmitError(null);
     setAdmitStep(3);
   };
@@ -991,8 +1036,14 @@ Please keep this login and password safe. Use your registered mobile number and 
           dob: formData.dob || undefined,
           gender: formData.gender,
           bloodGroup: formData.bloodGroup.trim() || undefined,
-          batchId: formData.batchId || undefined,
-          subjectIds: formData.subjectIds.length > 0 ? formData.subjectIds : undefined,
+          onlineDirect: formData.onlineDirect,
+          learningMode: formData.onlineDirect
+            ? 'ONLINE'
+            : (formData.globalCourseId ? formData.learningMode : undefined),
+          globalCourseId: formData.globalCourseId || undefined,
+          franchiseId: franchiseContext?.id || undefined,
+          batchId: formData.onlineDirect ? undefined : (formData.batchId || undefined),
+          subjectIds: !formData.onlineDirect && formData.subjectIds.length > 0 ? formData.subjectIds : undefined,
           photoUrl: uploadedPhotoKey,
           notes: formData.notes.trim() || undefined,
           // Parent details
@@ -1015,7 +1066,7 @@ Please keep this login and password safe. Use your registered mobile number and 
         setAdmittedSuccess({
           admissionNumber: generatedNum,
           name: `${formData.firstName.trim()} ${formData.lastName.trim()}`,
-          instituteCode: activeInstitute?.code || 'INST',
+          instituteCode: formData.onlineDirect ? (franchiseContext?.code || 'ONLINE') : (activeInstitute?.code || 'INST'),
           studentCredentials: studentCreds ? {
             fullName: studentCreds.fullName || `${formData.firstName.trim()} ${formData.lastName.trim()}`,
             admissionNumber: studentCreds.admissionNumber || generatedNum,
@@ -1037,7 +1088,12 @@ Please keep this login and password safe. Use your registered mobile number and 
 
         showToast(`Student admitted successfully with admission number ${generatedNum}.`, 'success');
 
-        setFormData(initialFormData);
+        setFormData({
+          ...initialFormData,
+          onlineDirect: isConsolidatedView,
+          learningMode: isConsolidatedView ? 'ONLINE' : 'OFFLINE',
+        });
+        setAdmitStep(1);
         fetchData();
       }
     } catch (err: any) {
@@ -1126,6 +1182,13 @@ Please keep this login and password safe. Use your registered mobile number and 
               type="button"
               onClick={() => {
                 setDetectedCollision(null);
+                setAdmitError(null);
+                setAdmitStep(1);
+                setFormData({
+                  ...initialFormData,
+                  onlineDirect: isConsolidatedView,
+                  learningMode: isConsolidatedView ? 'ONLINE' : 'OFFLINE',
+                });
                 setShowAdmitModal(true);
               }}
               className="inline-flex items-center gap-2 bg-[#006FFF] hover:bg-[#0058D4] text-white text-sm font-semibold px-4 py-2.5 rounded-xl shadow-md shadow-[#006FFF]/20 transition-all"
@@ -1138,26 +1201,49 @@ Please keep this login and password safe. Use your registered mobile number and 
 
       {/* Filters and Search Bar */}
       <div className="bg-white border border-[#E2E8F0] rounded-2xl p-6 shadow-sm space-y-4">
-        {/* Status Tabs */}
-        <div className="flex flex-wrap gap-2 border-b border-[#F1F5F9] pb-4">
-          {[
-            { id: 'ALL', label: 'All Students' },
-            { id: 'ACTIVE', label: 'Active Students' },
-            { id: 'PASSED_OUT', label: 'Passed Out' },
-            { id: 'DISCONTINUED', label: 'Discontinued' },
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setStatusFilter(tab.id)}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition ${
-                statusFilter === tab.id
-                  ? 'bg-[#006FFF] text-white shadow-md font-bold'
-                  : 'text-[#64748B] hover:text-[#0F172A] hover:bg-[#F8FAFC]'
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
+        {/* Status & LMS Mode Tabs */}
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#F1F5F9] pb-4">
+          <div className="flex flex-wrap gap-2">
+            {[
+              { id: 'ALL', label: 'All Students' },
+              { id: 'ACTIVE', label: 'Active Students' },
+              { id: 'PASSED_OUT', label: 'Passed Out' },
+              { id: 'DISCONTINUED', label: 'Discontinued' },
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setStatusFilter(tab.id)}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition ${
+                  statusFilter === tab.id
+                    ? 'bg-[#006FFF] text-white shadow-md font-bold'
+                    : 'text-[#64748B] hover:text-[#0F172A] hover:bg-[#F8FAFC]'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex items-center gap-1 bg-[#F8FAFC] p-1 rounded-xl border border-[#E2E8F0]">
+            {[
+              { id: 'ALL', label: 'All Modes' },
+              { id: 'OFFLINE', label: 'Offline Campus' },
+              { id: 'ONLINE', label: 'Online LMS' },
+            ].map((modeTab) => (
+              <button
+                key={modeTab.id}
+                type="button"
+                onClick={() => setLearningModeFilter(modeTab.id)}
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition ${
+                  learningModeFilter === modeTab.id
+                    ? 'bg-white text-[#006FFF] shadow-2xs border border-[#E2E8F0]'
+                    : 'text-[#64748B] hover:text-[#0F172A]'
+                }`}
+              >
+                {modeTab.label}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Search & Batch dropdown */}
@@ -1216,8 +1302,8 @@ Please keep this login and password safe. Use your registered mobile number and 
               <tr className="border-b border-[#E2E8F0] text-[#64748B] bg-[#F8FAFC] uppercase tracking-wider text-[11px]">
                 <th className="py-3 px-3.5 font-bold">Student Name</th>
                 <th className="py-3 px-3 font-bold">Admission No</th>
-                <th className="py-3 px-3 font-bold">Allocated Subjects</th>
-                <th className="py-3 px-3 font-bold">Batch</th>
+                <th className="py-3 px-3 font-bold">Subjects & Global LMS</th>
+                <th className="py-3 px-3 font-bold">Batch / Mode</th>
                 <th className="py-3 px-3 font-bold">Linked Guardians</th>
                 <th className="py-3 px-2 font-bold text-center">Status</th>
                 <th className="py-3 px-3 font-bold text-right w-14">Actions</th>
@@ -1252,6 +1338,8 @@ Please keep this login and password safe. Use your registered mobile number and 
               ) : (
                 students.map((student, index) => {
                   const isBottomRow = index >= students.length - 2 && students.length > 2;
+                  const subjectText = student.enrollments?.filter((e: any) => e.subject).map((e: any) => e.subject.name).join(', ');
+                  const lmsList = student.courseEnrollments || [];
                   return (
                     <tr
                       key={student.id}
@@ -1268,8 +1356,17 @@ Please keep this login and password safe. Use your registered mobile number and 
                             name={`${student.firstName} ${student.lastName}`}
                             size="sm"
                           />
-                          <span className="font-bold text-[#0F172A] truncate">{student.firstName} {student.lastName}</span>
-                          <span className="text-[10px] bg-[#F1F5F9] text-[#64748B] px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 transition whitespace-nowrap">View</span>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-bold text-[#0F172A] truncate">{student.firstName} {student.lastName}</span>
+                              <span className="text-[10px] bg-[#F1F5F9] text-[#64748B] px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 transition whitespace-nowrap">View</span>
+                            </div>
+                            {student.institute?.code && (
+                              <span className="text-[10px] text-[#64748B] font-normal block truncate">
+                                {student.institute.name}
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </td>
                       <td
@@ -1284,12 +1381,35 @@ Please keep this login and password safe. Use your registered mobile number and 
                         className="py-3 px-3 text-[#475569]"
                         onClick={() => setSelectedStudentId(student.id)}
                       >
-                        <div
-                          className="truncate max-w-[150px]"
-                          title={student.enrollments?.filter((e: any) => e.subject).map((e: any) => e.subject.name).join(', ') || 'General Curriculum'}
-                        >
-                          {student.enrollments?.filter((e: any) => e.subject).map((e: any) => e.subject.name).join(', ') || (
-                            <span className="text-[#94A3B8] italic">General Curriculum</span>
+                        <div className="space-y-1 max-w-[190px]">
+                          <div
+                            className="truncate"
+                            title={subjectText || 'General Curriculum'}
+                          >
+                            {subjectText || (
+                              lmsList.length === 0 ? <span className="text-[#94A3B8] italic">General Curriculum</span> : null
+                            )}
+                          </div>
+                          {lmsList.length > 0 && (
+                            <div className="flex flex-wrap gap-1">
+                              {lmsList.slice(0, 2).map((ce) => (
+                                <span
+                                  key={ce.id}
+                                  title={`${ce.course?.title} (${ce.mode})`}
+                                  className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold border truncate max-w-[175px] ${
+                                    ce.mode === 'ONLINE'
+                                      ? 'bg-sky-50 text-sky-700 border-sky-200'
+                                      : 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                                  }`}
+                                >
+                                  <BookOpen className="w-2.5 h-2.5 shrink-0" />
+                                  <span className="truncate">{ce.course?.title}</span>
+                                </span>
+                              ))}
+                              {lmsList.length > 2 && (
+                                <span className="text-[10px] text-[#64748B] font-semibold">+{lmsList.length - 2} more</span>
+                              )}
+                            </div>
                           )}
                         </div>
                       </td>
@@ -1312,22 +1432,39 @@ Please keep this login and password safe. Use your registered mobile number and 
                             );
 
                             if (uniqueBatches.length > 0) {
-                              return uniqueBatches.map(([bId, bName]) => {
-                                const isUserBatch = batches.some((b) => b.id === bId);
-                                return (
-                                  <span
-                                    key={bId}
-                                    title={`Batch: ${bName}`}
-                                    className={`inline-block px-2 py-0.5 rounded-md text-[11px] font-semibold border whitespace-nowrap shadow-xs ${
-                                      isUserBatch
-                                        ? 'bg-amber-100 text-[#0F172A] border-amber-300 font-bold'
-                                        : 'bg-[#F8FAFC] text-[#006FFF] border-[#E2E8F0]'
-                                    }`}
-                                  >
-                                    {bName}
-                                  </span>
-                                );
-                              });
+                              return (
+                                <>
+                                  {uniqueBatches.map(([bId, bName]) => {
+                                    const isUserBatch = batches.some((b) => b.id === bId);
+                                    return (
+                                      <span
+                                        key={bId}
+                                        title={`Batch: ${bName}`}
+                                        className={`inline-block px-2 py-0.5 rounded-md text-[11px] font-semibold border whitespace-nowrap shadow-xs ${
+                                          isUserBatch
+                                            ? 'bg-amber-100 text-[#0F172A] border-amber-300 font-bold'
+                                            : 'bg-[#F8FAFC] text-[#006FFF] border-[#E2E8F0]'
+                                        }`}
+                                      >
+                                        {bName}
+                                      </span>
+                                    );
+                                  })}
+                                  {lmsList.some((ce) => ce.mode === 'OFFLINE') && (
+                                    <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                                      OFFLINE + LMS
+                                    </span>
+                                  )}
+                                </>
+                              );
+                            }
+
+                            if (!student.instituteId) {
+                              return (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-sky-50 border border-sky-200 text-sky-700 text-[11px] font-bold">
+                                  <Globe className="w-3 h-3" /> Online Direct
+                                </span>
+                              );
                             }
 
                             return (
@@ -1780,86 +1917,224 @@ Please keep this login and password safe. Use your registered mobile number and 
                 </div>
               )}
 
-              {/* STEP 2: Academics & Batch Allocation */}
+              {/* STEP 2: Academics, LMS Mode & Batch Allocation */}
               {admitStep === 2 && (
                 <div className="space-y-4">
-                  <div className="p-4 bg-[#FAF8F5] border border-[#E2E8F0] rounded-2xl space-y-3">
-                    <div>
-                      <label className="block text-xs font-semibold text-[#006FFF] mb-1.5">
-                        Class Batch Allocation
+                  {(user?.role === 'FRANCHISE_OWNER' || user?.role === 'SUPER_ADMIN') && (
+                    <div className="p-4 bg-[#F8FAFC] border border-[#E2E8F0] rounded-2xl space-y-2.5">
+                      <label className="block text-xs font-bold text-[#006FFF]">
+                        Admission Delivery Channel
                       </label>
-                      <select
-                        value={formData.batchId}
-                        onChange={(e) => setFormData({ ...formData, batchId: e.target.value, subjectIds: [] })}
-                        className="w-full bg-white border border-[#E2E8F0] rounded-xl px-3.5 py-2.5 text-xs text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#006FFF]/20"
-                      >
-                        <option value="">Select Class Batch (Optional)</option>
-                        {batches.map((b) => (
-                          <option key={b.id} value={b.id}>{b.name} ({b.academicYear})</option>
-                        ))}
-                      </select>
-                      <p className="text-[11px] text-[#94A3B8] mt-1">
-                        Assigning a batch now enables instant attendance tracking and syllabus scheduling.
-                      </p>
-                    </div>
-
-                    {/* Batch Subject Selection (if batch selected and subjects exist) */}
-                    {(() => {
-                      const selectedBatch = batches.find((b) => b.id === formData.batchId);
-                      const subjects = selectedBatch?.batchSubjects || [];
-                      if (!formData.batchId) {
-                        return (
-                          <div className="p-3 bg-white border border-dashed border-[#E2E8F0] rounded-xl text-center text-xs text-[#94A3B8]">
-                            Select a class batch above to view and allocate curriculum subjects.
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setFormData((prev) => ({
+                              ...prev,
+                              onlineDirect: false,
+                              learningMode: 'OFFLINE',
+                            }))
+                          }
+                          className={`p-3 rounded-xl border text-left transition flex items-start gap-2.5 ${
+                            !formData.onlineDirect
+                              ? 'bg-white border-[#006FFF] ring-2 ring-[#006FFF]/15 shadow-2xs'
+                              : 'bg-white/60 border-[#E2E8F0] hover:bg-white'
+                          }`}
+                        >
+                          <Laptop className={`w-4 h-4 shrink-0 mt-0.5 ${!formData.onlineDirect ? 'text-[#006FFF]' : 'text-[#94A3B8]'}`} />
+                          <div>
+                            <div className="text-xs font-bold text-[#0F172A]">Branch / Classroom</div>
+                            <div className="text-[11px] text-[#64748B] mt-0.5">
+                              Physical campus batch + optional Offline/Recorded or Online LMS
+                            </div>
                           </div>
-                        );
-                      }
-                      if (subjects.length === 0) {
-                        return (
-                          <div className="p-3 bg-white border border-[#E2E8F0] rounded-xl text-xs text-[#94A3B8]">
-                            No specific subjects configured for this batch yet. The student will be enrolled in the general batch curriculum.
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setFormData((prev) => ({
+                              ...prev,
+                              onlineDirect: true,
+                              learningMode: 'ONLINE',
+                              batchId: '',
+                              subjectIds: [],
+                            }))
+                          }
+                          className={`p-3 rounded-xl border text-left transition flex items-start gap-2.5 ${
+                            formData.onlineDirect
+                              ? 'bg-sky-50 border-sky-500 ring-2 ring-sky-500/15 shadow-2xs'
+                              : 'bg-white/60 border-[#E2E8F0] hover:bg-white'
+                          }`}
+                        >
+                          <Globe className={`w-4 h-4 shrink-0 mt-0.5 ${formData.onlineDirect ? 'text-sky-600' : 'text-[#94A3B8]'}`} />
+                          <div>
+                            <div className="text-xs font-bold text-[#0F172A]">Online Direct (No Branch)</div>
+                            <div className="text-[11px] text-[#64748B] mt-0.5">
+                              Campus-independent self-paced LMS student (ON{String(new Date().getFullYear()).slice(-2)}###)
+                            </div>
                           </div>
-                        );
-                      }
-                      return (
-                        <div className="bg-white border border-[#E2E8F0] rounded-xl p-3.5 space-y-2">
-                          <div className="flex items-center justify-between">
-                            <label className="block text-xs font-bold text-[#006FFF]">
-                              Select Subjects to Allocate
-                            </label>
-                            <span className="text-[10px] font-semibold text-[#94A3B8] bg-[#FAF8F5] px-2 py-0.5 rounded-full border border-[#E2E8F0]">
-                              {formData.subjectIds.length} of {subjects.length} selected
-                            </span>
-                          </div>
-                          <div className="flex flex-wrap gap-2 pt-1">
-                            {subjects.map((bs: any) => {
-                              const isSelected = formData.subjectIds.includes(bs.subject.id);
-                              return (
-                                <button
-                                  key={bs.subject.id}
-                                  type="button"
-                                  onClick={() => {
-                                    const next = isSelected
-                                      ? formData.subjectIds.filter((id) => id !== bs.subject.id)
-                                      : [...formData.subjectIds, bs.subject.id];
-                                    setFormData({ ...formData, subjectIds: next });
-                                  }}
-                                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition ${
-                                    isSelected
-                                      ? 'bg-[#006FFF] text-white shadow-sm'
-                                      : 'bg-[#FAF8F5] border border-[#E2E8F0] text-[#475569] hover:bg-[#F8FAFC]'
-                                  }`}
-                                >
-                                  {isSelected && <Check className="w-3.5 h-3.5" />}
-                                  <span>{bs.subject.name} {bs.subject.code ? `(${bs.subject.code})` : ''}</span>
-                                </button>
-                              );
-                            })}
-                          </div>
+                        </button>
+                      </div>
+                      {!formData.onlineDirect && isConsolidatedView && (
+                        <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-300 text-amber-900 text-[11px] flex items-center gap-2">
+                          <AlertTriangle className="w-4 h-4 text-amber-700 shrink-0" />
+                          <span>
+                            You are currently viewing <strong>All Branches</strong>. Switch to a specific branch in the header to admit a Branch student, or select <strong>Online Direct</strong>.
+                          </span>
                         </div>
-                      );
-                    })()}
+                      )}
+                    </div>
+                  )}
+
+                  {/* Global LMS Course Enrollment (Optional) */}
+                  <div className="p-4 bg-[#FAF8F5] border border-[#E2E8F0] rounded-2xl space-y-3">
+                    <div className="flex items-center justify-between">
+                      <label className="block text-xs font-bold text-[#006FFF] flex items-center gap-1.5">
+                        <BookOpen className="w-3.5 h-3.5" />
+                        <span>Global LMS Course (Optional)</span>
+                      </label>
+                      {franchiseContext?.name && (
+                        <span className="text-[10px] font-semibold text-[#64748B] bg-white border border-[#E2E8F0] px-2 py-0.5 rounded-full">
+                          {franchiseContext.name}
+                        </span>
+                      )}
+                    </div>
+                    <select
+                      value={formData.globalCourseId}
+                      onChange={(e) => setFormData({ ...formData, globalCourseId: e.target.value })}
+                      className="w-full bg-white border border-[#E2E8F0] rounded-xl px-3.5 py-2.5 text-xs text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#006FFF]/20"
+                    >
+                      <option value="">-- Skip Global Course Enrollment (or enroll later) --</option>
+                      {enabledGlobalCourses.map((c: any) => (
+                        <option key={c.id} value={c.id}>
+                          {c.title} {c.code ? `(${c.code})` : ''}
+                        </option>
+                      ))}
+                    </select>
+                    {enabledGlobalCourses.length === 0 && (
+                      <p className="text-[11px] text-[#94A3B8]">
+                        No published Global Courses are currently enabled for this franchise in Franchise Offerings.
+                      </p>
+                    )}
+
+                    {formData.globalCourseId && !formData.onlineDirect && (
+                      <div className="grid grid-cols-2 gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => setFormData({ ...formData, learningMode: 'OFFLINE' })}
+                          className={`px-3 py-2 rounded-xl text-xs font-semibold border transition ${
+                            formData.learningMode === 'OFFLINE'
+                              ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
+                              : 'bg-white text-[#475569] border-[#E2E8F0]'
+                          }`}
+                        >
+                          OFFLINE (Classroom + Recorded LMS)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setFormData({ ...formData, learningMode: 'ONLINE' })}
+                          className={`px-3 py-2 rounded-xl text-xs font-semibold border transition ${
+                            formData.learningMode === 'ONLINE'
+                              ? 'bg-sky-600 text-white border-sky-600 shadow-xs'
+                              : 'bg-white text-[#475569] border-[#E2E8F0]'
+                          }`}
+                        >
+                          ONLINE (Self-Paced Digital LMS)
+                        </button>
+                      </div>
+                    )}
                   </div>
+
+                  {/* Batch & Subject Allocation (Branch Mode Only) */}
+                  {formData.onlineDirect ? (
+                    <div className="p-4 rounded-2xl bg-sky-50/70 border border-sky-200 text-sky-900 text-xs flex items-start gap-2.5">
+                      <Globe className="w-4 h-4 text-sky-600 shrink-0 mt-0.5" />
+                      <div>
+                        <span className="font-bold block">Campus-Independent Online Admission</span>
+                        <p className="text-[11px] text-sky-800 mt-0.5">
+                          No physical classroom batch is required. Student receives full online video, PDF, and certificate portal access immediately.
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-4 bg-[#FAF8F5] border border-[#E2E8F0] rounded-2xl space-y-3">
+                      <div>
+                        <label className="block text-xs font-semibold text-[#006FFF] mb-1.5">
+                          Class Batch Allocation {formData.globalCourseId && formData.learningMode === 'OFFLINE' ? '*' : ''}
+                        </label>
+                        <select
+                          value={formData.batchId}
+                          onChange={(e) => setFormData({ ...formData, batchId: e.target.value, subjectIds: [] })}
+                          className="w-full bg-white border border-[#E2E8F0] rounded-xl px-3.5 py-2.5 text-xs text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#006FFF]/20"
+                        >
+                          <option value="">Select Class Batch (Optional)</option>
+                          {batches.map((b) => (
+                            <option key={b.id} value={b.id}>{b.name} ({b.academicYear})</option>
+                          ))}
+                        </select>
+                        <p className="text-[11px] text-[#94A3B8] mt-1">
+                          Assigning a batch now enables instant attendance tracking and syllabus scheduling.
+                        </p>
+                      </div>
+
+                      {/* Batch Subject Selection (if batch selected and subjects exist) */}
+                      {(() => {
+                        const selectedBatch = batches.find((b) => b.id === formData.batchId);
+                        const subjects = selectedBatch?.batchSubjects || [];
+                        if (!formData.batchId) {
+                          return (
+                            <div className="p-3 bg-white border border-dashed border-[#E2E8F0] rounded-xl text-center text-xs text-[#94A3B8]">
+                              Select a class batch above to view and allocate curriculum subjects.
+                            </div>
+                          );
+                        }
+                        if (subjects.length === 0) {
+                          return (
+                            <div className="p-3 bg-white border border-[#E2E8F0] rounded-xl text-xs text-[#94A3B8]">
+                              No specific subjects configured for this batch yet. The student will be enrolled in the general batch curriculum.
+                            </div>
+                          );
+                        }
+                        return (
+                          <div className="bg-white border border-[#E2E8F0] rounded-xl p-3.5 space-y-2">
+                            <div className="flex items-center justify-between">
+                              <label className="block text-xs font-bold text-[#006FFF]">
+                                Select Subjects to Allocate
+                              </label>
+                              <span className="text-[10px] font-semibold text-[#94A3B8] bg-[#FAF8F5] px-2 py-0.5 rounded-full border border-[#E2E8F0]">
+                                {formData.subjectIds.length} of {subjects.length} selected
+                              </span>
+                            </div>
+                            <div className="flex flex-wrap gap-2 pt-1">
+                              {subjects.map((bs: any) => {
+                                const isSelected = formData.subjectIds.includes(bs.subject.id);
+                                return (
+                                  <button
+                                    key={bs.subject.id}
+                                    type="button"
+                                    onClick={() => {
+                                      const next = isSelected
+                                        ? formData.subjectIds.filter((id) => id !== bs.subject.id)
+                                        : [...formData.subjectIds, bs.subject.id];
+                                      setFormData({ ...formData, subjectIds: next });
+                                    }}
+                                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition ${
+                                      isSelected
+                                        ? 'bg-[#006FFF] text-white shadow-sm'
+                                        : 'bg-[#FAF8F5] border border-[#E2E8F0] text-[#475569] hover:bg-[#F8FAFC]'
+                                    }`}
+                                  >
+                                    {isSelected && <Check className="w-3.5 h-3.5" />}
+                                    <span>{bs.subject.name} {bs.subject.code ? `(${bs.subject.code})` : ''}</span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  )}
 
                   <div>
                     <label className="block text-xs font-semibold text-[#006FFF] mb-1">Notes / Medical Info</label>
@@ -2009,11 +2284,22 @@ Please keep this login and password safe. Use your registered mobile number and 
                         <span className="font-semibold text-[#0F172A]">{formData.firstName} {formData.lastName}</span>
                       </div>
                       <div>
-                        <span className="text-[#94A3B8]">Batch:</span>{' '}
+                        <span className="text-[#94A3B8]">Channel / Batch:</span>{' '}
                         <span className="font-semibold text-[#0F172A]">
-                          {batches.find(b => b.id === formData.batchId)?.name || 'Unassigned'}
+                          {formData.onlineDirect
+                            ? 'Online Direct (Campus-Independent)'
+                            : (batches.find(b => b.id === formData.batchId)?.name || 'Branch (Unassigned)')}
                         </span>
                       </div>
+                      {formData.globalCourseId && (
+                        <div className="col-span-2">
+                          <span className="text-[#94A3B8]">Global LMS Course:</span>{' '}
+                          <span className="font-semibold text-[#006FFF]">
+                            {enabledGlobalCourses.find(c => c.id === formData.globalCourseId)?.title || 'Selected Course'}{' '}
+                            ({formData.onlineDirect ? 'ONLINE' : formData.learningMode})
+                          </span>
+                        </div>
+                      )}
                       <div>
                         <span className="text-[#94A3B8]">Parent:</span>{' '}
                         <span className="font-semibold text-[#0F172A]">{formData.parentFullName} ({formData.parentRelationship})</span>

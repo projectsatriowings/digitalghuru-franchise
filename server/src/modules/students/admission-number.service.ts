@@ -286,6 +286,64 @@ export async function generateNextAdmissionNumber(
 }
 
 /**
+ * Concurrency-safe generation of admission numbers for franchise-direct ONLINE students (no branch instituteId).
+ * Scheme: ON[YY 2-CHAR][SERIAL 3-CHAR+] (e.g. ON26001)
+ */
+export async function generateNextOnlineAdmissionNumber(
+  tx: Prisma.TransactionClient,
+  franchiseId: string,
+  admissionDateInput?: Date | string | null
+): Promise<{
+  admissionNumber: string;
+  year: number;
+  serial: number;
+  prefix: string;
+}> {
+  const year = getAdmissionYear(admissionDateInput);
+  const yy = String(year).slice(-2);
+  const prefix = `ON${yy}`;
+
+  // Advisory lock scoped to transaction to serialize concurrent online-direct admissions per franchise/year
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`online_adm_${franchiseId}_${year}`}));`;
+
+  const existingOnline = await tx.student.findMany({
+    where: {
+      admissionNumber: { startsWith: prefix },
+    },
+    select: { admissionNumber: true },
+  });
+
+  let maxSerial = 0;
+  for (const row of existingOnline) {
+    const tail = row.admissionNumber.slice(prefix.length);
+    if (/^\d+$/.test(tail)) {
+      const n = parseInt(tail, 10);
+      if (n > maxSerial) maxSerial = n;
+    }
+  }
+
+  let serial = maxSerial + 1;
+  let admissionNumber = `${prefix}${String(serial).padStart(DEFAULT_SERIAL_WIDTH, '0')}`;
+
+  while (
+    await tx.student.findFirst({
+      where: { admissionNumber },
+      select: { id: true },
+    })
+  ) {
+    serial++;
+    admissionNumber = `${prefix}${String(serial).padStart(DEFAULT_SERIAL_WIDTH, '0')}`;
+  }
+
+  return {
+    admissionNumber,
+    year,
+    serial,
+    prefix: 'ON',
+  };
+}
+
+/**
  * Legacy compatibility export for existing tests
  */
 export async function getOrSetInstitutePrefix(

@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { apiFetch } from '../services/api';
 import { Batch, Subject } from '../types';
+import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { ConfirmationModal } from '../components/ConfirmationModal';
 import { StudentAvatar } from '../components/StudentAvatar';
@@ -58,6 +59,7 @@ interface AcademicsManagementProps {
 }
 
 export const AcademicsManagement: React.FC<AcademicsManagementProps> = ({ onNavigateTab }) => {
+  const { activeInstitute } = useAuth();
   const { success, error, info } = useToast();
 
   const [batches, setBatches] = useState<Batch[]>([]);
@@ -162,6 +164,7 @@ export const AcademicsManagement: React.FC<AcademicsManagementProps> = ({ onNavi
   }, [error]);
 
   useEffect(() => {
+    setSelectedBatchDetails(null);
     fetchData();
 
     // Auto-sync whenever user focuses the window (e.g. returning from DB editor/tool)
@@ -177,7 +180,7 @@ export const AcademicsManagement: React.FC<AcademicsManagementProps> = ({ onNavi
       window.removeEventListener('focus', handleFocus);
       document.removeEventListener('visibilitychange', handleVisibility);
     };
-  }, [fetchData]);
+  }, [fetchData, activeInstitute?.id]);
 
   // Load detailed batch with subjects, roster, allocations and faculty
   const loadBatchDetails = async (batchId: string) => {

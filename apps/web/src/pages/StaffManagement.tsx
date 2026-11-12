@@ -107,11 +107,15 @@ export const StaffManagement: React.FC = () => {
   };
 
   useEffect(() => {
+    setSelectedStaff(null);
+  }, [activeInstitute?.id]);
+
+  useEffect(() => {
     const timer = setTimeout(() => {
       fetchData();
     }, 300);
     return () => clearTimeout(timer);
-  }, [search]);
+  }, [search, activeInstitute?.id]);
 
   const handleOpenAssignmentModal = (item: StaffMember) => {
     setViewingStaffAssignments(item);

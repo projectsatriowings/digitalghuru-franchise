@@ -26,6 +26,7 @@ import questionGeneratorRoutes from './modules/question-generator/question-gener
 import feedbackRoutes from './modules/feedback/feedback.routes.js';
 import staffAttendanceRoutes from './modules/staff-attendance/staff-attendance.routes.js';
 import franchiseRoutes from './modules/franchise/franchise.routes.js';
+import coursesRoutes from './modules/courses/courses.routes.js';
 import { NotificationService } from './modules/notifications/notification.service.js';
 import { demoModeMiddleware } from './middleware/demo-mode.middleware.js';
 import { apiRateLimiter } from './middleware/rate-limiter.js';
@@ -121,6 +122,7 @@ app.use('/api/question-generator', questionGeneratorRoutes);
 app.use('/api/feedback', feedbackRoutes);
 app.use('/api/staff-attendance', staffAttendanceRoutes);
 app.use('/api/franchises', franchiseRoutes);
+app.use('/api/courses', coursesRoutes);
 
 // Root info endpoint & health check redirects
 app.get('/', (_req: Request, res: Response) => {

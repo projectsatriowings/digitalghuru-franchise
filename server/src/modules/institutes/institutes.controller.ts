@@ -16,6 +16,7 @@ export const createInstituteSchema = z.object({
   postalCode: z.string().optional(),
   phone: z.string().optional(),
   email: z.string().email('Invalid institute email').optional().or(z.literal('')),
+  franchiseId: z.string().uuid().optional().nullable(),
   // Required initial Academic Admin provisioning
   adminFullName: z.string().min(2, 'Academic Admin full name is required').max(100),
   adminEmail: z.string().email('Valid Academic Admin login email is required'),
@@ -32,6 +33,7 @@ export const updateInstituteSchema = z.object({
   postalCode: z.string().optional(),
   phone: z.string().optional(),
   email: z.string().email().optional().or(z.literal('')),
+  franchiseId: z.string().uuid().optional().nullable(),
   settingsJson: z.record(z.any()).optional(),
 });
 
@@ -83,6 +85,14 @@ export async function listInstitutes(req: AuthenticatedRequest, res: Response) {
         take: limit,
         orderBy: { createdAt: 'desc' },
         include: {
+          franchise: {
+            select: {
+              id: true,
+              code: true,
+              name: true,
+              city: true,
+            },
+          },
           _count: {
             select: {
               students: true,
@@ -195,6 +205,7 @@ export async function createInstitute(req: AuthenticatedRequest, res: Response) 
           postalCode: data.postalCode?.trim() || null,
           phone: data.phone?.trim() || null,
           email: data.email?.trim() || null,
+          franchiseId: data.franchiseId || null,
           status: 'ACTIVE',
         },
       });
@@ -275,8 +286,10 @@ export async function getInstituteById(req: AuthenticatedRequest, res: Response)
   try {
     const { id } = req.params;
 
-    // Academic admins can only view their own institute
-    if (req.user?.role !== 'SUPER_ADMIN' && req.instituteId !== id) {
+    // Academic/Branch admins can view their active institute; Franchise owners can view any assigned branch
+    const assignedBranchIds: string[] = (req as any).assignedBranchIds || [];
+    const isOwnerBranch = req.user?.role === 'FRANCHISE_OWNER' && assignedBranchIds.includes(id);
+    if (req.user?.role !== 'SUPER_ADMIN' && req.instituteId !== id && !isOwnerBranch) {
       return res.status(403).json({
         success: false,
         error: 'Forbidden: You do not have permission to view another institute',
@@ -286,6 +299,15 @@ export async function getInstituteById(req: AuthenticatedRequest, res: Response)
     const institute = await prisma.institute.findUnique({
       where: { id },
       include: {
+        franchise: {
+          select: {
+            id: true,
+            code: true,
+            name: true,
+            city: true,
+            ownerName: true,
+          },
+        },
         _count: {
           select: {
             students: true,

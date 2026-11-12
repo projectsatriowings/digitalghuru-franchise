@@ -29,6 +29,7 @@ import {
   Clock,
   BookOpen,
   ArrowRight,
+  Info,
 } from 'lucide-react';
 
 interface AcademicAdminAccount extends User {
@@ -43,6 +44,7 @@ interface InstituteDetailData {
 export const SuperAdminDashboard: React.FC = () => {
   const [metrics, setMetrics] = useState<any>(null);
   const [institutes, setInstitutes] = useState<Institute[]>([]);
+  const [availableFranchises, setAvailableFranchises] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
@@ -61,7 +63,7 @@ export const SuperAdminDashboard: React.FC = () => {
   // 1. CREATE INSTITUTE MODAL STATE
   // ----------------------------------------------------
   const [showCreateModal, setShowCreateModal] = useState(false);
-    const [createLoading, setCreateLoading] = useState(false);
+  const [createLoading, setCreateLoading] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
 
   // Form fields
@@ -74,6 +76,7 @@ export const SuperAdminDashboard: React.FC = () => {
     postalCode: '',
     phone: '',
     email: '',
+    franchiseId: '',
     adminFullName: '',
     adminEmail: '',
     adminPhone: '',
@@ -177,12 +180,16 @@ export const SuperAdminDashboard: React.FC = () => {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [metricsRes, institutesRes] = await Promise.all([
+      const [metricsRes, institutesRes, franchisesRes] = await Promise.all([
         apiFetch('/institutes/dashboard/summary'),
         apiFetch(`/institutes?search=${encodeURIComponent(search)}&status=${statusFilter}`),
+        apiFetch('/franchises?limit=100').catch(() => ({ success: false, data: null })),
       ]);
       setMetrics(metricsRes.data);
       setInstitutes(institutesRes.data?.institutes || []);
+      if (franchisesRes.success && Array.isArray(franchisesRes.data?.franchises)) {
+        setAvailableFranchises(franchisesRes.data.franchises);
+      }
     } catch (err: any) {
       console.error('Failed to load institutes', err);
       showNotification('error', err.message || 'Failed to load institute directory');
@@ -279,6 +286,7 @@ export const SuperAdminDashboard: React.FC = () => {
         postalCode: newInst.postalCode.trim() || undefined,
         phone: newInst.phone.trim() || undefined,
         email: newInst.email.trim() || undefined,
+        franchiseId: newInst.franchiseId || undefined,
         adminFullName: newInst.adminFullName.trim(),
         adminEmail: newInst.adminEmail.trim().toLowerCase(),
         adminPhone: newInst.adminPhone.trim() || undefined,
@@ -306,6 +314,7 @@ export const SuperAdminDashboard: React.FC = () => {
           postalCode: '',
           phone: '',
           email: '',
+          franchiseId: '',
           adminFullName: '',
           adminEmail: '',
           adminPhone: '',
@@ -610,6 +619,7 @@ export const SuperAdminDashboard: React.FC = () => {
               <tr className="border-b border-[#E2E8F0] text-[#64748B] bg-[#F8FAFC] uppercase tracking-wider">
                 <th className="py-3 px-4 font-bold">Institute</th>
                 <th className="py-3 px-4 font-bold whitespace-nowrap w-32">Code</th>
+                <th className="py-3 px-4 font-bold">Franchise Center</th>
                 <th className="py-3 px-4 font-bold">Location</th>
                 <th className="py-3 px-4 font-bold">Metrics</th>
                 <th className="py-3 px-4 font-bold">Status</th>
@@ -619,11 +629,11 @@ export const SuperAdminDashboard: React.FC = () => {
             <tbody className="divide-y divide-[#EFEBE9]">
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="py-8 text-center text-[#64748B]">Loading institutes...</td>
+                  <td colSpan={7} className="py-8 text-center text-[#64748B]">Loading institutes...</td>
                 </tr>
               ) : institutes.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="py-8 text-center text-[#64748B]">No institutes found.</td>
+                  <td colSpan={7} className="py-8 text-center text-[#64748B]">No institutes found.</td>
                 </tr>
               ) : (
                 institutes.map((inst) => (
@@ -636,6 +646,18 @@ export const SuperAdminDashboard: React.FC = () => {
                       <span className="bg-[#F8FAFC] border border-[#E2E8F0] px-2.5 py-1 rounded text-xs whitespace-nowrap inline-block tracking-wide">
                         {inst.code}
                       </span>
+                    </td>
+                    <td className="py-3.5 px-4 whitespace-nowrap">
+                      {inst.franchise ? (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-blue-50 text-[#006FFF] border border-blue-200" title={`Franchise: ${inst.franchise.name} (${inst.franchise.code})`}>
+                          <Building2 className="w-3.5 h-3.5 text-[#006FFF]" />
+                          {inst.franchise.code} - {inst.franchise.name}
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium bg-slate-50 text-slate-500 border border-slate-200">
+                          Standalone Campus
+                        </span>
+                      )}
                     </td>
                     <td className="py-3.5 px-4 text-[#475569]">
                       {inst.city ? `${inst.city}${inst.state ? `, ${inst.state}` : ''}` : '—'}
@@ -722,6 +744,14 @@ export const SuperAdminDashboard: React.FC = () => {
               </div>
             )}
 
+            {/* Franchise Workflow Notice */}
+            <div className="mt-4 p-3.5 bg-blue-50/80 border border-blue-200/90 rounded-2xl flex items-start gap-2.5">
+              <Info className="w-4 h-4 text-[#006FFF] mt-0.5 shrink-0" />
+              <div className="text-xs text-blue-900 leading-relaxed">
+                <strong className="text-[#006FFF]">Franchise Campus Notice:</strong> If you are setting up a branch campus for a Franchise, you do not need to create it here separately. When creating a Franchise in Franchise Management, linking or creating a campus is optional at first, and can be linked or created anytime later via the franchise <strong>Edit</strong> option. You may also attach this institute to an existing Franchise below.
+              </div>
+            </div>
+
             <form onSubmit={handleCreateSubmit} className="space-y-6 mt-5">
               {/* SECTION: INSTITUTE DETAILS */}
               <div className="space-y-3">
@@ -733,6 +763,34 @@ export const SuperAdminDashboard: React.FC = () => {
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                  {/* Franchise Center Association Field */}
+                  <div className="sm:col-span-2 p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                        <Building2 className="w-3.5 h-3.5 text-[#006FFF]" />
+                        Attach to Franchise Center (Optional)
+                      </label>
+                      <span className="text-[10px] font-semibold text-slate-500 bg-white px-2 py-0.5 rounded border border-slate-200">
+                        Optional
+                      </span>
+                    </div>
+                    <select
+                      value={newInst.franchiseId}
+                      onChange={(e) => setNewInst({ ...newInst, franchiseId: e.target.value })}
+                      className="w-full bg-white border border-[#E2E8F0] rounded-xl px-3 py-2 text-xs text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#006FFF]/20"
+                    >
+                      <option value="">Standalone / Independent Institute (No Franchise)</option>
+                      {availableFranchises.map((fr: any) => (
+                        <option key={fr.id} value={fr.id}>
+                          {fr.code} — {fr.name} ({fr.city || 'Tamil Nadu'}) — Owner: {fr.ownerName}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-[10px] text-slate-500">
+                      If selected, this institute campus will be attached directly to the Franchisee Admin's center.
+                    </p>
+                  </div>
+
                   <div className="sm:col-span-2">
                     <label className="block text-xs font-semibold text-[#006FFF] mb-1">
                       Institute Name <span className="text-rose-500">*</span>
@@ -1203,6 +1261,20 @@ export const SuperAdminDashboard: React.FC = () => {
                         <div className="font-mono font-bold text-[#006FFF] bg-[#F8FAFC] px-2 py-0.5 rounded border border-[#E2E8F0] inline-block">
                           {detailData.institute.code}
                         </div>
+                      </div>
+
+                      <div>
+                        <span className="text-[#64748B] block mb-0.5">Franchise Affiliation</span>
+                        {detailData.institute.franchise ? (
+                          <div className="font-semibold text-[#006FFF] flex items-center gap-1.5 bg-blue-50/80 px-2 py-1 rounded border border-blue-200">
+                            <Building2 className="w-3.5 h-3.5 text-[#006FFF]" />
+                            {detailData.institute.franchise.code} - {detailData.institute.franchise.name}
+                          </div>
+                        ) : (
+                          <div className="text-slate-500 italic bg-slate-50 px-2 py-1 rounded border border-slate-200">
+                            Standalone Campus (Independent)
+                          </div>
+                        )}
                       </div>
 
                       {detailData.institute.legalName && (

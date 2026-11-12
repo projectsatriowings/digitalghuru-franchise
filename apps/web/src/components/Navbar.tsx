@@ -10,11 +10,16 @@ import {
   MapPin,
   User as UserIcon,
   Layers,
+  Menu,
 } from 'lucide-react';
 import { NotificationBell } from './NotificationBell';
 import BRANDING from '../config/branding';
 
-export const Navbar: React.FC = () => {
+interface NavbarProps {
+  onToggleMobileSidebar?: () => void;
+}
+
+export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileSidebar }) => {
   const { user, activeInstitute, assignedBranches, isConsolidatedMode, setActiveInstitute, logout } = useAuth();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -95,6 +100,16 @@ export const Navbar: React.FC = () => {
   return (
     <header className="h-16 border-b border-slate-200 bg-white sticky top-0 z-40 px-4 sm:px-6 flex items-center justify-between text-slate-900 shadow-sm">
       <div className="flex items-center gap-3">
+        {onToggleMobileSidebar && (
+          <button
+            type="button"
+            onClick={onToggleMobileSidebar}
+            className="md:hidden p-2 -ml-1 rounded-xl text-slate-700 hover:bg-slate-100 border border-slate-200 transition-colors"
+            aria-label="Open navigation menu"
+          >
+            <Menu className="w-4 h-4" />
+          </button>
+        )}
         <div className="flex items-center gap-2.5">
           <img
             src={BRANDING.logo.navbar}

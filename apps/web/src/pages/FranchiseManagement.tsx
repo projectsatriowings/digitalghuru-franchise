@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { apiFetch } from '../services/api';
 import { Franchise, FranchiseAgreement, FranchiseRoyaltyInstallment } from '../types';
 import {
@@ -29,6 +29,8 @@ import {
   Info,
   X,
   Printer,
+  Lock,
+  Check,
 } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
 
@@ -64,6 +66,13 @@ export const FranchiseManagement: React.FC = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [createModalTab, setCreateModalTab] = useState<'profile' | 'model' | 'financials' | 'review'>('profile');
   const [createdResultModal, setCreatedResultModal] = useState<any>(null);
+  const createModalBodyRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (showCreateModal) {
+      createModalBodyRef.current?.scrollTo({ top: 0, behavior: 'instant' });
+    }
+  }, [createModalTab, showCreateModal]);
 
   const [showAddBranchModal, setShowAddBranchModal] = useState(false);
   const [selectedFranchiseForBranch, setSelectedFranchiseForBranch] = useState<Franchise | null>(null);
@@ -155,8 +164,7 @@ export const FranchiseManagement: React.FC = () => {
     }
   };
 
-  // Forms
-  const [createForm, setCreateForm] = useState({
+  const initialCreateForm = {
     name: '',
     ownerName: '',
     email: '',
@@ -175,6 +183,17 @@ export const FranchiseManagement: React.FC = () => {
     },
     gstin: '',
     pan: '',
+    branchOption: 'NONE' as 'NONE' | 'LINK_EXISTING' | 'CREATE_NEW',
+    linkedInstituteId: '',
+    newBranch: {
+      name: '',
+      code: '',
+      city: '',
+      state: '',
+      address: '',
+      phone: '',
+      email: '',
+    },
     initialAgreement: {
       agreementType: 'NEW_CENTRE_JOINT_INVESTMENT' as any,
       title: 'Annual Master Franchise Agreement',
@@ -215,6 +234,35 @@ export const FranchiseManagement: React.FC = () => {
       terms: 'Standard Digital Guru franchise license terms. Two annual installments due per agreement year.',
       notes: '',
     },
+  };
+
+  // Forms
+  const [createForm, setCreateForm] = useState(initialCreateForm);
+
+  // Edit Franchise & Manage Linked Institutes State
+  const [showEditFranchiseModal, setShowEditFranchiseModal] = useState(false);
+  const [selectedFranchiseForEdit, setSelectedFranchiseForEdit] = useState<Franchise | null>(null);
+  const [editFranchiseTab, setEditFranchiseTab] = useState<'details' | 'campuses'>('details');
+  const [editForm, setEditForm] = useState({
+    name: '',
+    ownerName: '',
+    phone: '',
+    address: '',
+    city: '',
+    state: '',
+    postalCode: '',
+    country: 'India',
+    notes: '',
+  });
+  const [editLinkInstituteId, setEditLinkInstituteId] = useState('');
+  const [editNewBranch, setEditNewBranch] = useState({
+    name: '',
+    code: '',
+    city: '',
+    state: '',
+    address: '',
+    phone: '',
+    email: '',
   });
 
   const [branchForm, setBranchForm] = useState({
@@ -289,6 +337,15 @@ export const FranchiseManagement: React.FC = () => {
           }
         }
         setInstallments(allInsts);
+      }
+      // Refresh unassigned campus branches
+      try {
+        const unassignedRes = await apiFetch('/franchises/unassigned-branches');
+        if (unassignedRes.success && Array.isArray(unassignedRes.data?.branches)) {
+          setUnassignedBranches(unassignedRes.data.branches);
+        }
+      } catch {
+        // non-blocking
       }
       await loadMonthlyRecords();
     } catch (err: any) {
@@ -445,6 +502,60 @@ export const FranchiseManagement: React.FC = () => {
     return true;
   };
 
+  const isProfileStepComplete = Boolean(
+    createForm.name?.trim() &&
+    createForm.ownerName?.trim() &&
+    createForm.email?.trim() &&
+    createForm.phone?.trim() &&
+    createForm.address?.trim() &&
+    createForm.city?.trim() &&
+    createForm.state?.trim() &&
+    createForm.postalCode?.trim()
+  );
+
+  const isModelStepComplete = Boolean(
+    isProfileStepComplete &&
+    createForm.initialAgreement.startDate &&
+    createForm.initialAgreement.endDate
+  );
+
+  const isFinancialsStepComplete = Boolean(
+    isModelStepComplete &&
+    Number(createForm.initialAgreement.digitalGuruRevenuePercentage || 0) +
+      Number(createForm.initialAgreement.partnerRevenuePercentage || 0) === 100 &&
+    (createForm.initialAgreement.calculationMethod !== 'FIXED_ANNUAL' || Number(createForm.initialAgreement.annualRoyaltyAmount) > 0) &&
+    (createForm.initialAgreement.calculationMethod !== 'PER_STUDENT' || Number(createForm.initialAgreement.perStudentFee) > 0)
+  );
+
+  const handleTabClick = (targetTab: 'profile' | 'model' | 'financials' | 'review') => {
+    if (targetTab === createModalTab) return;
+
+    const stepOrder: ('profile' | 'model' | 'financials' | 'review')[] = ['profile', 'model', 'financials', 'review'];
+    const currentIndex = stepOrder.indexOf(createModalTab);
+    const targetIndex = stepOrder.indexOf(targetTab);
+
+    // Navigating back to an earlier step is always permitted
+    if (targetIndex < currentIndex) {
+      setCreateModalTab(targetTab);
+      createModalBodyRef.current?.scrollTo({ top: 0, behavior: 'instant' });
+      return;
+    }
+
+    // Moving forward requires step-by-step validation
+    if (targetIndex >= 1 && !validateProfileStep()) {
+      return;
+    }
+    if (targetIndex >= 2 && !validateModelStep()) {
+      return;
+    }
+    if (targetIndex >= 3 && !validateFinancialsStep()) {
+      return;
+    }
+
+    setCreateModalTab(targetTab);
+    createModalBodyRef.current?.scrollTo({ top: 0, behavior: 'instant' });
+  };
+
   const handleCreateFranchise = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
@@ -464,6 +575,20 @@ export const FranchiseManagement: React.FC = () => {
           gstin: createForm.gstin,
           pan: createForm.pan,
         },
+        // Optional Campus / Institute Association
+        branchOption: createForm.branchOption,
+        linkedInstituteId: createForm.branchOption === 'LINK_EXISTING' ? createForm.linkedInstituteId : undefined,
+        newBranch: createForm.branchOption === 'CREATE_NEW' && createForm.newBranch.name.trim()
+          ? {
+              name: createForm.newBranch.name.trim(),
+              code: createForm.newBranch.code.trim() || undefined,
+              city: createForm.newBranch.city.trim() || createForm.city,
+              state: createForm.newBranch.state.trim() || createForm.state,
+              address: createForm.newBranch.address.trim() || createForm.address,
+              phone: createForm.newBranch.phone.trim() || createForm.phone,
+              email: createForm.newBranch.email.trim() || createForm.email,
+            }
+          : undefined,
         initialAgreement: {
           agreementType: createForm.initialAgreement.agreementType,
           title: createForm.initialAgreement.title,
@@ -515,10 +640,162 @@ export const FranchiseManagement: React.FC = () => {
         );
         setShowCreateModal(false);
         setCreatedResultModal(res.data);
+        setCreateForm(initialCreateForm);
         loadData();
       }
     } catch (err: any) {
       showToast(err.message || 'Failed to create franchise', 'error');
+    }
+  };
+
+  // ----------------------------------------------------
+  // EDIT FRANCHISE & LINKED CAMPUSES HANDLERS
+  // ----------------------------------------------------
+  const openEditFranchiseModal = async (fr: Franchise) => {
+    setSelectedFranchiseForEdit(fr);
+    setEditForm({
+      name: fr.name || '',
+      ownerName: fr.ownerName || '',
+      phone: fr.phone || '',
+      address: fr.address || '',
+      city: fr.city || '',
+      state: fr.state || '',
+      postalCode: fr.postalCode || '',
+      country: fr.country || 'India',
+      notes: fr.notes || '',
+    });
+    setEditLinkInstituteId('');
+    setEditNewBranch({
+      name: '',
+      code: '',
+      city: fr.city || '',
+      state: fr.state || '',
+      address: fr.address || '',
+      phone: fr.phone || '',
+      email: '',
+    });
+    setEditFranchiseTab('details');
+    setShowEditFranchiseModal(true);
+
+    try {
+      const res = await apiFetch('/franchises/unassigned-branches');
+      if (res.success && Array.isArray(res.data?.branches)) {
+        setUnassignedBranches(res.data.branches);
+      }
+    } catch {
+      // non-blocking
+    }
+  };
+
+  const handleSaveFranchiseProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedFranchiseForEdit) return;
+    try {
+      const res = await apiFetch(`/franchises/${selectedFranchiseForEdit.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(editForm),
+      });
+      if (res.success) {
+        showToast('Franchise profile updated successfully', 'success');
+        setShowEditFranchiseModal(false);
+        loadData();
+      }
+    } catch (err: any) {
+      showToast(err.message || 'Failed to update franchise', 'error');
+    }
+  };
+
+  const handleLinkBranchInEdit = async () => {
+    if (!selectedFranchiseForEdit || !editLinkInstituteId) return;
+    try {
+      const res = await apiFetch(`/franchises/${selectedFranchiseForEdit.id}/branches`, {
+        method: 'POST',
+        body: JSON.stringify({ instituteId: editLinkInstituteId }),
+      });
+      if (res.success) {
+        showToast('Institute successfully linked to franchise!', 'success');
+        setEditLinkInstituteId('');
+        const refreshed = await apiFetch(`/franchises/${selectedFranchiseForEdit.id}`);
+        if (refreshed.success && refreshed.data?.franchise) {
+          setSelectedFranchiseForEdit(refreshed.data.franchise);
+        }
+        const unassigned = await apiFetch('/franchises/unassigned-branches');
+        if (unassigned.success && Array.isArray(unassigned.data?.branches)) {
+          setUnassignedBranches(unassigned.data.branches);
+        }
+        loadData();
+      }
+    } catch (err: any) {
+      showToast(err.message || 'Failed to link branch', 'error');
+    }
+  };
+
+  const handleCreateBranchInEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedFranchiseForEdit || !editNewBranch.name.trim()) return;
+    try {
+      const res = await apiFetch(`/franchises/${selectedFranchiseForEdit.id}/branches`, {
+        method: 'POST',
+        body: JSON.stringify({
+          createNew: true,
+          name: editNewBranch.name.trim(),
+          code: editNewBranch.code.trim() || undefined,
+          city: editNewBranch.city.trim() || undefined,
+          state: editNewBranch.state.trim() || undefined,
+          address: editNewBranch.address.trim() || undefined,
+          phone: editNewBranch.phone.trim() || undefined,
+          email: editNewBranch.email.trim() || undefined,
+        }),
+      });
+      if (res.success) {
+        showToast('New campus branch created and linked to franchise!', 'success');
+        setEditNewBranch({
+          name: '',
+          code: '',
+          city: selectedFranchiseForEdit.city || '',
+          state: selectedFranchiseForEdit.state || '',
+          address: selectedFranchiseForEdit.address || '',
+          phone: selectedFranchiseForEdit.phone || '',
+          email: '',
+        });
+        const refreshed = await apiFetch(`/franchises/${selectedFranchiseForEdit.id}`);
+        if (refreshed.success && refreshed.data?.franchise) {
+          setSelectedFranchiseForEdit(refreshed.data.franchise);
+        }
+        loadData();
+      }
+    } catch (err: any) {
+      showToast(err.message || 'Failed to create branch', 'error');
+    }
+  };
+
+  const handleDetachBranchInEdit = async (branchId: string, branchName: string) => {
+    if (!selectedFranchiseForEdit) return;
+    if (
+      !window.confirm(
+        `Are you sure you want to detach "${branchName}" from this franchise? All records will remain completely preserved.`
+      )
+    ) {
+      return;
+    }
+    try {
+      const res = await apiFetch(`/franchises/${selectedFranchiseForEdit.id}/branches/${branchId}`, {
+        method: 'DELETE',
+      });
+      if (res.success) {
+        showToast(`Campus "${branchName}" detached successfully`, 'success');
+        const refreshed = await apiFetch(`/franchises/${selectedFranchiseForEdit.id}`);
+        if (refreshed.success && refreshed.data?.franchise) {
+          setSelectedFranchiseForEdit(refreshed.data.franchise);
+        }
+        const unassigned = await apiFetch('/franchises/unassigned-branches');
+        if (unassigned.success && Array.isArray(unassigned.data?.branches)) {
+          setUnassignedBranches(unassigned.data.branches);
+        }
+        loadData();
+      }
+    } catch (err: any) {
+      showToast(err.message || 'Failed to detach branch', 'error');
     }
   };
 
@@ -851,6 +1128,13 @@ export const FranchiseManagement: React.FC = () => {
           </button>
           <button
             onClick={() => {
+              apiFetch('/franchises/unassigned-branches')
+                .then((res) => {
+                  if (res.success && Array.isArray(res.data?.branches)) {
+                    setUnassignedBranches(res.data.branches);
+                  }
+                })
+                .catch(() => {});
               setCreateModalTab('profile');
               setShowCreateModal(true);
             }}
@@ -863,108 +1147,108 @@ export const FranchiseManagement: React.FC = () => {
 
       {/* KPI Stats Grid - Balanced Alignment & Unified Card Heights */}
       {dashboardStats?.summary && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3.5">
+        <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-2 sm:gap-2.5">
           {/* 1. Total Franchises */}
-          <div className="bg-white p-4 rounded-xl border border-slate-200/90 shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between h-full min-h-[116px]">
+          <div className="bg-white p-3 sm:p-3.5 rounded-xl border border-slate-200/90 shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between h-full min-h-[110px] min-w-0">
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Franchises</span>
-              <div className="w-7 h-7 rounded-lg bg-blue-50 text-[#006FFF] flex items-center justify-center">
+              <div className="w-7 h-7 rounded-lg bg-blue-50 text-[#006FFF] flex items-center justify-center shrink-0">
                 <Building2 className="w-4 h-4" />
               </div>
             </div>
             <div className="my-1">
-              <div className="text-2xl font-black text-slate-900 tracking-tight" title={String(dashboardStats.summary.totalFranchises)}>
+              <div className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight whitespace-nowrap tabular-nums" title={String(dashboardStats.summary.totalFranchises)}>
                 {dashboardStats.summary.totalFranchises}
               </div>
             </div>
-            <div className="text-[11px] text-emerald-600 font-semibold flex items-center gap-1">
+            <div className="text-[11px] text-emerald-600 font-semibold flex items-center gap-1 whitespace-nowrap">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
               {dashboardStats.summary.activeFranchises} Active
             </div>
           </div>
 
           {/* 2. Branch Campuses */}
-          <div className="bg-white p-4 rounded-xl border border-slate-200/90 shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between h-full min-h-[116px]">
+          <div className="bg-white p-3 sm:p-3.5 rounded-xl border border-slate-200/90 shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between h-full min-h-[110px] min-w-0">
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Campuses</span>
-              <div className="w-7 h-7 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center">
+              <div className="w-7 h-7 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
                 <MapPin className="w-4 h-4" />
               </div>
             </div>
             <div className="my-1">
-              <div className="text-2xl font-black text-slate-900 tracking-tight" title={String(dashboardStats.summary.totalBranches)}>
+              <div className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight whitespace-nowrap tabular-nums" title={String(dashboardStats.summary.totalBranches)}>
                 {dashboardStats.summary.totalBranches}
               </div>
             </div>
-            <div className="text-[11px] text-slate-500 font-medium truncate" title={`${dashboardStats.summary.totalStudents} Active Students`}>
+            <div className="text-[11px] text-slate-500 font-medium whitespace-nowrap" title={`${dashboardStats.summary.totalStudents} Active Students`}>
               {dashboardStats.summary.totalStudents} Active Students
             </div>
           </div>
 
           {/* 3. Total Royalty */}
-          <div className="bg-white p-4 rounded-xl border border-slate-200/90 shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between h-full min-h-[116px]">
+          <div className="bg-white p-3 sm:p-3.5 rounded-xl border border-slate-200/90 shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between h-full min-h-[110px] min-w-0">
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Total Royalty</span>
-              <div className="w-7 h-7 rounded-lg bg-blue-50 text-[#006FFF] flex items-center justify-center">
+              <div className="w-7 h-7 rounded-lg bg-blue-50 text-[#006FFF] flex items-center justify-center shrink-0">
                 <FileText className="w-4 h-4" />
               </div>
             </div>
             <div className="my-1">
-              <div className="text-xl sm:text-2xl font-black text-[#006FFF] tracking-tight truncate" title={`₹${Number(dashboardStats.summary.totalRoyaltyObligations || 0).toLocaleString('en-IN')}`}>
+              <div className="text-sm sm:text-base xl:text-[15px] 2xl:text-lg font-black text-[#006FFF] tracking-tight whitespace-nowrap tabular-nums" title={`₹${Number(dashboardStats.summary.totalRoyaltyObligations || 0).toLocaleString('en-IN')}`}>
                 ₹{Number(dashboardStats.summary.totalRoyaltyObligations || 0).toLocaleString('en-IN')}
               </div>
             </div>
-            <div className="text-[11px] text-slate-500 font-medium">2-Installment Sched.</div>
+            <div className="text-[11px] text-slate-500 font-medium whitespace-nowrap">2-Installment Sched.</div>
           </div>
 
           {/* 4. Royalty Received */}
-          <div className="bg-white p-4 rounded-xl border border-slate-200/90 shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between h-full min-h-[116px]">
+          <div className="bg-white p-3 sm:p-3.5 rounded-xl border border-slate-200/90 shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between h-full min-h-[110px] min-w-0">
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Received</span>
-              <div className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
+              <div className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
                 <CheckCircle2 className="w-4 h-4" />
               </div>
             </div>
             <div className="my-1">
-              <div className="text-xl sm:text-2xl font-black text-emerald-600 tracking-tight truncate" title={`₹${Number(dashboardStats.summary.totalRoyaltyReceived || 0).toLocaleString('en-IN')}`}>
+              <div className="text-sm sm:text-base xl:text-[15px] 2xl:text-lg font-black text-emerald-600 tracking-tight whitespace-nowrap tabular-nums" title={`₹${Number(dashboardStats.summary.totalRoyaltyReceived || 0).toLocaleString('en-IN')}`}>
                 ₹{Number(dashboardStats.summary.totalRoyaltyReceived || 0).toLocaleString('en-IN')}
               </div>
             </div>
-            <div className="text-[11px] text-emerald-600 font-semibold">Verified Receipts</div>
+            <div className="text-[11px] text-emerald-600 font-semibold whitespace-nowrap">Verified Receipts</div>
           </div>
 
           {/* 5. Outstanding */}
-          <div className="bg-white p-4 rounded-xl border border-slate-200/90 shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between h-full min-h-[116px]">
+          <div className="bg-white p-3 sm:p-3.5 rounded-xl border border-slate-200/90 shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between h-full min-h-[110px] min-w-0">
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Outstanding</span>
-              <div className="w-7 h-7 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center">
+              <div className="w-7 h-7 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
                 <Clock className="w-4 h-4" />
               </div>
             </div>
             <div className="my-1">
-              <div className="text-xl sm:text-2xl font-black text-amber-600 tracking-tight truncate" title={`₹${Number(dashboardStats.summary.outstandingRoyalty || 0).toLocaleString('en-IN')}`}>
+              <div className="text-sm sm:text-base xl:text-[15px] 2xl:text-lg font-black text-amber-600 tracking-tight whitespace-nowrap tabular-nums" title={`₹${Number(dashboardStats.summary.outstandingRoyalty || 0).toLocaleString('en-IN')}`}>
                 ₹{Number(dashboardStats.summary.outstandingRoyalty || 0).toLocaleString('en-IN')}
               </div>
             </div>
-            <div className="text-[11px] text-amber-600 font-medium">
+            <div className="text-[11px] text-amber-600 font-medium whitespace-nowrap">
               {dashboardStats.summary.dueInstallmentsCount || 0} Installments Due
             </div>
           </div>
 
           {/* 6. Overdue Amount */}
-          <div className="bg-white p-4 rounded-xl border border-slate-200/90 shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between h-full min-h-[116px]">
+          <div className="bg-white p-3 sm:p-3.5 rounded-xl border border-slate-200/90 shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between h-full min-h-[110px] min-w-0">
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Overdue</span>
-              <div className="w-7 h-7 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center">
+              <div className="w-7 h-7 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center shrink-0">
                 <AlertTriangle className="w-4 h-4" />
               </div>
             </div>
             <div className="my-1">
-              <div className="text-xl sm:text-2xl font-black text-rose-600 tracking-tight truncate" title={`₹${Number(dashboardStats.summary.overdueRoyalty || 0).toLocaleString('en-IN')}`}>
+              <div className="text-sm sm:text-base xl:text-[15px] 2xl:text-lg font-black text-rose-600 tracking-tight whitespace-nowrap tabular-nums" title={`₹${Number(dashboardStats.summary.overdueRoyalty || 0).toLocaleString('en-IN')}`}>
                 ₹{Number(dashboardStats.summary.overdueRoyalty || 0).toLocaleString('en-IN')}
               </div>
             </div>
-            <div className="text-[11px] text-rose-600 font-medium">
+            <div className="text-[11px] text-rose-600 font-medium whitespace-nowrap">
               {dashboardStats.summary.overdueInstallmentsCount || 0} Overdue
             </div>
           </div>
@@ -1001,6 +1285,16 @@ export const FranchiseManagement: React.FC = () => {
             }`}
         >
           <FileText className="w-4 h-4" /> Agreements & Renewals
+        </button>
+
+        <button
+          onClick={() => setActiveTab('monthly_settlements')}
+          className={`py-3.5 px-2 text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${activeTab === 'monthly_settlements'
+              ? 'border-[#006FFF] text-[#006FFF]'
+              : 'border-transparent text-slate-600 hover:text-slate-900'
+            }`}
+        >
+          <Layers className="w-4 h-4" /> Monthly Royalty Settlements ({monthlyRecords.length})
         </button>
       </div>
 
@@ -1089,7 +1383,14 @@ export const FranchiseManagement: React.FC = () => {
                             {fr.status}
                           </span>
                         </td>
-                        <td className="px-4 py-3.5 text-right space-x-2">
+                        <td className="px-4 py-3.5 text-right space-x-1.5 whitespace-nowrap">
+                          <button
+                            onClick={() => openEditFranchiseModal(fr)}
+                            className="px-2.5 py-1 text-xs font-semibold bg-blue-50 hover:bg-blue-100 text-[#006FFF] rounded-md transition-all inline-flex items-center gap-1 border border-blue-200"
+                            title="Edit franchise details and manage linked institutes"
+                          >
+                            <Edit3 className="w-3 h-3" /> Edit
+                          </button>
                           <button
                             onClick={() => openAddBranchModal(fr)}
                             className="px-2.5 py-1 text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-md transition-all"
@@ -1123,12 +1424,20 @@ export const FranchiseManagement: React.FC = () => {
                                 <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-2">
                                   <Building2 className="w-4 h-4 text-[#006FFF]" /> Assigned Campus Branches ({fr.branches?.length || 0})
                                 </h4>
-                                <button
-                                  onClick={() => openAddBranchModal(fr)}
-                                  className="px-3 py-1 bg-[#006FFF] hover:bg-[#0055CC] text-white text-xs font-bold rounded-lg shadow-sm"
-                                >
-                                  + Assign / Add Branch
-                                </button>
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    onClick={() => openEditFranchiseModal(fr)}
+                                    className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-[#006FFF] text-xs font-bold rounded-lg border border-blue-200 inline-flex items-center gap-1 shadow-xs"
+                                  >
+                                    <Edit3 className="w-3 h-3" /> Manage in Edit
+                                  </button>
+                                  <button
+                                    onClick={() => openAddBranchModal(fr)}
+                                    className="px-3 py-1 bg-[#006FFF] hover:bg-[#0055CC] text-white text-xs font-bold rounded-lg shadow-sm"
+                                  >
+                                    + Assign / Add Branch
+                                  </button>
+                                </div>
                               </div>
 
                               {(!fr.branches || fr.branches.length === 0) ? (
@@ -1644,16 +1953,16 @@ export const FranchiseManagement: React.FC = () => {
       {/* ============================================================= */}
       {showCreateModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-start justify-center p-3 sm:p-6 overflow-y-auto min-h-screen">
-          <div className="bg-white rounded-2xl max-w-4xl w-full shadow-2xl my-4 sm:my-8 border border-slate-200 overflow-hidden flex flex-col max-h-[92vh]">
+          <div className="bg-white rounded-2xl max-w-4xl w-full shadow-2xl my-2 sm:my-4 border border-slate-200 overflow-hidden flex flex-col max-h-[94vh]">
             {/* Modal Header with Stepper Tabs */}
-            <div className="p-5 sm:p-6 border-b border-slate-200 bg-white shrink-0">
+            <div className="px-6 py-4 border-b border-slate-200 bg-white shrink-0">
               <div className="flex justify-between items-start">
                 <div>
                   <h3 className="text-lg sm:text-xl font-bold text-slate-900 font-display flex items-center gap-2">
                     <Building2 className="w-5 h-5 text-[#006FFF]" />
                     Register Franchisee Admin
                   </h3>
-                  <p className="text-xs text-slate-500 mt-1">
+                  <p className="text-xs text-slate-500 mt-0.5">
                     Multi-step setup for franchise profile, agreement model, financial terms, and pre-submission review.
                   </p>
                 </div>
@@ -1668,39 +1977,56 @@ export const FranchiseManagement: React.FC = () => {
               </div>
 
               {/* Wizard Tabs / Stepper */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-4 pt-1">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3 pt-1">
                 {[
-                  { id: 'profile', step: '1', title: 'Business Profile', desc: 'Owner & Address' },
-                  { id: 'model', step: '2', title: 'Agreement Model', desc: 'Preset & Duration' },
-                  { id: 'financials', step: '3', title: 'Financial Terms', desc: 'Investment & Rev Share' },
-                  { id: 'review', step: '4', title: 'Review & Submit', desc: 'Summary & Confirm' },
+                  { id: 'profile', step: '1', title: 'Business Profile', desc: 'Owner & Address', isComplete: isProfileStepComplete, isAccessible: true },
+                  { id: 'model', step: '2', title: 'Agreement Model', desc: 'Preset & Duration', isComplete: isModelStepComplete, isAccessible: isProfileStepComplete },
+                  { id: 'financials', step: '3', title: 'Financial Terms', desc: 'Investment & Rev Share', isComplete: isFinancialsStepComplete, isAccessible: isProfileStepComplete && isModelStepComplete },
+                  { id: 'review', step: '4', title: 'Review & Submit', desc: 'Summary & Confirm', isComplete: false, isAccessible: isProfileStepComplete && isModelStepComplete && isFinancialsStepComplete },
                 ].map((t) => {
                   const isActive = createModalTab === t.id;
+                  const isLocked = !t.isAccessible;
                   return (
                     <button
                       key={t.id}
                       type="button"
-                      onClick={() => setCreateModalTab(t.id as any)}
+                      onClick={() => handleTabClick(t.id as any)}
+                      title={isLocked ? 'Complete the previous section to unlock this step' : undefined}
                       className={`text-left p-2.5 rounded-xl border transition-all ${
                         isActive
                           ? 'bg-blue-50/90 border-[#006FFF] shadow-xs ring-1 ring-[#006FFF]'
-                          : 'bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-600'
+                          : isLocked
+                            ? 'bg-slate-50 border-slate-200 text-slate-400 opacity-60 cursor-not-allowed'
+                            : t.isComplete
+                              ? 'bg-emerald-50/40 border-emerald-300 text-slate-700 hover:bg-emerald-50 cursor-pointer'
+                              : 'bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-600 cursor-pointer'
                       }`}
                     >
-                      <div className="flex items-center gap-2">
-                        <span
-                          className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold ${
-                            isActive ? 'bg-[#006FFF] text-white' : 'bg-slate-200 text-slate-700'
-                          }`}
-                        >
-                          {t.step}
-                        </span>
-                        <span className={`text-xs font-bold leading-tight ${isActive ? 'text-[#006FFF]' : 'text-slate-800'}`}>
-                          {t.title}
-                        </span>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold ${
+                              isActive
+                                ? 'bg-[#006FFF] text-white'
+                                : t.isComplete
+                                  ? 'bg-emerald-600 text-white'
+                                  : isLocked
+                                    ? 'bg-slate-200 text-slate-400'
+                                    : 'bg-slate-200 text-slate-700'
+                            }`}
+                          >
+                            {t.isComplete && !isActive ? '✓' : t.step}
+                          </span>
+                          <span className={`text-xs font-bold leading-tight ${
+                            isActive ? 'text-[#006FFF]' : isLocked ? 'text-slate-400' : 'text-slate-800'
+                          }`}>
+                            {t.title}
+                          </span>
+                        </div>
+                        {isLocked && <Lock className="w-3.5 h-3.5 text-slate-400 shrink-0" />}
                       </div>
                       <div className="text-[10px] text-slate-400 mt-1 pl-7 hidden sm:block truncate">
-                        {t.desc}
+                        {isLocked ? 'Locked until section filled' : t.isComplete ? 'Section completed ✓' : t.desc}
                       </div>
                     </button>
                   );
@@ -1709,7 +2035,7 @@ export const FranchiseManagement: React.FC = () => {
             </div>
 
             <form onSubmit={handleCreateFranchise} className="flex flex-col flex-1 min-h-0">
-              <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-5">
+              <div ref={createModalBodyRef} className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
                 {/* --------------------------------------------------------- */}
                 {/* STEP 1: BUSINESS PROFILE & OWNER DETAILS                  */}
                 {/* --------------------------------------------------------- */}
@@ -1858,6 +2184,205 @@ export const FranchiseManagement: React.FC = () => {
                           />
                         </div>
                       </div>
+                    </div>
+
+                    {/* Subsection 3: Campus / Institute Association (Optional) */}
+                    <div className="space-y-3 pt-3 border-t">
+                      <div className="flex items-center justify-between border-b pb-1">
+                        <div className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                          <Building2 className="w-3.5 h-3.5 text-[#006FFF]" />
+                          3. Campus / Institute Association (Optional)
+                        </div>
+                        <span className="text-[11px] text-emerald-700 font-semibold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                          Optional • Can also be attached later via Edit option
+                        </span>
+                      </div>
+
+                      <p className="text-xs text-slate-500">
+                        Link an existing operational campus or create a new branch directly for this franchise. You can skip this step and add campuses anytime later through the franchise Edit option.
+                      </p>
+
+                      {/* Radio Selector Cards */}
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
+                        <div
+                          onClick={() => setCreateForm({ ...createForm, branchOption: 'NONE' })}
+                          className={`p-3 rounded-xl border cursor-pointer transition-all flex flex-col justify-between ${
+                            createForm.branchOption === 'NONE'
+                              ? 'bg-blue-50/70 border-[#006FFF] ring-1 ring-[#006FFF]'
+                              : 'bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-600'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between mb-1.5">
+                            <span className="text-xs font-bold text-slate-900">Skip for now</span>
+                            <input
+                              type="radio"
+                              name="branchOption"
+                              checked={createForm.branchOption === 'NONE'}
+                              onChange={() => setCreateForm({ ...createForm, branchOption: 'NONE' })}
+                              className="text-[#006FFF]"
+                            />
+                          </div>
+                          <p className="text-[11px] text-slate-500">
+                            Create franchise first. Attach or create campus branches later using the Edit option.
+                          </p>
+                        </div>
+
+                        <div
+                          onClick={() => setCreateForm({ ...createForm, branchOption: 'LINK_EXISTING' })}
+                          className={`p-3 rounded-xl border cursor-pointer transition-all flex flex-col justify-between ${
+                            createForm.branchOption === 'LINK_EXISTING'
+                              ? 'bg-blue-50/70 border-[#006FFF] ring-1 ring-[#006FFF]'
+                              : 'bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-600'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between mb-1.5">
+                            <span className="text-xs font-bold text-slate-900">Link Existing Institute</span>
+                            <input
+                              type="radio"
+                              name="branchOption"
+                              checked={createForm.branchOption === 'LINK_EXISTING'}
+                              onChange={() => setCreateForm({ ...createForm, branchOption: 'LINK_EXISTING' })}
+                              className="text-[#006FFF]"
+                            />
+                          </div>
+                          <p className="text-[11px] text-slate-500">
+                            Select from available unassigned institutes ({unassignedBranches.length} available).
+                          </p>
+                        </div>
+
+                        <div
+                          onClick={() => {
+                            setCreateForm({
+                              ...createForm,
+                              branchOption: 'CREATE_NEW',
+                              newBranch: {
+                                ...createForm.newBranch,
+                                name: createForm.newBranch.name || (createForm.name ? `${createForm.name} Campus` : ''),
+                                city: createForm.newBranch.city || createForm.city,
+                                state: createForm.newBranch.state || createForm.state,
+                                address: createForm.newBranch.address || createForm.address,
+                                phone: createForm.newBranch.phone || createForm.phone,
+                                email: createForm.newBranch.email || createForm.email,
+                              },
+                            });
+                          }}
+                          className={`p-3 rounded-xl border cursor-pointer transition-all flex flex-col justify-between ${
+                            createForm.branchOption === 'CREATE_NEW'
+                              ? 'bg-blue-50/70 border-[#006FFF] ring-1 ring-[#006FFF]'
+                              : 'bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-600'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between mb-1.5">
+                            <span className="text-xs font-bold text-slate-900">Create & Link New Campus</span>
+                            <input
+                              type="radio"
+                              name="branchOption"
+                              checked={createForm.branchOption === 'CREATE_NEW'}
+                              onChange={() => {}}
+                              className="text-[#006FFF]"
+                            />
+                          </div>
+                          <p className="text-[11px] text-slate-500">
+                            Set up a new campus branch attached directly to this franchise.
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Conditional sub-form: LINK_EXISTING */}
+                      {createForm.branchOption === 'LINK_EXISTING' && (
+                        <div className="p-3 bg-blue-50/40 border border-blue-200 rounded-xl space-y-2 mt-2">
+                          <label className="block text-xs font-bold text-slate-800">
+                            Select Unassigned Institute / Campus Branch:
+                          </label>
+                          {unassignedBranches.length === 0 ? (
+                            <div className="text-xs text-amber-700 bg-amber-50 p-2.5 rounded-lg border border-amber-200">
+                              No unassigned institutes currently available. You can select &ldquo;Create & Link New Campus&rdquo; or &ldquo;Skip for now&rdquo; to link via Edit later.
+                            </div>
+                          ) : (
+                            <select
+                              value={createForm.linkedInstituteId}
+                              onChange={(e) => setCreateForm({ ...createForm, linkedInstituteId: e.target.value })}
+                              className="w-full px-3 py-2 border rounded-lg text-sm bg-white focus:ring-2 focus:ring-[#006FFF]"
+                            >
+                              <option value="">-- Choose an institute to link --</option>
+                              {unassignedBranches.map((b) => (
+                                <option key={b.id} value={b.id}>
+                                  {b.code} - {b.name} ({b.city || 'Tamil Nadu'})
+                                </option>
+                              ))}
+                            </select>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Conditional sub-form: CREATE_NEW */}
+                      {createForm.branchOption === 'CREATE_NEW' && (
+                        <div className="p-3 bg-blue-50/40 border border-blue-200 rounded-xl space-y-3 mt-2">
+                          <div className="text-xs font-bold text-slate-800">New Campus Branch Details:</div>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                            <div>
+                              <label className="block text-xs font-medium text-slate-700">Campus / Branch Name *</label>
+                              <input
+                                type="text"
+                                placeholder="e.g. Digital Guru Adyar Campus"
+                                value={createForm.newBranch.name}
+                                onChange={(e) =>
+                                  setCreateForm({
+                                    ...createForm,
+                                    newBranch: { ...createForm.newBranch, name: e.target.value },
+                                  })
+                                }
+                                className="mt-1 w-full px-3 py-1.5 border rounded-lg text-sm bg-white focus:ring-2 focus:ring-[#006FFF]"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-slate-700">Campus Code (Optional, auto-generated)</label>
+                              <input
+                                type="text"
+                                placeholder="e.g. BR-005"
+                                value={createForm.newBranch.code}
+                                onChange={(e) =>
+                                  setCreateForm({
+                                    ...createForm,
+                                    newBranch: { ...createForm.newBranch, code: e.target.value },
+                                  })
+                                }
+                                className="mt-1 w-full px-3 py-1.5 border rounded-lg text-sm bg-white focus:ring-2 focus:ring-[#006FFF]"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-slate-700">City</label>
+                              <input
+                                type="text"
+                                placeholder="e.g. Chennai"
+                                value={createForm.newBranch.city}
+                                onChange={(e) =>
+                                  setCreateForm({
+                                    ...createForm,
+                                    newBranch: { ...createForm.newBranch, city: e.target.value },
+                                  })
+                                }
+                                className="mt-1 w-full px-3 py-1.5 border rounded-lg text-sm bg-white focus:ring-2 focus:ring-[#006FFF]"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-slate-700">Phone</label>
+                              <input
+                                type="tel"
+                                placeholder="+91 98765 43210"
+                                value={createForm.newBranch.phone}
+                                onChange={(e) =>
+                                  setCreateForm({
+                                    ...createForm,
+                                    newBranch: { ...createForm.newBranch, phone: e.target.value },
+                                  })
+                                }
+                                className="mt-1 w-full px-3 py-1.5 border rounded-lg text-sm bg-white focus:ring-2 focus:ring-[#006FFF]"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
@@ -2502,6 +3027,42 @@ export const FranchiseManagement: React.FC = () => {
                       </div>
                     </div>
 
+                    {/* Campus Association Review Card */}
+                    <div className="bg-white border border-slate-200 p-3.5 rounded-xl space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <div className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                          <Building2 className="w-4 h-4 text-[#006FFF]" />
+                          Campus / Institute Association
+                        </div>
+                        <span className="text-[11px] font-semibold text-slate-600 bg-slate-100 px-2 py-0.5 rounded">
+                          {createForm.branchOption === 'NONE' && 'Skipped for now (Optional)'}
+                          {createForm.branchOption === 'LINK_EXISTING' && 'Link Existing Institute'}
+                          {createForm.branchOption === 'CREATE_NEW' && 'Create New Campus Branch'}
+                        </span>
+                      </div>
+                      <div className="text-xs text-slate-600">
+                        {createForm.branchOption === 'NONE' && (
+                          <span>Franchise will be created without linked branches. You can link or create institutes anytime later via the franchise <strong>Edit</strong> option.</span>
+                        )}
+                        {createForm.branchOption === 'LINK_EXISTING' && (
+                          <span>
+                            Linking existing institute:{' '}
+                            <strong className="text-slate-900">
+                              {unassignedBranches.find((b) => b.id === createForm.linkedInstituteId)?.name || 'Selected Institute'}
+                            </strong>{' '}
+                            ({unassignedBranches.find((b) => b.id === createForm.linkedInstituteId)?.code || ''})
+                          </span>
+                        )}
+                        {createForm.branchOption === 'CREATE_NEW' && (
+                          <span>
+                            Creating and attaching campus:{' '}
+                            <strong className="text-slate-900">{createForm.newBranch.name || `${createForm.name} Campus`}</strong>
+                            {createForm.newBranch.city ? ` in ${createForm.newBranch.city}` : ''}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
                     {/* Password notice */}
                     <div className="bg-blue-50 border border-blue-200 p-3.5 rounded-xl flex items-start gap-2.5">
                       <Info className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
@@ -2514,37 +3075,46 @@ export const FranchiseManagement: React.FC = () => {
               </div>
 
               {/* Modal Footer Controls */}
-              <div className="p-4 sm:p-5 bg-slate-50 border-t border-slate-200 flex items-center justify-between shrink-0">
+              <div className="px-6 py-3.5 bg-slate-50 border-t border-slate-200 flex items-center justify-between shrink-0">
                 <div>
                   {createModalTab === 'profile' ? (
                     <button
                       type="button"
                       onClick={() => setShowCreateModal(false)}
-                      className="px-4 py-2 border border-slate-300 text-slate-700 rounded-xl text-xs font-semibold hover:bg-white transition"
+                      className="px-4 py-2 border border-slate-300 text-slate-700 rounded-xl text-xs font-semibold hover:bg-white transition cursor-pointer"
                     >
                       Cancel
                     </button>
                   ) : createModalTab === 'model' ? (
                     <button
                       type="button"
-                      onClick={() => setCreateModalTab('profile')}
-                      className="px-4 py-2 border border-slate-300 text-slate-700 rounded-xl text-xs font-semibold hover:bg-white transition"
+                      onClick={() => {
+                        setCreateModalTab('profile');
+                        createModalBodyRef.current?.scrollTo({ top: 0, behavior: 'instant' });
+                      }}
+                      className="px-4 py-2 border border-slate-300 text-slate-700 rounded-xl text-xs font-semibold hover:bg-white transition cursor-pointer"
                     >
                       ← Back to Profile
                     </button>
                   ) : createModalTab === 'financials' ? (
                     <button
                       type="button"
-                      onClick={() => setCreateModalTab('model')}
-                      className="px-4 py-2 border border-slate-300 text-slate-700 rounded-xl text-xs font-semibold hover:bg-white transition"
+                      onClick={() => {
+                        setCreateModalTab('model');
+                        createModalBodyRef.current?.scrollTo({ top: 0, behavior: 'instant' });
+                      }}
+                      className="px-4 py-2 border border-slate-300 text-slate-700 rounded-xl text-xs font-semibold hover:bg-white transition cursor-pointer"
                     >
                       ← Back to Model
                     </button>
                   ) : (
                     <button
                       type="button"
-                      onClick={() => setCreateModalTab('financials')}
-                      className="px-4 py-2 border border-slate-300 text-slate-700 rounded-xl text-xs font-semibold hover:bg-white transition"
+                      onClick={() => {
+                        setCreateModalTab('financials');
+                        createModalBodyRef.current?.scrollTo({ top: 0, behavior: 'instant' });
+                      }}
+                      className="px-4 py-2 border border-slate-300 text-slate-700 rounded-xl text-xs font-semibold hover:bg-white transition cursor-pointer"
                     >
                       ← Back to Financials
                     </button>
@@ -2562,9 +3132,10 @@ export const FranchiseManagement: React.FC = () => {
                       onClick={() => {
                         if (validateProfileStep()) {
                           setCreateModalTab('model');
+                          createModalBodyRef.current?.scrollTo({ top: 0, behavior: 'instant' });
                         }
                       }}
-                      className="px-5 py-2.5 bg-[#006FFF] hover:bg-[#0058D4] text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm"
+                      className="px-5 py-2.5 bg-[#006FFF] hover:bg-[#0058D4] text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm cursor-pointer"
                     >
                       Next: Agreement Model <ChevronRight className="w-4 h-4" />
                     </button>
@@ -2574,9 +3145,10 @@ export const FranchiseManagement: React.FC = () => {
                       onClick={() => {
                         if (validateModelStep()) {
                           setCreateModalTab('financials');
+                          createModalBodyRef.current?.scrollTo({ top: 0, behavior: 'instant' });
                         }
                       }}
-                      className="px-5 py-2.5 bg-[#006FFF] hover:bg-[#0058D4] text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm"
+                      className="px-5 py-2.5 bg-[#006FFF] hover:bg-[#0058D4] text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm cursor-pointer"
                     >
                       Next: Financial Terms <ChevronRight className="w-4 h-4" />
                     </button>
@@ -2586,16 +3158,17 @@ export const FranchiseManagement: React.FC = () => {
                       onClick={() => {
                         if (validateFinancialsStep()) {
                           setCreateModalTab('review');
+                          createModalBodyRef.current?.scrollTo({ top: 0, behavior: 'instant' });
                         }
                       }}
-                      className="px-5 py-2.5 bg-[#006FFF] hover:bg-[#0058D4] text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm"
+                      className="px-5 py-2.5 bg-[#006FFF] hover:bg-[#0058D4] text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm cursor-pointer"
                     >
                       Next: Review Summary <ChevronRight className="w-4 h-4" />
                     </button>
                   ) : (
                     <button
                       type="submit"
-                      className="px-6 py-2.5 bg-[#FEDC32] hover:bg-[#FEDC32]/90 text-slate-900 font-bold rounded-xl text-xs shadow-md transition-all flex items-center gap-2"
+                      className="px-6 py-2.5 bg-[#FEDC32] hover:bg-[#FEDC32]/90 text-slate-900 font-bold rounded-xl text-xs shadow-md transition-all flex items-center gap-2 cursor-pointer"
                     >
                       {createForm.initialAgreement.settlementFrequency === 'YEARLY'
                         ? 'Create Franchise & Generate 2 Annual Installments'
@@ -2838,9 +3411,13 @@ export const FranchiseManagement: React.FC = () => {
                 </div>
 
                 <div>
-                  <div className="text-slate-400 uppercase font-semibold">Installment Particulars:</div>
-                  <div className="font-bold text-slate-900 mt-0.5">{receiptData.installment?.periodLabel}</div>
-                  <div className="text-slate-600">Agreement: {receiptData.installment?.agreementNumber}</div>
+                  <div className="text-slate-400 uppercase font-semibold">Royalty Particulars:</div>
+                  <div className="font-bold text-slate-900 mt-0.5">
+                    {receiptData.installment?.periodLabel || receiptData.royaltyRecord?.periodLabel || 'Royalty Settlement'}
+                  </div>
+                  <div className="text-slate-600">
+                    {receiptData.installment?.agreementNumber ? `Agreement: ${receiptData.installment.agreementNumber}` : 'Monthly Revenue Settlement'}
+                  </div>
                   <div className="text-slate-500">Method: {receiptData.paymentMethod}</div>
                   {receiptData.transactionReference && (
                     <div className="text-slate-500 font-mono">Ref: {receiptData.transactionReference}</div>
@@ -3624,6 +4201,374 @@ export const FranchiseManagement: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================= */}
+      {/* MODAL 9: EDIT FRANCHISE & MANAGE LINKED INSTITUTES            */}
+      {/* ============================================================= */}
+      {showEditFranchiseModal && selectedFranchiseForEdit && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-start justify-center p-3 sm:p-6 overflow-y-auto min-h-screen">
+          <div className="bg-white rounded-2xl max-w-2xl w-full shadow-2xl my-6 sm:my-8 border border-slate-200 overflow-hidden flex flex-col">
+            {/* Modal Header */}
+            <div className="px-6 py-4 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-blue-500/20 text-[#006FFF] flex items-center justify-center border border-blue-400/30">
+                  <Edit3 className="w-5 h-5 text-blue-400" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white flex items-center gap-2">
+                    Edit Franchise Center
+                    <span className="text-xs font-mono font-bold px-2 py-0.5 rounded bg-blue-900 text-blue-200 border border-blue-700">
+                      {selectedFranchiseForEdit.code}
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    {selectedFranchiseForEdit.name} • Manage profile details and linked campus branches
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowEditFranchiseModal(false)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Tab navigation */}
+            <div className="flex border-b border-slate-200 bg-slate-50 px-6 gap-4">
+              <button
+                type="button"
+                onClick={() => setEditFranchiseTab('details')}
+                className={`py-3 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 ${
+                  editFranchiseTab === 'details'
+                    ? 'border-[#006FFF] text-[#006FFF]'
+                    : 'border-transparent text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Building2 className="w-4 h-4" />
+                Franchise Profile & Contact
+              </button>
+              <button
+                type="button"
+                onClick={() => setEditFranchiseTab('campuses')}
+                className={`py-3 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 ${
+                  editFranchiseTab === 'campuses'
+                    ? 'border-[#006FFF] text-[#006FFF]'
+                    : 'border-transparent text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <MapPin className="w-4 h-4" />
+                Linked Institutes / Campuses ({selectedFranchiseForEdit.branches?.length || 0})
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 max-h-[75vh] overflow-y-auto">
+              {/* TAB 1: PROFILE DETAILS */}
+              {editFranchiseTab === 'details' && (
+                <form onSubmit={handleSaveFranchiseProfile} className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        Franchise / Center Name <span className="text-rose-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={editForm.name}
+                        onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                        className="w-full px-3 py-2 border rounded-xl text-sm focus:ring-2 focus:ring-[#006FFF]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        Owner Full Name <span className="text-rose-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={editForm.ownerName}
+                        onChange={(e) => setEditForm({ ...editForm, ownerName: e.target.value })}
+                        className="w-full px-3 py-2 border rounded-xl text-sm focus:ring-2 focus:ring-[#006FFF]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        Primary Mobile Number <span className="text-rose-500">*</span>
+                      </label>
+                      <input
+                        type="tel"
+                        required
+                        value={editForm.phone}
+                        onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
+                        className="w-full px-3 py-2 border rounded-xl text-sm focus:ring-2 focus:ring-[#006FFF]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        Owner Email (Primary Login ID)
+                      </label>
+                      <input
+                        type="email"
+                        disabled
+                        value={selectedFranchiseForEdit.email}
+                        className="w-full px-3 py-2 border rounded-xl text-sm bg-slate-100 text-slate-500 cursor-not-allowed"
+                      />
+                      <span className="text-[10px] text-slate-400">Email is unique and managed via admin security</span>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 pt-2 border-t">
+                    <div className="sm:col-span-3">
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        Full Business Address
+                      </label>
+                      <input
+                        type="text"
+                        value={editForm.address}
+                        onChange={(e) => setEditForm({ ...editForm, address: e.target.value })}
+                        className="w-full px-3 py-2 border rounded-xl text-sm focus:ring-2 focus:ring-[#006FFF]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">City</label>
+                      <input
+                        type="text"
+                        value={editForm.city}
+                        onChange={(e) => setEditForm({ ...editForm, city: e.target.value })}
+                        className="w-full px-3 py-2 border rounded-xl text-sm focus:ring-2 focus:ring-[#006FFF]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">State</label>
+                      <input
+                        type="text"
+                        value={editForm.state}
+                        onChange={(e) => setEditForm({ ...editForm, state: e.target.value })}
+                        className="w-full px-3 py-2 border rounded-xl text-sm focus:ring-2 focus:ring-[#006FFF]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">PIN / Postal Code</label>
+                      <input
+                        type="text"
+                        value={editForm.postalCode}
+                        onChange={(e) => setEditForm({ ...editForm, postalCode: e.target.value })}
+                        className="w-full px-3 py-2 border rounded-xl text-sm focus:ring-2 focus:ring-[#006FFF]"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="pt-2 border-t">
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Administrative Notes
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={editForm.notes}
+                      onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
+                      placeholder="Special commercial terms, geographic radius, or onboarding notes..."
+                      className="w-full px-3 py-2 border rounded-xl text-sm focus:ring-2 focus:ring-[#006FFF]"
+                    />
+                  </div>
+
+                  <div className="flex justify-end gap-3 pt-3 border-t">
+                    <button
+                      type="button"
+                      onClick={() => setShowEditFranchiseModal(false)}
+                      className="px-4 py-2 border text-slate-600 rounded-xl text-xs font-semibold hover:bg-slate-50"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-5 py-2 bg-[#006FFF] hover:bg-[#0055CC] text-white font-bold rounded-xl text-xs shadow transition-all"
+                    >
+                      Save Franchise Details
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {/* TAB 2: LINKED INSTITUTES / CAMPUSES */}
+              {editFranchiseTab === 'campuses' && (
+                <div className="space-y-6">
+                  {/* Current Linked Branches */}
+                  <div>
+                    <div className="flex items-center justify-between mb-2.5">
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                        <Building2 className="w-4 h-4 text-[#006FFF]" />
+                        Currently Associated Institutes & Branches ({selectedFranchiseForEdit.branches?.length || 0})
+                      </h4>
+                      <span className="text-[11px] text-slate-500 font-medium">
+                        Student counts & tuition records remain fully preserved
+                      </span>
+                    </div>
+
+                    {(!selectedFranchiseForEdit.branches || selectedFranchiseForEdit.branches.length === 0) ? (
+                      <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl text-center text-xs text-slate-500">
+                        No institutes or campus branches are currently linked to this franchise center.
+                        <br />
+                        <span className="text-slate-400">Use either option below to link an existing institute or create a new branch.</span>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {selectedFranchiseForEdit.branches.map((b: any) => (
+                          <div
+                            key={b.id}
+                            className="p-3 bg-white border border-slate-200 rounded-xl flex items-center justify-between hover:border-slate-300 transition"
+                          >
+                            <div className="flex items-center gap-3">
+                              <span className="text-xs font-mono font-bold px-2 py-0.5 rounded bg-blue-50 text-[#006FFF] border border-blue-200">
+                                {b.code}
+                              </span>
+                              <div>
+                                <div className="text-xs font-bold text-slate-900">{b.name}</div>
+                                <div className="text-[11px] text-slate-500">
+                                  {b.city ? `${b.city}, ${b.state || ''}` : 'Location on record'}
+                                  {b._count?.students !== undefined && (
+                                    <span className="ml-2 font-semibold text-slate-700">• {b._count.students} Students</span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => handleDetachBranchInEdit(b.id, b.name)}
+                              className="px-2.5 py-1 text-xs font-semibold text-rose-600 hover:text-rose-800 hover:bg-rose-50 rounded-lg transition"
+                              title="Detach branch from this franchise"
+                            >
+                              Detach
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Section A: Link Existing Institute */}
+                  <div className="p-4 bg-blue-50/50 border border-blue-200 rounded-2xl space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
+                        <Plus className="w-3.5 h-3.5 text-[#006FFF]" />
+                        Option 1: Link Existing Institute / Branch
+                      </div>
+                      <span className="text-[11px] font-semibold text-[#006FFF]">
+                        {unassignedBranches.length} Unassigned Available
+                      </span>
+                    </div>
+
+                    <p className="text-xs text-slate-600">
+                      Select an existing unassigned institute to attach it immediately to this franchise.
+                    </p>
+
+                    {unassignedBranches.length === 0 ? (
+                      <div className="p-3 bg-white border border-slate-200 rounded-xl text-xs text-slate-500">
+                        No unassigned institutes are currently available. Use Option 2 below to create and attach a new campus.
+                      </div>
+                    ) : (
+                      <div className="flex flex-col sm:flex-row gap-2">
+                        <select
+                          value={editLinkInstituteId}
+                          onChange={(e) => setEditLinkInstituteId(e.target.value)}
+                          className="flex-1 px-3 py-2 border rounded-xl text-xs bg-white focus:ring-2 focus:ring-[#006FFF]"
+                        >
+                          <option value="">-- Select an unassigned institute --</option>
+                          {unassignedBranches.map((b) => (
+                            <option key={b.id} value={b.id}>
+                              {b.code} - {b.name} ({b.city || 'Tamil Nadu'})
+                            </option>
+                          ))}
+                        </select>
+                        <button
+                          type="button"
+                          disabled={!editLinkInstituteId}
+                          onClick={handleLinkBranchInEdit}
+                          className="px-4 py-2 bg-[#006FFF] hover:bg-[#0055CC] disabled:opacity-50 text-white font-bold text-xs rounded-xl shadow-xs transition"
+                        >
+                          + Link Institute
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Section B: Create & Attach New Campus */}
+                  <form onSubmit={handleCreateBranchInEdit} className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-3">
+                    <div className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
+                      <Building2 className="w-3.5 h-3.5 text-emerald-600" />
+                      Option 2: Create & Link New Campus Branch
+                    </div>
+
+                    <p className="text-xs text-slate-600">
+                      Need a new branch campus? Create it directly here and it will be attached immediately to this franchise center.
+                    </p>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-medium text-slate-700 mb-1">
+                          Campus Name <span className="text-rose-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="e.g. Digital Guru T. Nagar Campus"
+                          value={editNewBranch.name}
+                          onChange={(e) => setEditNewBranch({ ...editNewBranch, name: e.target.value })}
+                          className="w-full px-3 py-1.5 border rounded-lg text-xs bg-white focus:ring-2 focus:ring-[#006FFF]"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-slate-700 mb-1">
+                          Campus Code (Optional, auto-generated)
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="e.g. BR-008"
+                          value={editNewBranch.code}
+                          onChange={(e) => setEditNewBranch({ ...editNewBranch, code: e.target.value })}
+                          className="w-full px-3 py-1.5 border rounded-lg text-xs bg-white focus:ring-2 focus:ring-[#006FFF]"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-slate-700 mb-1">City</label>
+                        <input
+                          type="text"
+                          placeholder="Chennai"
+                          value={editNewBranch.city}
+                          onChange={(e) => setEditNewBranch({ ...editNewBranch, city: e.target.value })}
+                          className="w-full px-3 py-1.5 border rounded-lg text-xs bg-white focus:ring-2 focus:ring-[#006FFF]"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-slate-700 mb-1">Phone</label>
+                        <input
+                          type="tel"
+                          placeholder="+91 98765 43210"
+                          value={editNewBranch.phone}
+                          onChange={(e) => setEditNewBranch({ ...editNewBranch, phone: e.target.value })}
+                          className="w-full px-3 py-1.5 border rounded-lg text-xs bg-white focus:ring-2 focus:ring-[#006FFF]"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end pt-2">
+                      <button
+                        type="submit"
+                        disabled={!editNewBranch.name.trim()}
+                        className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold text-xs rounded-xl shadow-xs transition"
+                      >
+                        + Create & Link Campus
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}

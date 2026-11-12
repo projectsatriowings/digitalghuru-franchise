@@ -18,8 +18,69 @@ import {
   lookupExistingStudent,
   enrollExistingStudent,
 } from './students.controller.js';
-import { authenticateToken, requireRole, requireInstituteContext } from '../../middleware/auth.js';
+import { authenticateToken, requireRole, requireInstituteContext, AuthenticatedRequest } from '../../middleware/auth.js';
+import { prisma } from '../../prisma.js';
 import { fileUpload, photoUpload } from '../../utils/storage.js';
+
+const requireStudentModuleContext = async (req: AuthenticatedRequest, res: any, next: any) => {
+  if (!req.user) {
+    return res.status(401).json({ success: false, error: 'Unauthorized' });
+  }
+
+  if (req.user.role === 'SUPER_ADMIN') {
+    const requestedInst = (req.headers['x-institute-id'] as string) || (req.query.instituteId as string);
+    req.instituteId = requestedInst && requestedInst !== 'ALL' && requestedInst !== 'all' ? requestedInst : undefined;
+    const requestedFranchise = (req.headers['x-franchise-id'] as string) || (req.query.franchiseId as string) || (req.body?.franchiseId as string);
+    if (requestedFranchise) req.franchiseId = requestedFranchise;
+    return next();
+  }
+
+  if (req.user.role === 'FRANCHISE_OWNER') {
+    const userFranchise = await prisma.franchise.findFirst({
+      where: { ownerUserId: req.user.userId },
+      include: {
+        branches: {
+          select: { id: true, code: true, name: true, status: true },
+          orderBy: { name: 'asc' },
+        },
+      },
+    });
+    if (!userFranchise) {
+      return res.status(400).json({ success: false, error: 'Franchise profile not found for your account' });
+    }
+    const assignedBranchIds = userFranchise.branches.map((b) => b.id);
+    req.franchiseId = userFranchise.id;
+    (req as any).assignedBranchIds = assignedBranchIds;
+
+    const rawInst = (req.headers['x-institute-id'] as string) || (req.query.instituteId as string) || req.user.instituteId;
+    if (rawInst === 'ALL' || rawInst === 'all') {
+      (req as any).isConsolidatedBranchView = true;
+      req.instituteId = undefined;
+      return next();
+    }
+    if (!rawInst) {
+      req.instituteId = assignedBranchIds[0] || undefined;
+      if (!req.instituteId) {
+        (req as any).isConsolidatedBranchView = true;
+      }
+      return next();
+    }
+    if (!assignedBranchIds.includes(rawInst)) {
+      return res.status(403).json({
+        success: false,
+        error: 'Forbidden: You do not have authorization to access this campus branch',
+      });
+    }
+    req.instituteId = rawInst;
+    return next();
+  }
+
+  if (req.user.role === 'PARENT' || req.user.role === 'STUDENT') {
+    return next();
+  }
+
+  return requireInstituteContext(req, res, next);
+};
 
 const handlePhotoUpload = (req: any, res: any, next: any) => {
   photoUpload.single('photo')(req, res, (err: any) => {
@@ -38,16 +99,16 @@ const router = Router();
 router.use(authenticateToken);
 
 // Photograph streaming routes (accessible via <img> tags with query token ?token=...)
-router.get('/:id/photo', requireRole('SUPER_ADMIN', 'ACADEMIC_ADMIN', 'STAFF', 'PARENT', 'STUDENT'), getStudentPhoto);
-router.get('/photo-raw/:key', requireRole('SUPER_ADMIN', 'ACADEMIC_ADMIN', 'STAFF', 'PARENT', 'STUDENT'), getRawPhoto);
+router.get('/:id/photo', requireRole('SUPER_ADMIN', 'FRANCHISE_OWNER', 'BRANCH_ADMIN', 'ACADEMIC_ADMIN', 'STAFF', 'PARENT', 'STUDENT'), getStudentPhoto);
+router.get('/photo-raw/:key', requireRole('SUPER_ADMIN', 'FRANCHISE_OWNER', 'BRANCH_ADMIN', 'ACADEMIC_ADMIN', 'STAFF', 'PARENT', 'STUDENT'), getRawPhoto);
+router.get('/my/profile', requireRole('STUDENT'), getMyStudentProfile);
 
-router.use(requireInstituteContext);
+router.use(requireStudentModuleContext);
 
 // Student management routes
 router.get('/admission-prefix', requireRole('SUPER_ADMIN', 'FRANCHISE_OWNER', 'ACADEMIC_ADMIN', 'STAFF'), getAdmissionPrefixInfo);
 router.get('/lookup', requireRole('SUPER_ADMIN', 'FRANCHISE_OWNER', 'ACADEMIC_ADMIN', 'STAFF'), lookupExistingStudent);
 router.get('/lookup-parent', requireRole('SUPER_ADMIN', 'FRANCHISE_OWNER', 'ACADEMIC_ADMIN', 'STAFF'), lookupParent);
-router.get('/my/profile', requireRole('STUDENT'), getMyStudentProfile);
 router.get('/', requireRole('SUPER_ADMIN', 'FRANCHISE_OWNER', 'ACADEMIC_ADMIN', 'STAFF'), listStudents);
 router.post('/', requireRole('SUPER_ADMIN', 'FRANCHISE_OWNER', 'ACADEMIC_ADMIN', 'STAFF'), admitStudent);
 router.post('/:id/enroll', requireRole('SUPER_ADMIN', 'FRANCHISE_OWNER', 'ACADEMIC_ADMIN', 'STAFF'), enrollExistingStudent);

@@ -13,6 +13,7 @@ import {
   AlertCircle,
   TrendingUp,
   Sparkles,
+  Laptop,
 } from 'lucide-react';
 
 interface ParentDashboardViewProps {
@@ -81,7 +82,7 @@ export const ParentDashboardView: React.FC<ParentDashboardViewProps> = ({
             <strong className="text-white font-semibold">
               {activeStudent?.firstName} {activeStudent?.lastName}
             </strong>{' '}
-            ({activeStudent?.enrollments?.[0]?.batch?.name || 'Class 10'}).
+            ({activeStudent?.enrollments?.[0]?.batch?.name || (activeStudent?.instituteId ? 'Campus Batch' : 'Online Direct LMS')}).
           </p>
         </div>
       </div>
@@ -253,7 +254,17 @@ export const ParentDashboardView: React.FC<ParentDashboardViewProps> = ({
         <h2 className="text-sm font-bold text-[#64748B] uppercase tracking-wider mb-3">
           Parent Quick Access Modules
         </h2>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3">
+          <button
+            onClick={() => onNavigateTab('courses')}
+            className="p-4 rounded-2xl bg-white border border-emerald-200 hover:border-emerald-500 shadow-sm hover:shadow-md transition-all text-center flex flex-col items-center gap-2 group"
+          >
+            <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center group-hover:bg-emerald-600 group-hover:text-white transition-colors">
+              <Laptop className="w-5 h-5" />
+            </div>
+            <span className="text-xs font-bold text-[#0F172A]">Courses &amp; Certs</span>
+          </button>
+
           <button
             onClick={() => onNavigateTab('attendance')}
             className="p-4 rounded-2xl bg-white border border-[#E2E8F0] hover:border-[#006FFF] shadow-sm hover:shadow-md transition-all text-center flex flex-col items-center gap-2 group"

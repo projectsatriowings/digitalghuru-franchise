@@ -29,9 +29,14 @@ import {
 import { MaterialViewerModal } from '../components/MaterialViewerModal';
 
 export const ExaminationsManagement: React.FC = () => {
-  const { user } = useAuth();
+  const { user, activeInstitute } = useAuth();
   const toast = useToast();
-  const isStaffOrAdmin = user?.role === 'SUPER_ADMIN' || user?.role === 'ACADEMIC_ADMIN' || user?.role === 'STAFF';
+  const isStaffOrAdmin =
+    user?.role === 'SUPER_ADMIN' ||
+    user?.role === 'FRANCHISE_OWNER' ||
+    user?.role === 'BRANCH_ADMIN' ||
+    user?.role === 'ACADEMIC_ADMIN' ||
+    user?.role === 'STAFF';
   const isStudent = user?.role === 'STUDENT';
   const isParent = user?.role === 'PARENT';
 
@@ -85,7 +90,7 @@ export const ExaminationsManagement: React.FC = () => {
     if (isStaffOrAdmin) {
       loadBatchesAndSubjects();
     }
-  }, [selectedBatch, selectedSubject, selectedStatus]);
+  }, [selectedBatch, selectedSubject, selectedStatus, activeInstitute?.id]);
 
   async function loadExams() {
     try {

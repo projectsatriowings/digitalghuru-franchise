@@ -30,9 +30,14 @@ import {
 import { MaterialViewerModal } from '../components/MaterialViewerModal';
 
 export const HomeworkManagement: React.FC = () => {
-  const { user } = useAuth();
+  const { user, activeInstitute } = useAuth();
   const toast = useToast();
-  const isStaffOrAdmin = user?.role === 'SUPER_ADMIN' || user?.role === 'ACADEMIC_ADMIN' || user?.role === 'STAFF';
+  const isStaffOrAdmin =
+    user?.role === 'SUPER_ADMIN' ||
+    user?.role === 'FRANCHISE_OWNER' ||
+    user?.role === 'BRANCH_ADMIN' ||
+    user?.role === 'ACADEMIC_ADMIN' ||
+    user?.role === 'STAFF';
   const isStudent = user?.role === 'STUDENT';
 
   // Section switcher: Homework vs Quizzes (Phase 6)
@@ -87,7 +92,7 @@ export const HomeworkManagement: React.FC = () => {
     if (isStaffOrAdmin) {
       loadBatches();
     }
-  }, []);
+  }, [activeInstitute?.id]);
 
   // Lock background page scrolling when completion review modal is open and handle Escape key safely
   useEffect(() => {

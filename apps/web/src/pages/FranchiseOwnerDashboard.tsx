@@ -827,18 +827,19 @@ export const FranchiseOwnerDashboard: React.FC = () => {
                     </tr>
                   ) : (
                     royaltyRecords.map((r: any) => {
-                      const basis = r.calculationBasis || activeAgreement?.revenueCalculationBasis || 'GROSS_FEES';
-                      const gross = Number(r.totalRevenueCollected || 0);
-                      const deductions = Number(r.deductibleExpenses || 0);
-                      const pool = Number(r.distributableRevenue ?? (gross - deductions));
-                      const dgShare = Number(r.calculatedRoyalty || 0);
-                      const partnerShare = Number(r.partnerRetainedAmount ?? Math.max(0, pool - dgShare));
+                      const details = r.calculationDetails || {};
+                      const basis = details.calculationBasis || activeAgreement?.revenueCalculationBasis || 'GROSS_COURSE_FEES';
+                      const gross = Number(r.grossCollection ?? r.totalRevenueCollected ?? 0);
+                      const deductions = Number(details.deductibleExpenses ?? details.refundsAndAdjustments ?? details.deductionsOrExpenses ?? r.deductibleExpenses ?? 0);
+                      const pool = Number(r.eligibleRevenue ?? r.distributableRevenue ?? Math.max(0, gross - deductions));
+                      const dgShare = Number(r.royaltyPayable ?? r.calculatedRoyalty ?? 0);
+                      const partnerShare = Number(details.partnerShare ?? r.partnerRetainedAmount ?? Math.max(0, Math.round((pool - dgShare) * 100) / 100));
 
                       return (
                         <tr key={r.id} className="hover:bg-slate-50 transition-colors">
                           <td className="px-4 py-3">
                             <div className="font-bold text-slate-900 text-xs">
-                              {new Date(r.startDate).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })}
+                              {r.periodLabel || new Date(r.startDate).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })}
                             </div>
                             <div className="text-[11px] text-slate-500">
                               {new Date(r.startDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })} – {new Date(r.endDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}

@@ -577,6 +577,10 @@ export async function getStaffById(req: AuthenticatedRequest, res: Response) {
       return res.status(404).json({ success: false, error: 'Staff member not found in this institute' });
     }
 
+    if (req.user?.role === 'STAFF' && staff.userId !== req.user.userId) {
+      return res.status(403).json({ success: false, error: 'Forbidden: You can only view your own staff profile' });
+    }
+
     return res.json({
       success: true,
       data: { staff },
@@ -929,6 +933,10 @@ export async function resetStaffPassword(req: AuthenticatedRequest, res: Respons
 
     if (!staff) {
       return res.status(404).json({ success: false, error: 'Staff member not found in this institute' });
+    }
+
+    if (req.user?.role === 'STAFF' && staff.userId !== req.user.userId) {
+      return res.status(403).json({ success: false, error: 'Forbidden: Only administrators can reset staff passwords' });
     }
 
     const parse = resetStaffPasswordSchema.safeParse(req.body);
@@ -1388,10 +1396,15 @@ export async function downloadStaffDocument(req: AuthenticatedRequest, res: Resp
 
     const doc = await prisma.staffDocument.findFirst({
       where: { id: docId, staffProfileId: id, instituteId },
+      include: { staffProfile: { select: { userId: true } } },
     });
 
     if (!doc) {
       return res.status(404).json({ success: false, error: 'Document not found' });
+    }
+
+    if (req.user?.role === 'STAFF' && doc.staffProfile?.userId !== req.user.userId) {
+      return res.status(403).json({ success: false, error: 'Forbidden: You can only download your own documents' });
     }
 
     const absPath = resolveAbsolutePath(doc.fileUrl);
@@ -1418,10 +1431,15 @@ export async function deleteStaffDocument(req: AuthenticatedRequest, res: Respon
 
     const doc = await prisma.staffDocument.findFirst({
       where: { id: docId, staffProfileId: id, instituteId },
+      include: { staffProfile: { select: { userId: true } } },
     });
 
     if (!doc) {
       return res.status(404).json({ success: false, error: 'Document not found' });
+    }
+
+    if (req.user?.role === 'STAFF' && doc.staffProfile?.userId !== req.user.userId) {
+      return res.status(403).json({ success: false, error: 'Forbidden: You can only download your own documents' });
     }
 
     // Attempt to remove file from disk safely

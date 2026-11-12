@@ -58,11 +58,12 @@ coverage/
 
 # Scratch / Temporary Dev Scripts
 scratch/
+*.tsbuildinfo
 
 
 
 # Uploads / Local files
-uploads/
+/uploads/
 server/uploads/
 backups/
 server/backups/

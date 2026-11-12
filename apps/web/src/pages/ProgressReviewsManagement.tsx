@@ -33,11 +33,16 @@ import {
 } from 'lucide-react';
 
 export const ProgressReviewsManagement: React.FC = () => {
-  const { user } = useAuth();
+  const { user, activeInstitute } = useAuth();
   const toast = useToast();
   const isParent = user?.role === 'PARENT';
   const isStudent = user?.role === 'STUDENT';
-  const isStaffOrAdmin = user?.role === 'SUPER_ADMIN' || user?.role === 'ACADEMIC_ADMIN' || user?.role === 'STAFF';
+  const isStaffOrAdmin =
+    user?.role === 'SUPER_ADMIN' ||
+    user?.role === 'FRANCHISE_OWNER' ||
+    user?.role === 'BRANCH_ADMIN' ||
+    user?.role === 'ACADEMIC_ADMIN' ||
+    user?.role === 'STAFF';
 
   // Sub-tabs
   const [activeTab, setActiveTab] = useState<'progress' | 'log-report' | 'parent_inquiries' | 'inquiries'>('progress');
@@ -114,7 +119,7 @@ export const ProgressReviewsManagement: React.FC = () => {
 
   useEffect(() => {
     loadInitialFilters();
-  }, []);
+  }, [activeInstitute?.id]);
 
   useEffect(() => {
     if (activeTab === 'parent_inquiries') {
@@ -122,7 +127,7 @@ export const ProgressReviewsManagement: React.FC = () => {
     } else {
       loadData();
     }
-  }, [activeTab, selectedBatchFilter, selectedSubjectFilter, selectedStatusFilter, selectedPeriodFilter, feedbackFilterStatus, feedbackFilterCategory]);
+  }, [activeTab, selectedBatchFilter, selectedSubjectFilter, selectedStatusFilter, selectedPeriodFilter, feedbackFilterStatus, feedbackFilterCategory, activeInstitute?.id]);
 
   useEffect(() => {
     const token = localStorage.getItem('tuition_token') || localStorage.getItem('token');

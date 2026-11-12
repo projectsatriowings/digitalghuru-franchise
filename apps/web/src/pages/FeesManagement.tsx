@@ -26,8 +26,12 @@ import {
 } from 'lucide-react';
 
 export const FeesManagement: React.FC = () => {
-  const { user } = useAuth();
-  const isAdmin = user?.role === 'ACADEMIC_ADMIN' || user?.role === 'SUPER_ADMIN';
+  const { user, activeInstitute } = useAuth();
+  const isAdmin =
+    user?.role === 'ACADEMIC_ADMIN' ||
+    user?.role === 'BRANCH_ADMIN' ||
+    user?.role === 'FRANCHISE_OWNER' ||
+    user?.role === 'SUPER_ADMIN';
 
   const [activeTab, setActiveTab] = useState<'dashboard' | 'assignments' | 'structures' | 'payments' | 'adjustments'>('dashboard');
 
@@ -118,7 +122,7 @@ export const FeesManagement: React.FC = () => {
     loadDashboardData();
     loadBatches();
     loadStudents();
-  }, [isAdmin]);
+  }, [isAdmin, activeInstitute?.id]);
 
   useEffect(() => {
     if (!isAdmin) return;
@@ -126,7 +130,7 @@ export const FeesManagement: React.FC = () => {
     if (activeTab === 'assignments') loadAssignments();
     if (activeTab === 'payments') loadPayments();
     if (activeTab === 'adjustments') loadAdjustments();
-  }, [activeTab, isAdmin]);
+  }, [activeTab, isAdmin, activeInstitute?.id]);
 
   const loadDashboardData = async () => {
     try {

@@ -755,7 +755,7 @@ export class InAppNotificationService {
       const notif = await prisma.notification.upsert({
         where: { idempotencyKey },
         create: {
-          instituteId: sub.student.instituteId,
+          instituteId: sub.student.instituteId || sub.material.instituteId,
           userId: teacherUserId,
           role: teacherRole as UserRole,
           title: `Homework Submitted: ${sub.material.title}`,
@@ -817,7 +817,7 @@ export class InAppNotificationService {
         const studentNotif = await prisma.notification.upsert({
           where: { idempotencyKey: studentKey },
           create: {
-            instituteId: sub.student.instituteId,
+            instituteId: sub.student.instituteId || sub.material.instituteId,
             userId: sub.student.userId,
             role: 'STUDENT',
             title: `Homework Graded: ${sub.material.title}`,
@@ -848,7 +848,7 @@ export class InAppNotificationService {
         const parentNotif = await prisma.notification.upsert({
           where: { idempotencyKey: parentKey },
           create: {
-            instituteId: sub.student.instituteId,
+            instituteId: sub.student.instituteId || sub.material.instituteId,
             userId: parentUserId,
             role: 'PARENT',
             title: `Homework Graded: ${sub.material.title}`,
@@ -887,7 +887,7 @@ export class InAppNotificationService {
         include: {
           feeAssignment: {
             include: {
-              feeStructure: { select: { name: true } },
+              feeStructure: { select: { name: true, instituteId: true } },
             },
           },
           student: {
@@ -919,7 +919,7 @@ export class InAppNotificationService {
         const parentNotif = await prisma.notification.upsert({
           where: { idempotencyKey: parentKey },
           create: {
-            instituteId: student.instituteId,
+            instituteId: student.instituteId || payment.feeAssignment.feeStructure.instituteId,
             userId: parentUserId,
             role: 'PARENT',
             title: `Fee Payment Recorded: ₹${amountStr}`,

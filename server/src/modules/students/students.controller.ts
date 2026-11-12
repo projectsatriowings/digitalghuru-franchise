@@ -3,10 +3,12 @@ import path from 'path';
 import { Response } from 'express';
 import { prisma } from '../../prisma.js';
 import { z } from 'zod';
+import { CourseStatus, LearningMode, EnrollmentStatus } from '@prisma/client';
 import { AuthenticatedRequest } from '../../middleware/auth.js';
 import { hashPassword, generateSecureRandomToken } from '../../utils/security.js';
 import {
   generateNextAdmissionNumber,
+  generateNextOnlineAdmissionNumber,
   getOrSetInstitutePrefix,
   getOrSetCompactInstituteCode,
   deriveBatchCode,
@@ -63,9 +65,14 @@ export const studentAdmissionSchema = z.object({
   notes: z.string().optional(),
   admissionDate: z.string().optional(), // YYYY-MM-DD
   // Optional batch enrollment
-  batchId: z.string().uuid().optional(),
+  batchId: z.preprocess((v) => (typeof v === 'string' && v.trim() === '' ? undefined : v), z.string().uuid().optional()),
   // Optional batch subject enrollments
   subjectIds: z.array(z.string().uuid()).optional(),
+  // Optional Global LMS Course enrollment & delivery mode during admission
+  globalCourseId: z.preprocess((v) => (typeof v === 'string' && v.trim() === '' ? undefined : v), z.string().uuid().optional()),
+  learningMode: z.enum(['ONLINE', 'OFFLINE']).optional(),
+  onlineDirect: z.boolean().optional().default(false),
+  franchiseId: z.preprocess((v) => (typeof v === 'string' && v.trim() === '' ? undefined : v), z.string().uuid().optional()),
   // Student login account creation (defaults to true for enterprise credentials workflow)
   createLoginAccount: z.boolean().default(true),
   email: z.string().email().optional().or(z.literal('')),
@@ -125,7 +132,14 @@ export const updateStudentIdentifierSchema = z.object({
 export async function listStudents(req: AuthenticatedRequest, res: Response) {
   try {
     const instituteId = req.instituteId;
-    if (!instituteId) {
+    const franchiseId = req.franchiseId;
+    const isConsolidated = Boolean((req as any).isConsolidatedBranchView);
+    const assignedBranchIds: string[] = (req as any).assignedBranchIds || [];
+    const includeOnline = req.query.includeOnline === 'true';
+    const learningMode = req.query.learningMode as string | undefined;
+    const globalCourseId = req.query.globalCourseId as string | undefined;
+
+    if (!instituteId && !franchiseId && req.user?.role !== 'SUPER_ADMIN') {
       return res.status(400).json({ success: false, error: 'Institute context required' });
     }
 
@@ -162,13 +176,65 @@ export async function listStudents(req: AuthenticatedRequest, res: Response) {
 
     const scope = await getAuthorizedStudentScope(req, prisma, { batchId, subjectId });
 
-    const andConditions: any[] = [
-      { instituteId },
-      scope.whereClause,
-    ];
+    const andConditions: any[] = [];
+
+    if (req.user?.role === 'FRANCHISE_OWNER') {
+      if (isConsolidated || !instituteId) {
+        andConditions.push(scope.whereClause);
+      } else if (includeOnline || learningMode === 'ONLINE') {
+        andConditions.push({
+          OR: [
+            { instituteId },
+            ...(franchiseId ? [{ franchiseId, instituteId: null }] : []),
+          ],
+        });
+      } else {
+        andConditions.push({ instituteId });
+      }
+    } else if (req.user?.role === 'SUPER_ADMIN') {
+      if (instituteId) {
+        andConditions.push({ instituteId });
+      } else if (franchiseId) {
+        andConditions.push({
+          OR: [
+            { franchiseId },
+            { institute: { franchiseId } },
+          ],
+        });
+      } else {
+        andConditions.push(scope.whereClause);
+      }
+    } else {
+      andConditions.push({ instituteId });
+      andConditions.push(scope.whereClause);
+    }
 
     if (status && ['ACTIVE', 'PASSED_OUT', 'DISCONTINUED'].includes(status)) {
       andConditions.push({ status });
+    }
+
+    if (learningMode === 'ONLINE') {
+      andConditions.push({
+        OR: [
+          { instituteId: null },
+          { courseEnrollments: { some: { mode: LearningMode.ONLINE, status: { in: [EnrollmentStatus.ACTIVE, EnrollmentStatus.COMPLETED] } } } },
+        ],
+      });
+    } else if (learningMode === 'OFFLINE') {
+      andConditions.push({
+        instituteId: { not: null },
+      });
+    }
+
+    if (globalCourseId) {
+      andConditions.push({
+        courseEnrollments: {
+          some: {
+            courseId: globalCourseId,
+            status: { in: [EnrollmentStatus.ACTIVE, EnrollmentStatus.COMPLETED] },
+          },
+        },
+      });
     }
 
     // For admin roles where scope.whereClause is broad, apply explicit query filters
@@ -199,7 +265,7 @@ export async function listStudents(req: AuthenticatedRequest, res: Response) {
       });
     }
 
-    const where: any = { AND: andConditions };
+    const where: any = andConditions.length > 0 ? { AND: andConditions } : {};
 
     const [total, students] = await Promise.all([
       prisma.student.count({ where }),
@@ -209,6 +275,12 @@ export async function listStudents(req: AuthenticatedRequest, res: Response) {
         take: limit,
         orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
         include: {
+          institute: {
+            select: { id: true, name: true, code: true },
+          },
+          franchise: {
+            select: { id: true, name: true, code: true },
+          },
           enrollments: {
             where: { isActive: true },
             include: {
@@ -218,6 +290,18 @@ export async function listStudents(req: AuthenticatedRequest, res: Response) {
               subject: {
                 select: { id: true, name: true, code: true },
               },
+            },
+          },
+          courseEnrollments: {
+            where: { status: { in: [EnrollmentStatus.ACTIVE, EnrollmentStatus.COMPLETED] } },
+            orderBy: { enrolledAt: 'desc' },
+            select: {
+              id: true,
+              mode: true,
+              status: true,
+              progress: true,
+              course: { select: { id: true, title: true, slug: true } },
+              batch: { select: { id: true, name: true } },
             },
           },
           user: {
@@ -277,11 +361,6 @@ export async function listStudents(req: AuthenticatedRequest, res: Response) {
  */
 export async function admitStudent(req: AuthenticatedRequest, res: Response) {
   try {
-    const instituteId = req.instituteId;
-    if (!instituteId) {
-      return res.status(400).json({ success: false, error: 'Institute context required' });
-    }
-
     const parse = studentAdmissionSchema.safeParse(req.body);
     if (!parse.success) {
       return res.status(400).json({
@@ -291,6 +370,63 @@ export async function admitStudent(req: AuthenticatedRequest, res: Response) {
     }
 
     const data = parse.data;
+    const rawInstHeader = req.headers['x-institute-id'] as string | undefined;
+    const callerRole = req.user?.role;
+    const isOnlineDirectRequest = Boolean(data.onlineDirect) || (!req.instituteId && data.learningMode === 'ONLINE');
+
+    let effectiveInstituteId: string | null = req.instituteId || null;
+    if (isOnlineDirectRequest) {
+      if (callerRole !== 'FRANCHISE_OWNER' && callerRole !== 'SUPER_ADMIN') {
+        return res.status(403).json({
+          success: false,
+          error: 'Only Franchise Owner or Super Admin can admit campus-independent Online Direct students.',
+        });
+      }
+      if (data.batchId) {
+        return res.status(400).json({
+          success: false,
+          error: 'Online Direct students cannot be assigned to a physical branch batch; select Offline / Hybrid mode instead.',
+        });
+      }
+      effectiveInstituteId = null;
+    } else if (!effectiveInstituteId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Please select a specific campus branch to admit a branch/offline student, or select Online-Direct mode.',
+      });
+    }
+
+    // Resolve franchise ownership
+    let resolvedFranchiseId: string | null = req.franchiseId || data.franchiseId || null;
+    let resolvedBranchFranchiseId: string | null = null;
+    if (effectiveInstituteId) {
+      const inst = await prisma.institute.findUnique({
+        where: { id: effectiveInstituteId },
+        select: { id: true, franchiseId: true },
+      });
+      if (!inst) {
+        return res.status(404).json({ success: false, error: 'Selected campus branch not found' });
+      }
+      resolvedBranchFranchiseId = inst.franchiseId || null;
+      if (!resolvedFranchiseId) {
+        resolvedFranchiseId = resolvedBranchFranchiseId;
+      } else if (resolvedBranchFranchiseId && resolvedFranchiseId !== resolvedBranchFranchiseId) {
+        return res.status(403).json({ success: false, error: 'Forbidden: Selected branch belongs to a different franchise' });
+      }
+    } else if (!resolvedFranchiseId && rawInstHeader && rawInstHeader !== 'ALL' && rawInstHeader !== 'all') {
+      const inst = await prisma.institute.findUnique({
+        where: { id: rawInstHeader },
+        select: { franchiseId: true },
+      });
+      resolvedFranchiseId = inst?.franchiseId || null;
+    }
+
+    if (isOnlineDirectRequest && !resolvedFranchiseId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Franchise context is required for Online Direct student admission',
+      });
+    }
 
     let parsedDob: Date | null = null;
     if (data.dob) {
@@ -325,14 +461,82 @@ export async function admitStudent(req: AuthenticatedRequest, res: Response) {
         }
       }
     }
-    // Check if likely existing student already exists in this institute (by phone, email, or admissionNumber)
+
+    // Validate optional Global LMS Course enrollment rules before entering write transaction
+    let verifiedGlobalCourse: { id: string; title: string; slug: string; activeCurriculumVersionId: string } | null = null;
+    let effectiveLearningMode: LearningMode = isOnlineDirectRequest
+      ? LearningMode.ONLINE
+      : (data.learningMode === 'ONLINE' ? LearningMode.ONLINE : data.learningMode === 'OFFLINE' ? LearningMode.OFFLINE : (data.batchId ? LearningMode.OFFLINE : LearningMode.ONLINE));
+
+    if (data.globalCourseId) {
+      if (effectiveLearningMode === LearningMode.OFFLINE && (!effectiveInstituteId || !data.batchId)) {
+        return res.status(400).json({
+          success: false,
+          error: 'Class batch allocation is required when enrolling in Offline / Recorded LMS mode.',
+        });
+      }
+      if (!resolvedFranchiseId) {
+        return res.status(400).json({
+          success: false,
+          error: 'This campus branch must be linked to a franchise to enroll students in Global Courses.',
+        });
+      }
+
+      const [globalCourse, franchiseSelection] = await Promise.all([
+        prisma.globalCourse.findUnique({
+          where: { id: data.globalCourseId },
+          select: { id: true, title: true, slug: true, status: true, activeCurriculumVersionId: true },
+        }),
+        prisma.franchiseCourseSelection.findUnique({
+          where: {
+            franchiseId_courseId: {
+              franchiseId: resolvedFranchiseId,
+              courseId: data.globalCourseId,
+            },
+          },
+          select: { isPermitted: true, isEnabled: true },
+        }),
+      ]);
+
+      if (!globalCourse || globalCourse.status !== CourseStatus.PUBLISHED || !globalCourse.activeCurriculumVersionId) {
+        return res.status(400).json({
+          success: false,
+          error: 'Selected Global Course is not published or has no active curriculum version.',
+        });
+      }
+      if (!franchiseSelection || !franchiseSelection.isPermitted) {
+        return res.status(403).json({
+          success: false,
+          error: 'Selected Global Course is not permitted for this franchise by Super Admin.',
+        });
+      }
+      if (!franchiseSelection.isEnabled) {
+        return res.status(400).json({
+          success: false,
+          error: 'Selected Global Course is not enabled for this franchise. Enable it in Franchise Offerings first.',
+        });
+      }
+
+      verifiedGlobalCourse = {
+        id: globalCourse.id,
+        title: globalCourse.title,
+        slug: globalCourse.slug,
+        activeCurriculumVersionId: globalCourse.activeCurriculumVersionId,
+      };
+    }
+
+    // Check if likely existing student already exists in this institute or franchise
     const cleanPhone = data.studentPhone?.trim() || data.phone?.trim() || null;
     const cleanEmail = data.studentEmail?.trim().toLowerCase() || data.email?.trim().toLowerCase() || null;
 
     if (cleanPhone || cleanEmail) {
+      const scopeMatch: any = effectiveInstituteId
+        ? { instituteId: effectiveInstituteId }
+        : { franchiseId: resolvedFranchiseId };
+
       const existingStudent = await prisma.student.findFirst({
         where: {
-          instituteId,
+          ...scopeMatch,
           OR: [
             ...(cleanPhone ? [{ phone: cleanPhone }] : []),
             ...(cleanPhone ? [{ user: { phone: cleanPhone } }] : []),
@@ -348,7 +552,7 @@ export async function admitStudent(req: AuthenticatedRequest, res: Response) {
       });
 
       if (existingStudent) {
-        const errorMsg = `A student profile already exists in this institute (${existingStudent.firstName} ${existingStudent.lastName}, Admission: ${existingStudent.admissionNumber}). Please use 'Enroll Existing Student' to enroll them into another batch or subject without duplicating the account.`;
+        const errorMsg = `A student profile already exists (${existingStudent.firstName} ${existingStudent.lastName}, Admission: ${existingStudent.admissionNumber}). Please use 'Enroll Existing Student' to enroll them without duplicating the account.`;
         return res.status(409).json({
           success: false,
           isExistingStudent: true,
@@ -417,13 +621,10 @@ export async function admitStudent(req: AuthenticatedRequest, res: Response) {
       try {
         result = await prisma.$transaction(
           async (tx) => {
-            // Generate atomic, concurrency-safe institute-based admission number (7-character format)
-            const admissionInfo = await generateNextAdmissionNumber(
-              tx,
-              instituteId,
-              data.batchId,
-              parsedAdmissionDate
-            );
+            // Generate atomic, concurrency-safe admission number (branch 7-char or franchise ON-online format)
+            const admissionInfo = effectiveInstituteId
+              ? await generateNextAdmissionNumber(tx, effectiveInstituteId, data.batchId, parsedAdmissionDate)
+              : await generateNextOnlineAdmissionNumber(tx, resolvedFranchiseId!, parsedAdmissionDate);
             const admissionNumber = admissionInfo.admissionNumber;
 
             let studentUser = null;
@@ -436,8 +637,6 @@ export async function admitStudent(req: AuthenticatedRequest, res: Response) {
               const cleanParentPhone = data.parentPhone?.trim() || null;
               const cleanParentEmail = data.parentEmail?.trim().toLowerCase() || null;
 
-              // If student phone is identical to parent phone, student user account should not take the parent's unique login phone!
-              // (The student profile still retains student.phone, while student logs in via admission number, and parent logs in via phone).
               if (cleanPhone && cleanParentPhone && cleanPhone === cleanParentPhone) {
                 cleanPhone = null;
               }
@@ -477,20 +676,23 @@ export async function admitStudent(req: AuthenticatedRequest, res: Response) {
                 },
               });
 
-              await tx.instituteMembership.create({
-                data: {
-                  instituteId,
-                  userId: studentUser.id,
-                  role: 'STUDENT',
-                  isActive: true,
-                },
-              });
+              if (effectiveInstituteId) {
+                await tx.instituteMembership.create({
+                  data: {
+                    instituteId: effectiveInstituteId,
+                    userId: studentUser.id,
+                    role: 'STUDENT',
+                    isActive: true,
+                  },
+                });
+              }
             }
 
-            // Create Student profile
+            // Create Student profile (populates both franchiseId and nullable instituteId)
             const student = await tx.student.create({
               data: {
-                instituteId,
+                instituteId: effectiveInstituteId,
+                franchiseId: resolvedFranchiseId,
                 userId: studentUser?.id || null,
                 admissionNumber,
                 firstName: data.firstName.trim(),
@@ -507,18 +709,16 @@ export async function admitStudent(req: AuthenticatedRequest, res: Response) {
               },
             });
 
-            // Batch enrollment if provided
-            if (data.batchId) {
-              // Validate batch belongs to this institute
+            // Batch enrollment if provided (only for branch-linked students)
+            if (effectiveInstituteId && data.batchId) {
               const batch = await tx.batch.findFirst({
-                where: { id: data.batchId, instituteId },
+                where: { id: data.batchId, instituteId: effectiveInstituteId },
               });
 
               if (!batch) {
                 throw new Error('Selected batch does not belong to this institute');
               }
 
-              // Create primary batch enrollment
               await tx.studentEnrollment.create({
                 data: {
                   studentId: student.id,
@@ -528,7 +728,6 @@ export async function admitStudent(req: AuthenticatedRequest, res: Response) {
                 },
               });
 
-              // Create subject enrollments if provided
               if (data.subjectIds && data.subjectIds.length > 0) {
                 for (const sid of data.subjectIds) {
                   await tx.studentEnrollment.create({
@@ -543,6 +742,26 @@ export async function admitStudent(req: AuthenticatedRequest, res: Response) {
               }
             }
 
+            // Global LMS Course Enrollment if selected during admission
+            let courseEnrollment = null;
+            if (verifiedGlobalCourse && resolvedFranchiseId) {
+              courseEnrollment = await tx.courseEnrollment.create({
+                data: {
+                  studentId: student.id,
+                  courseId: verifiedGlobalCourse.id,
+                  curriculumVersionId: verifiedGlobalCourse.activeCurriculumVersionId,
+                  franchiseId: resolvedFranchiseId,
+                  instituteId: effectiveLearningMode === LearningMode.ONLINE ? null : effectiveInstituteId,
+                  batchId: effectiveLearningMode === LearningMode.ONLINE ? null : (data.batchId || null),
+                  mode: effectiveLearningMode,
+                  status: EnrollmentStatus.ACTIVE,
+                },
+                include: {
+                  course: { select: { id: true, title: true, slug: true } },
+                },
+              });
+            }
+
             // Parent Account Creation & Linking (Requirement 3)
             let parentUser = null;
             let parentProfile = null;
@@ -553,7 +772,6 @@ export async function admitStudent(req: AuthenticatedRequest, res: Response) {
               const cleanParentPhone = data.parentPhone.trim();
               const cleanParentEmail = data.parentEmail?.trim().toLowerCase() || null;
 
-              // Check if a parent user already exists by phone or email (excluding newly created studentUser)
               const existingUser = await tx.user.findFirst({
                 where: {
                   AND: [
@@ -576,9 +794,8 @@ export async function admitStudent(req: AuthenticatedRequest, res: Response) {
 
                 parentUser = existingUser;
                 isExistingParentAccount = true;
-                parentTempPassword = null; // Do not reset or expose existing parent's password!
+                parentTempPassword = null;
 
-                // Ensure ParentProfile exists
                 if (existingUser.parentProfile) {
                   parentProfile = existingUser.parentProfile;
                 } else {
@@ -587,28 +804,28 @@ export async function admitStudent(req: AuthenticatedRequest, res: Response) {
                   });
                 }
 
-                // Ensure membership exists for this institute
-                const existingMembership = await tx.instituteMembership.findUnique({
-                  where: {
-                    instituteId_userId: {
-                      instituteId,
-                      userId: existingUser.id,
-                    },
-                  },
-                });
-
-                if (!existingMembership) {
-                  await tx.instituteMembership.create({
-                    data: {
-                      instituteId,
-                      userId: existingUser.id,
-                      role: 'PARENT',
-                      isActive: true,
+                if (effectiveInstituteId) {
+                  const existingMembership = await tx.instituteMembership.findUnique({
+                    where: {
+                      instituteId_userId: {
+                        instituteId: effectiveInstituteId,
+                        userId: existingUser.id,
+                      },
                     },
                   });
+
+                  if (!existingMembership) {
+                    await tx.instituteMembership.create({
+                      data: {
+                        instituteId: effectiveInstituteId,
+                        userId: existingUser.id,
+                        role: 'PARENT',
+                        isActive: true,
+                      },
+                    });
+                  }
                 }
               } else {
-                // Create new parent account
                 isExistingParentAccount = false;
                 parentTempPassword = data.parentInitialPassword?.trim() || `Parent#${generateSecureRandomToken(4)}2026`;
                 const parentPasswordHash = await hashPassword(parentTempPassword);
@@ -621,18 +838,20 @@ export async function admitStudent(req: AuthenticatedRequest, res: Response) {
                     passwordHash: parentPasswordHash,
                     role: 'PARENT',
                     isActive: true,
-                    mustChangePassword: false, // Staff-managed credentials
+                    mustChangePassword: false,
                   },
                 });
 
-                await tx.instituteMembership.create({
-                  data: {
-                    instituteId,
-                    userId: parentUser.id,
-                    role: 'PARENT',
-                    isActive: true,
-                  },
-                });
+                if (effectiveInstituteId) {
+                  await tx.instituteMembership.create({
+                    data: {
+                      instituteId: effectiveInstituteId,
+                      userId: parentUser.id,
+                      role: 'PARENT',
+                      isActive: true,
+                    },
+                  });
+                }
 
                 parentProfile = await tx.parentProfile.create({
                   data: {
@@ -642,7 +861,6 @@ export async function admitStudent(req: AuthenticatedRequest, res: Response) {
                 });
               }
 
-              // Link student to parent
               await tx.studentParentRelation.upsert({
                 where: {
                   studentId_parentId: {
@@ -665,7 +883,7 @@ export async function admitStudent(req: AuthenticatedRequest, res: Response) {
               });
             }
 
-            // Store initial generated credentials into student.notes so they display permanently on the staff Login & Password page
+            // Store initial generated credentials into student.notes
             const initialCredNotes: Record<string, any> = {};
             if (data.notes?.trim()) {
               initialCredNotes.userNotes = data.notes.trim();
@@ -686,10 +904,10 @@ export async function admitStudent(req: AuthenticatedRequest, res: Response) {
               student.notes = notesJson;
             }
 
-            // Record Audit Log
+            // Record Audit Log (supports nullable instituteId for online-direct students)
             await tx.auditLog.create({
               data: {
-                instituteId,
+                instituteId: effectiveInstituteId,
                 userId: req.user?.userId || null,
                 action: 'STUDENT_ADMITTED',
                 entityType: 'Student',
@@ -697,7 +915,11 @@ export async function admitStudent(req: AuthenticatedRequest, res: Response) {
                 newValues: {
                   admissionNumber: student.admissionNumber,
                   name: `${student.firstName} ${student.lastName}`,
+                  franchiseId: resolvedFranchiseId,
+                  instituteId: effectiveInstituteId,
                   batchId: data.batchId || null,
+                  globalCourseId: verifiedGlobalCourse?.id || null,
+                  learningMode: courseEnrollment ? effectiveLearningMode : (isOnlineDirectRequest ? 'ONLINE' : 'OFFLINE'),
                   hasParentAccount: !!parentUser,
                   isExistingParentAccount,
                 },
@@ -709,6 +931,7 @@ export async function admitStudent(req: AuthenticatedRequest, res: Response) {
               studentUser,
               tempPassword,
               admissionInfo,
+              courseEnrollment,
               parentUser,
               parentProfile,
               parentTempPassword,
@@ -720,9 +943,8 @@ export async function admitStudent(req: AuthenticatedRequest, res: Response) {
             timeout: 20000,
           }
         );
-        break; // Successfully committed, exit retry loop
+        break;
       } catch (txErr: any) {
-        // Retry only on transient pool acquisition timeouts, write conflicts, or unique constraint race
         if (
           attempt < 3 &&
           (txErr.code === 'P2028' || txErr.code === 'P2034' || txErr.code === 'P2002')
@@ -744,6 +966,7 @@ export async function admitStudent(req: AuthenticatedRequest, res: Response) {
         student: formatStudentResponse(result.student),
         admissionNumber: result.student.admissionNumber,
         admissionInfo: result.admissionInfo,
+        courseEnrollment: result.courseEnrollment,
         studentCredentials: result.studentUser ? {
           fullName: result.studentUser.fullName,
           admissionNumber: result.student.admissionNumber,
@@ -821,11 +1044,31 @@ export async function admitStudent(req: AuthenticatedRequest, res: Response) {
 }
 
 /**
- * Get admission number prefix & preview pattern for the active institute
+ * Get admission number prefix & preview pattern for the active institute (or Online Direct mode)
  */
 export async function getAdmissionPrefixInfo(req: AuthenticatedRequest, res: Response) {
   try {
     const instituteId = req.instituteId;
+    const isOnlineDirect = req.query.onlineDirect === 'true';
+
+    if (isOnlineDirect || (!instituteId && req.franchiseId)) {
+      const currentYear = getAdmissionYear(new Date());
+      const yy = String(currentYear).slice(-2);
+      return res.json({
+        success: true,
+        data: {
+          format: 'Franchise Online Direct [ON][YY][SERIAL 3]',
+          compactInstitute: 'ON',
+          batchCode: yy,
+          prefix: `ON${yy}`,
+          currentYear,
+          previewFormat: `ON${yy}###`,
+          example: `ON${yy}001`,
+          note: 'Auto-generated campus-independent Online Direct admission number',
+        },
+      });
+    }
+
     if (!instituteId) {
       return res.status(400).json({ success: false, error: 'Institute context required' });
     }
@@ -887,6 +1130,12 @@ export async function getMyStudentProfile(req: AuthenticatedRequest, res: Respon
         institute: {
           select: { id: true, name: true, code: true, address: true, phone: true },
         },
+        franchise: {
+          select: { id: true, name: true, code: true },
+        },
+        user: {
+          select: { id: true, email: true, xpPoints: true, level: true },
+        },
         enrollments: {
           where: { isActive: true },
           include: {
@@ -945,10 +1194,9 @@ export async function getMyStudentProfile(req: AuthenticatedRequest, res: Respon
  */
 export async function getStudentById(req: AuthenticatedRequest, res: Response) {
   try {
-    const instituteId = req.instituteId;
     const { id } = req.params;
 
-    // Enforce strict staff-to-student and role-based data isolation
+    // Enforce strict staff-to-student and role-based data isolation (supports branch & online-direct students)
     const authorized = await isStudentAuthorized(req, id, prisma);
     if (!authorized) {
       return res.status(403).json({
@@ -957,17 +1205,25 @@ export async function getStudentById(req: AuthenticatedRequest, res: Response) {
       });
     }
 
-    const student = await prisma.student.findFirst({
-      where: {
-        id,
-        instituteId,
-      },
+    const student = await prisma.student.findUnique({
+      where: { id },
       include: {
         createdByUser: {
           select: { id: true, fullName: true, role: true },
         },
         institute: {
           select: { id: true, name: true, code: true, phone: true, email: true },
+        },
+        franchise: {
+          select: { id: true, name: true, code: true },
+        },
+        courseEnrollments: {
+          orderBy: { enrolledAt: 'desc' },
+          include: {
+            course: { select: { id: true, title: true, slug: true } },
+            batch: { select: { id: true, name: true } },
+            institute: { select: { id: true, name: true, code: true } },
+          },
         },
         user: {
           select: {
@@ -1070,7 +1326,6 @@ export async function getStudentById(req: AuthenticatedRequest, res: Response) {
  */
 export async function updateStudent(req: AuthenticatedRequest, res: Response) {
   try {
-    const instituteId = req.instituteId;
     const { id } = req.params;
 
     const parse = updateStudentSchema.safeParse(req.body);
@@ -1089,8 +1344,8 @@ export async function updateStudent(req: AuthenticatedRequest, res: Response) {
       });
     }
 
-    const existing = await prisma.student.findFirst({
-      where: { id, instituteId },
+    const existing = await prisma.student.findUnique({
+      where: { id },
       include: {
         user: true,
         parentRelations: {
@@ -1104,8 +1359,9 @@ export async function updateStudent(req: AuthenticatedRequest, res: Response) {
     });
 
     if (!existing) {
-      return res.status(404).json({ success: false, error: 'Student not found in this institute' });
+      return res.status(404).json({ success: false, error: 'Student not found' });
     }
+    const auditInstituteId = existing.instituteId || req.instituteId || null;
 
     const data = parse.data;
 
@@ -1235,7 +1491,7 @@ export async function updateStudent(req: AuthenticatedRequest, res: Response) {
       // 5. Record Audit Log
       await tx.auditLog.create({
         data: {
-          instituteId,
+          instituteId: auditInstituteId,
           userId: req.user?.userId || null,
           action: 'STUDENT_UPDATED',
           entityType: 'Student',
@@ -1246,13 +1502,19 @@ export async function updateStudent(req: AuthenticatedRequest, res: Response) {
       });
     });
 
-    const fullUpdated = await prisma.student.findFirst({
-      where: { id, instituteId },
+    const fullUpdated = await prisma.student.findUnique({
+      where: { id },
       include: {
         user: true,
+        institute: { select: { id: true, name: true, code: true } },
+        franchise: { select: { id: true, name: true, code: true } },
         enrollments: {
           where: { isActive: true },
           include: { batch: true, subject: true },
+        },
+        courseEnrollments: {
+          where: { status: { in: [EnrollmentStatus.ACTIVE, EnrollmentStatus.COMPLETED] } },
+          include: { course: { select: { id: true, title: true, slug: true } } },
         },
         parentRelations: {
           include: {
@@ -1280,10 +1542,6 @@ export async function updateStudent(req: AuthenticatedRequest, res: Response) {
  */
 export async function resetStudentPassword(req: AuthenticatedRequest, res: Response) {
   try {
-    const instituteId = req.instituteId;
-    if (!instituteId) {
-      return res.status(400).json({ success: false, error: 'Institute context required' });
-    }
     const { id } = req.params;
 
     const parse = resetStudentPasswordSchema.safeParse(req.body);
@@ -1299,14 +1557,15 @@ export async function resetStudentPassword(req: AuthenticatedRequest, res: Respo
       });
     }
 
-    const student = await prisma.student.findFirst({
-      where: { id, instituteId },
+    const student = await prisma.student.findUnique({
+      where: { id },
       include: { user: true },
     });
 
     if (!student) {
-      return res.status(404).json({ success: false, error: 'Student not found in this institute' });
+      return res.status(404).json({ success: false, error: 'Student not found' });
     }
+    const targetInstituteId = student.instituteId || req.instituteId || null;
 
     let targetUserId = student.userId;
     const temporaryPassword =
@@ -1328,14 +1587,16 @@ export async function resetStudentPassword(req: AuthenticatedRequest, res: Respo
         },
       });
 
-      await prisma.instituteMembership.create({
-        data: {
-          instituteId,
-          userId: studentUser.id,
-          role: 'STUDENT',
-          isActive: true,
-        },
-      });
+      if (targetInstituteId) {
+        await prisma.instituteMembership.create({
+          data: {
+            instituteId: targetInstituteId,
+            userId: studentUser.id,
+            role: 'STUDENT',
+            isActive: true,
+          },
+        });
+      }
 
       await prisma.student.update({
         where: { id: student.id },
@@ -1377,7 +1638,7 @@ export async function resetStudentPassword(req: AuthenticatedRequest, res: Respo
     // Record audit log
     await prisma.auditLog.create({
       data: {
-        instituteId,
+        instituteId: targetInstituteId,
         userId: req.user?.userId || null,
         action: 'STUDENT_PASSWORD_RESET',
         entityType: 'Student',
@@ -1410,10 +1671,6 @@ export async function resetStudentPassword(req: AuthenticatedRequest, res: Respo
  */
 export async function updateStudentLoginIdentifier(req: AuthenticatedRequest, res: Response) {
   try {
-    const instituteId = req.instituteId;
-    if (!instituteId) {
-      return res.status(400).json({ success: false, error: 'Institute context required' });
-    }
     const { id } = req.params;
 
     const parse = updateStudentIdentifierSchema.safeParse(req.body);
@@ -1429,14 +1686,15 @@ export async function updateStudentLoginIdentifier(req: AuthenticatedRequest, re
       });
     }
 
-    const student = await prisma.student.findFirst({
-      where: { id, instituteId },
+    const student = await prisma.student.findUnique({
+      where: { id },
       include: { user: true },
     });
 
     if (!student) {
-      return res.status(404).json({ success: false, error: 'Student not found in this institute' });
+      return res.status(404).json({ success: false, error: 'Student not found' });
     }
+    const auditInstId = student.instituteId || req.instituteId || null;
 
     const cleanEmail = parse.data.email !== undefined ? (parse.data.email.trim().toLowerCase() || null) : undefined;
     const cleanPhone = parse.data.phone !== undefined ? (parse.data.phone.trim() || null) : undefined;
@@ -1481,7 +1739,7 @@ export async function updateStudentLoginIdentifier(req: AuthenticatedRequest, re
 
       await tx.auditLog.create({
         data: {
-          instituteId,
+          instituteId: auditInstId,
           userId: req.user?.userId || null,
           action: 'STUDENT_IDENTIFIER_UPDATED',
           entityType: 'Student',
@@ -1509,7 +1767,6 @@ export async function updateStudentLoginIdentifier(req: AuthenticatedRequest, re
  */
 export async function updateStudentStatus(req: AuthenticatedRequest, res: Response) {
   try {
-    const instituteId = req.instituteId;
     const { id } = req.params;
 
     const parse = updateStudentStatusSchema.safeParse(req.body);
@@ -1530,13 +1787,14 @@ export async function updateStudentStatus(req: AuthenticatedRequest, res: Respon
       });
     }
 
-    const existing = await prisma.student.findFirst({
-      where: { id, instituteId },
+    const existing = await prisma.student.findUnique({
+      where: { id },
     });
 
     if (!existing) {
-      return res.status(404).json({ success: false, error: 'Student not found in this institute' });
+      return res.status(404).json({ success: false, error: 'Student not found' });
     }
+    const auditInstId = existing.instituteId || req.instituteId || null;
 
     const updated = await prisma.$transaction(async (tx) => {
       const student = await tx.student.update({
@@ -1555,7 +1813,7 @@ export async function updateStudentStatus(req: AuthenticatedRequest, res: Respon
       // Record Audit Log
       await tx.auditLog.create({
         data: {
-          instituteId,
+          instituteId: auditInstId,
           userId: req.user?.userId || null,
           action: 'STUDENT_STATUS_CHANGED',
           entityType: 'Student',
@@ -1727,10 +1985,6 @@ export async function getRawPhoto(req: AuthenticatedRequest, res: Response) {
  */
 export async function updateStudentAccountStatus(req: AuthenticatedRequest, res: Response) {
   try {
-    const instituteId = req.instituteId;
-    if (!instituteId) {
-      return res.status(400).json({ success: false, error: 'Institute context required' });
-    }
     const { id } = req.params;
     const { isActive } = req.body;
 
@@ -1746,8 +2000,8 @@ export async function updateStudentAccountStatus(req: AuthenticatedRequest, res:
       });
     }
 
-    const student = await prisma.student.findFirst({
-      where: { id, instituteId },
+    const student = await prisma.student.findUnique({
+      where: { id },
       include: { user: true },
     });
 
@@ -1761,14 +2015,16 @@ export async function updateStudentAccountStatus(req: AuthenticatedRequest, res:
         data: { isActive },
       });
 
-      await tx.instituteMembership.updateMany({
-        where: { instituteId, userId: student.userId! },
-        data: { isActive },
-      });
+      if (student.instituteId) {
+        await tx.instituteMembership.updateMany({
+          where: { instituteId: student.instituteId, userId: student.userId! },
+          data: { isActive },
+        });
+      }
 
       await tx.auditLog.create({
         data: {
-          instituteId,
+          instituteId: student.instituteId || req.instituteId || null,
           userId: req.user?.userId || null,
           action: 'STUDENT_ACCOUNT_STATUS_CHANGED',
           entityType: 'User',
@@ -1994,8 +2250,7 @@ export async function assignStudentBatch(req: AuthenticatedRequest, res: Respons
  */
 export async function lookupExistingStudent(req: AuthenticatedRequest, res: Response) {
   try {
-    const instituteId = req.instituteId;
-    if (!instituteId) return res.status(400).json({ success: false, error: 'Institute context required' });
+    const scope = await getAuthorizedStudentScope(req, prisma);
 
     const search = ((req.query.search || req.query.query || req.query.q || req.query.phone || req.query.admissionNumber || '') as string).trim();
     if (!search || search.length < 2) {
@@ -2004,24 +2259,35 @@ export async function lookupExistingStudent(req: AuthenticatedRequest, res: Resp
 
     const students = await prisma.student.findMany({
       where: {
-        instituteId,
-        OR: [
-          { admissionNumber: { contains: search, mode: 'insensitive' } },
-          { firstName: { contains: search, mode: 'insensitive' } },
-          { lastName: { contains: search, mode: 'insensitive' } },
-          { phone: { contains: search, mode: 'insensitive' } },
-          { user: { phone: { contains: search, mode: 'insensitive' } } },
-          { user: { email: { contains: search, mode: 'insensitive' } } },
+        AND: [
+          scope.whereClause,
+          {
+            OR: [
+              { admissionNumber: { contains: search, mode: 'insensitive' } },
+              { firstName: { contains: search, mode: 'insensitive' } },
+              { lastName: { contains: search, mode: 'insensitive' } },
+              { phone: { contains: search, mode: 'insensitive' } },
+              { user: { phone: { contains: search, mode: 'insensitive' } } },
+              { user: { email: { contains: search, mode: 'insensitive' } } },
+            ],
+          },
         ],
       },
       take: 20,
       include: {
         user: { select: { id: true, email: true, phone: true, fullName: true, isActive: true } },
+        institute: { select: { id: true, name: true, code: true } },
         enrollments: {
           where: { isActive: true },
           include: {
             batch: { select: { id: true, name: true, code: true } },
             subject: { select: { id: true, name: true, code: true } },
+          },
+        },
+        courseEnrollments: {
+          where: { status: { in: [EnrollmentStatus.ACTIVE, EnrollmentStatus.COMPLETED] } },
+          include: {
+            course: { select: { id: true, title: true, slug: true } },
           },
         },
         parentRelations: {
@@ -2038,6 +2304,8 @@ export async function lookupExistingStudent(req: AuthenticatedRequest, res: Resp
 
     const formatted = students.map((s) => ({
       id: s.id,
+      instituteId: s.instituteId,
+      franchiseId: s.franchiseId,
       admissionNumber: s.admissionNumber,
       firstName: s.firstName,
       lastName: s.lastName,
@@ -2046,12 +2314,20 @@ export async function lookupExistingStudent(req: AuthenticatedRequest, res: Resp
       email: s.user?.email || null,
       status: s.status,
       photoUrl: s.photoUrl,
+      institute: s.institute,
       activeEnrollments: s.enrollments.map((e) => ({
         batchId: e.batchId,
         batchName: e.batch?.name,
         batchCode: e.batch?.code,
         subjectId: e.subjectId,
         subjectName: e.subject?.name,
+      })),
+      courseEnrollments: s.courseEnrollments.map((ce) => ({
+        id: ce.id,
+        courseId: ce.courseId,
+        mode: ce.mode,
+        status: ce.status,
+        course: ce.course,
       })),
       parents: s.parentRelations.map((pr) => ({
         fullName: pr.parent?.user?.fullName,

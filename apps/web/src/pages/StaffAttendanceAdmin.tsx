@@ -263,7 +263,7 @@ export const StaffAttendanceAdmin: React.FC<StaffAttendanceAdminProps> = () => {
   useEffect(() => {
     loadSummary();
     loadRegister();
-  }, [loadSummary, loadRegister]);
+  }, [loadSummary, loadRegister, activeInstitute?.id]);
 
   useEffect(() => {
     if (activeTab === 'settings') {
@@ -274,7 +274,7 @@ export const StaffAttendanceAdmin: React.FC<StaffAttendanceAdminProps> = () => {
       loadWfhMetrics();
       loadWfhAuthorizations();
     }
-  }, [activeTab, loadConfig, loadMonthlyReport, loadWfhMetrics, loadWfhAuthorizations]);
+  }, [activeTab, loadConfig, loadMonthlyReport, loadWfhMetrics, loadWfhAuthorizations, activeInstitute?.id]);
 
   // ==========================================
   // ACTIONS
@@ -413,13 +413,14 @@ export const StaffAttendanceAdmin: React.FC<StaffAttendanceAdminProps> = () => {
   const handleDownloadCsv = async () => {
     try {
       setDownloadingCsv(true);
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('tuition_token') || localStorage.getItem('token');
+      const instId = activeInstitute?.id || localStorage.getItem('tuition_active_institute_id') || '';
       const response = await fetch(
-        `http://localhost:5000/api/staff-attendance/admin/monthly-report?year=${reportYear}&month=${reportMonth}&format=csv`,
+        `/api/staff-attendance/admin/monthly-report?year=${reportYear}&month=${reportMonth}&format=csv`,
         {
           headers: {
             Authorization: `Bearer ${token}`,
-            'X-Institute-Id': localStorage.getItem('activeInstituteId') || '',
+            ...(instId && instId !== 'ALL' ? { 'X-Institute-Id': instId } : {}),
           },
         }
       );

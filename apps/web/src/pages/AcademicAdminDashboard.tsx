@@ -30,9 +30,10 @@ export const AcademicAdminDashboard: React.FC<AcademicAdminDashboardProps> = ({ 
       })
       .catch((err) => console.error(err))
       .finally(() => setLoading(false));
-  }, []);
+  }, [activeInstitute?.id]);
 
   const metrics = data?.metrics;
+  const isAdminRole = user?.role === 'ACADEMIC_ADMIN' || user?.role === 'BRANCH_ADMIN' || user?.role === 'FRANCHISE_OWNER';
 
   return (
     <div className="space-y-8">
@@ -120,7 +121,7 @@ export const AcademicAdminDashboard: React.FC<AcademicAdminDashboardProps> = ({ 
           </span>
         </button>
 
-        {user?.role === 'ACADEMIC_ADMIN' && (
+        {isAdminRole && (
           <button
             onClick={() => onNavigateTab('staff')}
             className="p-5 rounded-2xl bg-white border border-[#E2E8F0] hover:border-[#8D6E63] text-left transition-all group shadow-sm hover:shadow-md"
@@ -140,7 +141,7 @@ export const AcademicAdminDashboard: React.FC<AcademicAdminDashboardProps> = ({ 
           </button>
         )}
 
-        {user?.role === 'ACADEMIC_ADMIN' && (
+        {isAdminRole && (
           <button
             onClick={() => onNavigateTab('staff_attendance')}
             className="p-5 rounded-2xl bg-white border border-[#E2E8F0] hover:border-[#8D6E63] text-left transition-all group shadow-sm hover:shadow-md"
@@ -160,7 +161,7 @@ export const AcademicAdminDashboard: React.FC<AcademicAdminDashboardProps> = ({ 
           </button>
         )}
 
-        {user?.role === 'ACADEMIC_ADMIN' && (
+        {isAdminRole && (
           <button
             onClick={() => onNavigateTab('academics')}
             className="p-5 rounded-2xl bg-white border border-[#E2E8F0] hover:border-[#8D6E63] text-left transition-all group shadow-sm hover:shadow-md"

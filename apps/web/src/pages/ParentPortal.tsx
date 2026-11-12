@@ -9,6 +9,7 @@ import { ParentAcademicsView } from './parent/ParentAcademicsView';
 import { ParentTestResultsView } from './parent/ParentTestResultsView';
 import { ParentNotificationsView } from './parent/ParentNotificationsView';
 import { ParentProfileView } from './parent/ParentProfileView';
+import { ParentCoursesView } from './parent/ParentCoursesView';
 
 import {
   GraduationCap,
@@ -23,6 +24,7 @@ import {
   RotateCw,
   AlertCircle,
   Users,
+  Laptop,
 } from 'lucide-react';
 
 interface ParentPortalProps {
@@ -130,14 +132,16 @@ export const ParentPortal: React.FC<ParentPortalProps> = ({ initialTab = 'dashbo
     }
   };
 
-  useEffect(() => {
-    if (selectedStudentId) {
-      loadStudentFeeStatement(selectedStudentId);
-    }
-  }, [selectedStudentId]);
-
   const activeChildRelation = children.find((c) => c.student.id === selectedStudentId) || children[0];
   const activeStudent = activeChildRelation?.student;
+
+  useEffect(() => {
+    if (selectedStudentId && activeChildRelation?.student?.instituteId) {
+      loadStudentFeeStatement(selectedStudentId);
+    } else {
+      setFeeStatement(null);
+    }
+  }, [selectedStudentId, activeChildRelation?.student?.instituteId]);
 
   const formatCurrency = (val: number | string | undefined) => {
     const num = Number(val || 0);
@@ -146,6 +150,7 @@ export const ParentPortal: React.FC<ParentPortalProps> = ({ initialTab = 'dashbo
 
   const tabs = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'courses', label: 'My Courses & Certs', icon: Laptop },
     { id: 'attendance', label: 'Attendance', icon: Calendar },
     { id: 'communication', label: 'Teacher Chat', icon: MessageSquare },
     { id: 'fees', label: 'Fee Payments', icon: CreditCard },
@@ -171,7 +176,16 @@ export const ParentPortal: React.FC<ParentPortalProps> = ({ initialTab = 'dashbo
         </p>
         <button
           onClick={() => {
-            const dest = user.role === 'ACADEMIC_ADMIN' ? 'academic_dashboard' : user.role === 'STAFF' ? 'my_attendance' : 'super_admin_dashboard';
+            const dest =
+              user.role === 'ACADEMIC_ADMIN' || user.role === 'BRANCH_ADMIN'
+                ? 'academic_dashboard'
+                : user.role === 'FRANCHISE_OWNER'
+                ? 'franchise_owner_dashboard'
+                : user.role === 'STAFF'
+                ? 'my_attendance'
+                : user.role === 'STUDENT'
+                ? 'student_portal'
+                : 'super_admin_dashboard';
             window.location.href = '/' + dest;
           }}
           className="px-5 py-2.5 rounded-xl bg-[#006FFF] hover:bg-[#0058D4] text-white font-bold text-xs inline-flex items-center gap-2 shadow-sm transition-all"
@@ -239,8 +253,11 @@ export const ParentPortal: React.FC<ParentPortalProps> = ({ initialTab = 'dashbo
               </span>
             </div>
             <p className="text-xs text-[#64748B]">
-              Admission No: <strong className="font-mono text-[#0F172A]">{activeStudent?.admissionNumber}</strong> &bull; Batch:{' '}
-              <strong className="text-[#0F172A]">{activeStudent?.enrollments?.[0]?.batch?.name || 'Assigned'}</strong>
+              Admission No: <strong className="font-mono text-[#0F172A]">{activeStudent?.admissionNumber}</strong> &bull;{' '}
+              {activeStudent?.instituteId ? 'Batch:' : 'Channel:'}{' '}
+              <strong className="text-[#0F172A]">
+                {activeStudent?.enrollments?.[0]?.batch?.name || (activeStudent?.instituteId ? 'Assigned' : 'Online Direct')}
+              </strong>
             </p>
           </div>
         </div>
@@ -311,6 +328,10 @@ export const ParentPortal: React.FC<ParentPortalProps> = ({ initialTab = 'dashbo
             onNavigateTab={(tab) => setActiveTab(tab)}
             formatCurrency={formatCurrency}
           />
+        )}
+
+        {activeTab === 'courses' && (
+          <ParentCoursesView student={activeStudent} />
         )}
 
         {activeTab === 'attendance' && (

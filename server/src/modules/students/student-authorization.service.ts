@@ -153,7 +153,7 @@ export async function getAuthorizedStaffAssignments(
     const userId = req.user.userId || (req.user as any).id;
     const instituteId = req.instituteId;
 
-    if (!instituteId && role !== 'SUPER_ADMIN') {
+    if (!instituteId && role !== 'SUPER_ADMIN' && role !== 'FRANCHISE_OWNER' && role !== 'PARENT' && role !== 'STUDENT') {
       throw new Error('Institute context required');
     }
 
@@ -167,15 +167,40 @@ export async function getAuthorizedStaffAssignments(
       };
     }
 
-      // 2. ACADEMIC_ADMIN / FRANCHISE_OWNER: full institute scope
-      if (role === 'ACADEMIC_ADMIN' || role === 'BRANCH_ADMIN' || role === 'FRANCHISE_OWNER') {
+    // 2. FRANCHISE_OWNER: consolidated franchise + online scope or specific branch scope
+    if (role === 'FRANCHISE_OWNER') {
+      const franchiseId = req.franchiseId;
+      const assignedBranchIds: string[] = (req as any).assignedBranchIds || [];
+      if (franchiseId && (!instituteId || (req as any).isConsolidatedBranchView)) {
         return {
-          instituteId: instituteId!,
+          instituteId: instituteId || '',
           isStaff: false,
           assignedBatchIds: [],
-          whereClause: { instituteId: instituteId! },
+          whereClause: {
+            OR: [
+              ...(assignedBranchIds.length > 0 ? [{ instituteId: { in: assignedBranchIds } }] : []),
+              { franchiseId, instituteId: null },
+            ],
+          },
         };
       }
+      return {
+        instituteId: instituteId!,
+        isStaff: false,
+        assignedBatchIds: [],
+        whereClause: { instituteId: instituteId! },
+      };
+    }
+
+    // 2b. ACADEMIC_ADMIN / BRANCH_ADMIN: strict single-branch institute scope
+    if (role === 'ACADEMIC_ADMIN' || role === 'BRANCH_ADMIN') {
+      return {
+        instituteId: instituteId!,
+        isStaff: false,
+        assignedBatchIds: [],
+        whereClause: { instituteId: instituteId! },
+      };
+    }
 
       // 3. STAFF: Strict isolation â€” only students enrolled in batches and subjects assigned to this staff
       if (role === 'STAFF') {
@@ -404,17 +429,61 @@ export async function getAuthorizedStaffAssignments(
     ): Promise<boolean> {
       if (!req.user) return false;
 
-        // 1. SUPER_ADMIN / ACADEMIC_ADMIN / FRANCHISE_OWNER: full institute scope
-        if (
-          req.user.role === 'SUPER_ADMIN' ||
-          req.user.role === 'ACADEMIC_ADMIN' ||
-          req.user.role === 'BRANCH_ADMIN' ||
-          req.user.role === 'FRANCHISE_OWNER'
-        ) {
+        // 1. SUPER_ADMIN: full access (scoped if instituteId header provided)
+        if (req.user.role === 'SUPER_ADMIN') {
           const student = await prismaClient.student.findFirst({
             where: {
               id: studentId,
               ...(req.instituteId ? { instituteId: req.instituteId } : {}),
+            },
+            select: { id: true },
+          });
+          return !!student;
+        }
+
+        // 1b. FRANCHISE_OWNER: any branch in their franchise OR their franchise's online-direct students
+        if (req.user.role === 'FRANCHISE_OWNER') {
+          let franchiseId = req.franchiseId;
+          let assignedBranchIds: string[] = (req as any).assignedBranchIds || [];
+          if (!franchiseId) {
+            const franchise = await prismaClient.franchise.findFirst({
+              where: { ownerUserId: req.user.userId },
+              include: { branches: { select: { id: true } } },
+            });
+            franchiseId = franchise?.id;
+            assignedBranchIds = franchise?.branches.map((b: any) => b.id) || [];
+          }
+          if (!franchiseId) return false;
+
+          const student = await prismaClient.student.findFirst({
+            where: {
+              id: studentId,
+              OR: [
+                ...(assignedBranchIds.length > 0 ? [{ instituteId: { in: assignedBranchIds } }] : []),
+                { franchiseId, instituteId: null },
+                { institute: { franchiseId } },
+              ],
+            },
+            select: { id: true, instituteId: true },
+          });
+          if (!student) return false;
+          // If a specific branch is active (not consolidated), still allow pure ONLINE students of the franchise
+          if (req.instituteId && !(req as any).isConsolidatedBranchView && student.instituteId && student.instituteId !== req.instituteId) {
+            return false;
+          }
+          return true;
+        }
+
+        // 1c. ACADEMIC_ADMIN / BRANCH_ADMIN: strict single-branch scope
+        if (
+          req.user.role === 'ACADEMIC_ADMIN' ||
+          req.user.role === 'BRANCH_ADMIN'
+        ) {
+          if (!req.instituteId) return false;
+          const student = await prismaClient.student.findFirst({
+            where: {
+              id: studentId,
+              instituteId: req.instituteId,
             },
             select: { id: true },
           });
@@ -485,7 +554,12 @@ export async function getAuthorizedStaffAssignments(
         batchId: string,
         prismaClient: any = defaultPrisma
       ): Promise<boolean> {
-        if (req.user?.role === 'ACADEMIC_ADMIN' || req.user?.role === 'SUPER_ADMIN' || req.user?.role === 'BRANCH_ADMIN') {
+        if (
+          req.user?.role === 'ACADEMIC_ADMIN' ||
+          req.user?.role === 'SUPER_ADMIN' ||
+          req.user?.role === 'BRANCH_ADMIN' ||
+          req.user?.role === 'FRANCHISE_OWNER'
+        ) {
           return true;
         }
         if (req.user?.role !== 'STAFF') {
@@ -505,7 +579,12 @@ export async function getAuthorizedStaffAssignments(
         subjectId: string,
         prismaClient: any = defaultPrisma
       ): Promise<boolean> {
-        if (req.user?.role === 'ACADEMIC_ADMIN' || req.user?.role === 'SUPER_ADMIN' || req.user?.role === 'BRANCH_ADMIN') {
+        if (
+          req.user?.role === 'ACADEMIC_ADMIN' ||
+          req.user?.role === 'SUPER_ADMIN' ||
+          req.user?.role === 'BRANCH_ADMIN' ||
+          req.user?.role === 'FRANCHISE_OWNER'
+        ) {
           return true;
         }
         if (req.user?.role !== 'STAFF') {

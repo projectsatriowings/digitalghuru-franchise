@@ -132,3 +132,61 @@ export function resolveAbsolutePath(storageKey: string): string | null {
 
   return null;
 }
+
+/**
+ * Course media storage (thumbnails, banners, brochures, videos, worksheets)
+ */
+const courseStorage = multer.diskStorage({
+  destination: (req: Request, file: any, cb: any) => {
+    const rawFolder = (req.query?.folder as string) || (req.body?.folder as string) || 'general';
+    const sanitizedFolder = rawFolder.replace(/[^a-zA-Z0-9_-]/g, '') || 'general';
+    const courseDir = path.join(LOCAL_STORAGE_DIR, 'courses', sanitizedFolder);
+    if (!fs.existsSync(courseDir)) {
+      fs.mkdirSync(courseDir, { recursive: true });
+    }
+    cb(null, courseDir);
+  },
+  filename: (req: any, file: any, cb: any) => {
+    const safeName = sanitizeFilename(file.originalname);
+    const uniquePrefix = `${Date.now()}-${crypto.randomBytes(6).toString('hex')}`;
+    cb(null, `${uniquePrefix}-${safeName}`);
+  },
+});
+
+export const ALLOWED_COURSE_MIME_TYPES = [
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/svg+xml',
+  'image/gif',
+  'application/pdf',
+  'application/zip',
+  'application/x-zip-compressed',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-powerpoint',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'text/plain',
+  'text/csv',
+  'video/mp4',
+  'video/webm',
+  'video/ogg',
+  'video/quicktime',
+];
+
+export const MAX_COURSE_FILE_SIZE_BYTES = 250 * 1024 * 1024; // 250MB for video & archive media
+
+export const courseMediaUpload = multer({
+  storage: courseStorage,
+  limits: { fileSize: MAX_COURSE_FILE_SIZE_BYTES },
+  fileFilter: (req: any, file: any, cb: any) => {
+    if (ALLOWED_COURSE_MIME_TYPES.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error(`Unsupported file type: ${file.mimetype}. Allowed types: Images, PDFs, Documents, ZIP archives, and Videos.`));
+    }
+  },
+});
+

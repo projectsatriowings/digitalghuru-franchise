@@ -18,16 +18,30 @@ import {
   Bell,
   User,
   Compass,
+  Laptop,
+  X,
 } from 'lucide-react';
 
 interface SidebarProps {
   currentTab: string;
   onSelectTab: (tab: string) => void;
+  isMobileOpen?: boolean;
+  onCloseMobile?: () => void;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab }) => {
+export const Sidebar: React.FC<SidebarProps> = ({
+  currentTab,
+  onSelectTab,
+  isMobileOpen = false,
+  onCloseMobile,
+}) => {
   const { user } = useAuth();
   const role = user?.role;
+
+  const handleSelect = (tab: string) => {
+    onSelectTab(tab);
+    onCloseMobile?.();
+  };
 
   const navItemClass = (tab: string) => `
     flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold transition-all duration-150 cursor-pointer w-full text-left
@@ -37,11 +51,27 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab }) => 
     }
   `;
 
-  return (
-    <aside className="w-64 border-r border-slate-800 bg-[#0F172A] h-full p-4 flex flex-col justify-between shrink-0 overflow-y-auto select-none">
+  const sidebarContent = (isDrawer: boolean) => (
+    <aside
+      className={`w-64 border-r border-slate-800 bg-[#0F172A] h-full p-4 flex flex-col justify-between shrink-0 overflow-y-auto select-none ${
+        isDrawer ? 'shadow-2xl' : ''
+      }`}
+    >
       <div className="space-y-1">
-        <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400 font-display px-3 py-2">
-          Navigation Menu
+        <div className="flex items-center justify-between px-3 py-2">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 font-display">
+            Navigation Menu
+          </span>
+          {isDrawer && onCloseMobile && (
+            <button
+              type="button"
+              onClick={onCloseMobile}
+              className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+              aria-label="Close navigation menu"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
         </div>
 
         {/* Super Admin Nav Items */}
@@ -59,6 +89,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab }) => 
             >
               <Building2 className="w-4 h-4 text-[#FEDC32]" /> Franchise Management
             </button>
+            <button
+              onClick={() => onSelectTab('course_management')}
+              className={navItemClass('course_management')}
+            >
+              <BookOpen className="w-4 h-4 text-emerald-400" /> Global Course Catalogue
+            </button>
           </>
         )}
 
@@ -70,6 +106,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab }) => 
               className={navItemClass('franchise_owner_dashboard')}
             >
               <LayoutDashboard className="w-4 h-4 text-[#FEDC32]" /> Franchisee Dashboard
+            </button>
+            <button
+              onClick={() => onSelectTab('franchise_courses')}
+              className={navItemClass('franchise_courses')}
+            >
+              <GraduationCap className="w-4 h-4 text-emerald-400" /> Courses & LMS Enrollments
             </button>
             <button
               onClick={() => onSelectTab('academics')}
@@ -142,6 +184,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab }) => 
               className={navItemClass('academic_dashboard')}
             >
               <LayoutDashboard className="w-4 h-4" /> Dashboard
+            </button>
+
+            <button
+              onClick={() => onSelectTab('franchise_courses')}
+              className={navItemClass('franchise_courses')}
+            >
+              <BookOpen className="w-4 h-4 text-emerald-400" /> Courses & Enrollments
             </button>
 
             <button
@@ -288,6 +337,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab }) => 
             </button>
 
             <button
+              onClick={() => onSelectTab('parent_courses')}
+              className={navItemClass('parent_courses')}
+            >
+              <Laptop className="w-4 h-4 text-emerald-400" /> My Courses & Certs
+            </button>
+
+            <button
               onClick={() => onSelectTab('parent_attendance')}
               className={navItemClass('parent_attendance')}
             >
@@ -356,6 +412,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab }) => 
             </button>
 
             <button
+              onClick={() => onSelectTab('student_courses')}
+              className={navItemClass('student_courses')}
+            >
+              <Laptop className="w-4 h-4" /> My Courses & Player
+            </button>
+
+            <button
               onClick={() => onSelectTab('materials')}
               className={navItemClass('materials')}
             >
@@ -390,5 +453,30 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab }) => 
         Digital Guru Franchise &bull; Enterprise v2.0
       </div>
     </aside>
+  );
+
+  return (
+    <>
+      {/* Desktop persistent sidebar */}
+      <div className="hidden md:flex h-full shrink-0">
+        {sidebarContent(false)}
+      </div>
+
+      {/* Mobile slide-over drawer */}
+      {isMobileOpen && (
+        <div className="fixed inset-0 z-50 md:hidden flex">
+          <div
+            className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs"
+            onClick={onCloseMobile}
+          />
+          <div
+            className="relative z-10 flex h-full"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {sidebarContent(true)}
+          </div>
+        </div>
+      )}
+    </>
   );
 };
