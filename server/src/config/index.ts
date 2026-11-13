@@ -40,14 +40,23 @@ export const config = {
   storage: {
     driver: (process.env.STORAGE_DRIVER || 'local').toLowerCase() as 'local' | 'volume' | 's3',
     localPath: process.env.STORAGE_LOCAL_PATH || './uploads',
-    persistentVolumePath: process.env.PERSISTENT_STORAGE_PATH || process.env.STORAGE_PERSISTENT_PATH || '',
-    allowEphemeralLocal: process.env.STORAGE_ALLOW_EPHEMERAL_LOCAL === 'true',
+    // Canonical environment variable: PERSISTENT_VOLUME_PATH
+    // Supported legacy aliases: PERSISTENT_STORAGE_PATH, STORAGE_PERSISTENT_PATH
+    persistentVolumePath:
+      process.env.PERSISTENT_VOLUME_PATH ||
+      process.env.PERSISTENT_STORAGE_PATH ||
+      process.env.STORAGE_PERSISTENT_PATH ||
+      '',
+    allowEphemeralLocal:
+      process.env.ALLOW_EPHEMERAL_LOCAL_STORAGE === 'true' ||
+      process.env.STORAGE_ALLOW_EPHEMERAL_LOCAL === 'true',
     s3: {
-      bucket: process.env.S3_BUCKET || '',
-      region: process.env.S3_REGION || 'us-east-1',
-      endpoint: process.env.S3_ENDPOINT || '',
-      accessKeyId: process.env.S3_ACCESS_KEY_ID || '',
-      secretAccessKey: process.env.S3_SECRET_ACCESS_KEY || '',
+      bucket: process.env.S3_BUCKET || process.env.S3_BUCKET_NAME || process.env.AWS_S3_BUCKET || '',
+      region: process.env.S3_REGION || process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || 'us-east-1',
+      endpoint: process.env.S3_ENDPOINT || process.env.AWS_ENDPOINT_URL_S3 || process.env.AWS_ENDPOINT_URL || '',
+      accessKeyId: process.env.S3_ACCESS_KEY_ID || process.env.AWS_ACCESS_KEY_ID || '',
+      secretAccessKey: process.env.S3_SECRET_ACCESS_KEY || process.env.AWS_SECRET_ACCESS_KEY || '',
+      forcePathStyle: process.env.S3_FORCE_PATH_STYLE === 'true',
     },
   },
   superAdmin: {
@@ -58,7 +67,135 @@ export const config = {
 };
 
 /**
- * Validates that critical secrets are properly configured in production
+ * Validates storage driver configuration strictly across environments.
+ * Prevents silent fallback to ephemeral storage in production and verifies directory permissions.
+ */
+export function validateStorageConfig(): {
+  driver: 'local' | 'volume' | 's3';
+  resolvedLocation: string;
+  isWritable: boolean;
+  statusMessage: string;
+} {
+  const driver = config.storage.driver;
+
+  if (driver !== 'local' && driver !== 'volume' && driver !== 's3') {
+    throw new Error(
+      `[Storage Validation Failed]: Invalid STORAGE_DRIVER "${driver}". Allowed values are: local, volume, s3.`
+    );
+  }
+
+  if (driver === 'volume') {
+    const rawPath = config.storage.persistentVolumePath;
+    if (!rawPath || !rawPath.trim()) {
+      throw new Error(
+        `[Storage Validation Failed]: STORAGE_DRIVER is set to "volume" but no persistent mount path was configured. ` +
+        `Please set the canonical environment variable PERSISTENT_VOLUME_PATH to an absolute directory path. ` +
+        `Refusing to silently fall back to local ephemeral storage.`
+      );
+    }
+
+    const trimmedPath = rawPath.trim();
+    if (!path.isAbsolute(trimmedPath)) {
+      throw new Error(
+        `[Storage Validation Failed]: PERSISTENT_VOLUME_PATH must be an absolute path (e.g. /mnt/persistent_storage or C:\\storage). ` +
+        `Received relative path: "${trimmedPath}". Refusing silent fallback to local storage.`
+      );
+    }
+
+    const resolved = path.resolve(trimmedPath);
+
+    // Verify the persistent volume directory exists (fail-fast if volume is unmounted)
+    if (!fs.existsSync(resolved)) {
+      throw new Error(
+        `[Storage Validation Failed]: PERSISTENT_VOLUME_PATH directory "${resolved}" does not exist. ` +
+        `Ensure the persistent storage volume is mounted and accessible before starting the server.`
+      );
+    }
+
+    // Verify it is a directory
+    try {
+      const stat = fs.statSync(resolved);
+      if (!stat.isDirectory()) {
+        throw new Error(
+          `[Storage Validation Failed]: PERSISTENT_VOLUME_PATH "${resolved}" exists but is not a directory.`
+        );
+      }
+    } catch (err: any) {
+      throw new Error(
+        `[Storage Validation Failed]: Could not inspect PERSISTENT_VOLUME_PATH "${resolved}": ${err.message}`
+      );
+    }
+
+    // Verify write permissions
+    try {
+      fs.accessSync(resolved, fs.constants.W_OK);
+      const probeFile = path.join(resolved, `.probe-write-${Date.now()}-${process.pid}`);
+      fs.writeFileSync(probeFile, 'storage-probe-ok');
+      fs.unlinkSync(probeFile);
+    } catch (err: any) {
+      throw new Error(
+        `[Storage Validation Failed]: PERSISTENT_VOLUME_PATH "${resolved}" is not writable: ${err.message}`
+      );
+    }
+
+    return {
+      driver: 'volume',
+      resolvedLocation: resolved,
+      isWritable: true,
+      statusMessage: `Persistent volume verified and operational at ${resolved}`,
+    };
+  }
+
+  if (driver === 's3') {
+    const { bucket, accessKeyId, secretAccessKey, region, endpoint } = config.storage.s3;
+    const missing: string[] = [];
+    if (!bucket) missing.push('S3_BUCKET (or S3_BUCKET_NAME)');
+    if (!accessKeyId) missing.push('S3_ACCESS_KEY_ID (or AWS_ACCESS_KEY_ID)');
+    if (!secretAccessKey) missing.push('S3_SECRET_ACCESS_KEY (or AWS_SECRET_ACCESS_KEY)');
+
+    if (missing.length > 0) {
+      throw new Error(
+        `[Storage Validation Failed]: STORAGE_DRIVER is set to "s3" but missing required configuration: ${missing.join(', ')}. ` +
+        `Refusing to start. S3 configuration must be complete; never silently write S3 uploads to local disk.`
+      );
+    }
+
+    const endpointInfo = endpoint ? ` (endpoint: ${endpoint})` : '';
+    return {
+      driver: 's3',
+      resolvedLocation: `s3://${bucket} [${region}]${endpointInfo}`,
+      isWritable: true,
+      statusMessage: `S3 storage configured for bucket "${bucket}" in region "${region}"`,
+    };
+  }
+
+  // driver === 'local'
+  if (config.nodeEnv === 'production' && !config.storage.allowEphemeralLocal) {
+    throw new Error(
+      `[Storage Validation Failed]: STORAGE_DRIVER is set to "local" in production without explicit ALLOW_EPHEMERAL_LOCAL_STORAGE=true. ` +
+      `Local container storage is ephemeral and will lose uploaded course media on redeployment or restart. ` +
+      `Configure STORAGE_DRIVER=volume with PERSISTENT_VOLUME_PATH=/path/to/volume, or STORAGE_DRIVER=s3 with credentials, ` +
+      `or set ALLOW_EPHEMERAL_LOCAL_STORAGE=true to explicitly override.`
+    );
+  }
+
+  const localResolved = path.resolve(process.cwd(), config.storage.localPath || './uploads');
+  if (!fs.existsSync(localResolved)) {
+    fs.mkdirSync(localResolved, { recursive: true });
+  }
+
+  return {
+    driver: 'local',
+    resolvedLocation: localResolved,
+    isWritable: true,
+    statusMessage: config.nodeEnv === 'production'
+      ? `EPHEMERAL WARNING: Local storage active at ${localResolved} with ephemeral override`
+      : `Local storage active at ${localResolved} (development mode)`,
+  };
+}
+
+/**
+ * Validates that critical secrets and storage are properly configured in production
  */
 export function validateProductionConfig() {
   if (config.nodeEnv === 'production') {
@@ -73,25 +210,10 @@ export function validateProductionConfig() {
       errors.push('REFRESH_TOKEN_SECRET or JWT_SECRET must be explicitly set in production.');
     }
 
-    // Storage persistence validation in production
-    if (config.storage.driver === 'local') {
-      if (!config.storage.allowEphemeralLocal && !config.storage.persistentVolumePath) {
-        errors.push(
-          'STORAGE_DRIVER is set to "local" in production without a persistent volume mount. ' +
-          'Local container storage is ephemeral and will lose uploaded course media on redeployment or restart. ' +
-          'Please configure a persistent mounted volume (STORAGE_DRIVER=volume and PERSISTENT_STORAGE_PATH=/path/to/volume) ' +
-          'or object storage (STORAGE_DRIVER=s3 with credentials), or set STORAGE_ALLOW_EPHEMERAL_LOCAL=true to explicitly override.'
-        );
-      }
-    } else if (config.storage.driver === 'volume') {
-      const mountPath = config.storage.persistentVolumePath || config.storage.localPath;
-      if (!mountPath) {
-        errors.push('STORAGE_DRIVER is set to "volume" but PERSISTENT_STORAGE_PATH is not configured.');
-      }
-    } else if (config.storage.driver === 's3') {
-      if (!config.storage.s3.bucket) errors.push('S3_BUCKET must be defined when STORAGE_DRIVER=s3.');
-      if (!config.storage.s3.accessKeyId) errors.push('S3_ACCESS_KEY_ID must be defined when STORAGE_DRIVER=s3.');
-      if (!config.storage.s3.secretAccessKey) errors.push('S3_SECRET_ACCESS_KEY must be defined when STORAGE_DRIVER=s3.');
+    try {
+      validateStorageConfig();
+    } catch (storageErr: any) {
+      errors.push(storageErr.message);
     }
 
     if (errors.length > 0) {

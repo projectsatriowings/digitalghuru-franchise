@@ -27,7 +27,7 @@ import feedbackRoutes from './modules/feedback/feedback.routes.js';
 import staffAttendanceRoutes from './modules/staff-attendance/staff-attendance.routes.js';
 import franchiseRoutes from './modules/franchise/franchise.routes.js';
 import coursesRoutes from './modules/courses/courses.routes.js';
-import { isPublicCourseFolder } from './utils/storage.js';
+import { isPublicCourseFolder, printStorageDiagnostics } from './utils/storage.js';
 import { streamPublicMedia, streamProtectedMedia } from './modules/courses/courses.controller.js';
 import { authenticateToken } from './middleware/auth.js';
 import { NotificationService } from './modules/notifications/notification.service.js';
@@ -169,6 +169,13 @@ app.get('/api/health', async (_req: Request, res: Response) => {
       latencyMs: dbHealth.latencyMs,
       ...(dbHealth.error && { error: dbHealth.error }),
     },
+    storage: {
+      driver: config.storage.driver,
+      location: config.storage.driver === 's3'
+        ? config.storage.s3.bucket
+        : (config.storage.driver === 'volume' ? config.storage.persistentVolumePath : config.storage.localPath),
+      operational: true,
+    },
   });
 });
 
@@ -201,6 +208,7 @@ app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
 const isMain = process.argv[1] && process.argv[1].endsWith('index.ts');
 if (isMain || process.env.NODE_ENV === 'production') {
   validateProductionConfig();
+  printStorageDiagnostics();
   const server = app.listen(config.port, config.host, () => {
     console.log(`[Digital Guru Franchise API Server] listening on http://${config.host}:${config.port}`);
     console.log(`[Digital Guru Franchise API Server] Health check available at http://${config.host}:${config.port}/api/health`);

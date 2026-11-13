@@ -19,7 +19,7 @@ import {
 } from './courses.types.js';
 import { CourseStatus, LearningMode, EnrollmentStatus, UserRole } from '@prisma/client';
 import { prisma } from '../../prisma.js';
-import { resolveAbsolutePath, isPublicCourseFolder, getMimeType } from '../../utils/storage.js';
+import { resolveAbsolutePath, isPublicCourseFolder, getMimeType, StorageManager } from '../../utils/storage.js';
 
 // -------------------------------------------------------------
 // TENANT & OWNERSHIP AUTHORIZATION HELPERS
@@ -293,8 +293,8 @@ function normalizeWizardCoursePayload(rawBody: any) {
         m.showCareerFeatures !== undefined
           ? m.showCareerFeatures
           : (extensibleConfig?.featureFlags?.showCareerFeatures !== undefined
-              ? extensibleConfig.featureFlags.showCareerFeatures
-              : true),
+            ? extensibleConfig.featureFlags.showCareerFeatures
+            : true),
       whoIsThisForData: normalizedAudiences,
       categorizedToolsData: m.categorizedToolsData ?? body.overviewJson?.categorizedToolsData ?? [],
       ...(m.usps !== undefined ? { usps: m.usps } : {}),
@@ -419,28 +419,28 @@ export async function replaceDraftCurriculum(req: Request, res: Response) {
     const { id, versionId } = req.params;
     const rawModules = Array.isArray(req.body?.modules)
       ? req.body.modules.map((mod: any, mIdx: number) => ({
-          title: mod.title || `Module ${mIdx + 1}`,
-          description: mod.description || null,
-          position: mod.position !== undefined ? mod.position : mIdx,
-          chapters: (mod.chapters || mod.lessons || []).map((ch: any, cIdx: number) => ({
-            title: ch.title || `Lesson ${cIdx + 1}`,
-            description: ch.description || null,
-            videoUrl: ch.videoUrl || null,
-            pdfUrl: ch.pdfUrl || null,
-            duration: ch.duration || '10:00',
-            position: ch.position !== undefined ? ch.position : cIdx,
-            isFree: Boolean(ch.isFree),
-            attachments: (ch.attachments || ch.materials || []).map((att: any) => ({
-              title: att.title || 'Resource',
-              fileUrl: att.fileUrl,
-              fileType: att.fileType || att.type || 'PDF',
-              type: att.fileType || att.type || 'PDF',
-              fileSize: Number(att.fileSize) || 0,
-              isDownload: att.isDownload !== undefined ? Boolean(att.isDownload) : (att.isDownloadable !== undefined ? Boolean(att.isDownloadable) : true),
-              isDownloadable: att.isDownload !== undefined ? Boolean(att.isDownload) : (att.isDownloadable !== undefined ? Boolean(att.isDownloadable) : true),
-            })),
+        title: mod.title || `Module ${mIdx + 1}`,
+        description: mod.description || null,
+        position: mod.position !== undefined ? mod.position : mIdx,
+        chapters: (mod.chapters || mod.lessons || []).map((ch: any, cIdx: number) => ({
+          title: ch.title || `Lesson ${cIdx + 1}`,
+          description: ch.description || null,
+          videoUrl: ch.videoUrl || null,
+          pdfUrl: ch.pdfUrl || null,
+          duration: ch.duration || '10:00',
+          position: ch.position !== undefined ? ch.position : cIdx,
+          isFree: Boolean(ch.isFree),
+          attachments: (ch.attachments || ch.materials || []).map((att: any) => ({
+            title: att.title || 'Resource',
+            fileUrl: att.fileUrl,
+            fileType: att.fileType || att.type || 'PDF',
+            type: att.fileType || att.type || 'PDF',
+            fileSize: Number(att.fileSize) || 0,
+            isDownload: att.isDownload !== undefined ? Boolean(att.isDownload) : (att.isDownloadable !== undefined ? Boolean(att.isDownloadable) : true),
+            isDownloadable: att.isDownload !== undefined ? Boolean(att.isDownload) : (att.isDownloadable !== undefined ? Boolean(att.isDownloadable) : true),
           })),
-        }))
+        })),
+      }))
       : req.body?.modules;
 
     const parse = ReplaceDraftCurriculumSchema.safeParse({ modules: rawModules });
@@ -495,7 +495,7 @@ export async function updateGlobalCourseStatus(req: Request, res: Response) {
 export async function deleteGlobalCourse(req: Request, res: Response) {
   try {
     const { id } = req.params;
-    
+
     // Check if active or historical enrollments exist
     const enrollmentCount = await prisma.courseEnrollment.count({
       where: { courseId: id }
@@ -596,12 +596,12 @@ export async function getMyFranchiseCourseContext(req: Request, res: Response) {
       where: isBranchScoped
         ? { instituteId: { in: allowedInstituteIds }, status: 'ACTIVE' }
         : {
-            status: 'ACTIVE',
-            OR: [
-              { franchiseId },
-              ...(branchIds.length > 0 ? [{ instituteId: { in: branchIds } }] : []),
-            ],
-          },
+          status: 'ACTIVE',
+          OR: [
+            { franchiseId },
+            ...(branchIds.length > 0 ? [{ instituteId: { in: branchIds } }] : []),
+          ],
+        },
       orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
       select: {
         id: true,
@@ -1048,9 +1048,9 @@ export async function uploadCourseMedia(req: Request, res: Response) {
       return res.status(400).json({ success: false, message: 'No file uploaded' });
     }
 
-    const actualSavedFolder = req.file.path
-      ? path.basename(path.dirname(req.file.path))
-      : ((req.query?.folder as string) || (req.body?.folder as string) || 'general');
+    const actualSavedFolder = req.file.destination
+      ? path.basename(req.file.destination)
+      : (req.file.path ? path.basename(path.dirname(req.file.path)) : ((req.query?.folder as string) || (req.body?.folder as string) || 'general'));
     const folder = actualSavedFolder.replace(/[^a-zA-Z0-9_-]/g, '') || 'general';
     const isPublic = isPublicCourseFolder(folder);
     const scope = isPublic ? 'public' : 'protected';
@@ -1091,26 +1091,34 @@ export async function streamPublicMedia(req: Request, res: Response) {
       });
     }
 
-    const resolvedPath =
-      resolveAbsolutePath(path.join('courses', 'public', sanitizedFolder, sanitizedFilename)) ||
-      resolveAbsolutePath(path.join('courses', sanitizedFolder, sanitizedFilename)) ||
-      resolveAbsolutePath(path.join('courses', sanitizedFilename));
+    try {
+      const result = await StorageManager.getMediaStream({
+        scope: 'public',
+        folder: sanitizedFolder,
+        filename: sanitizedFilename,
+        rangeHeader: req.headers.range,
+      });
 
-    if (!resolvedPath || !fs.existsSync(resolvedPath)) {
-      return res.status(404).json({ success: false, message: 'Media not found' });
+      if (!result) {
+        return res.status(404).json({ success: false, message: 'Media not found' });
+      }
+
+      res.writeHead(result.statusCode, {
+        'Content-Length': result.contentLength,
+        'Content-Type': result.contentType,
+        'Cache-Control': 'public, max-age=86400',
+        'Accept-Ranges': result.acceptRanges,
+        ...(result.contentRange ? { 'Content-Range': result.contentRange } : {}),
+      });
+
+      result.stream.pipe(res);
+    } catch (streamErr: any) {
+      if (streamErr.statusCode === 416) {
+        res.setHeader('Content-Range', `bytes */${streamErr.totalSize || '*'}`);
+        return res.status(416).json({ success: false, message: 'Range Not Satisfiable' });
+      }
+      throw streamErr;
     }
-
-    const stat = fs.statSync(resolvedPath);
-    const contentType = getMimeType(path.extname(sanitizedFilename));
-
-    res.writeHead(200, {
-      'Content-Length': stat.size,
-      'Content-Type': contentType,
-      'Cache-Control': 'public, max-age=86400',
-      'Accept-Ranges': 'bytes',
-    });
-
-    fs.createReadStream(resolvedPath).pipe(res);
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message || 'Media stream error' });
   }
@@ -1132,12 +1140,14 @@ export async function streamProtectedMedia(req: Request, res: Response) {
       return res.status(400).json({ success: false, message: 'Invalid media path' });
     }
 
-    const filePath =
-      resolveAbsolutePath(path.join('courses', 'protected', sanitizedFolder, sanitizedFilename)) ||
-      resolveAbsolutePath(path.join('courses', sanitizedFolder, sanitizedFilename)) ||
-      resolveAbsolutePath(path.join('courses', sanitizedFilename));
+    // Check media file presence in storage backend (disk volume or S3 bucket)
+    const mediaExists = await StorageManager.mediaExists({
+      scope: 'protected',
+      folder: sanitizedFolder,
+      filename: sanitizedFilename,
+    });
 
-    if (!filePath || !fs.existsSync(filePath)) {
+    if (!mediaExists) {
       return res.status(404).json({ success: false, message: 'Media file not found' });
     }
 
@@ -1270,64 +1280,37 @@ export async function streamProtectedMedia(req: Request, res: Response) {
     // -------------------------------------------------------------
     // HTTP BYTE-RANGE & STREAMING DELIVERY
     // -------------------------------------------------------------
-    const stat = fs.statSync(filePath);
-    const fileSize = stat.size;
-    const ext = path.extname(sanitizedFilename).toLowerCase();
-    const contentType = getMimeType(ext);
-
     const isDownload = req.query.download === 'true' || req.query.dl === '1';
     const dispositionType = isDownload ? 'attachment' : 'inline';
     res.setHeader('Content-Disposition', `${dispositionType}; filename="${sanitizedFilename}"`);
 
-    const range = req.headers.range;
-    if (range) {
-      const match = range.match(/bytes=(\d*)-(\d*)/);
-      if (!match) {
-        res.setHeader('Content-Range', `bytes */${fileSize}`);
-        return res.status(416).json({ success: false, message: 'Range Not Satisfiable' });
-      }
-
-      let start: number;
-      let end: number;
-
-      if (match[1] === '' && match[2] !== '') {
-        // Suffix range: bytes=-500 (last 500 bytes)
-        const suffix = parseInt(match[2], 10);
-        start = Math.max(0, fileSize - suffix);
-        end = fileSize - 1;
-      } else if (match[1] !== '' && match[2] === '') {
-        // From start to EOF: bytes=1000-
-        start = parseInt(match[1], 10);
-        end = fileSize - 1;
-      } else {
-        start = parseInt(match[1], 10);
-        end = parseInt(match[2], 10);
-      }
-
-      if (isNaN(start) || isNaN(end) || start > end || start >= fileSize || start < 0) {
-        res.setHeader('Content-Range', `bytes */${fileSize}`);
-        return res.status(416).json({ success: false, message: 'Range Not Satisfiable' });
-      }
-
-      end = Math.min(end, fileSize - 1);
-      const chunkSize = end - start + 1;
-
-      res.writeHead(206, {
-        'Content-Range': `bytes ${start}-${end}/${fileSize}`,
-        'Accept-Ranges': 'bytes',
-        'Content-Length': chunkSize,
-        'Content-Type': contentType,
+    try {
+      const result = await StorageManager.getMediaStream({
+        scope: 'protected',
+        folder: sanitizedFolder,
+        filename: sanitizedFilename,
+        rangeHeader: req.headers.range,
       });
 
-      fs.createReadStream(filePath, { start, end }).pipe(res);
-    } else {
-      res.writeHead(200, {
-        'Content-Length': fileSize,
-        'Content-Type': contentType,
-        'Accept-Ranges': 'bytes',
+      if (!result) {
+        return res.status(404).json({ success: false, message: 'Media file not found' });
+      }
+
+      res.writeHead(result.statusCode, {
+        'Content-Length': result.contentLength,
+        'Content-Type': result.contentType,
+        'Accept-Ranges': result.acceptRanges,
+        'Cache-Control': 'private, no-cache, no-store, must-revalidate',
+        ...(result.contentRange ? { 'Content-Range': result.contentRange } : {}),
       });
 
-      fs.createReadStream(filePath).pipe(res);
+      result.stream.pipe(res);
+    } catch (streamErr: any) {
+      if (streamErr.statusCode === 416) {
+        res.setHeader('Content-Range', `bytes */${streamErr.totalSize || '*'}`);
+        return res.status(416).json({ success: false, message: 'Range Not Satisfiable' });
+      }
+      throw streamErr;
     }
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message || 'Stream error' });
