@@ -151,41 +151,55 @@ export interface ByteRange {
  * - Prefix range: bytes=1024- (from 1024 to EOF)
  * - Suffix range: bytes=-500 (last 500 bytes of file)
  * Throws { statusCode: 416, totalSize } for unsatisfiable or malformed ranges.
+ * Empty files (totalSize === 0) cannot satisfy any byte-range request.
  */
 export function parseHttpRange(rangeHeader: string, totalSize: number): ByteRange | null {
   if (!rangeHeader || !rangeHeader.startsWith('bytes=')) return null;
+
+  // Empty file: No byte range is satisfiable (RFC 7233 Section 4.4)
+  if (totalSize <= 0) {
+    throw { statusCode: 416, totalSize: 0 };
+  }
+
   const rangeSpec = rangeHeader.replace(/^bytes=/, '').trim();
   if (!rangeSpec || rangeSpec.includes(',')) {
     throw { statusCode: 416, totalSize };
   }
 
-  const parts = rangeSpec.split('-');
-  if (parts.length !== 2) throw { statusCode: 416, totalSize };
+  // Strict regex: must contain only digits or empty on either side of single hyphen.
+  // Strictly rejects partial non-numeric strings like "12abc-34", negative signs, or decimals.
+  const match = rangeSpec.match(/^(\d*)-(\d*)$/);
+  if (!match) {
+    throw { statusCode: 416, totalSize };
+  }
+
+  const [, startStr, endStr] = match;
+  if (!startStr && !endStr) {
+    throw { statusCode: 416, totalSize };
+  }
 
   let start: number;
   let end: number;
 
-  if (parts[0] === '') {
+  if (!startStr) {
     // Suffix range: bytes=-500 (last 500 bytes)
-    const suffix = parseInt(parts[1], 10);
-    if (isNaN(suffix) || suffix <= 0) throw { statusCode: 416, totalSize };
+    const suffix = parseInt(endStr, 10);
+    if (suffix <= 0) throw { statusCode: 416, totalSize };
     start = Math.max(0, totalSize - suffix);
     end = totalSize - 1;
-  } else if (parts[1] === '') {
+  } else if (!endStr) {
     // Prefix range: bytes=1024- (from 1024 to EOF)
-    start = parseInt(parts[0], 10);
-    if (isNaN(start) || start < 0 || start >= totalSize) throw { statusCode: 416, totalSize };
+    start = parseInt(startStr, 10);
+    if (start >= totalSize) throw { statusCode: 416, totalSize };
     end = totalSize - 1;
   } else {
     // Closed range: bytes=0-1023
-    start = parseInt(parts[0], 10);
-    end = parseInt(parts[1], 10);
-    if (isNaN(start) || isNaN(end) || start < 0 || start > end || start >= totalSize) {
+    start = parseInt(startStr, 10);
+    end = parseInt(endStr, 10);
+    if (start > end || start >= totalSize) {
       throw { statusCode: 416, totalSize };
     }
-    if (end >= totalSize) {
-      end = totalSize - 1;
-    }
+    end = Math.min(end, totalSize - 1);
   }
 
   return { start, end };

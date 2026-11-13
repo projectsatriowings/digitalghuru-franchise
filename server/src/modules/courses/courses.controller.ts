@@ -1125,7 +1125,8 @@ export async function streamPublicMedia(req: Request, res: Response) {
       result.stream.pipe(res);
     } catch (streamErr: any) {
       if (streamErr.statusCode === 416) {
-        res.setHeader('Content-Range', `bytes */${streamErr.totalSize || '*'}`);
+        const totalSizeHeader = typeof streamErr.totalSize === 'number' ? streamErr.totalSize : '*';
+        res.setHeader('Content-Range', `bytes */${totalSizeHeader}`);
         return res.status(416).json({ success: false, message: 'Range Not Satisfiable' });
       }
       throw streamErr;
@@ -1621,7 +1622,8 @@ export async function streamProtectedMedia(req: Request, res: Response) {
       result.stream.pipe(res);
     } catch (streamErr: any) {
       if (streamErr.statusCode === 416) {
-        res.setHeader('Content-Range', `bytes */${streamErr.totalSize || '*'}`);
+        const totalSizeHeader = typeof streamErr.totalSize === 'number' ? streamErr.totalSize : '*';
+        res.setHeader('Content-Range', `bytes */${totalSizeHeader}`);
         return res.status(416).json({ success: false, message: 'Range Not Satisfiable' });
       }
       throw streamErr;

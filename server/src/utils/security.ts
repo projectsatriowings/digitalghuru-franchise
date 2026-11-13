@@ -1,7 +1,7 @@
 import argon2 from 'argon2';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
-import { config } from '../config/index.js';
+import { config, DEV_MEDIA_TOKEN_SECRET_FALLBACK } from '../config/index.js';
 
 export interface TokenPayload {
   userId: string;
@@ -79,6 +79,24 @@ export interface MediaTokenPayload {
 }
 
 /**
+ * Returns the independent media token secret.
+ * Throws in production if missing, strictly forbidding fallback to JWT_SECRET.
+ */
+export function getMediaTokenSecret(): string {
+  const secret = config.jwt.mediaTokenSecret;
+  if (!secret) {
+    if (config.nodeEnv === 'production') {
+      throw new Error(
+        '[Security Error]: MEDIA_TOKEN_SECRET is not configured in production. ' +
+        'Media tokens cannot be signed or verified without an independent production secret.'
+      );
+    }
+    return DEV_MEDIA_TOKEN_SECRET_FALLBACK;
+  }
+  return secret;
+}
+
+/**
  * Generates a short-lived, cryptographically bound media authorization token.
  * Uses a dedicated media token secret separate from the application login JWT secret.
  */
@@ -90,6 +108,7 @@ export function generateMediaToken(payload: {
   filename: string;
   expiresInSeconds?: number;
 }): string {
+  const secret = getMediaTokenSecret();
   const expiresIn = payload.expiresInSeconds || config.jwt.mediaTokenExpiresInSeconds || 900;
   const tokenData: MediaTokenPayload = {
     sub: payload.userId,
@@ -101,7 +120,7 @@ export function generateMediaToken(payload: {
     mediaKey: `courses/protected/${payload.folder.trim().toLowerCase()}/${payload.filename.trim()}`,
     type: 'media_token',
   };
-  return jwt.sign(tokenData, config.jwt.mediaTokenSecret, {
+  return jwt.sign(tokenData, secret, {
     expiresIn,
   } as jwt.SignOptions);
 }
@@ -112,7 +131,8 @@ export function generateMediaToken(payload: {
  */
 export function verifyMediaToken(token: string): MediaTokenPayload | null {
   try {
-    const decoded = jwt.verify(token, config.jwt.mediaTokenSecret) as MediaTokenPayload;
+    const secret = getMediaTokenSecret();
+    const decoded = jwt.verify(token, secret) as MediaTokenPayload;
     if (
       decoded &&
       decoded.type === 'media_token' &&

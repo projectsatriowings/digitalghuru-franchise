@@ -7,7 +7,7 @@ declare global {
   var __tuition_prisma__: PrismaClient | undefined;
 }
 
-export const prisma =
+const basePrisma =
   global.__tuition_prisma__ ||
   new PrismaClient({
     log:
@@ -15,6 +15,22 @@ export const prisma =
         ? ['query', 'info', 'warn', 'error']
         : ['warn', 'error'],
   });
+
+export const prisma: PrismaClient = new Proxy(basePrisma as PrismaClient, {
+  get(_target, prop) {
+    const active = (global as any).__tuition_prisma__ || basePrisma;
+    const val = (active as any)[prop];
+    if (typeof val === 'function') {
+      return val.bind(active);
+    }
+    return val;
+  },
+  set(_target, prop, value) {
+    const active = (global as any).__tuition_prisma__ || basePrisma;
+    (active as any)[prop] = value;
+    return true;
+  },
+});
 
 // Transparent auto-reconnect middleware for Neon serverless socket dropouts (code 10054 / P1017)
 prisma.$use(async (params, next) => {
@@ -79,7 +95,7 @@ prisma.$transaction = (async (arg: any, options?: any) => {
 }) as any;
 
 if (process.env.NODE_ENV !== 'production') {
-  global.__tuition_prisma__ = prisma;
+  global.__tuition_prisma__ = basePrisma;
 }
 
 export default prisma;

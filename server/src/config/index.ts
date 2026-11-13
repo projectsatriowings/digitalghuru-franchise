@@ -18,6 +18,8 @@ for (const envPath of envPaths) {
   }
 }
 
+export const DEV_MEDIA_TOKEN_SECRET_FALLBACK = 'dev-media-token-secret-dg-franchise-2026-min-32-chars';
+
 export const config = {
   port: parseInt(process.env.PORT || '5000', 10),
   host: process.env.HOST || '0.0.0.0',
@@ -33,9 +35,12 @@ export const config = {
     expiresIn: process.env.JWT_EXPIRES_IN || '7d',
     refreshSecret: process.env.REFRESH_TOKEN_SECRET || (process.env.JWT_SECRET ? `${process.env.JWT_SECRET}_refresh` : 'fallback-refresh-secret-dev-only-32'),
     refreshExpiresIn: process.env.REFRESH_TOKEN_EXPIRES_IN || '30d',
+    // Strictly independent media token secret in production:
+    // Never derived from JWT_SECRET and never uses development fallback in production.
     mediaTokenSecret:
-      process.env.MEDIA_TOKEN_SECRET ||
-      (process.env.JWT_SECRET ? `${process.env.JWT_SECRET}_media_sec_2026` : 'fallback-media-token-secret-dev-only-32-chars-min'),
+      (process.env.NODE_ENV === 'production')
+        ? (process.env.MEDIA_TOKEN_SECRET || '')
+        : (process.env.MEDIA_TOKEN_SECRET || DEV_MEDIA_TOKEN_SECRET_FALLBACK),
     mediaTokenExpiresInSeconds: parseInt(process.env.MEDIA_TOKEN_EXPIRES_IN_SECONDS || '900', 10), // default 15 minutes
   },
   sms: {
@@ -212,6 +217,25 @@ export function validateProductionConfig() {
     }
     if (!process.env.REFRESH_TOKEN_SECRET && !process.env.JWT_SECRET) {
       errors.push('REFRESH_TOKEN_SECRET or JWT_SECRET must be explicitly set in production.');
+    }
+
+    // Media token secret verification in production:
+    // Strictly independent key, never derived from JWT_SECRET, no dev fallback, minimum 32 chars.
+    const mediaSecret = process.env.MEDIA_TOKEN_SECRET || '';
+    if (!mediaSecret || mediaSecret === DEV_MEDIA_TOKEN_SECRET_FALLBACK || mediaSecret === 'fallback-media-token-secret-dev-only-32-chars-min') {
+      errors.push(
+        'MEDIA_TOKEN_SECRET must be explicitly configured in production. Refusing development fallback or empty value.'
+      );
+    } else {
+      if (mediaSecret.length < 32) {
+        errors.push('MEDIA_TOKEN_SECRET must be at least 32 characters long in production for cryptographic strength.');
+      }
+      if (process.env.JWT_SECRET && mediaSecret === process.env.JWT_SECRET) {
+        errors.push('MEDIA_TOKEN_SECRET must be strictly independent and distinct from JWT_SECRET in production.');
+      }
+      if (process.env.REFRESH_TOKEN_SECRET && mediaSecret === process.env.REFRESH_TOKEN_SECRET) {
+        errors.push('MEDIA_TOKEN_SECRET must be strictly independent and distinct from REFRESH_TOKEN_SECRET in production.');
+      }
     }
 
     try {
