@@ -92,10 +92,13 @@ export function assertSafeTestDatabase(customUrl?: string): VerifiedTestDbIdenti
 
   const isTestDbName = pathname.includes('test') || pathname.includes('scratch') || pathname.includes('isolated');
 
-  if (!isLocalOrTestHost && !isTestDbName) {
+  if (!isLocalOrTestHost || !isTestDbName) {
     throw new Error(
-      `[CRITICAL DATABASE SAFETY GUARD]: Database "${hostname}:${port}${pathname}" cannot be positively identified as an isolated test database. ` +
-      `Refusing to proceed. Ensure TEST_DATABASE_URL points to a local or test-named database.`
+      `[CRITICAL DATABASE SAFETY GUARD]: Target database "${hostname}:${port}${pathname}" violates safety requirements.\n` +
+      `A test database must satisfy BOTH conditions:\n` +
+      `  1. Host must be a recognized local/test host (was: "${hostname}:${port}")\n` +
+      `  2. Database name must contain an approved test identifier ('test', 'scratch', or 'isolated') (was: "${pathname}")\n` +
+      `Refusing to proceed.`
     );
   }
 

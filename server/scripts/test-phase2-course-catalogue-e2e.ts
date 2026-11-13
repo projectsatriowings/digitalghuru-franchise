@@ -160,13 +160,40 @@ async function runPhase2Tests() {
     }
     assert(tuitionRejected, '0.4 Safety Guard: Positively rejects Tuition Management database target');
 
-    // 0.5 Positively verify safe isolated test database
+    // 0.5 Positively reject remote non-Neon production host with dg_test_isolated
+    let remoteIsolatedRejected = false;
+    try {
+      assertSafeTestDatabase('postgresql://postgres:password@db.production.company.com:5432/dg_test_isolated');
+    } catch (err: any) {
+      remoteIsolatedRejected = err.message.includes('violates safety requirements');
+    }
+    assert(remoteIsolatedRejected, '0.5 Safety Guard: Positively rejects remote host with test-named database (db.production.company.com/dg_test_isolated)');
+
+    // 0.6 Positively reject remote host with company_scratch
+    let remoteScratchRejected = false;
+    try {
+      assertSafeTestDatabase('postgresql://admin:secret@198.51.100.45:5432/company_scratch');
+    } catch (err: any) {
+      remoteScratchRejected = err.message.includes('violates safety requirements');
+    }
+    assert(remoteScratchRejected, '0.6 Safety Guard: Positively rejects remote IP host with scratch database (198.51.100.45/company_scratch)');
+
+    // 0.7 Positively reject local host with production-like database name
+    let localProdNameRejected = false;
+    try {
+      assertSafeTestDatabase('postgresql://postgres:password@localhost:5432/digitalghuru_production');
+    } catch (err: any) {
+      localProdNameRejected = err.message.includes('violates safety requirements');
+    }
+    assert(localProdNameRejected, '0.7 Safety Guard: Positively rejects local host with production database name (localhost:5432/digitalghuru_production)');
+
+    // 0.8 Positively verify safe isolated test database
     let testDbVerified = false;
     try {
       const verified = assertSafeTestDatabase('postgresql://postgres:password@localhost:5432/dg_test_isolated');
       testDbVerified = verified.isIsolatedTestDb && verified.database === '/dg_test_isolated';
     } catch {}
-    assert(testDbVerified, '0.5 Safety Guard: Positively validates safe isolated test database (localhost:5432/dg_test_isolated)');
+    assert(testDbVerified, '0.8 Safety Guard: Positively validates safe isolated test database (localhost:5432/dg_test_isolated)');
 
     // -------------------------------------------------------------
     // Phase 0.5: Actor Resolution & Context Setup
@@ -460,9 +487,33 @@ async function runPhase2Tests() {
     assert(c5Chapters.length === 40, `2.23 Course 5: Chapter count is exactly 40 (Actual: ${c5Chapters.length})`);
     assert(c5Chapters[0].duration === '10:00', '2.24 Course 5: Lesson duration matches database default 10:00');
     assert(c5Chapters[0].attachments.length === 0, '2.24b Course 5: No attachment created for missing Creative Design brochure (prevents broken references)');
+    // Five-Course Media Integrity Verification across all 5 courses (206 total chapters)
+    const allImportedChapters = [
+      ...c1Chapters,
+      ...c2Chapters,
+      ...c3Chapters,
+      ...c4Chapters,
+      ...c5Chapters,
+    ];
     assert(
-      c1Chapters.every((ch) => ch.videoUrl === null && ch.pdfUrl === null),
-      '2.24c Media Integrity: No fake lesson video URLs or PDF URLs invented; safely stored as null'
+      allImportedChapters.length === 206,
+      `2.24c Five-Course Chapter Aggregation: Exactly 206 chapters collected across all 5 courses (Actual: ${allImportedChapters.length})`
+    );
+    const c1Null = c1Chapters.every((ch) => ch.videoUrl === null && ch.pdfUrl === null);
+    const c2Null = c2Chapters.every((ch) => ch.videoUrl === null && ch.pdfUrl === null);
+    const c3Null = c3Chapters.every((ch) => ch.videoUrl === null && ch.pdfUrl === null);
+    const c4Null = c4Chapters.every((ch) => ch.videoUrl === null && ch.pdfUrl === null);
+    const c5Null = c5Chapters.every((ch) => ch.videoUrl === null && ch.pdfUrl === null);
+    const allNull = allImportedChapters.every((ch) => ch.videoUrl === null && ch.pdfUrl === null);
+
+    assert(c1Null, '2.24d Course 1 Media Integrity: All 48 chapters have videoUrl === null and pdfUrl === null');
+    assert(c2Null, '2.24e Course 2 Media Integrity: All 32 chapters have videoUrl === null and pdfUrl === null');
+    assert(c3Null, '2.24f Course 3 Media Integrity: All 48 chapters have videoUrl === null and pdfUrl === null');
+    assert(c4Null, '2.24g Course 4 Media Integrity: All 38 chapters have videoUrl === null and pdfUrl === null');
+    assert(c5Null, '2.24h Course 5 Media Integrity: All 40 chapters have videoUrl === null and pdfUrl === null');
+    assert(
+      allNull,
+      '2.24i Five-Course Media Integrity: Every chapter across all 5 imported courses (206/206 chapters) has videoUrl === null and pdfUrl === null'
     );
 
     // 2f. Aggregate Totals Calculated from Actual PostgreSQL Records
