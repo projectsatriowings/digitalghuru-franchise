@@ -19,7 +19,7 @@ import {
 } from './courses.types.js';
 import { CourseStatus, LearningMode, EnrollmentStatus, UserRole } from '@prisma/client';
 import { prisma } from '../../prisma.js';
-import { resolveAbsolutePath } from '../../utils/storage.js';
+import { resolveAbsolutePath, isPublicCourseFolder, getMimeType } from '../../utils/storage.js';
 
 // -------------------------------------------------------------
 // TENANT & OWNERSHIP AUTHORIZATION HELPERS
@@ -293,8 +293,8 @@ function normalizeWizardCoursePayload(rawBody: any) {
         m.showCareerFeatures !== undefined
           ? m.showCareerFeatures
           : (extensibleConfig?.featureFlags?.showCareerFeatures !== undefined
-              ? extensibleConfig.featureFlags.showCareerFeatures
-              : true),
+            ? extensibleConfig.featureFlags.showCareerFeatures
+            : true),
       whoIsThisForData: normalizedAudiences,
       categorizedToolsData: m.categorizedToolsData ?? body.overviewJson?.categorizedToolsData ?? [],
       ...(m.usps !== undefined ? { usps: m.usps } : {}),
@@ -419,28 +419,28 @@ export async function replaceDraftCurriculum(req: Request, res: Response) {
     const { id, versionId } = req.params;
     const rawModules = Array.isArray(req.body?.modules)
       ? req.body.modules.map((mod: any, mIdx: number) => ({
-          title: mod.title || `Module ${mIdx + 1}`,
-          description: mod.description || null,
-          position: mod.position !== undefined ? mod.position : mIdx,
-          chapters: (mod.chapters || mod.lessons || []).map((ch: any, cIdx: number) => ({
-            title: ch.title || `Lesson ${cIdx + 1}`,
-            description: ch.description || null,
-            videoUrl: ch.videoUrl || null,
-            pdfUrl: ch.pdfUrl || null,
-            duration: ch.duration || '10:00',
-            position: ch.position !== undefined ? ch.position : cIdx,
-            isFree: Boolean(ch.isFree),
-            attachments: (ch.attachments || ch.materials || []).map((att: any) => ({
-              title: att.title || 'Resource',
-              fileUrl: att.fileUrl,
-              fileType: att.fileType || att.type || 'PDF',
-              type: att.fileType || att.type || 'PDF',
-              fileSize: Number(att.fileSize) || 0,
-              isDownload: att.isDownload !== undefined ? Boolean(att.isDownload) : (att.isDownloadable !== undefined ? Boolean(att.isDownloadable) : true),
-              isDownloadable: att.isDownload !== undefined ? Boolean(att.isDownload) : (att.isDownloadable !== undefined ? Boolean(att.isDownloadable) : true),
-            })),
+        title: mod.title || `Module ${mIdx + 1}`,
+        description: mod.description || null,
+        position: mod.position !== undefined ? mod.position : mIdx,
+        chapters: (mod.chapters || mod.lessons || []).map((ch: any, cIdx: number) => ({
+          title: ch.title || `Lesson ${cIdx + 1}`,
+          description: ch.description || null,
+          videoUrl: ch.videoUrl || null,
+          pdfUrl: ch.pdfUrl || null,
+          duration: ch.duration || '10:00',
+          position: ch.position !== undefined ? ch.position : cIdx,
+          isFree: Boolean(ch.isFree),
+          attachments: (ch.attachments || ch.materials || []).map((att: any) => ({
+            title: att.title || 'Resource',
+            fileUrl: att.fileUrl,
+            fileType: att.fileType || att.type || 'PDF',
+            type: att.fileType || att.type || 'PDF',
+            fileSize: Number(att.fileSize) || 0,
+            isDownload: att.isDownload !== undefined ? Boolean(att.isDownload) : (att.isDownloadable !== undefined ? Boolean(att.isDownloadable) : true),
+            isDownloadable: att.isDownload !== undefined ? Boolean(att.isDownload) : (att.isDownloadable !== undefined ? Boolean(att.isDownloadable) : true),
           })),
-        }))
+        })),
+      }))
       : req.body?.modules;
 
     const parse = ReplaceDraftCurriculumSchema.safeParse({ modules: rawModules });
@@ -495,7 +495,7 @@ export async function updateGlobalCourseStatus(req: Request, res: Response) {
 export async function deleteGlobalCourse(req: Request, res: Response) {
   try {
     const { id } = req.params;
-    
+
     // Check if active or historical enrollments exist
     const enrollmentCount = await prisma.courseEnrollment.count({
       where: { courseId: id }
@@ -596,12 +596,12 @@ export async function getMyFranchiseCourseContext(req: Request, res: Response) {
       where: isBranchScoped
         ? { instituteId: { in: allowedInstituteIds }, status: 'ACTIVE' }
         : {
-            status: 'ACTIVE',
-            OR: [
-              { franchiseId },
-              ...(branchIds.length > 0 ? [{ instituteId: { in: branchIds } }] : []),
-            ],
-          },
+          status: 'ACTIVE',
+          OR: [
+            { franchiseId },
+            ...(branchIds.length > 0 ? [{ instituteId: { in: branchIds } }] : []),
+          ],
+        },
       orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
       select: {
         id: true,
@@ -1052,7 +1052,9 @@ export async function uploadCourseMedia(req: Request, res: Response) {
       ? path.basename(path.dirname(req.file.path))
       : ((req.query?.folder as string) || (req.body?.folder as string) || 'general');
     const folder = actualSavedFolder.replace(/[^a-zA-Z0-9_-]/g, '') || 'general';
-    const fileUrl = `/api/courses/media/public/${folder}/${req.file.filename}`;
+    const isPublic = isPublicCourseFolder(folder);
+    const scope = isPublic ? 'public' : 'protected';
+    const fileUrl = `/api/courses/media/${scope}/${folder}/${req.file.filename}`;
 
     res.status(201).json({
       success: true,
@@ -1063,6 +1065,7 @@ export async function uploadCourseMedia(req: Request, res: Response) {
         size: req.file.size,
         fileUrl,
         folder,
+        isProtected: !isPublic,
       }
     });
   } catch (error: any) {
@@ -1073,18 +1076,41 @@ export async function uploadCourseMedia(req: Request, res: Response) {
 export async function streamPublicMedia(req: Request, res: Response) {
   try {
     const { folder, filename } = req.params;
-    const sanitizedFolder = folder.replace(/[^a-zA-Z0-9_-]/g, '');
-    const sanitizedFilename = path.basename(filename);
+    const sanitizedFolder = (folder || '').replace(/[^a-zA-Z0-9_-]/g, '').toLowerCase();
+    const sanitizedFilename = path.basename(filename || '').replace(/[^a-zA-Z0-9._-]/g, '_');
+
+    if (!sanitizedFolder || !sanitizedFilename || sanitizedFilename === '.' || sanitizedFilename.startsWith('..')) {
+      return res.status(400).json({ success: false, message: 'Invalid media path' });
+    }
+
+    // STRICT PUBLIC FOLDER ALLOWLIST: Lesson materials & videos require authentication
+    if (!isPublicCourseFolder(sanitizedFolder)) {
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication required: Lesson materials and videos are protected and require enrollment authorization',
+      });
+    }
 
     const resolvedPath =
+      resolveAbsolutePath(path.join('courses', 'public', sanitizedFolder, sanitizedFilename)) ||
       resolveAbsolutePath(path.join('courses', sanitizedFolder, sanitizedFilename)) ||
-      path.join(path.resolve(process.cwd(), 'uploads', 'courses', sanitizedFolder), sanitizedFilename);
+      resolveAbsolutePath(path.join('courses', sanitizedFilename));
 
-    if (!fs.existsSync(resolvedPath)) {
+    if (!resolvedPath || !fs.existsSync(resolvedPath)) {
       return res.status(404).json({ success: false, message: 'Media not found' });
     }
 
-    res.sendFile(resolvedPath);
+    const stat = fs.statSync(resolvedPath);
+    const contentType = getMimeType(path.extname(sanitizedFilename));
+
+    res.writeHead(200, {
+      'Content-Length': stat.size,
+      'Content-Type': contentType,
+      'Cache-Control': 'public, max-age=86400',
+      'Accept-Ranges': 'bytes',
+    });
+
+    fs.createReadStream(resolvedPath).pipe(res);
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message || 'Media stream error' });
   }
@@ -1099,66 +1125,208 @@ export async function streamProtectedMedia(req: Request, res: Response) {
       return res.status(401).json({ success: false, message: 'Authentication required' });
     }
 
-    const sanitizedFolder = folder.replace(/[^a-zA-Z0-9_-]/g, '');
-    const sanitizedFilename = path.basename(filename);
+    const sanitizedFolder = (folder || '').replace(/[^a-zA-Z0-9_-]/g, '');
+    const sanitizedFilename = path.basename(filename || '').replace(/[^a-zA-Z0-9._-]/g, '_');
+
+    if (!sanitizedFolder || !sanitizedFilename || sanitizedFilename === '.' || sanitizedFilename.startsWith('..')) {
+      return res.status(400).json({ success: false, message: 'Invalid media path' });
+    }
 
     const filePath =
+      resolveAbsolutePath(path.join('courses', 'protected', sanitizedFolder, sanitizedFilename)) ||
       resolveAbsolutePath(path.join('courses', sanitizedFolder, sanitizedFilename)) ||
-      path.join(path.resolve(process.cwd(), 'uploads', 'courses', sanitizedFolder), sanitizedFilename);
+      resolveAbsolutePath(path.join('courses', sanitizedFilename));
 
-    if (!fs.existsSync(filePath)) {
+    if (!filePath || !fs.existsSync(filePath)) {
       return res.status(404).json({ success: false, message: 'Media file not found' });
     }
 
+    // -------------------------------------------------------------
+    // DATABASE-DRIVEN ENROLLMENT & LESSON AUTHORIZATION
+    // Never trust client-supplied courseId or file path parameters
+    // -------------------------------------------------------------
+    let resolvedCourseId: string | null = null;
+    let isFreeLesson = false;
+
+    // 1. Resolve through LessonAttachment record
+    const attachment = await prisma.lessonAttachment.findFirst({
+      where: {
+        fileUrl: { contains: sanitizedFilename },
+      },
+      include: {
+        chapter: {
+          include: {
+            module: {
+              include: {
+                curriculumVersion: {
+                  select: { courseId: true, isPublished: true },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (attachment?.chapter?.module?.curriculumVersion?.courseId) {
+      resolvedCourseId = attachment.chapter.module.curriculumVersion.courseId;
+      isFreeLesson = Boolean(attachment.chapter.isFree);
+    }
+
+    // 2. Resolve through CourseChapter (videoUrl or pdfUrl)
+    if (!resolvedCourseId) {
+      const chapter = await prisma.courseChapter.findFirst({
+        where: {
+          OR: [
+            { videoUrl: { contains: sanitizedFilename } },
+            { pdfUrl: { contains: sanitizedFilename } },
+          ],
+        },
+        include: {
+          module: {
+            include: {
+              curriculumVersion: {
+                select: { courseId: true, isPublished: true },
+              },
+            },
+          },
+        },
+      });
+
+      if (chapter?.module?.curriculumVersion?.courseId) {
+        resolvedCourseId = chapter.module.curriculumVersion.courseId;
+        isFreeLesson = Boolean(chapter.isFree);
+      }
+    }
+
+    // 3. Verify user authorization against resolved course & enrollment
+    let isAuthorized = false;
+
+    if (user.role === UserRole.SUPER_ADMIN) {
+      // Super Admin retains authorized preview & management access across all course assets
+      isAuthorized = true;
+    } else if (resolvedCourseId) {
+      if (user.role === UserRole.STUDENT) {
+        const student = await prisma.student.findFirst({
+          where: { userId: user.userId },
+          select: { id: true },
+        });
+
+        if (student) {
+          // Check for active or completed enrollment (supports both ONLINE and OFFLINE modes)
+          const enrollment = await prisma.courseEnrollment.findFirst({
+            where: {
+              studentId: student.id,
+              courseId: resolvedCourseId,
+              status: { in: [EnrollmentStatus.ACTIVE, EnrollmentStatus.COMPLETED] },
+            },
+            select: { id: true, status: true, mode: true },
+          });
+
+          if (enrollment) {
+            isAuthorized = true;
+          } else if (isFreeLesson) {
+            // Free preview lesson check
+            const course = await prisma.globalCourse.findUnique({
+              where: { id: resolvedCourseId },
+              select: { overviewJson: true },
+            });
+            const allowFree = (course?.overviewJson as any)?.extensibleConfig?.featureFlags?.allowFreePreview !== false;
+            if (allowFree) {
+              isAuthorized = true;
+            }
+          }
+        }
+      } else if (user.role === UserRole.PARENT) {
+        const parent = await prisma.parentProfile.findFirst({
+          where: { userId: user.userId },
+          include: { studentRelations: { select: { studentId: true } } },
+        });
+        const childIds = parent?.studentRelations.map((r) => r.studentId) || [];
+        if (childIds.length > 0) {
+          const childEnrollment = await prisma.courseEnrollment.findFirst({
+            where: {
+              studentId: { in: childIds },
+              courseId: resolvedCourseId,
+              status: { in: [EnrollmentStatus.ACTIVE, EnrollmentStatus.COMPLETED] },
+            },
+            select: { id: true },
+          });
+          if (childEnrollment) {
+            isAuthorized = true;
+          }
+        }
+      }
+      // Franchise owners, branch admins, and staff without enrolled student record are NOT granted student lesson access
+    }
+
+    if (!isAuthorized) {
+      return res.status(403).json({
+        success: false,
+        message: 'Forbidden: Active course enrollment required to access this lesson material',
+      });
+    }
+
+    // -------------------------------------------------------------
+    // HTTP BYTE-RANGE & STREAMING DELIVERY
+    // -------------------------------------------------------------
     const stat = fs.statSync(filePath);
     const fileSize = stat.size;
-    const range = req.headers.range;
-
     const ext = path.extname(sanitizedFilename).toLowerCase();
-    const mimeMap: Record<string, string> = {
-      '.mp4': 'video/mp4',
-      '.webm': 'video/webm',
-      '.ogg': 'video/ogg',
-      '.mov': 'video/quicktime',
-      '.pdf': 'application/pdf',
-      '.png': 'image/png',
-      '.jpg': 'image/jpeg',
-      '.jpeg': 'image/jpeg',
-      '.webp': 'image/webp',
-      '.gif': 'image/gif',
-      '.svg': 'image/svg+xml',
-      '.zip': 'application/zip',
-      '.doc': 'application/msword',
-      '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      '.ppt': 'application/vnd.ms-powerpoint',
-      '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-      '.csv': 'text/csv',
-      '.txt': 'text/plain',
-    };
-    const contentType = mimeMap[ext] || 'application/octet-stream';
+    const contentType = getMimeType(ext);
 
-    if (range && contentType.startsWith('video/')) {
-      const parts = range.replace(/bytes=/, '').split('-');
-      const start = parseInt(parts[0], 10);
-      const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+    const isDownload = req.query.download === 'true' || req.query.dl === '1';
+    const dispositionType = isDownload ? 'attachment' : 'inline';
+    res.setHeader('Content-Disposition', `${dispositionType}; filename="${sanitizedFilename}"`);
+
+    const range = req.headers.range;
+    if (range) {
+      const match = range.match(/bytes=(\d*)-(\d*)/);
+      if (!match) {
+        res.setHeader('Content-Range', `bytes */${fileSize}`);
+        return res.status(416).json({ success: false, message: 'Range Not Satisfiable' });
+      }
+
+      let start: number;
+      let end: number;
+
+      if (match[1] === '' && match[2] !== '') {
+        // Suffix range: bytes=-500 (last 500 bytes)
+        const suffix = parseInt(match[2], 10);
+        start = Math.max(0, fileSize - suffix);
+        end = fileSize - 1;
+      } else if (match[1] !== '' && match[2] === '') {
+        // From start to EOF: bytes=1000-
+        start = parseInt(match[1], 10);
+        end = fileSize - 1;
+      } else {
+        start = parseInt(match[1], 10);
+        end = parseInt(match[2], 10);
+      }
+
+      if (isNaN(start) || isNaN(end) || start > end || start >= fileSize || start < 0) {
+        res.setHeader('Content-Range', `bytes */${fileSize}`);
+        return res.status(416).json({ success: false, message: 'Range Not Satisfiable' });
+      }
+
+      end = Math.min(end, fileSize - 1);
       const chunkSize = end - start + 1;
 
-      const head = {
+      res.writeHead(206, {
         'Content-Range': `bytes ${start}-${end}/${fileSize}`,
         'Accept-Ranges': 'bytes',
         'Content-Length': chunkSize,
         'Content-Type': contentType,
-      };
+      });
 
-      res.writeHead(206, head);
       fs.createReadStream(filePath, { start, end }).pipe(res);
     } else {
-      const head = {
+      res.writeHead(200, {
         'Content-Length': fileSize,
         'Content-Type': contentType,
         'Accept-Ranges': 'bytes',
-      };
-      res.writeHead(200, head);
+      });
+
       fs.createReadStream(filePath).pipe(res);
     }
   } catch (error: any) {

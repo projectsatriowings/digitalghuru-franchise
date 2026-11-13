@@ -34,7 +34,7 @@ import {
   streamProtectedMedia,
 } from './courses.controller.js';
 import { authenticateToken, requireRole } from '../../middleware/auth.js';
-import { courseMediaUpload } from '../../utils/storage.js';
+import { courseMediaUpload, isPublicCourseFolder } from '../../utils/storage.js';
 
 const router = Router();
 
@@ -43,6 +43,15 @@ const router = Router();
 // -------------------------------------------------------------
 router.get('/media/public/:folder/:filename', streamPublicMedia);
 router.get('/media/protected/:folder/:filename', authenticateToken, streamProtectedMedia);
+
+// Legacy/unified media fallback route: public if in allowlist, otherwise strict protected streaming
+router.get('/media/:folder/:filename', (req, res) => {
+  const { folder } = req.params;
+  if (isPublicCourseFolder(folder)) {
+    return streamPublicMedia(req, res);
+  }
+  return authenticateToken(req as any, res, () => streamProtectedMedia(req, res));
+});
 
 router.post(
   '/upload',

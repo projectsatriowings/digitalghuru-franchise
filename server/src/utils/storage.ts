@@ -5,12 +5,38 @@ import multer from 'multer';
 import { Request } from 'express';
 import { config } from '../config/index.js';
 
-// Base directory for local file storage
-const LOCAL_STORAGE_DIR = path.resolve(process.cwd(), config.storage.localPath || './uploads');
+// Base directory for local / persistent volume file storage
+export function getActiveStorageDir(): string {
+  if (config.storage.driver === 'volume' && config.storage.persistentVolumePath) {
+    return path.resolve(config.storage.persistentVolumePath);
+  }
+  return path.resolve(process.cwd(), config.storage.localPath || './uploads');
+}
+
+const LOCAL_STORAGE_DIR = getActiveStorageDir();
 
 // Ensure local uploads directory exists
 if (!fs.existsSync(LOCAL_STORAGE_DIR)) {
   fs.mkdirSync(LOCAL_STORAGE_DIR, { recursive: true });
+}
+
+// Ensure partitioned public and protected course directories exist
+export const PUBLIC_COURSE_FOLDERS = ['thumbnails', 'banners', 'brochures', 'public', 'promotional', 'marketing'];
+export const PROTECTED_COURSE_FOLDERS = ['attachments', 'videos', 'lessons', 'materials', 'worksheets', 'protected', 'resources'];
+
+export function isPublicCourseFolder(folder: string): boolean {
+  if (!folder) return false;
+  return PUBLIC_COURSE_FOLDERS.includes(folder.trim().toLowerCase());
+}
+
+for (const folder of PUBLIC_COURSE_FOLDERS) {
+  const dir = path.join(LOCAL_STORAGE_DIR, 'courses', 'public', folder);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+}
+
+for (const folder of PROTECTED_COURSE_FOLDERS) {
+  const dir = path.join(LOCAL_STORAGE_DIR, 'courses', 'protected', folder);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 }
 
 // Allowlist of allowed MIME types
@@ -108,25 +134,46 @@ export function getRelativeStorageKey(instituteId: string, filename: string): st
 }
 
 /**
- * Resolve absolute file path from storage key
+ * Resolve absolute file path from storage key with strict directory traversal protection
  */
 export function resolveAbsolutePath(storageKey: string): string | null {
   if (!storageKey) return null;
-  // Prevent directory traversal
-  const normalizedKey = path.normalize(storageKey).replace(/^(\.\.[\/\\])+/, '');
+  // Strip query strings or leading slashes/api prefixes
+  const cleanKey = storageKey
+    .split('?')[0]
+    .replace(/^(\/api\/courses\/media\/(public|protected)\/)/, 'courses/$2/')
+    .replace(/^\/?(uploads\/)/, '')
+    .replace(/^[/\\]+/, '');
 
+  // Normalize and prevent directory traversal
+  const normalizedKey = path.normalize(cleanKey).replace(/^(\.\.[\/\\])+/, '');
+
+  const activeDir = getActiveStorageDir();
   const candidateDirs = [
-    LOCAL_STORAGE_DIR,
+    activeDir,
     path.resolve(process.cwd(), 'uploads'),
     path.resolve(process.cwd(), 'server', 'uploads'),
     path.resolve(process.cwd(), '..', 'uploads'),
     path.resolve(process.cwd(), '..', 'server', 'uploads'),
   ];
 
+  const candidateSubpaths: string[] = [normalizedKey];
+  if (normalizedKey.startsWith('courses' + path.sep) || normalizedKey.startsWith('courses/')) {
+    const rel = normalizedKey.replace(/^courses[/\\]/, '');
+    candidateSubpaths.push(
+      path.join('courses', 'protected', rel),
+      path.join('courses', 'public', rel),
+      normalizedKey
+    );
+  }
+
   for (const baseDir of candidateDirs) {
-    const fullPath = path.join(baseDir, normalizedKey);
-    if (fullPath.startsWith(baseDir) && fs.existsSync(fullPath)) {
-      return fullPath;
+    const resolvedBase = path.resolve(baseDir);
+    for (const sub of candidateSubpaths) {
+      const fullPath = path.resolve(resolvedBase, sub);
+      if ((fullPath === resolvedBase || fullPath.startsWith(resolvedBase + path.sep)) && fs.existsSync(fullPath)) {
+        return fullPath;
+      }
     }
   }
 
@@ -134,13 +181,49 @@ export function resolveAbsolutePath(storageKey: string): string | null {
 }
 
 /**
+ * Common MIME type mapping for course media and streaming
+ */
+export function getMimeType(ext: string): string {
+  const normalized = ext.toLowerCase().startsWith('.') ? ext.toLowerCase() : `.${ext.toLowerCase()}`;
+  const mimeMap: Record<string, string> = {
+    '.mp4': 'video/mp4',
+    '.webm': 'video/webm',
+    '.ogg': 'video/ogg',
+    '.ogv': 'video/ogg',
+    '.mov': 'video/quicktime',
+    '.m4v': 'video/mp4',
+    '.pdf': 'application/pdf',
+    '.png': 'image/png',
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.webp': 'image/webp',
+    '.gif': 'image/gif',
+    '.svg': 'image/svg+xml',
+    '.zip': 'application/zip',
+    '.doc': 'application/msword',
+    '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    '.ppt': 'application/vnd.ms-powerpoint',
+    '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    '.xls': 'application/vnd.ms-excel',
+    '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    '.csv': 'text/csv',
+    '.txt': 'text/plain',
+    '.json': 'application/json',
+  };
+  return mimeMap[normalized] || 'application/octet-stream';
+}
+
+/**
  * Course media storage (thumbnails, banners, brochures, videos, worksheets)
+ * Strictly separates public promotional media from private protected curriculum media.
  */
 const courseStorage = multer.diskStorage({
   destination: (req: Request, file: any, cb: any) => {
     const rawFolder = (req.query?.folder as string) || (req.body?.folder as string) || 'general';
     const sanitizedFolder = rawFolder.replace(/[^a-zA-Z0-9_-]/g, '') || 'general';
-    const courseDir = path.join(LOCAL_STORAGE_DIR, 'courses', sanitizedFolder);
+    const isPublic = isPublicCourseFolder(sanitizedFolder);
+    const scopeFolder = isPublic ? 'public' : 'protected';
+    const courseDir = path.join(LOCAL_STORAGE_DIR, 'courses', scopeFolder, sanitizedFolder);
     if (!fs.existsSync(courseDir)) {
       fs.mkdirSync(courseDir, { recursive: true });
     }

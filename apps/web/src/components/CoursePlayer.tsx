@@ -19,8 +19,21 @@ import {
   Trophy,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { apiFetch } from '../services/api';
+import { apiFetch, getAuthToken } from '../services/api';
 import { useToast } from '../context/ToastContext';
+
+function getAuthorizedMediaUrl(rawUrl?: string | null): string {
+  if (!rawUrl) return '';
+  if (rawUrl.startsWith('http://') || rawUrl.startsWith('https://')) {
+    if (!rawUrl.includes('/media/protected/') && !rawUrl.includes('/uploads/courses/')) {
+      return rawUrl;
+    }
+  }
+  const token = getAuthToken();
+  if (!token) return rawUrl;
+  const separator = rawUrl.includes('?') ? '&' : '?';
+  return `${rawUrl}${separator}token=${encodeURIComponent(token)}`;
+}
 
 interface CoursePlayerProps {
   courseId: string;
@@ -290,7 +303,7 @@ export const CoursePlayer: React.FC<CoursePlayerProps> = ({
     // Direct MP4/WebM/Stream video
     return (
       <video
-        src={url}
+        src={getAuthorizedMediaUrl(url)}
         controls
         className="w-full h-full object-contain bg-black"
         onEnded={handleCompleteAndNext}
@@ -538,7 +551,7 @@ export const CoursePlayer: React.FC<CoursePlayerProps> = ({
                   <div className="flex flex-wrap gap-2">
                     {activeLesson?.pdfUrl && (
                       <a
-                        href={activeLesson.pdfUrl}
+                        href={getAuthorizedMediaUrl(activeLesson.pdfUrl)}
                         target="_blank"
                         rel="noreferrer"
                         className="px-3.5 py-2 rounded-xl bg-blue-50 hover:bg-blue-100 text-[#006FFF] text-xs font-bold inline-flex items-center gap-1.5"
@@ -549,7 +562,7 @@ export const CoursePlayer: React.FC<CoursePlayerProps> = ({
                     {(activeLesson?.attachments || []).map((att: any) => (
                       <a
                         key={att.id}
-                        href={att.fileUrl}
+                        href={getAuthorizedMediaUrl(att.fileUrl)}
                         target="_blank"
                         rel="noreferrer"
                         className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold inline-flex items-center gap-1.5"

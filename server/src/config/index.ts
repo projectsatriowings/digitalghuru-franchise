@@ -38,8 +38,17 @@ export const config = {
     provider: process.env.SMS_PROVIDER || 'mock',
   },
   storage: {
-    driver: process.env.STORAGE_DRIVER || 'local',
+    driver: (process.env.STORAGE_DRIVER || 'local').toLowerCase() as 'local' | 'volume' | 's3',
     localPath: process.env.STORAGE_LOCAL_PATH || './uploads',
+    persistentVolumePath: process.env.PERSISTENT_STORAGE_PATH || process.env.STORAGE_PERSISTENT_PATH || '',
+    allowEphemeralLocal: process.env.STORAGE_ALLOW_EPHEMERAL_LOCAL === 'true',
+    s3: {
+      bucket: process.env.S3_BUCKET || '',
+      region: process.env.S3_REGION || 'us-east-1',
+      endpoint: process.env.S3_ENDPOINT || '',
+      accessKeyId: process.env.S3_ACCESS_KEY_ID || '',
+      secretAccessKey: process.env.S3_SECRET_ACCESS_KEY || '',
+    },
   },
   superAdmin: {
     email: process.env.SUPER_ADMIN_EMAIL || 'superadmin@platform.local',
@@ -63,6 +72,28 @@ export function validateProductionConfig() {
     if (!process.env.REFRESH_TOKEN_SECRET && !process.env.JWT_SECRET) {
       errors.push('REFRESH_TOKEN_SECRET or JWT_SECRET must be explicitly set in production.');
     }
+
+    // Storage persistence validation in production
+    if (config.storage.driver === 'local') {
+      if (!config.storage.allowEphemeralLocal && !config.storage.persistentVolumePath) {
+        errors.push(
+          'STORAGE_DRIVER is set to "local" in production without a persistent volume mount. ' +
+          'Local container storage is ephemeral and will lose uploaded course media on redeployment or restart. ' +
+          'Please configure a persistent mounted volume (STORAGE_DRIVER=volume and PERSISTENT_STORAGE_PATH=/path/to/volume) ' +
+          'or object storage (STORAGE_DRIVER=s3 with credentials), or set STORAGE_ALLOW_EPHEMERAL_LOCAL=true to explicitly override.'
+        );
+      }
+    } else if (config.storage.driver === 'volume') {
+      const mountPath = config.storage.persistentVolumePath || config.storage.localPath;
+      if (!mountPath) {
+        errors.push('STORAGE_DRIVER is set to "volume" but PERSISTENT_STORAGE_PATH is not configured.');
+      }
+    } else if (config.storage.driver === 's3') {
+      if (!config.storage.s3.bucket) errors.push('S3_BUCKET must be defined when STORAGE_DRIVER=s3.');
+      if (!config.storage.s3.accessKeyId) errors.push('S3_ACCESS_KEY_ID must be defined when STORAGE_DRIVER=s3.');
+      if (!config.storage.s3.secretAccessKey) errors.push('S3_SECRET_ACCESS_KEY must be defined when STORAGE_DRIVER=s3.');
+    }
+
     if (errors.length > 0) {
       throw new Error(`[Production Security Validation Failed]:\n- ${errors.join('\n- ')}`);
     }

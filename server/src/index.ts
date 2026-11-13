@@ -27,6 +27,9 @@ import feedbackRoutes from './modules/feedback/feedback.routes.js';
 import staffAttendanceRoutes from './modules/staff-attendance/staff-attendance.routes.js';
 import franchiseRoutes from './modules/franchise/franchise.routes.js';
 import coursesRoutes from './modules/courses/courses.routes.js';
+import { isPublicCourseFolder } from './utils/storage.js';
+import { streamPublicMedia, streamProtectedMedia } from './modules/courses/courses.controller.js';
+import { authenticateToken } from './middleware/auth.js';
 import { NotificationService } from './modules/notifications/notification.service.js';
 import { demoModeMiddleware } from './middleware/demo-mode.middleware.js';
 import { apiRateLimiter } from './middleware/rate-limiter.js';
@@ -123,6 +126,15 @@ app.use('/api/feedback', feedbackRoutes);
 app.use('/api/staff-attendance', staffAttendanceRoutes);
 app.use('/api/franchises', franchiseRoutes);
 app.use('/api/courses', coursesRoutes);
+
+// Legacy course media route (/uploads/courses/:folder/:filename)
+app.get('/uploads/courses/:folder/:filename', (req: Request, res: Response) => {
+  const { folder } = req.params;
+  if (isPublicCourseFolder(folder)) {
+    return streamPublicMedia(req, res);
+  }
+  return authenticateToken(req as any, res, () => streamProtectedMedia(req, res));
+});
 
 // Root info endpoint & health check redirects
 app.get('/', (_req: Request, res: Response) => {
