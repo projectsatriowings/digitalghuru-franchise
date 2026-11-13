@@ -232,7 +232,7 @@ async function run() {
         curriculumVersions: {
           create: {
             version: 1,
-            isPublished: true,
+            isPublished: false,
             modules: {
               create: {
                 title: 'Module 1',
@@ -256,6 +256,10 @@ async function run() {
     });
     createdCourseIds.push(courseA.id);
     const courseAVersion = courseA.curriculumVersions[0];
+    await realPrisma.courseCurriculumVersion.update({
+      where: { id: courseAVersion.id },
+      data: { isPublished: true, isLocked: true },
+    });
 
     // 3. Create Course B (owns my-intro.mp4)
     const courseB = await realPrisma.globalCourse.create({
@@ -268,7 +272,7 @@ async function run() {
         curriculumVersions: {
           create: {
             version: 1,
-            isPublished: true,
+            isPublished: false,
             modules: {
               create: {
                 title: 'Module 1',
@@ -286,8 +290,15 @@ async function run() {
           },
         },
       },
+      include: {
+        curriculumVersions: true,
+      },
     });
     createdCourseIds.push(courseB.id);
+    await realPrisma.courseCurriculumVersion.update({
+      where: { id: courseB.curriculumVersions[0].id },
+      data: { isPublished: true, isLocked: true },
+    });
 
     // 4. Create Course C & Course D sharing ambiguous-doc.pdf
     const courseC = await realPrisma.globalCourse.create({
@@ -300,7 +311,7 @@ async function run() {
         curriculumVersions: {
           create: {
             version: 1,
-            isPublished: true,
+            isPublished: false,
             modules: {
               create: {
                 title: 'Module 1',
@@ -325,8 +336,15 @@ async function run() {
           },
         },
       },
+      include: {
+        curriculumVersions: true,
+      },
     });
     createdCourseIds.push(courseC.id);
+    await realPrisma.courseCurriculumVersion.update({
+      where: { id: courseC.curriculumVersions[0].id },
+      data: { isPublished: true, isLocked: true },
+    });
 
     const courseD = await realPrisma.globalCourse.create({
       data: {
@@ -338,7 +356,7 @@ async function run() {
         curriculumVersions: {
           create: {
             version: 1,
-            isPublished: true,
+            isPublished: false,
             modules: {
               create: {
                 title: 'Module 1',
@@ -363,8 +381,15 @@ async function run() {
           },
         },
       },
+      include: {
+        curriculumVersions: true,
+      },
     });
     createdCourseIds.push(courseD.id);
+    await realPrisma.courseCurriculumVersion.update({
+      where: { id: courseD.curriculumVersions[0].id },
+      data: { isPublished: true, isLocked: true },
+    });
 
     // 5. Create Franchise & Selection for Course A
     const franchiseOwnerUser = await realPrisma.user.create({
@@ -788,18 +813,30 @@ async function run() {
       }
 
       if (createdCourseIds.length > 0) {
-        await realPrisma.lessonAttachment.deleteMany({
-          where: { chapter: { module: { curriculumVersion: { courseId: { in: createdCourseIds } } } } },
-        });
-        await realPrisma.courseChapter.deleteMany({
-          where: { module: { curriculumVersion: { courseId: { in: createdCourseIds } } } },
-        });
-        await realPrisma.courseModule.deleteMany({
-          where: { curriculumVersion: { courseId: { in: createdCourseIds } } },
-        });
-        await realPrisma.courseCurriculumVersion.deleteMany({
-          where: { courseId: { in: createdCourseIds } },
-        });
+        try {
+          await realPrisma.$executeRawUnsafe(`ALTER TABLE "CourseCurriculumVersion" DISABLE TRIGGER trg_lock_course_curriculum_version;`);
+          await realPrisma.$executeRawUnsafe(`ALTER TABLE "CourseModule" DISABLE TRIGGER trg_lock_course_module;`);
+          await realPrisma.$executeRawUnsafe(`ALTER TABLE "CourseChapter" DISABLE TRIGGER trg_lock_course_chapter;`);
+          await realPrisma.$executeRawUnsafe(`ALTER TABLE "LessonAttachment" DISABLE TRIGGER trg_lock_lesson_attachment;`);
+
+          await realPrisma.lessonAttachment.deleteMany({
+            where: { chapter: { module: { curriculumVersion: { courseId: { in: createdCourseIds } } } } },
+          });
+          await realPrisma.courseChapter.deleteMany({
+            where: { module: { curriculumVersion: { courseId: { in: createdCourseIds } } } },
+          });
+          await realPrisma.courseModule.deleteMany({
+            where: { curriculumVersion: { courseId: { in: createdCourseIds } } },
+          });
+          await realPrisma.courseCurriculumVersion.deleteMany({
+            where: { courseId: { in: createdCourseIds } },
+          });
+        } finally {
+          await realPrisma.$executeRawUnsafe(`ALTER TABLE "CourseCurriculumVersion" ENABLE TRIGGER trg_lock_course_curriculum_version;`);
+          await realPrisma.$executeRawUnsafe(`ALTER TABLE "CourseModule" ENABLE TRIGGER trg_lock_course_module;`);
+          await realPrisma.$executeRawUnsafe(`ALTER TABLE "CourseChapter" ENABLE TRIGGER trg_lock_course_chapter;`);
+          await realPrisma.$executeRawUnsafe(`ALTER TABLE "LessonAttachment" ENABLE TRIGGER trg_lock_lesson_attachment;`);
+        }
         await realPrisma.globalCourse.deleteMany({
           where: { id: { in: createdCourseIds } },
         });
