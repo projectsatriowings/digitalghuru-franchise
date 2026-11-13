@@ -293,8 +293,8 @@ function normalizeWizardCoursePayload(rawBody: any) {
         m.showCareerFeatures !== undefined
           ? m.showCareerFeatures
           : (extensibleConfig?.featureFlags?.showCareerFeatures !== undefined
-            ? extensibleConfig.featureFlags.showCareerFeatures
-            : true),
+              ? extensibleConfig.featureFlags.showCareerFeatures
+              : true),
       whoIsThisForData: normalizedAudiences,
       categorizedToolsData: m.categorizedToolsData ?? body.overviewJson?.categorizedToolsData ?? [],
       ...(m.usps !== undefined ? { usps: m.usps } : {}),
@@ -419,28 +419,28 @@ export async function replaceDraftCurriculum(req: Request, res: Response) {
     const { id, versionId } = req.params;
     const rawModules = Array.isArray(req.body?.modules)
       ? req.body.modules.map((mod: any, mIdx: number) => ({
-        title: mod.title || `Module ${mIdx + 1}`,
-        description: mod.description || null,
-        position: mod.position !== undefined ? mod.position : mIdx,
-        chapters: (mod.chapters || mod.lessons || []).map((ch: any, cIdx: number) => ({
-          title: ch.title || `Lesson ${cIdx + 1}`,
-          description: ch.description || null,
-          videoUrl: ch.videoUrl || null,
-          pdfUrl: ch.pdfUrl || null,
-          duration: ch.duration || '10:00',
-          position: ch.position !== undefined ? ch.position : cIdx,
-          isFree: Boolean(ch.isFree),
-          attachments: (ch.attachments || ch.materials || []).map((att: any) => ({
-            title: att.title || 'Resource',
-            fileUrl: att.fileUrl,
-            fileType: att.fileType || att.type || 'PDF',
-            type: att.fileType || att.type || 'PDF',
-            fileSize: Number(att.fileSize) || 0,
-            isDownload: att.isDownload !== undefined ? Boolean(att.isDownload) : (att.isDownloadable !== undefined ? Boolean(att.isDownloadable) : true),
-            isDownloadable: att.isDownload !== undefined ? Boolean(att.isDownload) : (att.isDownloadable !== undefined ? Boolean(att.isDownloadable) : true),
+          title: mod.title || `Module ${mIdx + 1}`,
+          description: mod.description || null,
+          position: mod.position !== undefined ? mod.position : mIdx,
+          chapters: (mod.chapters || mod.lessons || []).map((ch: any, cIdx: number) => ({
+            title: ch.title || `Lesson ${cIdx + 1}`,
+            description: ch.description || null,
+            videoUrl: ch.videoUrl || null,
+            pdfUrl: ch.pdfUrl || null,
+            duration: ch.duration || '10:00',
+            position: ch.position !== undefined ? ch.position : cIdx,
+            isFree: Boolean(ch.isFree),
+            attachments: (ch.attachments || ch.materials || []).map((att: any) => ({
+              title: att.title || 'Resource',
+              fileUrl: att.fileUrl,
+              fileType: att.fileType || att.type || 'PDF',
+              type: att.fileType || att.type || 'PDF',
+              fileSize: Number(att.fileSize) || 0,
+              isDownload: att.isDownload !== undefined ? Boolean(att.isDownload) : (att.isDownloadable !== undefined ? Boolean(att.isDownloadable) : true),
+              isDownloadable: att.isDownload !== undefined ? Boolean(att.isDownload) : (att.isDownloadable !== undefined ? Boolean(att.isDownloadable) : true),
+            })),
           })),
-        })),
-      }))
+        }))
       : req.body?.modules;
 
     const parse = ReplaceDraftCurriculumSchema.safeParse({ modules: rawModules });
@@ -495,7 +495,7 @@ export async function updateGlobalCourseStatus(req: Request, res: Response) {
 export async function deleteGlobalCourse(req: Request, res: Response) {
   try {
     const { id } = req.params;
-
+    
     // Check if active or historical enrollments exist
     const enrollmentCount = await prisma.courseEnrollment.count({
       where: { courseId: id }
@@ -596,12 +596,12 @@ export async function getMyFranchiseCourseContext(req: Request, res: Response) {
       where: isBranchScoped
         ? { instituteId: { in: allowedInstituteIds }, status: 'ACTIVE' }
         : {
-          status: 'ACTIVE',
-          OR: [
-            { franchiseId },
-            ...(branchIds.length > 0 ? [{ instituteId: { in: branchIds } }] : []),
-          ],
-        },
+            status: 'ACTIVE',
+            OR: [
+              { franchiseId },
+              ...(branchIds.length > 0 ? [{ instituteId: { in: branchIds } }] : []),
+            ],
+          },
       orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
       select: {
         id: true,
