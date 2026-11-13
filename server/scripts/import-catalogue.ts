@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import { PrismaClient, CourseStatus } from '@prisma/client';
+import { assertSafeTestDatabase } from '../src/utils/test-db-guard.js';
 
 interface CliOptions {
   dryRun: boolean;
@@ -923,9 +924,13 @@ export async function importCatalogue(options?: Partial<CliOptions>) {
   const schema = options?.schema || parsed.schema;
   const permitFranchiseId = options?.permitFranchiseId || parsed.permitFranchiseId;
 
-  const baseUrl = process.env.DATABASE_URL;
+  let baseUrl = process.env.TEST_DATABASE_URL || process.env.DATABASE_URL;
+  if (process.env.TEST_DATABASE_URL) {
+    assertSafeTestDatabase();
+    baseUrl = process.env.TEST_DATABASE_URL;
+  }
   if (!baseUrl) {
-    throw new Error('DATABASE_URL is missing in environment');
+    throw new Error('DATABASE_URL or TEST_DATABASE_URL is missing in environment');
   }
 
   console.log(`\n=== Digital Guru Complete Source Catalogue Importer ===`);
@@ -1070,8 +1075,23 @@ export async function importCatalogue(options?: Partial<CliOptions>) {
                   create: mod.topics.map((topic, cIdx) => ({
                     title: topic,
                     position: cIdx,
-                    duration: '15:00',
+                    duration: '10:00', // Authentic default from digitalghuru_updated
                     isFree: mIdx === 0 && cIdx === 0,
+                    ...(mIdx === 0 && cIdx === 0 && course.brochureUrl
+                      ? {
+                          attachments: {
+                            create: [
+                              {
+                                title: `${course.title} Syllabus & Brochure`,
+                                fileUrl: course.brochureUrl,
+                                fileType: 'PDF' as const,
+                                fileSize: 1024,
+                                isDownload: true,
+                              },
+                            ],
+                          },
+                        }
+                      : {}),
                   })),
                 },
               })),

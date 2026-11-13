@@ -66,6 +66,24 @@ export function assertSafeTestDatabase(): VerifiedTestDbIdentity {
     );
   }
 
+  // Strict check: Positively REJECT any Tuition Management database
+  const isTuitionDb =
+    rawUrl.includes('tuition') ||
+    pathname.includes('tuition') ||
+    rawUrl.includes('tuition_management') ||
+    pathname.includes('tuition_management');
+
+  if (isTuitionDb) {
+    throw new Error(
+      `\n====================================================================\n` +
+      ` [CRITICAL SAFETY GUARD REJECTION]\n` +
+      ` Target database is identified as the TUITION MANAGEMENT DATABASE!\n` +
+      ` Database: ${pathname}\n` +
+      ` Tests must NEVER run against or mutate Tuition Management databases.\n` +
+      `====================================================================\n`
+    );
+  }
+
   const isLocalOrTestHost =
     hostname === 'localhost' ||
     (hostname === '127.0.0.1' && port !== '5433') ||

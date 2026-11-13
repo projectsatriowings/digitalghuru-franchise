@@ -1,10 +1,15 @@
+import 'dotenv/config';
 import fs from 'fs';
 import path from 'path';
 import { Client } from 'pg';
+import { assertSafeTestDatabase } from '../src/utils/test-db-guard.js';
+
+// Enforce Safety Guard before any database connection is initialized
+const testDbIdentity = assertSafeTestDatabase();
+const testDbUrl = process.env.TEST_DATABASE_URL!;
 
 async function applyMigrationsToTestDb() {
-  const testDbUrl = process.env.TEST_DATABASE_URL || 'postgresql://postgres:password@localhost:5432/dg_test_isolated';
-  console.log(`Applying custom triggers and governance migrations to test DB: ${testDbUrl}`);
+  console.log(`Applying custom triggers and governance migrations to test DB: ${testDbIdentity.host}${testDbIdentity.database}`);
 
   const client = new Client({ connectionString: testDbUrl });
   await client.connect();
