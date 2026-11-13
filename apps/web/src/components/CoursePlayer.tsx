@@ -472,9 +472,8 @@ export const CoursePlayer: React.FC<CoursePlayerProps> = ({
       <div className="flex flex-1 flex-col lg:flex-row relative">
         {/* Curriculum Sidebar */}
         <aside
-          className={`${
-            isMobileSidebarOpen ? 'fixed inset-0 z-40 bg-white flex' : 'hidden lg:flex'
-          } lg:w-80 xl:w-96 flex-col border-r border-slate-200 bg-white shrink-0`}
+          className={`${isMobileSidebarOpen ? 'fixed inset-0 z-40 bg-white flex' : 'hidden lg:flex'
+            } lg:w-80 xl:w-96 flex-col border-r border-slate-200 bg-white shrink-0`}
         >
           {isMobileSidebarOpen && (
             <div className="p-4 border-b border-slate-200 flex items-center justify-between lg:hidden">
@@ -518,9 +517,8 @@ export const CoursePlayer: React.FC<CoursePlayerProps> = ({
                   <button
                     type="button"
                     onClick={() => setExpandedModule(isOpen ? -1 : mIdx)}
-                    className={`w-full px-4 py-3.5 flex items-center justify-between text-left transition-colors ${
-                      isOpen ? 'bg-blue-50/60' : 'hover:bg-slate-50'
-                    }`}
+                    className={`w-full px-4 py-3.5 flex items-center justify-between text-left transition-colors ${isOpen ? 'bg-blue-50/60' : 'hover:bg-slate-50'
+                      }`}
                   >
                     <span className={`text-xs font-extrabold pr-2 ${isOpen ? 'text-[#006FFF]' : 'text-slate-800'}`}>
                       {mod.title}
@@ -541,22 +539,19 @@ export const CoursePlayer: React.FC<CoursePlayerProps> = ({
                             key={lesson.id || lIdx}
                             type="button"
                             onClick={() => handleLessonSelect(lesson, mIdx)}
-                            className={`w-full px-4 py-3 flex items-start justify-between gap-2.5 text-left transition-colors relative ${
-                              isActive ? 'bg-blue-50/40' : 'hover:bg-slate-50'
-                            }`}
+                            className={`w-full px-4 py-3 flex items-start justify-between gap-2.5 text-left transition-colors relative ${isActive ? 'bg-blue-50/40' : 'hover:bg-slate-50'
+                              }`}
                           >
                             {isActive && <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#006FFF]" />}
                             <div className="flex items-start gap-2.5 min-w-0">
                               <FileText
-                                className={`w-4 h-4 shrink-0 mt-0.5 ${
-                                  isActive ? 'text-[#006FFF]' : 'text-slate-400'
-                                }`}
+                                className={`w-4 h-4 shrink-0 mt-0.5 ${isActive ? 'text-[#006FFF]' : 'text-slate-400'
+                                  }`}
                               />
                               <div className="min-w-0">
                                 <div
-                                  className={`text-xs leading-snug ${
-                                    isActive ? 'text-[#006FFF] font-bold' : 'text-slate-700 font-medium'
-                                  }`}
+                                  className={`text-xs leading-snug ${isActive ? 'text-[#006FFF] font-bold' : 'text-slate-700 font-medium'
+                                    }`}
                                 >
                                   {lIdx + 1}. {lesson.title}
                                 </div>
