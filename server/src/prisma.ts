@@ -80,7 +80,7 @@ prisma.$transaction = (async (arg: any, options?: any) => {
 }) as any;
 
 if (process.env.NODE_ENV !== 'production') {
-  global.__tuition_prisma__ = basePrisma;
+  global.__tuition_prisma__ = prisma;
 }
 
 export default prisma;
