@@ -31,22 +31,22 @@ import 'dotenv/config';
 import http from 'http';
 import { assertSafeTestDatabase } from '../src/utils/test-db-guard.js';
 
-// Enforce Safety Guard before any imports that initialize database clients
+// -----------------------------------------------------------------------------
+// 1. STRICT DATABASE SAFETY GUARD & EARLY TERMINATION
+// Must run BEFORE any application code, Express app, or Prisma client is loaded.
+// -----------------------------------------------------------------------------
 const testDbIdentity = assertSafeTestDatabase();
 const testDbUrl = process.env.TEST_DATABASE_URL!;
 process.env.DATABASE_URL = testDbUrl;
 process.env.DIRECT_URL = testDbUrl;
 
-import { PrismaClient, CourseStatus, LearningMode, EnrollmentStatus, UserRole } from '@prisma/client';
-import app from '../src/index.js';
-import { generateAccessToken } from '../src/utils/security.js';
-import { importCatalogue } from './import-catalogue.js';
-
-const prisma = new PrismaClient({
-  datasources: { db: { url: testDbUrl } },
-});
-(global as any).__tuition_prisma__ = prisma;
-
+// -----------------------------------------------------------------------------
+// 2. RUNTIME DEFERRED INITIALIZATION
+// Modules that initialize Prisma or the Express app are dynamically loaded
+// inside runPhase2Tests(), strictly after the top-level safety check passes.
+// -----------------------------------------------------------------------------
+let prisma: any;
+let app: any;
 let server: http.Server;
 const TEST_PORT = 5098;
 const BASE_URL = `http://127.0.0.1:${TEST_PORT}`;
@@ -92,6 +92,18 @@ async function runPhase2Tests() {
   console.log(' DIGITAL GURU FRANCHISE — PHASE 2: GLOBAL COURSE CATALOGUE VERIFICATION');
   console.log('========================================================================\n');
 
+  // Dynamic runtime imports strictly after top-level assertSafeTestDatabase()
+  const { PrismaClient, CourseStatus, LearningMode, EnrollmentStatus, UserRole } = await import('@prisma/client');
+  const appModule = await import('../src/index.js');
+  app = appModule.default;
+  const { generateAccessToken } = await import('../src/utils/security.js');
+  const { importCatalogue } = await import('./import-catalogue.js');
+
+  prisma = new PrismaClient({
+    datasources: { db: { url: testDbUrl } },
+  });
+  (global as any).__tuition_prisma__ = prisma;
+
   await startServer();
 
   // Test artifacts created during run that will be cleaned up
@@ -108,9 +120,58 @@ async function runPhase2Tests() {
     const suffix = `${Date.now()}`;
 
     // -------------------------------------------------------------
-    // Phase 0: Actor Resolution & Context Setup
+    // Phase 0: Test Database Safety Guard Rejection Assertions
     // -------------------------------------------------------------
-    console.log('--- 0. Resolving Actors and Authorization Context ---');
+    console.log('--- 0. Database Safety Guard Rejection Verification ---');
+
+    // 0.1 Positively reject missing/empty TEST_DATABASE_URL
+    let missingRejected = false;
+    try {
+      assertSafeTestDatabase('');
+    } catch (err: any) {
+      missingRejected = err.message.includes('No explicit TEST_DATABASE_URL configured');
+    }
+    assert(missingRejected, '0.1 Safety Guard: Positively rejects missing/empty TEST_DATABASE_URL');
+
+    // 0.2 Positively reject live production Neon host
+    let neonRejected = false;
+    try {
+      assertSafeTestDatabase('postgresql://neondb_owner:npg_123456@ep-nameless-hat-a4s5b9.us-east-2.aws.neon.tech/neondb');
+    } catch (err: any) {
+      neonRejected = err.message.includes('LIVE PRODUCTION NEON DATABASE');
+    }
+    assert(neonRejected, '0.2 Safety Guard: Positively rejects live production Neon database URL');
+
+    // 0.3 Positively reject local Neon TCP bridge (port 5433)
+    let bridgeRejected = false;
+    try {
+      assertSafeTestDatabase('postgresql://postgres:password@127.0.0.1:5433/neondb');
+    } catch (err: any) {
+      bridgeRejected = err.message.includes('LIVE PRODUCTION NEON DATABASE');
+    }
+    assert(bridgeRejected, '0.3 Safety Guard: Positively rejects local Neon TCP Bridge (port 5433)');
+
+    // 0.4 Positively reject Tuition Management database
+    let tuitionRejected = false;
+    try {
+      assertSafeTestDatabase('postgresql://postgres:password@localhost:5432/tuition_management');
+    } catch (err: any) {
+      tuitionRejected = err.message.includes('TUITION MANAGEMENT DATABASE');
+    }
+    assert(tuitionRejected, '0.4 Safety Guard: Positively rejects Tuition Management database target');
+
+    // 0.5 Positively verify safe isolated test database
+    let testDbVerified = false;
+    try {
+      const verified = assertSafeTestDatabase('postgresql://postgres:password@localhost:5432/dg_test_isolated');
+      testDbVerified = verified.isIsolatedTestDb && verified.database === '/dg_test_isolated';
+    } catch {}
+    assert(testDbVerified, '0.5 Safety Guard: Positively validates safe isolated test database (localhost:5432/dg_test_isolated)');
+
+    // -------------------------------------------------------------
+    // Phase 0.5: Actor Resolution & Context Setup
+    // -------------------------------------------------------------
+    console.log('\n--- 0.5 Resolving Actors and Authorization Context ---');
 
     // 0a. Super Admin Actor
     let superAdmin = await prisma.user.findFirst({
@@ -345,8 +406,10 @@ async function runPhase2Tests() {
     assert(c1Chapters[0].isFree === true, '2.5 Course 1: Chapter 1 is marked as free preview');
     assert(c1Chapters[1].isFree === false, '2.6 Course 1: Subsequent chapters are locked (isFree = false)');
     assert(
-      c1Chapters[0].attachments.length > 0 && c1Chapters[0].attachments[0].fileUrl === '/Courses/AI Powered Digital Marketing Course.pdf',
-      '2.7 Course 1: Chapter 1 contains authentic syllabus & brochure PDF attachment'
+      c1Chapters[0].attachments.length > 0 &&
+      c1Chapters[0].attachments[0].fileUrl === '/Courses/AI Powered Digital Marketing Course.pdf' &&
+      c1Chapters[0].attachments[0].fileSize === 8671263,
+      '2.7 Course 1: Chapter 1 contains authentic brochure PDF with exact validated size (8,671,263 bytes)'
     );
     assert(c1.thumbnailUrl === '/uploads/courses/1789123754349-ai-powered-digital-marketing-course-card.webp', '2.8 Course 1: Thumbnail URL matches authentic source path');
     assert(c1.bannerUrl === '/uploads/courses/1789123324736-ai-powered-digital-marketing-banner.jpg.webp', '2.9 Course 1: Banner URL matches authentic source path');
@@ -359,11 +422,13 @@ async function runPhase2Tests() {
     assert(c2.title === 'React JS Full Stack Development Course', '2.10 Course 2: Title matches authentic source');
     assert(c2Modules.length === 7, `2.11 Course 2: Module count is exactly 7 (Actual: ${c2Modules.length})`);
     assert(c2Chapters.length === 32, `2.12 Course 2: Chapter count is exactly 32 (Actual: ${c2Chapters.length})`);
-    assert(c2Chapters[0].duration === '10:00', `2.13 Course 2: Lesson duration matches authentic default 10:00 (Actual: "${c2Chapters[0].duration}")`);
+    assert(c2Chapters[0].duration === '10:00', `2.13 Course 2: Lesson duration matches database default 10:00 (Actual: "${c2Chapters[0].duration}")`);
     assert(c2Chapters[0].isFree === true, '2.14 Course 2: Chapter 1 is marked as free preview');
     assert(
-      c2Chapters[0].attachments.length > 0 && c2Chapters[0].attachments[0].fileUrl === '/Courses/React JS Full Stack Development.pdf',
-      '2.15 Course 2: Chapter 1 contains authentic syllabus & brochure PDF attachment'
+      c2Chapters[0].attachments.length > 0 &&
+      c2Chapters[0].attachments[0].fileUrl === '/Courses/React JS Full Stack Development.pdf' &&
+      c2Chapters[0].attachments[0].fileSize === 6700721,
+      '2.15 Course 2: Chapter 1 contains authentic brochure PDF with exact validated size (6,700,721 bytes)'
     );
 
     // 2c. Reconcile Course 3: AI Super Kids Grade 11-12
@@ -373,7 +438,8 @@ async function runPhase2Tests() {
     const c3Chapters = c3Modules.flatMap((m) => m.chapters);
     assert(c3Modules.length === 16, `2.16 Course 3: Module count is exactly 16 (Actual: ${c3Modules.length})`);
     assert(c3Chapters.length === 48, `2.17 Course 3: Chapter count is exactly 48 (Actual: ${c3Chapters.length})`);
-    assert(c3Chapters[0].duration === '10:00', '2.18 Course 3: Lesson duration matches authentic default 10:00');
+    assert(c3Chapters[0].duration === '10:00', '2.18 Course 3: Lesson duration matches database default 10:00');
+    assert(c3Chapters[0].attachments.length === 0, '2.18b Course 3: No attachment created for missing Grade 11-12 brochure (prevents broken references)');
 
     // 2d. Reconcile Course 4: Advanced Data Science with AI
     const c4 = courseMap.get('data-science-with-ai')!;
@@ -382,7 +448,8 @@ async function runPhase2Tests() {
     const c4Chapters = c4Modules.flatMap((m) => m.chapters);
     assert(c4Modules.length === 10, `2.19 Course 4: Module count is exactly 10 (Actual: ${c4Modules.length})`);
     assert(c4Chapters.length === 38, `2.20 Course 4: Chapter count is exactly 38 (Actual: ${c4Chapters.length})`);
-    assert(c4Chapters[0].duration === '10:00', '2.21 Course 4: Lesson duration matches authentic default 10:00');
+    assert(c4Chapters[0].duration === '10:00', '2.21 Course 4: Lesson duration matches database default 10:00');
+    assert(c4Chapters[0].attachments.length === 0, '2.21b Course 4: No attachment created for missing Data Science brochure (prevents broken references)');
 
     // 2e. Reconcile Course 5: Advanced Creative Design & Video Editing
     const c5 = courseMap.get('creative-design-and-video-editing')!;
@@ -391,7 +458,12 @@ async function runPhase2Tests() {
     const c5Chapters = c5Modules.flatMap((m) => m.chapters);
     assert(c5Modules.length === 10, `2.22 Course 5: Module count is exactly 10 (Actual: ${c5Modules.length})`);
     assert(c5Chapters.length === 40, `2.23 Course 5: Chapter count is exactly 40 (Actual: ${c5Chapters.length})`);
-    assert(c5Chapters[0].duration === '10:00', '2.24 Course 5: Lesson duration matches authentic default 10:00');
+    assert(c5Chapters[0].duration === '10:00', '2.24 Course 5: Lesson duration matches database default 10:00');
+    assert(c5Chapters[0].attachments.length === 0, '2.24b Course 5: No attachment created for missing Creative Design brochure (prevents broken references)');
+    assert(
+      c1Chapters.every((ch) => ch.videoUrl === null && ch.pdfUrl === null),
+      '2.24c Media Integrity: No fake lesson video URLs or PDF URLs invented; safely stored as null'
+    );
 
     // 2f. Aggregate Totals Calculated from Actual PostgreSQL Records
     const totalModules = dbCourses

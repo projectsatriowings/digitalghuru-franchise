@@ -11,10 +11,10 @@ export interface VerifiedTestDbIdentity {
   isIsolatedTestDb: boolean;
 }
 
-export function assertSafeTestDatabase(): VerifiedTestDbIdentity {
+export function assertSafeTestDatabase(customUrl?: string): VerifiedTestDbIdentity {
   // Database tests STRICTLY require an explicit TEST_DATABASE_URL.
   // Never silently fall back to DATABASE_URL if it points to production or the local Neon TCP bridge.
-  const testDbUrl = process.env.TEST_DATABASE_URL;
+  const testDbUrl = customUrl !== undefined ? customUrl : process.env.TEST_DATABASE_URL;
 
   if (!testDbUrl || !testDbUrl.trim()) {
     throw new Error(

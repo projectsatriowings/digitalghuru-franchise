@@ -1,6 +1,53 @@
 import 'dotenv/config';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { PrismaClient, CourseStatus } from '@prisma/client';
 import { assertSafeTestDatabase } from '../src/utils/test-db-guard.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+interface ResolvedBrochure {
+  fileUrl: string;
+  fileSize: number;
+}
+
+/**
+ * Validates whether a course brochure exists in the deployment environment and returns its exact size.
+ * Returns null if the file does not exist, preventing creation of broken attachment records.
+ */
+export function resolveBrochureAttachment(brochureUrl?: string): ResolvedBrochure | null {
+  if (!brochureUrl || !brochureUrl.trim()) return null;
+
+  const candidateRoots = [
+    path.resolve(__dirname, '../../apps/web/public'),
+    path.resolve(process.cwd(), 'apps/web/public'),
+    path.resolve(process.cwd(), '../apps/web/public'),
+    path.resolve(__dirname, '../../../digitalghuru_updated/public'),
+  ];
+
+  const cleanPath = brochureUrl.replace(/^\/+/, '');
+
+  for (const root of candidateRoots) {
+    const fullPath = path.resolve(root, cleanPath);
+    if (fs.existsSync(fullPath)) {
+      try {
+        const stats = fs.statSync(fullPath);
+        if (stats.isFile() && stats.size > 0) {
+          return {
+            fileUrl: brochureUrl,
+            fileSize: stats.size,
+          };
+        }
+      } catch {
+        // continue search
+      }
+    }
+  }
+
+  return null;
+}
 
 interface CliOptions {
   dryRun: boolean;
@@ -518,7 +565,7 @@ export const SOURCE_COURSES = [
     status: CourseStatus.PUBLISHED,
     thumbnailUrl: '/uploads/courses/1789120752643-image-1.webp',
     bannerUrl: '/uploads/courses/1789123324736-ai-powered-digital-marketing-banner.jpg.webp',
-    brochureUrl: '/uploads/courses/1789968532026-ai-super-kids-grade-7-to-8-brochure.pdf',
+    brochureUrl: undefined, // Note: Grade 11-12 brochure is NOT AVAILABLE in source repository (only 7-8 brochure exists)
     learningOutcomes: [
       'Python Fundamentals & Data Handling: Organise, clean and analyse simple datasets.',
       'Data Visualisation & Machine Learning: Understand data, features, models and predictions.',
@@ -665,7 +712,7 @@ export const SOURCE_COURSES = [
     status: CourseStatus.PUBLISHED,
     thumbnailUrl: '/uploads/courses/1789124003189-react-js-full-stack-developer-course-card.webp',
     bannerUrl: '/uploads/courses/1789124027228-react-js-full-stack-developer-banner.jpg.webp',
-    brochureUrl: '/Courses/Data Science with AI Course.pdf',
+    brochureUrl: undefined, // Note: Data Science brochure PDF is NOT AVAILABLE in source repository
     learningOutcomes: [
       'Analyze and interpret complex datasets using Python and SQL',
       'Build and evaluate predictive machine learning models',
@@ -796,7 +843,7 @@ export const SOURCE_COURSES = [
     status: CourseStatus.PUBLISHED,
     thumbnailUrl: '/uploads/courses/1789123754349-ai-powered-digital-marketing-course-card.webp',
     bannerUrl: '/uploads/courses/1789123324736-ai-powered-digital-marketing-banner.jpg.webp',
-    brochureUrl: '/Courses/Creative Design and video editing course.pdf',
+    brochureUrl: undefined, // Note: Creative Design brochure PDF is NOT AVAILABLE in source repository
     learningOutcomes: [
       'Create stunning digital creatives using Photoshop and Illustrator',
       'Edit high-performing reels, commercials, and YouTube videos in Premiere Pro',
@@ -1072,27 +1119,37 @@ export async function importCatalogue(options?: Partial<CliOptions>) {
                 title: mod.title,
                 position: mIdx,
                 chapters: {
-                  create: mod.topics.map((topic, cIdx) => ({
-                    title: topic,
-                    position: cIdx,
-                    duration: '10:00', // Authentic default from digitalghuru_updated
-                    isFree: mIdx === 0 && cIdx === 0,
-                    ...(mIdx === 0 && cIdx === 0 && course.brochureUrl
-                      ? {
-                          attachments: {
-                            create: [
-                              {
-                                title: `${course.title} Syllabus & Brochure`,
-                                fileUrl: course.brochureUrl,
-                                fileType: 'PDF' as const,
-                                fileSize: 1024,
-                                isDownload: true,
-                              },
-                            ],
-                          },
-                        }
-                      : {}),
-                  })),
+                  create: mod.topics.map((topic, cIdx) => {
+                    const isFirstChapter = mIdx === 0 && cIdx === 0;
+                    const resolvedBrochure = isFirstChapter ? resolveBrochureAttachment(course.brochureUrl) : null;
+                    return {
+                      title: topic,
+                      position: cIdx,
+                      // Note on duration: '10:00' represents the PostgreSQL schema default fallback
+                      // (ALTER TABLE chapters ADD COLUMN IF NOT EXISTS duration VARCHAR(20) DEFAULT '10:00')
+                      // from digitalghuru_updated/scripts/migrate-dynamic.js. The source repository
+                      // does not store individual per-lesson durations or lesson-level video URLs.
+                      duration: '10:00',
+                      isFree: isFirstChapter,
+                      videoUrl: null,
+                      pdfUrl: null,
+                      ...(resolvedBrochure
+                        ? {
+                            attachments: {
+                              create: [
+                                {
+                                  title: `${course.title} Syllabus & Brochure`,
+                                  fileUrl: resolvedBrochure.fileUrl,
+                                  fileType: 'PDF' as const,
+                                  fileSize: resolvedBrochure.fileSize,
+                                  isDownload: true,
+                                },
+                              ],
+                            },
+                          }
+                        : {}),
+                    };
+                  }),
                 },
               })),
             },
