@@ -96,9 +96,9 @@ async function run() {
       1,
       'Canonical PERSISTENT_VOLUME_PATH validates as absolute writable directory',
       valResult1.driver === 'volume' &&
-      norm(valResult1.resolvedLocation) === norm(tempVolumeDir) &&
-      valResult1.statusMessage.includes('Persistent volume verified') &&
-      valResult1.isWritable === true,
+        norm(valResult1.resolvedLocation) === norm(tempVolumeDir) &&
+        valResult1.statusMessage.includes('Persistent volume verified') &&
+        valResult1.isWritable === true,
       { resolved: valResult1.resolvedLocation, status: valResult1.statusMessage }
     );
 
@@ -341,14 +341,14 @@ async function run() {
       8,
       'Persistent volume streams full media (200), partial byte-range (206), and enforces 416 on invalid range',
       thumbExists &&
-      videoExists &&
-      stream200?.statusCode === 200 &&
-      content200?.length === thumbContent.length &&
-      stream206?.statusCode === 206 &&
-      stream206?.contentLength === 100 &&
-      stream206?.contentRange === 'bytes 100-199/1000' &&
-      content206?.length === 100 &&
-      range416Caught,
+        videoExists &&
+        stream200?.statusCode === 200 &&
+        content200?.length === thumbContent.length &&
+        stream206?.statusCode === 206 &&
+        stream206?.contentLength === 100 &&
+        stream206?.contentRange === 'bytes 100-199/1000' &&
+        content206?.length === 100 &&
+        range416Caught,
       {
         stream200Status: stream200?.statusCode,
         stream206Status: stream206?.statusCode,
@@ -388,7 +388,7 @@ async function run() {
     // Cleanup local test file
     try {
       fs.unlinkSync(path.join(localUploadsDir, localOnlyFile));
-    } catch { }
+    } catch {}
 
     // -------------------------------------------------------------
     // TEST 10: S3 Storage Manager Unit Protocol Verification
@@ -435,9 +435,9 @@ async function run() {
       11,
       'Storage diagnostics outputs formatted driver, resolved location, and operational health status',
       diagOutput.includes('[Storage Diagnostics]') &&
-      diagOutput.includes('VOLUME') &&
-      norm(diagOutput).includes(norm(tempVolumeDir)) &&
-      diagOutput.includes('Persistent volume verified'),
+        diagOutput.includes('VOLUME') &&
+        norm(diagOutput).includes(norm(tempVolumeDir)) &&
+        diagOutput.includes('Persistent volume verified'),
       { diagOutput }
     );
 
@@ -452,10 +452,10 @@ async function run() {
       12,
       '/api/health endpoint reports storage driver, resolved location, and operational status',
       healthRes.status === 200 &&
-      Boolean(healthJson.storage) &&
-      healthJson.storage.driver === 'volume' &&
-      norm(healthJson.storage.location) === norm(tempVolumeDir) &&
-      healthJson.storage.operational === true,
+        Boolean(healthJson.storage) &&
+        healthJson.storage.driver === 'volume' &&
+        norm(healthJson.storage.location) === norm(tempVolumeDir) &&
+        healthJson.storage.operational === true,
       { healthStorage: healthJson.storage }
     );
 
@@ -467,7 +467,7 @@ async function run() {
     // Clean up temporary volume directory
     try {
       fs.rmSync(tempVolumeDir, { recursive: true, force: true });
-    } catch { }
+    } catch {}
 
     // Close test server
     if (server) {
