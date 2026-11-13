@@ -19,7 +19,18 @@ import {
 } from './courses.types.js';
 import { CourseStatus, LearningMode, EnrollmentStatus, UserRole } from '@prisma/client';
 import { prisma } from '../../prisma.js';
-import { resolveAbsolutePath, isPublicCourseFolder, getMimeType, StorageManager } from '../../utils/storage.js';
+import {
+  resolveAbsolutePath,
+  isPublicCourseFolder,
+  isProtectedCourseFolder,
+  getMimeType,
+  StorageManager,
+} from '../../utils/storage.js';
+import {
+  verifyAccessToken,
+  verifyMediaToken,
+  generateMediaToken,
+} from '../../utils/security.js';
 
 // -------------------------------------------------------------
 // TENANT & OWNERSHIP AUTHORIZATION HELPERS
@@ -1124,20 +1135,299 @@ export async function streamPublicMedia(req: Request, res: Response) {
   }
 }
 
-export async function streamProtectedMedia(req: Request, res: Response) {
+// -------------------------------------------------------------
+// SHORT-LIVED MEDIA AUTHORIZATION TOKEN ISSUANCE (FIX C)
+// -------------------------------------------------------------
+export async function generateMediaTokenController(req: Request, res: Response) {
   try {
-    const { folder, filename } = req.params;
     const user = (req as any).user;
-
     if (!user) {
       return res.status(401).json({ success: false, message: 'Authentication required' });
     }
 
-    const sanitizedFolder = (folder || '').replace(/[^a-zA-Z0-9_-]/g, '');
+    const { courseId, mediaUrl, folder, filename } = req.body;
+
+    let targetFolder = folder;
+    let targetFilename = filename;
+
+    if (mediaUrl) {
+      const cleanUrl = String(mediaUrl).split('?')[0];
+      const match = cleanUrl.match(/\/api\/courses\/media\/(protected|public)\/([^\/]+)\/([^\/]+)/);
+      if (match) {
+        targetFolder = match[2];
+        targetFilename = match[3];
+      } else {
+        const parts = cleanUrl.split('/');
+        if (parts.length >= 2) {
+          targetFilename = parts[parts.length - 1];
+          targetFolder = parts[parts.length - 2];
+        }
+      }
+    }
+
+    if (!targetFolder || !targetFilename) {
+      return res.status(400).json({ success: false, message: 'folder and filename (or mediaUrl) are required' });
+    }
+
+    const sanitizedFolder = String(targetFolder).trim().toLowerCase();
+    const sanitizedFilename = path.basename(String(targetFilename)).replace(/[^a-zA-Z0-9._-]/g, '_');
+
+    if (!isProtectedCourseFolder(sanitizedFolder)) {
+      return res.status(400).json({
+        success: false,
+        message: `Folder "${sanitizedFolder}" is not a protected course media folder. Public assets do not require media tokens.`,
+      });
+    }
+
+    // Exact database lookup to find owning course (never use loose substring search)
+    const exactCandidates = [
+      `/api/courses/media/protected/${sanitizedFolder}/${sanitizedFilename}`,
+      `/api/courses/media/${sanitizedFolder}/${sanitizedFilename}`,
+      `/uploads/courses/${sanitizedFolder}/${sanitizedFilename}`,
+      `courses/protected/${sanitizedFolder}/${sanitizedFilename}`,
+      `courses/${sanitizedFolder}/${sanitizedFilename}`,
+    ];
+
+    const matchingAttachments = await prisma.lessonAttachment.findMany({
+      where: { fileUrl: { in: exactCandidates } },
+      include: {
+        chapter: {
+          include: {
+            module: {
+              include: {
+                curriculumVersion: {
+                  select: { courseId: true },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const matchingChapters = await prisma.courseChapter.findMany({
+      where: {
+        OR: [
+          { videoUrl: { in: exactCandidates } },
+          { pdfUrl: { in: exactCandidates } },
+        ],
+      },
+      include: {
+        module: {
+          include: {
+            curriculumVersion: {
+              select: { courseId: true },
+            },
+          },
+        },
+      },
+    });
+
+    const candidateCourseIds = new Set<string>();
+    for (const att of matchingAttachments) {
+      const cId = att.chapter?.module?.curriculumVersion?.courseId;
+      if (cId) candidateCourseIds.add(cId);
+    }
+    for (const ch of matchingChapters) {
+      const cId = ch.module?.curriculumVersion?.courseId;
+      if (cId) candidateCourseIds.add(cId);
+    }
+
+    if (candidateCourseIds.size === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Requested media object is not registered to any course curriculum in the database',
+      });
+    }
+
+    let resolvedCourseId: string;
+    if (courseId) {
+      if (!candidateCourseIds.has(courseId)) {
+        return res.status(403).json({
+          success: false,
+          message: 'Requested media does not belong to the specified course',
+        });
+      }
+      resolvedCourseId = courseId;
+    } else {
+      if (candidateCourseIds.size > 1) {
+        return res.status(409).json({
+          success: false,
+          message: 'Ambiguous media reference: multiple courses reference this asset. Please supply courseId.',
+        });
+      }
+      resolvedCourseId = Array.from(candidateCourseIds)[0];
+    }
+
+    // Verify user authorization for resolvedCourseId
+    let isAuthorized = false;
+    if (user.role === UserRole.SUPER_ADMIN) {
+      isAuthorized = true;
+    } else if (user.role === UserRole.STUDENT) {
+      const student = await prisma.student.findFirst({
+        where: { userId: user.userId },
+        select: { id: true },
+      });
+      if (student) {
+        const enrollment = await prisma.courseEnrollment.findFirst({
+          where: {
+            studentId: student.id,
+            courseId: resolvedCourseId,
+            status: { in: [EnrollmentStatus.ACTIVE, EnrollmentStatus.COMPLETED] },
+          },
+          select: { id: true },
+        });
+        if (enrollment) {
+          isAuthorized = true;
+        } else {
+          // Check free preview
+          const matchingFreeChapter = matchingChapters.find(
+            (c) => c.module?.curriculumVersion?.courseId === resolvedCourseId && c.isFree
+          );
+          if (matchingFreeChapter) {
+            isAuthorized = true;
+          }
+        }
+      }
+    } else if (user.role === UserRole.PARENT) {
+      const parent = await prisma.parentProfile.findFirst({
+        where: { userId: user.userId },
+        include: { studentRelations: { select: { studentId: true } } },
+      });
+      const childIds = parent?.studentRelations.map((r) => r.studentId) || [];
+      if (childIds.length > 0) {
+        const childEnrollment = await prisma.courseEnrollment.findFirst({
+          where: {
+            studentId: { in: childIds },
+            courseId: resolvedCourseId,
+            status: { in: [EnrollmentStatus.ACTIVE, EnrollmentStatus.COMPLETED] },
+          },
+          select: { id: true },
+        });
+        if (childEnrollment) isAuthorized = true;
+      }
+    }
+
+    if (!isAuthorized) {
+      return res.status(403).json({
+        success: false,
+        message: 'Forbidden: Active enrollment required to generate media access token',
+      });
+    }
+
+    const token = generateMediaToken({
+      userId: user.userId,
+      role: user.role,
+      courseId: resolvedCourseId,
+      folder: sanitizedFolder,
+      filename: sanitizedFilename,
+      expiresInSeconds: 900, // 15 mins
+    });
+
+    const mediaUrlWithToken = `/api/courses/media/protected/${sanitizedFolder}/${sanitizedFilename}?mt=${encodeURIComponent(token)}`;
+
+    return res.json({
+      success: true,
+      token,
+      expiresIn: 900,
+      expiresAt: new Date(Date.now() + 900 * 1000).toISOString(),
+      mediaUrl: mediaUrlWithToken,
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message || 'Failed to issue media token' });
+  }
+}
+
+export async function streamProtectedMedia(req: Request, res: Response) {
+  try {
+    const { folder, filename } = req.params;
+
+    const sanitizedFolder = (folder || '').replace(/[^a-zA-Z0-9_-]/g, '').toLowerCase();
     const sanitizedFilename = path.basename(filename || '').replace(/[^a-zA-Z0-9._-]/g, '_');
 
-    if (!sanitizedFolder || !sanitizedFilename || sanitizedFilename === '.' || sanitizedFilename.startsWith('..')) {
-      return res.status(400).json({ success: false, message: 'Invalid media path' });
+    if (
+      !sanitizedFolder ||
+      !sanitizedFilename ||
+      sanitizedFilename === '.' ||
+      sanitizedFilename.startsWith('..') ||
+      !isProtectedCourseFolder(sanitizedFolder)
+    ) {
+      return res.status(400).json({ success: false, message: 'Invalid or unauthorized media path' });
+    }
+
+    // -------------------------------------------------------------
+    // AUTHENTICATION & SHORT-LIVED MEDIA TOKEN ENFORCEMENT (FIX C)
+    // Query parameter token MUST be a dedicated short-lived media token.
+    // Normal login JWTs passed in query parameters are strictly rejected.
+    // -------------------------------------------------------------
+    const queryToken = (req.query.mt || req.query.token) as string | undefined;
+    const authHeader = req.headers.authorization;
+    const headerToken = authHeader && authHeader.startsWith('Bearer ') ? authHeader.split(' ')[1] : undefined;
+
+    let user: { userId: string; role: string } | null = null;
+    let tokenCourseId: string | null = null;
+
+    if (queryToken) {
+      // 1. Prohibit normal login JWTs from being exposed in media URLs
+      const normalJwtPayload = verifyAccessToken(queryToken);
+      const mediaTokenPayload = verifyMediaToken(queryToken);
+
+      if (normalJwtPayload && !mediaTokenPayload) {
+        return res.status(401).json({
+          success: false,
+          error: 'Insecure URL credential: Normal login JWTs cannot be passed in media URLs. Please obtain a dedicated short-lived media token from /api/courses/media-token.',
+        });
+      }
+
+      if (!mediaTokenPayload) {
+        return res.status(401).json({
+          success: false,
+          error: 'Invalid or expired media authorization token',
+        });
+      }
+
+      // Check token bindings against requested file and folder
+      if (
+        mediaTokenPayload.filename !== sanitizedFilename ||
+        mediaTokenPayload.folder.toLowerCase() !== sanitizedFolder
+      ) {
+        return res.status(403).json({
+          success: false,
+          error: `Media token mismatch: token is bound to "${mediaTokenPayload.folder}/${mediaTokenPayload.filename}", not "${sanitizedFolder}/${sanitizedFilename}"`,
+        });
+      }
+
+      user = { userId: mediaTokenPayload.sub, role: mediaTokenPayload.role };
+      tokenCourseId = mediaTokenPayload.courseId;
+    } else if (headerToken) {
+      // 2. Authorization header: accept either media token or direct login token (for API/curl clients)
+      const mediaPayload = verifyMediaToken(headerToken);
+      if (mediaPayload) {
+        if (
+          mediaPayload.filename !== sanitizedFilename ||
+          mediaPayload.folder.toLowerCase() !== sanitizedFolder
+        ) {
+          return res.status(403).json({
+            success: false,
+            error: `Media token mismatch: token is bound to "${mediaPayload.folder}/${mediaPayload.filename}"`,
+          });
+        }
+        user = { userId: mediaPayload.sub, role: mediaPayload.role };
+        tokenCourseId = mediaPayload.courseId;
+      } else {
+        const accessPayload = verifyAccessToken(headerToken);
+        if (accessPayload) {
+          user = { userId: accessPayload.userId, role: accessPayload.role };
+        } else {
+          return res.status(401).json({ success: false, error: 'Invalid authentication token' });
+        }
+      }
+    } else if ((req as any).user) {
+      user = (req as any).user;
+    }
+
+    if (!user) {
+      return res.status(401).json({ success: false, message: 'Authentication required' });
     }
 
     // Check media file presence in storage backend (disk volume or S3 bucket)
@@ -1152,17 +1442,19 @@ export async function streamProtectedMedia(req: Request, res: Response) {
     }
 
     // -------------------------------------------------------------
-    // DATABASE-DRIVEN ENROLLMENT & LESSON AUTHORIZATION
-    // Never trust client-supplied courseId or file path parameters
+    // DATABASE-DRIVEN EXACT MEDIA IDENTITY & OWNERSHIP (FIX B)
+    // Exact match against database records. Never use loose substring contains or arbitrary findFirst.
     // -------------------------------------------------------------
-    let resolvedCourseId: string | null = null;
-    let isFreeLesson = false;
+    const exactCandidates = [
+      `/api/courses/media/protected/${sanitizedFolder}/${sanitizedFilename}`,
+      `/api/courses/media/${sanitizedFolder}/${sanitizedFilename}`,
+      `/uploads/courses/${sanitizedFolder}/${sanitizedFilename}`,
+      `courses/protected/${sanitizedFolder}/${sanitizedFilename}`,
+      `courses/${sanitizedFolder}/${sanitizedFilename}`,
+    ];
 
-    // 1. Resolve through LessonAttachment record
-    const attachment = await prisma.lessonAttachment.findFirst({
-      where: {
-        fileUrl: { contains: sanitizedFilename },
-      },
+    const matchingAttachments = await prisma.lessonAttachment.findMany({
+      where: { fileUrl: { in: exactCandidates } },
       include: {
         chapter: {
           include: {
@@ -1178,42 +1470,67 @@ export async function streamProtectedMedia(req: Request, res: Response) {
       },
     });
 
-    if (attachment?.chapter?.module?.curriculumVersion?.courseId) {
-      resolvedCourseId = attachment.chapter.module.curriculumVersion.courseId;
-      isFreeLesson = Boolean(attachment.chapter.isFree);
-    }
-
-    // 2. Resolve through CourseChapter (videoUrl or pdfUrl)
-    if (!resolvedCourseId) {
-      const chapter = await prisma.courseChapter.findFirst({
-        where: {
-          OR: [
-            { videoUrl: { contains: sanitizedFilename } },
-            { pdfUrl: { contains: sanitizedFilename } },
-          ],
-        },
-        include: {
-          module: {
-            include: {
-              curriculumVersion: {
-                select: { courseId: true, isPublished: true },
-              },
+    const matchingChapters = await prisma.courseChapter.findMany({
+      where: {
+        OR: [
+          { videoUrl: { in: exactCandidates } },
+          { pdfUrl: { in: exactCandidates } },
+        ],
+      },
+      include: {
+        module: {
+          include: {
+            curriculumVersion: {
+              select: { courseId: true, isPublished: true },
             },
           },
         },
-      });
+      },
+    });
 
-      if (chapter?.module?.curriculumVersion?.courseId) {
-        resolvedCourseId = chapter.module.curriculumVersion.courseId;
-        isFreeLesson = Boolean(chapter.isFree);
+    const referencingCourseIds = new Set<string>();
+    let isFreeLesson = false;
+
+    for (const att of matchingAttachments) {
+      const cId = att.chapter?.module?.curriculumVersion?.courseId;
+      if (cId) {
+        referencingCourseIds.add(cId);
+        if (att.chapter?.isFree) isFreeLesson = true;
+      }
+    }
+    for (const ch of matchingChapters) {
+      const cId = ch.module?.curriculumVersion?.courseId;
+      if (cId) {
+        referencingCourseIds.add(cId);
+        if (ch.isFree) isFreeLesson = true;
       }
     }
 
-    // 3. Verify user authorization against resolved course & enrollment
+    if (referencingCourseIds.size === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Media asset is not referenced by any valid course curriculum in the database',
+      });
+    }
+
+    let resolvedCourseId: string;
+    if (tokenCourseId && referencingCourseIds.has(tokenCourseId)) {
+      resolvedCourseId = tokenCourseId;
+    } else if (referencingCourseIds.size === 1) {
+      resolvedCourseId = Array.from(referencingCourseIds)[0];
+    } else {
+      return res.status(409).json({
+        success: false,
+        message: 'Ambiguous media reference: multiple courses reference this asset. Valid course-bound media token required.',
+      });
+    }
+
+    // -------------------------------------------------------------
+    // AUTHORIZATION AGAINST RESOLVED COURSE
+    // -------------------------------------------------------------
     let isAuthorized = false;
 
     if (user.role === UserRole.SUPER_ADMIN) {
-      // Super Admin retains authorized preview & management access across all course assets
       isAuthorized = true;
     } else if (resolvedCourseId) {
       if (user.role === UserRole.STUDENT) {
@@ -1223,7 +1540,6 @@ export async function streamProtectedMedia(req: Request, res: Response) {
         });
 
         if (student) {
-          // Check for active or completed enrollment (supports both ONLINE and OFFLINE modes)
           const enrollment = await prisma.courseEnrollment.findFirst({
             where: {
               studentId: student.id,
@@ -1236,7 +1552,6 @@ export async function streamProtectedMedia(req: Request, res: Response) {
           if (enrollment) {
             isAuthorized = true;
           } else if (isFreeLesson) {
-            // Free preview lesson check
             const course = await prisma.globalCourse.findUnique({
               where: { id: resolvedCourseId },
               select: { overviewJson: true },
@@ -1267,7 +1582,6 @@ export async function streamProtectedMedia(req: Request, res: Response) {
           }
         }
       }
-      // Franchise owners, branch admins, and staff without enrolled student record are NOT granted student lesson access
     }
 
     if (!isAuthorized) {

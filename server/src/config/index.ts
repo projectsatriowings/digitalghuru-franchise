@@ -33,6 +33,10 @@ export const config = {
     expiresIn: process.env.JWT_EXPIRES_IN || '7d',
     refreshSecret: process.env.REFRESH_TOKEN_SECRET || (process.env.JWT_SECRET ? `${process.env.JWT_SECRET}_refresh` : 'fallback-refresh-secret-dev-only-32'),
     refreshExpiresIn: process.env.REFRESH_TOKEN_EXPIRES_IN || '30d',
+    mediaTokenSecret:
+      process.env.MEDIA_TOKEN_SECRET ||
+      (process.env.JWT_SECRET ? `${process.env.JWT_SECRET}_media_sec_2026` : 'fallback-media-token-secret-dev-only-32-chars-min'),
+    mediaTokenExpiresInSeconds: parseInt(process.env.MEDIA_TOKEN_EXPIRES_IN_SECONDS || '900', 10), // default 15 minutes
   },
   sms: {
     provider: process.env.SMS_PROVIDER || 'mock',

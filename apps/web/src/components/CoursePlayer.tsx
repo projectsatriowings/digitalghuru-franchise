@@ -19,20 +19,32 @@ import {
   Trophy,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { apiFetch, getAuthToken } from '../services/api';
+import { apiFetch } from '../services/api';
 import { useToast } from '../context/ToastContext';
 
-function getAuthorizedMediaUrl(rawUrl?: string | null): string {
+/**
+ * Requests a short-lived media access token bound to the current user, course, and file.
+ * Normal login JWTs are never exposed in media URLs.
+ */
+async function requestShortLivedMediaUrl(courseId: string, rawUrl?: string | null): Promise<string> {
   if (!rawUrl) return '';
   if (rawUrl.startsWith('http://') || rawUrl.startsWith('https://')) {
     if (!rawUrl.includes('/media/protected/') && !rawUrl.includes('/uploads/courses/')) {
       return rawUrl;
     }
   }
-  const token = getAuthToken();
-  if (!token) return rawUrl;
-  const separator = rawUrl.includes('?') ? '&' : '?';
-  return `${rawUrl}${separator}token=${encodeURIComponent(token)}`;
+  try {
+    const res = await apiFetch('/courses/media-token', {
+      method: 'POST',
+      body: JSON.stringify({ courseId, mediaUrl: rawUrl }),
+    });
+    if (res.data?.mediaUrl) {
+      return res.data.mediaUrl;
+    }
+  } catch (err) {
+    console.warn('[CoursePlayer] Could not acquire short-lived media token:', err);
+  }
+  return rawUrl;
 }
 
 interface CoursePlayerProps {
@@ -72,6 +84,47 @@ export const CoursePlayer: React.FC<CoursePlayerProps> = ({
     newLevel: 0,
   });
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const [videoMediaUrl, setVideoMediaUrl] = useState<string>('');
+  const [isVideoLoading, setIsVideoLoading] = useState<boolean>(false);
+
+  // Automatically request short-lived media token for active lesson video
+  useEffect(() => {
+    let isCancelled = false;
+    const url = activeLesson?.videoUrl;
+    if (!url || url.includes('drive.google.com') || url.includes('youtube.com') || url.includes('youtu.be')) {
+      setVideoMediaUrl(url || '');
+      setIsVideoLoading(false);
+      return;
+    }
+
+    setIsVideoLoading(true);
+    requestShortLivedMediaUrl(courseId, url)
+      .then((tokenUrl) => {
+        if (!isCancelled) {
+          setVideoMediaUrl(tokenUrl);
+        }
+      })
+      .catch((err) => {
+        console.warn('Failed to obtain short-lived media token for lesson video:', err);
+      })
+      .finally(() => {
+        if (!isCancelled) setIsVideoLoading(false);
+      });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [courseId, activeLesson?.id, activeLesson?.videoUrl]);
+
+  const handleOpenResource = async (rawUrl?: string | null) => {
+    if (!rawUrl) return;
+    try {
+      const authorizedUrl = await requestShortLivedMediaUrl(courseId, rawUrl);
+      window.open(authorizedUrl, '_blank', 'noopener,noreferrer');
+    } catch (err: any) {
+      toast.error(err.message || 'Unable to open study resource');
+    }
+  };
 
   const loadPlayer = useCallback(async () => {
     setLoading(true);
@@ -300,13 +353,30 @@ export const CoursePlayer: React.FC<CoursePlayerProps> = ({
       }
     }
 
-    // Direct MP4/WebM/Stream video
+    // Direct MP4/WebM/Stream video (with dedicated short-lived media token and auto-refresh)
+    if (isVideoLoading && !videoMediaUrl) {
+      return (
+        <div className="flex flex-col items-center justify-center p-8 space-y-2">
+          <Loader2 className="w-8 h-8 animate-spin text-[#006FFF]" />
+          <p className="text-xs text-slate-300 font-semibold">Authorizing secure stream...</p>
+        </div>
+      );
+    }
+
     return (
       <video
-        src={getAuthorizedMediaUrl(url)}
+        key={videoMediaUrl}
+        src={videoMediaUrl}
         controls
         className="w-full h-full object-contain bg-black"
         onEnded={handleCompleteAndNext}
+        onError={async () => {
+          console.warn('[CoursePlayer] Video stream error or expired token, refreshing...');
+          const freshUrl = await requestShortLivedMediaUrl(courseId, activeLesson?.videoUrl);
+          if (freshUrl && freshUrl !== videoMediaUrl) {
+            setVideoMediaUrl(freshUrl);
+          }
+        }}
       >
         Your browser does not support HTML5 video playback.
       </video>
@@ -550,25 +620,23 @@ export const CoursePlayer: React.FC<CoursePlayerProps> = ({
                   </h4>
                   <div className="flex flex-wrap gap-2">
                     {activeLesson?.pdfUrl && (
-                      <a
-                        href={getAuthorizedMediaUrl(activeLesson.pdfUrl)}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="px-3.5 py-2 rounded-xl bg-blue-50 hover:bg-blue-100 text-[#006FFF] text-xs font-bold inline-flex items-center gap-1.5"
+                      <button
+                        type="button"
+                        onClick={() => handleOpenResource(activeLesson.pdfUrl)}
+                        className="px-3.5 py-2 rounded-xl bg-blue-50 hover:bg-blue-100 text-[#006FFF] text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer"
                       >
                         <Download className="w-3.5 h-3.5" /> Lesson PDF Guide
-                      </a>
+                      </button>
                     )}
                     {(activeLesson?.attachments || []).map((att: any) => (
-                      <a
+                      <button
                         key={att.id}
-                        href={getAuthorizedMediaUrl(att.fileUrl)}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold inline-flex items-center gap-1.5"
+                        type="button"
+                        onClick={() => handleOpenResource(att.fileUrl)}
+                        className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer"
                       >
                         <Download className="w-3.5 h-3.5" /> {att.title}
-                      </a>
+                      </button>
                     ))}
                   </div>
                 </div>

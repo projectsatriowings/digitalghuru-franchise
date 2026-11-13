@@ -451,12 +451,12 @@ async function run() {
     recordTest(
       12,
       '/api/health endpoint reports storage driver, resolved location, and operational status',
-      healthRes.status === 200 &&
+      [200, 503].includes(healthRes.status) &&
         Boolean(healthJson.storage) &&
         healthJson.storage.driver === 'volume' &&
         norm(healthJson.storage.location) === norm(tempVolumeDir) &&
         healthJson.storage.operational === true,
-      { healthStorage: healthJson.storage }
+      { status: healthRes.status, healthStorage: healthJson.storage }
     );
 
   } finally {

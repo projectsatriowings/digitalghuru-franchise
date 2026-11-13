@@ -29,6 +29,7 @@ import app from '../src/index.js';
 import { prisma } from '../src/prisma.js';
 import { generateAccessToken } from '../src/utils/security.js';
 import { getActiveStorageDir } from '../src/utils/storage.js';
+import { assertSafeTestDatabase } from '../src/utils/test-db-guard.js';
 import { UserRole, CourseStatus, LearningMode, EnrollmentStatus } from '@prisma/client';
 
 let server: http.Server;
@@ -56,6 +57,9 @@ async function run() {
   console.log('================================================================');
   console.log(' DIGITAL GURU FRANCHISE: PHASE 1 MEDIA SECURITY TEST SUITE');
   console.log('================================================================\n');
+
+  // Enforce test database safety guard
+  assertSafeTestDatabase();
 
   // Start HTTP server on test port
   await new Promise<void>((resolve) => {

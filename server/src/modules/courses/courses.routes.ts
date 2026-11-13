@@ -32,25 +32,33 @@ import {
   uploadCourseMedia,
   streamPublicMedia,
   streamProtectedMedia,
+  generateMediaTokenController,
 } from './courses.controller.js';
 import { authenticateToken, requireRole } from '../../middleware/auth.js';
-import { courseMediaUpload, isPublicCourseFolder } from '../../utils/storage.js';
+import { courseMediaUpload, isPublicCourseFolder, isProtectedCourseFolder } from '../../utils/storage.js';
 
 const router = Router();
 
 // -------------------------------------------------------------
-// 1. MEDIA ASSETS & STREAMING
+// 1. MEDIA ASSETS & STREAMING (PHASE 1.1.2 HARDENING)
 // -------------------------------------------------------------
-router.get('/media/public/:folder/:filename', streamPublicMedia);
-router.get('/media/protected/:folder/:filename', authenticateToken, streamProtectedMedia);
+// Short-lived media token generator (requires user login)
+router.post('/media-token', authenticateToken, generateMediaTokenController);
 
-// Legacy/unified media fallback route: public if in allowlist, otherwise strict protected streaming
+// Scoped media streaming
+router.get('/media/public/:folder/:filename', streamPublicMedia);
+router.get('/media/protected/:folder/:filename', streamProtectedMedia);
+
+// Legacy media route with strict scoped routing (no fallback across scopes)
 router.get('/media/:folder/:filename', (req, res) => {
   const { folder } = req.params;
   if (isPublicCourseFolder(folder)) {
     return streamPublicMedia(req, res);
   }
-  return authenticateToken(req as any, res, () => streamProtectedMedia(req, res));
+  if (isProtectedCourseFolder(folder)) {
+    return streamProtectedMedia(req, res);
+  }
+  return res.status(404).json({ success: false, message: 'Unrecognized media folder partition' });
 });
 
 router.post(

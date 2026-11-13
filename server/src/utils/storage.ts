@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import multer from 'multer';
+import { Readable } from 'stream';
 import { Request } from 'express';
 import {
   S3Client,
@@ -10,17 +11,40 @@ import {
   HeadObjectCommand,
   DeleteObjectCommand,
 } from '@aws-sdk/client-s3';
+import { Upload } from '@aws-sdk/lib-storage';
 import { config, validateStorageConfig } from '../config/index.js';
 
 // -------------------------------------------------------------
-// FOLDER PARTITIONS & SCOPES
+// FOLDER PARTITIONS & SCOPES (STRICT ISOLATION)
 // -------------------------------------------------------------
-export const PUBLIC_COURSE_FOLDERS = ['thumbnails', 'banners', 'brochures', 'public', 'promotional', 'marketing'];
-export const PROTECTED_COURSE_FOLDERS = ['attachments', 'videos', 'lessons', 'materials', 'worksheets', 'protected', 'resources'];
+export const PUBLIC_COURSE_FOLDERS = [
+  'thumbnails',
+  'banners',
+  'brochures',
+  'public',
+  'promotional',
+  'marketing',
+];
+
+export const PROTECTED_COURSE_FOLDERS = [
+  'attachments',
+  'videos',
+  'lessons',
+  'materials',
+  'worksheets',
+  'protected',
+  'resources',
+  'general',
+];
 
 export function isPublicCourseFolder(folder: string): boolean {
   if (!folder) return false;
   return PUBLIC_COURSE_FOLDERS.includes(folder.trim().toLowerCase());
+}
+
+export function isProtectedCourseFolder(folder: string): boolean {
+  if (!folder) return false;
+  return PROTECTED_COURSE_FOLDERS.includes(folder.trim().toLowerCase());
 }
 
 // -------------------------------------------------------------
@@ -114,6 +138,60 @@ export function printStorageDiagnostics(): void {
 }
 
 // -------------------------------------------------------------
+// RFC 7233 HTTP BYTE-RANGE PARSING
+// -------------------------------------------------------------
+export interface ByteRange {
+  start: number;
+  end: number;
+}
+
+/**
+ * Parses HTTP Range headers in compliance with RFC 7233:
+ * - Closed range: bytes=0-1023
+ * - Prefix range: bytes=1024- (from 1024 to EOF)
+ * - Suffix range: bytes=-500 (last 500 bytes of file)
+ * Throws { statusCode: 416, totalSize } for unsatisfiable or malformed ranges.
+ */
+export function parseHttpRange(rangeHeader: string, totalSize: number): ByteRange | null {
+  if (!rangeHeader || !rangeHeader.startsWith('bytes=')) return null;
+  const rangeSpec = rangeHeader.replace(/^bytes=/, '').trim();
+  if (!rangeSpec || rangeSpec.includes(',')) {
+    throw { statusCode: 416, totalSize };
+  }
+
+  const parts = rangeSpec.split('-');
+  if (parts.length !== 2) throw { statusCode: 416, totalSize };
+
+  let start: number;
+  let end: number;
+
+  if (parts[0] === '') {
+    // Suffix range: bytes=-500 (last 500 bytes)
+    const suffix = parseInt(parts[1], 10);
+    if (isNaN(suffix) || suffix <= 0) throw { statusCode: 416, totalSize };
+    start = Math.max(0, totalSize - suffix);
+    end = totalSize - 1;
+  } else if (parts[1] === '') {
+    // Prefix range: bytes=1024- (from 1024 to EOF)
+    start = parseInt(parts[0], 10);
+    if (isNaN(start) || start < 0 || start >= totalSize) throw { statusCode: 416, totalSize };
+    end = totalSize - 1;
+  } else {
+    // Closed range: bytes=0-1023
+    start = parseInt(parts[0], 10);
+    end = parseInt(parts[1], 10);
+    if (isNaN(start) || isNaN(end) || start < 0 || start > end || start >= totalSize) {
+      throw { statusCode: 416, totalSize };
+    }
+    if (end >= totalSize) {
+      end = totalSize - 1;
+    }
+  }
+
+  return { start, end };
+}
+
+// -------------------------------------------------------------
 // S3 OBJECT STORAGE MANAGER
 // -------------------------------------------------------------
 export class S3StorageManager {
@@ -139,6 +217,41 @@ export class S3StorageManager {
       });
     }
     return this.client;
+  }
+
+  /**
+   * Memory-safe streaming upload directly to S3 via @aws-sdk/lib-storage Upload.
+   * Chunks are streamed in 5MB parts without buffering the whole file in application memory.
+   * Incomplete multipart uploads are automatically aborted on failure.
+   */
+  async uploadStream(options: {
+    key: string;
+    stream: NodeJS.ReadableStream;
+    contentType: string;
+    metadata?: Record<string, string>;
+  }): Promise<{ key: string; size: number }> {
+    const client = this.getClient();
+    let bytesUploaded = 0;
+    options.stream.on('data', (chunk) => {
+      bytesUploaded += chunk.length;
+    });
+
+    const upload = new Upload({
+      client,
+      params: {
+        Bucket: config.storage.s3.bucket,
+        Key: options.key,
+        Body: options.stream as any,
+        ContentType: options.contentType,
+        Metadata: options.metadata,
+      },
+      queueSize: 4,
+      partSize: 5 * 1024 * 1024, // 5MB part size
+      leavePartsOnError: false, // Automatically abort incomplete multipart uploads
+    });
+
+    await upload.done();
+    return { key: options.key, size: bytesUploaded };
   }
 
   async uploadFile(options: {
@@ -172,16 +285,35 @@ export class S3StorageManager {
   } | null> {
     const client = this.getClient();
     try {
+      let rangeHeaderToSend = range;
+      if (range) {
+        try {
+          const head = await client.send(
+            new HeadObjectCommand({
+              Bucket: config.storage.s3.bucket,
+              Key: key,
+            })
+          );
+          const totalSize = head.ContentLength || 0;
+          const parsedRange = parseHttpRange(range, totalSize);
+          if (parsedRange) {
+            rangeHeaderToSend = `bytes=${parsedRange.start}-${parsedRange.end}`;
+          }
+        } catch (headErr: any) {
+          if (headErr.statusCode === 416) throw headErr;
+        }
+      }
+
       const response = await client.send(
         new GetObjectCommand({
           Bucket: config.storage.s3.bucket,
           Key: key,
-          ...(range ? { Range: range } : {}),
+          ...(rangeHeaderToSend ? { Range: rangeHeaderToSend } : {}),
         })
       );
 
       const stream = response.Body as any;
-      const statusCode = range && response.ContentRange ? 206 : 200;
+      const statusCode = rangeHeaderToSend && response.ContentRange ? 206 : 200;
       const contentLength = response.ContentLength || 0;
       const contentType = response.ContentType || getMimeType(path.extname(key));
       const contentRange = response.ContentRange;
@@ -197,8 +329,8 @@ export class S3StorageManager {
       if (err.name === 'NoSuchKey' || err.name === 'NotFound' || err.$metadata?.httpStatusCode === 404) {
         return null;
       }
-      if (err.name === 'InvalidRange' || err.$metadata?.httpStatusCode === 416) {
-        throw { statusCode: 416, message: 'Requested range not satisfiable' };
+      if (err.name === 'InvalidRange' || err.$metadata?.httpStatusCode === 416 || err.statusCode === 416) {
+        throw { statusCode: 416, totalSize: err.totalSize, message: 'Requested range not satisfiable' };
       }
       console.error(`[S3 Storage Error] Failed to stream object ${key}:`, err.message);
       throw err;
@@ -243,7 +375,7 @@ export class S3StorageManager {
 export const s3StorageManager = new S3StorageManager();
 
 // -------------------------------------------------------------
-// UNIFIED STORAGE MANAGER (LOCAL, VOLUME & S3)
+// UNIFIED STORAGE MANAGER (STRICT SCOPED ISOLATION)
 // -------------------------------------------------------------
 export const StorageManager = {
   validate: validateStorageConfig,
@@ -264,9 +396,33 @@ export const StorageManager = {
   } | null> {
     const { scope, folder, filename, rangeHeader } = options;
 
-    // A. S3 Storage Driver
+    if (!folder || !filename) return null;
+    // Strict rejection of path traversal
+    if (
+      filename.includes('..') ||
+      filename.includes('/') ||
+      filename.includes('\\') ||
+      filename.includes('%2e') ||
+      filename.includes('%2E')
+    ) {
+      return null;
+    }
+
+    const sanitizedFolder = folder.trim().toLowerCase();
+    const sanitizedFilename = sanitizeFilename(filename);
+
+    // Strict scope validation: public cannot access protected folders and vice versa
+    if (scope === 'public') {
+      if (!isPublicCourseFolder(sanitizedFolder)) return null;
+    } else if (scope === 'protected') {
+      if (!isProtectedCourseFolder(sanitizedFolder)) return null;
+    } else {
+      return null;
+    }
+
+    // A. S3 Storage Driver: Exact key courses/{scope}/{folder}/{filename} ONLY
     if (config.storage.driver === 's3') {
-      const key = `courses/${scope}/${folder}/${filename}`;
+      const key = `courses/${scope}/${sanitizedFolder}/${sanitizedFilename}`;
       const res = await s3StorageManager.getObjectStream(key, rangeHeader);
       if (!res) return null;
       return {
@@ -275,37 +431,41 @@ export const StorageManager = {
       };
     }
 
-    // B. Local or Persistent Volume Storage Driver
-    const resolvedPath =
-      resolveAbsolutePath(path.join('courses', scope, folder, filename)) ||
-      resolveAbsolutePath(path.join('courses', folder, filename)) ||
-      resolveAbsolutePath(path.join('courses', filename));
+    // B. Local or Persistent Volume Storage Driver: Exact scoped path ONLY
+    const baseDir = getActiveStorageDir();
+    const expectedDir = path.resolve(baseDir, 'courses', scope, sanitizedFolder);
+    const resolvedPath = path.resolve(expectedDir, sanitizedFilename);
 
-    if (!resolvedPath || !fs.existsSync(resolvedPath)) {
+    // Containment guard: ensure strictly inside expectedDir
+    if (
+      !resolvedPath.startsWith(expectedDir + path.sep) &&
+      resolvedPath !== path.join(expectedDir, sanitizedFilename)
+    ) {
+      return null;
+    }
+
+    if (!fs.existsSync(resolvedPath)) {
       return null;
     }
 
     const stat = fs.statSync(resolvedPath);
     const totalSize = stat.size;
-    const contentType = getMimeType(path.extname(filename));
+    const contentType = getMimeType(path.extname(sanitizedFilename));
 
     if (rangeHeader) {
-      const parts = rangeHeader.replace(/bytes=/, '').split('-');
-      const start = parseInt(parts[0], 10);
-      const end = parts[1] ? parseInt(parts[1], 10) : totalSize - 1;
-
-      if (isNaN(start) || isNaN(end) || start > end || start >= totalSize || end >= totalSize || start < 0) {
+      const range = parseHttpRange(rangeHeader, totalSize);
+      if (!range) {
         throw { statusCode: 416, totalSize };
       }
 
-      const chunkSize = end - start + 1;
-      const stream = fs.createReadStream(resolvedPath, { start, end });
+      const chunkSize = range.end - range.start + 1;
+      const stream = fs.createReadStream(resolvedPath, { start: range.start, end: range.end });
       return {
         stream,
         statusCode: 206,
         contentType,
         contentLength: chunkSize,
-        contentRange: `bytes ${start}-${end}/${totalSize}`,
+        contentRange: `bytes ${range.start}-${range.end}/${totalSize}`,
         acceptRanges: 'bytes',
       };
     }
@@ -327,15 +487,43 @@ export const StorageManager = {
     filename: string;
   }): Promise<boolean> {
     const { scope, folder, filename } = options;
+    if (!folder || !filename) return false;
+    if (
+      filename.includes('..') ||
+      filename.includes('/') ||
+      filename.includes('\\') ||
+      filename.includes('%2e') ||
+      filename.includes('%2E')
+    ) {
+      return false;
+    }
+
+    const sanitizedFolder = folder.trim().toLowerCase();
+    const sanitizedFilename = sanitizeFilename(filename);
+
+    if (scope === 'public') {
+      if (!isPublicCourseFolder(sanitizedFolder)) return false;
+    } else if (scope === 'protected') {
+      if (!isProtectedCourseFolder(sanitizedFolder)) return false;
+    } else {
+      return false;
+    }
+
     if (config.storage.driver === 's3') {
-      const key = `courses/${scope}/${folder}/${filename}`;
+      const key = `courses/${scope}/${sanitizedFolder}/${sanitizedFilename}`;
       return s3StorageManager.objectExists(key);
     }
-    const resolved =
-      resolveAbsolutePath(path.join('courses', scope, folder, filename)) ||
-      resolveAbsolutePath(path.join('courses', folder, filename)) ||
-      resolveAbsolutePath(path.join('courses', filename));
-    return Boolean(resolved && fs.existsSync(resolved));
+
+    const baseDir = getActiveStorageDir();
+    const expectedDir = path.resolve(baseDir, 'courses', scope, sanitizedFolder);
+    const resolvedPath = path.resolve(expectedDir, sanitizedFilename);
+    if (
+      !resolvedPath.startsWith(expectedDir + path.sep) &&
+      resolvedPath !== path.join(expectedDir, sanitizedFilename)
+    ) {
+      return false;
+    }
+    return fs.existsSync(resolvedPath);
   },
 
   async deleteMedia(options: {
@@ -344,16 +532,46 @@ export const StorageManager = {
     filename: string;
   }): Promise<boolean> {
     const { scope, folder, filename } = options;
+    if (!folder || !filename) return false;
+    if (
+      filename.includes('..') ||
+      filename.includes('/') ||
+      filename.includes('\\') ||
+      filename.includes('%2e') ||
+      filename.includes('%2E')
+    ) {
+      return false;
+    }
+
+    const sanitizedFolder = folder.trim().toLowerCase();
+    const sanitizedFilename = sanitizeFilename(filename);
+
+    if (scope === 'public') {
+      if (!isPublicCourseFolder(sanitizedFolder)) return false;
+    } else if (scope === 'protected') {
+      if (!isProtectedCourseFolder(sanitizedFolder)) return false;
+    } else {
+      return false;
+    }
+
     if (config.storage.driver === 's3') {
-      const key = `courses/${scope}/${folder}/${filename}`;
+      const key = `courses/${scope}/${sanitizedFolder}/${sanitizedFilename}`;
       return s3StorageManager.deleteObject(key);
     }
-    const resolved =
-      resolveAbsolutePath(path.join('courses', scope, folder, filename)) ||
-      resolveAbsolutePath(path.join('courses', folder, filename));
-    if (resolved && fs.existsSync(resolved)) {
+
+    const baseDir = getActiveStorageDir();
+    const expectedDir = path.resolve(baseDir, 'courses', scope, sanitizedFolder);
+    const resolvedPath = path.resolve(expectedDir, sanitizedFilename);
+    if (
+      !resolvedPath.startsWith(expectedDir + path.sep) &&
+      resolvedPath !== path.join(expectedDir, sanitizedFilename)
+    ) {
+      return false;
+    }
+
+    if (fs.existsSync(resolvedPath)) {
       try {
-        fs.unlinkSync(resolved);
+        fs.unlinkSync(resolvedPath);
         return true;
       } catch {
         return false;
@@ -378,44 +596,37 @@ export function resolveAbsolutePath(storageKey: string): string | null {
     return null;
   }
 
+  // Reject directory traversal attempts
+  if (
+    storageKey.includes('..') ||
+    storageKey.includes('%2e%2e') ||
+    storageKey.includes('%2E%2E')
+  ) {
+    return null;
+  }
+
   const cleanKey = storageKey
     .split('?')[0]
     .replace(/^(\/api\/courses\/media\/(public|protected)\/)/, 'courses/$2/')
     .replace(/^\/?(uploads\/)/, '')
     .replace(/^[/\\]+/, '');
 
-  const normalizedKey = path.normalize(cleanKey).replace(/^(\.\.[\/\\])+/, '');
+  const normalizedKey = path.normalize(cleanKey);
   const activeDir = getActiveStorageDir();
+  const resolvedBase = path.resolve(activeDir);
 
-  const candidateSubpaths: string[] = [normalizedKey];
-  if (normalizedKey.startsWith('courses' + path.sep) || normalizedKey.startsWith('courses/')) {
-    const rel = normalizedKey.replace(/^courses[/\\]/, '');
-    candidateSubpaths.push(
-      path.join('courses', 'protected', rel),
-      path.join('courses', 'public', rel),
-      normalizedKey
-    );
+  const resolvedPath = path.resolve(resolvedBase, normalizedKey);
+
+  // Strict containment check: must never escape active storage directory
+  if (
+    !resolvedPath.startsWith(resolvedBase + path.sep) &&
+    resolvedPath !== resolvedBase
+  ) {
+    return null;
   }
 
-  // When driver is volume, search ONLY within PERSISTENT_VOLUME_PATH. Never fall back to ./uploads.
-  const candidateDirs = config.storage.driver === 'volume'
-    ? [activeDir]
-    : [
-        activeDir,
-        path.resolve(process.cwd(), 'uploads'),
-        path.resolve(process.cwd(), 'server', 'uploads'),
-        path.resolve(process.cwd(), '..', 'uploads'),
-        path.resolve(process.cwd(), '..', 'server', 'uploads'),
-      ];
-
-  for (const baseDir of candidateDirs) {
-    const resolvedBase = path.resolve(baseDir);
-    for (const sub of candidateSubpaths) {
-      const fullPath = path.resolve(resolvedBase, sub);
-      if ((fullPath === resolvedBase || fullPath.startsWith(resolvedBase + path.sep)) && fs.existsSync(fullPath)) {
-        return fullPath;
-      }
-    }
+  if (fs.existsSync(resolvedPath)) {
+    return resolvedPath;
   }
 
   return null;
@@ -555,12 +766,12 @@ export const photoUpload = multer({
 /**
  * Custom Multer Engine for Course Media:
  * - Writes to persistent volume or local directory when driver is 'volume' or 'local'.
- * - Uploads directly to AWS S3 / Cloudflare R2 when driver is 's3'.
+ * - Memory-safe streaming upload directly to AWS S3 via @aws-sdk/lib-storage when driver is 's3'.
  */
 class HybridCourseStorageEngine implements multer.StorageEngine {
   _handleFile(req: Request, file: Express.Multer.File, cb: (error?: any, info?: Partial<Express.Multer.File>) => void) {
     const rawFolder = (req.query?.folder as string) || (req.body?.folder as string) || 'general';
-    const sanitizedFolder = rawFolder.replace(/[^a-zA-Z0-9_-]/g, '') || 'general';
+    const sanitizedFolder = rawFolder.replace(/[^a-zA-Z0-9_-]/g, '').toLowerCase() || 'general';
     const isPublic = isPublicCourseFolder(sanitizedFolder);
     const scope = isPublic ? 'public' : 'protected';
     const safeName = sanitizeFilename(file.originalname);
@@ -568,33 +779,44 @@ class HybridCourseStorageEngine implements multer.StorageEngine {
     const filename = `${uniquePrefix}-${safeName}`;
 
     if (config.storage.driver === 's3') {
-      const chunks: Buffer[] = [];
-      file.stream.on('data', (chunk) => chunks.push(chunk));
-      file.stream.on('error', (err) => cb(err));
-      file.stream.on('end', async () => {
-        try {
-          const buffer = Buffer.concat(chunks);
-          const key = `courses/${scope}/${sanitizedFolder}/${filename}`;
-          await s3StorageManager.uploadFile({
-            key,
-            buffer,
-            contentType: file.mimetype,
-            metadata: {
-              originalname: safeName,
-              scope,
-              folder: sanitizedFolder,
-            },
-          });
+      const s3Client = s3StorageManager.getClient();
+      const key = `courses/${scope}/${sanitizedFolder}/${filename}`;
+
+      let bytesUploaded = 0;
+      file.stream.on('data', (chunk) => {
+        bytesUploaded += chunk.length;
+      });
+
+      const upload = new Upload({
+        client: s3Client,
+        params: {
+          Bucket: config.storage.s3.bucket,
+          Key: key,
+          Body: file.stream as any,
+          ContentType: file.mimetype,
+          Metadata: {
+            originalname: safeName,
+            scope,
+            folder: sanitizedFolder,
+          },
+        },
+        queueSize: 4,
+        partSize: 5 * 1024 * 1024, // 5MB chunks (streamed, not buffered in entire heap)
+        leavePartsOnError: false, // Automatically abort multipart upload on failure
+      });
+
+      upload.done()
+        .then(() => {
           cb(null, {
             destination: `s3://${config.storage.s3.bucket}/courses/${scope}/${sanitizedFolder}`,
             filename,
             path: key,
-            size: buffer.length,
+            size: bytesUploaded,
           });
-        } catch (s3Err) {
+        })
+        .catch((s3Err) => {
           cb(s3Err);
-        }
-      });
+        });
     } else {
       // Local or Persistent Volume
       try {
