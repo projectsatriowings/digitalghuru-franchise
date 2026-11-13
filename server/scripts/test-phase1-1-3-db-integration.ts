@@ -28,15 +28,19 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import { PassThrough } from 'stream';
-import { PrismaClient, CourseStatus, LearningMode, EnrollmentStatus, UserRole } from '@prisma/client';
+import {
+  PrismaClient,
+  CourseStatus,
+  LearningMode,
+  EnrollmentStatus,
+  UserRole,
+  GuardianRelation,
+  AttachmentType,
+} from '@prisma/client';
 import { config } from '../src/config/index.js';
 import { StorageManager } from '../src/utils/storage.js';
 import { generateMediaToken, generateAccessToken } from '../src/utils/security.js';
 import { assertSafeTestDatabase } from '../src/utils/test-db-guard.js';
-import {
-  generateMediaTokenController,
-  streamProtectedMedia,
-} from '../src/modules/courses/courses.controller.js';
 
 let passedCount = 0;
 let failedCount = 0;
@@ -140,18 +144,25 @@ async function run() {
 
   const testDbUrl = process.env.TEST_DATABASE_URL!;
 
+  // Configure environment so that all Prisma instances in server point to the isolated DB
+  process.env.DATABASE_URL = testDbUrl;
+  process.env.DIRECT_URL = testDbUrl;
+
   // 2. Attempt Genuine Connection to Isolated PostgreSQL Database
   const realPrisma = new PrismaClient({
     datasources: { db: { url: testDbUrl } },
     log: ['error'],
   });
 
+  // Bind singleton so controller uses the exact same isolated client instance
+  (global as any).__tuition_prisma__ = realPrisma;
+
   console.log(`[Database Connection] Attempting connection to ${testDbIdentity.host}${testDbIdentity.database}...`);
   try {
     await realPrisma.$connect();
     // Verify connectivity with a simple ping
     await realPrisma.$queryRaw`SELECT 1 as ping`;
-    console.log(`[Database Connection] Successfully connected to genuine PostgreSQL test database.\n`);
+    console.log('[Database Connection] Successfully connected to genuine PostgreSQL test database.');
   } catch (connErr: any) {
     console.error('\n================================================================');
     console.error(' [HONEST BLOCKER REPORT]: ISOLATED TEST DATABASE UNAVAILABLE');
@@ -166,6 +177,12 @@ async function run() {
     await realPrisma.$disconnect().catch(() => {});
     process.exit(1);
   }
+
+  // Dynamically import controller so it initializes with realPrisma
+  const {
+    generateMediaTokenController,
+    streamProtectedMedia,
+  } = await import('../src/modules/courses/courses.controller.js');
 
   // 3. Prepare Isolated Persistent Storage
   const tempVolumeDir = path.join(os.tmpdir(), `dg-db-live-volume-${Date.now()}`);
@@ -219,11 +236,11 @@ async function run() {
             modules: {
               create: {
                 title: 'Module 1',
-                order: 1,
+                position: 1,
                 chapters: {
                   create: {
                     title: 'Intro Chapter',
-                    order: 1,
+                    position: 1,
                     videoUrl: `/api/courses/media/protected/videos/intro.mp4`,
                     isFree: false,
                   },
@@ -233,8 +250,12 @@ async function run() {
           },
         },
       },
+      include: {
+        curriculumVersions: true,
+      },
     });
     createdCourseIds.push(courseA.id);
+    const courseAVersion = courseA.curriculumVersions[0];
 
     // 3. Create Course B (owns my-intro.mp4)
     const courseB = await realPrisma.globalCourse.create({
@@ -251,11 +272,11 @@ async function run() {
             modules: {
               create: {
                 title: 'Module 1',
-                order: 1,
+                position: 1,
                 chapters: {
                   create: {
                     title: 'My Intro Chapter',
-                    order: 1,
+                    position: 1,
                     videoUrl: `/api/courses/media/protected/videos/my-intro.mp4`,
                     isFree: false,
                   },
@@ -283,17 +304,17 @@ async function run() {
             modules: {
               create: {
                 title: 'Module 1',
-                order: 1,
+                position: 1,
                 chapters: {
                   create: {
                     title: 'Shared Chapter C',
-                    order: 1,
+                    position: 1,
                     isFree: false,
                     attachments: {
                       create: {
-                        name: 'Ambiguous Doc',
+                        title: 'Ambiguous Doc',
                         fileUrl: `/api/courses/media/protected/materials/ambiguous-doc.pdf`,
-                        fileType: 'pdf',
+                        fileType: AttachmentType.PDF,
                         fileSize: ambiguousData.length,
                       },
                     },
@@ -321,17 +342,17 @@ async function run() {
             modules: {
               create: {
                 title: 'Module 1',
-                order: 1,
+                position: 1,
                 chapters: {
                   create: {
                     title: 'Shared Chapter D',
-                    order: 1,
+                    position: 1,
                     isFree: false,
                     attachments: {
                       create: {
-                        name: 'Ambiguous Doc',
+                        title: 'Ambiguous Doc',
                         fileUrl: `/api/courses/media/protected/materials/ambiguous-doc.pdf`,
-                        fileType: 'pdf',
+                        fileType: AttachmentType.PDF,
                         fileSize: ambiguousData.length,
                       },
                     },
@@ -360,6 +381,9 @@ async function run() {
       data: {
         code: `FR-${suffix.toUpperCase()}`,
         name: `Test Franchise ${suffix}`,
+        ownerName: 'Franchise Owner Test',
+        email: `fo-${suffix}@test.local`,
+        phone: '9876543210',
         ownerUserId: franchiseOwnerUser.id,
         status: 'ACTIVE',
       },
@@ -371,7 +395,8 @@ async function run() {
       data: {
         franchiseId: franchise.id,
         courseId: courseA.id,
-        isOffered: true,
+        isPermitted: true,
+        isEnabled: true,
       },
     });
 
@@ -390,7 +415,9 @@ async function run() {
       data: {
         userId: userStudent1.id,
         franchiseId: franchise.id,
-        enrollmentNumber: `ENR-1-${suffix}`,
+        admissionNumber: `ADM-1-${suffix}`,
+        firstName: 'Student',
+        lastName: 'One',
       },
     });
 
@@ -398,6 +425,8 @@ async function run() {
       data: {
         studentId: student1.id,
         courseId: courseA.id,
+        curriculumVersionId: courseAVersion.id,
+        franchiseId: franchise.id,
         mode: LearningMode.ONLINE,
         status: EnrollmentStatus.ACTIVE,
       },
@@ -418,7 +447,9 @@ async function run() {
       data: {
         userId: userStudent2.id,
         franchiseId: franchise.id,
-        enrollmentNumber: `ENR-2-${suffix}`,
+        admissionNumber: `ADM-2-${suffix}`,
+        firstName: 'Student',
+        lastName: 'Two',
       },
     });
 
@@ -437,7 +468,9 @@ async function run() {
       data: {
         userId: userStudent3.id,
         franchiseId: franchise.id,
-        enrollmentNumber: `ENR-3-${suffix}`,
+        admissionNumber: `ADM-3-${suffix}`,
+        firstName: 'Student',
+        lastName: 'Three',
       },
     });
 
@@ -445,6 +478,8 @@ async function run() {
       data: {
         studentId: student3.id,
         courseId: courseA.id,
+        curriculumVersionId: courseAVersion.id,
+        franchiseId: franchise.id,
         mode: LearningMode.ONLINE,
         status: EnrollmentStatus.CANCELLED,
       },
@@ -461,11 +496,11 @@ async function run() {
     });
     createdUserIds.push(userParent1.id);
 
-    const parentProfile1 = await realPrisma.parentProfile.create({
+    await realPrisma.parentProfile.create({
       data: {
         userId: userParent1.id,
         studentRelations: {
-          create: { studentId: student1.id, relationship: 'Mother' },
+          create: { studentId: student1.id, relation: GuardianRelation.MOTHER },
         },
       },
     });
@@ -484,7 +519,7 @@ async function run() {
       data: {
         userId: userParent2.id,
         studentRelations: {
-          create: { studentId: student2.id, relationship: 'Father' },
+          create: { studentId: student2.id, relation: GuardianRelation.FATHER },
         },
       },
     });
@@ -664,19 +699,30 @@ async function run() {
     // TEST 9: Franchise Course Revocation Genuinely Executed in DB
     // -------------------------------------------------------------
     console.log('\n--- Test 9: Franchise Course Revocation Execution & Access Preservation ---');
-    // Actually delete the FranchiseCourseSelection in the database
-    await realPrisma.franchiseCourseSelection.deleteMany({
+    // Genuinely revoke the course selection for the franchise in database
+    await realPrisma.franchiseCourseSelection.update({
       where: {
-        franchiseId: franchise.id,
-        courseId: courseA.id,
+        franchiseId_courseId: {
+          franchiseId: franchise.id,
+          courseId: courseA.id,
+        },
+      },
+      data: {
+        isEnabled: false,
+        isPermitted: false,
       },
     });
 
-    // Verify in database that selection is gone
-    const remainingSelection = await realPrisma.franchiseCourseSelection.findFirst({
-      where: { franchiseId: franchise.id, courseId: courseA.id },
+    // Verify in database that selection is revoked
+    const updatedSelection = await realPrisma.franchiseCourseSelection.findUnique({
+      where: {
+        franchiseId_courseId: {
+          franchiseId: franchise.id,
+          courseId: courseA.id,
+        },
+      },
     });
-    const isRevokedInDb = remainingSelection === null;
+    const isRevokedInDb = updatedSelection?.isEnabled === false && updatedSelection?.isPermitted === false;
 
     // Verify that existing student 1 continues to have media access
     const tokenAfterRevocation = generateMediaToken({
@@ -712,7 +758,7 @@ async function run() {
     console.log('\n--- Cleaning Up Isolated Test Records in Database ---');
     try {
       if (createdUserIds.length > 0) {
-        await realPrisma.parentStudentRelation.deleteMany({
+        await realPrisma.studentParentRelation.deleteMany({
           where: { student: { userId: { in: createdUserIds } } },
         });
         await realPrisma.parentProfile.deleteMany({

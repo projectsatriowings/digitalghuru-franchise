@@ -27,7 +27,7 @@ import path from 'path';
 import crypto from 'crypto';
 import app from '../src/index.js';
 import { prisma } from '../src/prisma.js';
-import { generateAccessToken } from '../src/utils/security.js';
+import { generateAccessToken, generateMediaToken } from '../src/utils/security.js';
 import { getActiveStorageDir } from '../src/utils/storage.js';
 import { assertSafeTestDatabase } from '../src/utils/test-db-guard.js';
 import { UserRole, CourseStatus, LearningMode, EnrollmentStatus } from '@prisma/client';
@@ -524,12 +524,19 @@ async function run() {
     // =============================================================
     // TEST 6: Enrolled offline student -> Allowed (HTTP 200 or 206)
     // =============================================================
-    // Test both Bearer header and browser URL query parameter (?token=...)
-    const res6 = await fetch(`${BASE_URL}/api/courses/media/protected/attachments/${testPdfFilename}?token=${student2Token}`);
+    // Test both Bearer header and dedicated browser URL media token (?mt=...)
+    const student2MediaToken = generateMediaToken({
+      userId: user2.id,
+      role: 'STUDENT',
+      courseId: courseA.id,
+      folder: 'attachments',
+      filename: testPdfFilename,
+    });
+    const res6 = await fetch(`${BASE_URL}/api/courses/media/protected/attachments/${testPdfFilename}?mt=${student2MediaToken}`);
     const buf6 = await res6.arrayBuffer();
     recordTest(
       6,
-      'Enrolled offline student can access lesson PDF attachment via query token (HTTP 200)',
+      'Enrolled offline student can access lesson PDF attachment via query media token (HTTP 200)',
       res6.status === 200 && buf6.byteLength > 0,
       { status: res6.status, bytesReceived: buf6.byteLength }
     );
