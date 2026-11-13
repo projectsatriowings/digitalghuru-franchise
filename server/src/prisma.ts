@@ -1,4 +1,3 @@
-import './dns-preload.cjs';
 import './db-bridge.js';
 import { PrismaClient } from '@prisma/client';
 
