@@ -30,7 +30,7 @@ function parseArgs(): CliOptions {
   return { dryRun, schema, allowProd, permitFranchiseId };
 }
 
-const SOURCE_CATEGORIES = [
+export const SOURCE_CATEGORIES = [
   {
     name: 'Marketing & AI',
     slug: 'marketing-ai',
@@ -45,9 +45,31 @@ const SOURCE_CATEGORIES = [
     icon: 'Code2',
     sortOrder: 2,
   },
+  {
+    name: 'Kids & School AI',
+    slug: 'kids-school-ai',
+    description: 'Young technology leadership, Python programming, and foundational AI for schools.',
+    icon: 'GraduationCap',
+    sortOrder: 3,
+  },
+  {
+    name: 'Data Science & AI',
+    slug: 'data-science-ai',
+    description: 'Statistical machine learning, deep learning, NLP, computer vision, and predictive analytics.',
+    icon: 'BrainCircuit',
+    sortOrder: 4,
+  },
+  {
+    name: 'Design & Creative Media',
+    slug: 'design-media',
+    description: 'Graphic design, brand identity, motion graphics, UI/UX, and professional video editing.',
+    icon: 'PenTool',
+    sortOrder: 5,
+  },
 ];
 
-const SOURCE_COURSES = [
+export const SOURCE_COURSES = [
+  // 1. AI-POWERED DIGITAL MARKETING
   {
     slug: 'ai-powered-digital-marketing',
     categorySlug: 'marketing-ai',
@@ -260,6 +282,8 @@ const SOURCE_COURSES = [
       { title: 'Module 12: Digital Design Mastery', topics: ['Design creatives using Canva.', 'Create social media posts and ad creatives.', 'Build brand identity and visual content.', 'Understand design principles.'] },
     ],
   },
+
+  // 2. REACT JS FULL STACK DEVELOPMENT
   {
     slug: 'react-js-full-stack-development',
     categorySlug: 'full-stack-development',
@@ -476,6 +500,415 @@ const SOURCE_COURSES = [
       { title: 'Module 7: Capstone Project', topics: ['E-commerce application', 'Admin dashboard system', 'Booking or service platform'] },
     ],
   },
+
+  // 3. AI SUPER KIDS - AI FUTURE LEADERS (GRADES 11-12)
+  {
+    slug: 'ai-super-kids-grade-11-12',
+    slugAliases: ['ai-super-kids', 'ai-future-leaders-11-12'],
+    categorySlug: 'kids-school-ai',
+    title: 'AI Super Kids - AI Future Leaders Grade 11-12',
+    subTitle: 'Advanced AI, Python & Future Leadership for Grades 11-12',
+    description:
+      'Advanced learning for higher education, AI careers, entrepreneurship and responsible technology leadership.',
+    format: 'Live and Online',
+    duration: '16 Weeks',
+    level: 'High School (Grades 11-12)',
+    price: 15000,
+    status: CourseStatus.PUBLISHED,
+    thumbnailUrl: '/uploads/courses/1789120752643-image-1.webp',
+    bannerUrl: '/uploads/courses/1789123324736-ai-powered-digital-marketing-banner.jpg.webp',
+    brochureUrl: '/uploads/courses/1789968532026-ai-super-kids-grade-7-to-8-brochure.pdf',
+    learningOutcomes: [
+      'Python Fundamentals & Data Handling: Organise, clean and analyse simple datasets.',
+      'Data Visualisation & Machine Learning: Understand data, features, models and predictions.',
+      'Generative AI & Prompt Engineering: Explore modern content and task support.',
+      'API & AI Automation: Connect tools, data and AI-supported workflows.',
+      'AI Product Development & Research: Plan an AI service around a clear user need.',
+      'Business Models & Startup Strategy: Explore value, customers, revenue and costs.',
+      'Portfolio & Career Readiness: Organise projects, presentations, resumes, and interview skills.',
+    ],
+    targetAudience: ['High School Students (Grades 11-12)', 'Future Tech Leaders', 'Aspiring AI Engineers'],
+    toolsCovered: ['Python', 'ChatGPT', 'OpenAI', 'Jupyter', 'Pandas', 'Matplotlib', 'Scikit-learn', 'Streamlit'],
+    overviewJson: {
+      batchInfo: 'Grades 11-12 Cohort | 16 Modules',
+      location: 'Live Online + Partner School Innovation Labs',
+      originalPrice: '15000',
+      discountedPrice: '12000',
+      showCareerFeatures: true,
+      usps: [
+        'School Partnership Program',
+        'Technical Learning Path with Python & AI',
+        'Career Pathways & Portfolio Development',
+        'Responsible Technology Leadership',
+        'Capstone Project & Showcase',
+      ],
+      overviewDescription: [
+        'Students develop practical foundations in programming, data analysis, machine learning and connected AI services.',
+        'Students connect technical learning with product development, career pathways and professional communication.',
+        'The capstone combines technical knowledge, research, responsible design, testing and presentation to prepare students for technical capability, product thinking and leadership.',
+      ],
+      overviewLearnings: [
+        'Python Fundamentals & Data Handling: Organise, clean and analyse simple datasets.',
+        'Data Visualisation & Machine Learning: Understand data, features, models and predictions.',
+        'Generative AI & Prompt Engineering: Explore modern content and task support.',
+        'API & AI Automation: Connect tools, data and AI-supported workflows.',
+        'AI Product Development & Research: Plan an AI service around a clear user need.',
+        'Business Models & Startup Strategy: Explore value, customers, revenue and costs.',
+        'Portfolio & Career Readiness: Organise projects, presentations, resumes, and interview skills.',
+      ],
+      whoIsThisForData: [
+        {
+          role: 'High School Students (Grades 11-12)',
+          title: 'High School Students (Grades 11-12)',
+          iconName: 'GraduationCap',
+          desc: 'Advanced learning for higher education, AI careers, entrepreneurship and responsible technology leadership.',
+          description: 'Advanced learning for higher education, AI careers, entrepreneurship and responsible technology leadership.',
+          points: [
+            'Python, Data Analysis, and Machine Learning',
+            'AI Product Development and Startup Strategy',
+            'Portfolio building and Career Readiness',
+          ],
+          bullets: [
+            'Python, Data Analysis, and Machine Learning',
+            'AI Product Development and Startup Strategy',
+            'Portfolio building and Career Readiness',
+          ],
+        },
+      ],
+      categorizedToolsData: [
+        {
+          category: 'AI & Technical Tools',
+          title: 'AI & Technical Tools',
+          description: 'Learn modern tools for programming and AI development.',
+          bgClass: 'bg-white',
+          textClass: 'text-[#0d2f62]',
+          tools: [
+            { name: 'Python', iconUrl: '/tools/openai.svg' },
+            { name: 'ChatGPT', iconUrl: '/tools/openai.svg' },
+            { name: 'Code.org', iconUrl: '/tools/codeorg.svg' },
+            { name: 'Scratch', iconUrl: '/tools/scratch.svg' },
+          ],
+        },
+      ],
+    },
+    designedToHelpJson: {
+      title: 'This course is designed to help high schoolers lead with AI',
+      description: 'Empowering future leaders with programming, data intelligence, and venture readiness.',
+      benefits: [
+        { iconName: 'Blocks', title: 'Solid Python Programming Foundations', description: 'Move beyond visual blocks to industry standard Python programming and algorithms.' },
+        { iconName: 'Sparkles', title: 'Data Analysis & Machine Learning', description: 'Analyze real-world data, evaluate accuracy, and understand how intelligent models make decisions.' },
+        { iconName: 'Rocket', title: 'AI Venture & Product Prototyping', description: 'Learn product thinking, user research, and how to create AI-driven applications.' },
+        { iconName: 'Globe2', title: 'Responsible AI Leadership', description: 'Understand ethical implications, privacy, and safety in autonomous AI systems.' },
+      ],
+    },
+    numberedFeaturesJson: {
+      title: 'AI Capstone Project (From Learning to Leadership)',
+      description: 'The capstone combines technical knowledge, research, responsible design, testing and presentation.',
+      features: [
+        { num: '01', iconName: 'Search', title: 'Capstone Development Process', description: 'Identify, Research, Design, Develop, Test, Improve, and Present.' },
+        { num: '02', iconName: 'FileText', title: 'Final Submission', description: 'Problem research, Technical workflow, Prototype or proof of concept, Responsible AI review, and Final demonstration.' },
+        { num: '03', iconName: 'CheckCircle', title: 'Suggested Capstone Areas', description: 'Education, Healthcare awareness, Agriculture, Sustainability, Accessibility, and Community development.' },
+        { num: '04', iconName: 'Target', title: 'Student Portfolio & Outcomes', description: 'Python, Data projects, AI activities, Product concepts, Capstone, and Verified Certification.' },
+      ],
+    },
+    whyDigitalGhuruJson: {
+      title: 'Why Choose the AI Future Leaders Program?',
+      reasons: [
+        { num: '01', iconName: 'Users', title: 'School Partnership Program', description: 'Advanced learning for higher education, AI careers, entrepreneurship and responsible technology leadership.' },
+        { num: '02', iconName: 'Laptop2', title: 'Technical Learning Path', description: 'Code, Analyse data, Model concepts, Connect tools, Automate, and Build applications.' },
+        { num: '03', iconName: 'Target', title: 'Career Preparation', description: 'Career pathways, Portfolio, Resume, Interview skills, and Entrepreneurship guidance.' },
+      ],
+    },
+    topHighlightsJson: [
+      { iconName: 'Award', title: 'School Partnership Curriculum', description: 'Specially engineered for students in Grades 11 & 12 aiming for STEM and AI majors.' },
+      { iconName: 'Cpu', title: 'Full Technical AI Stack', description: 'Hands-on Python, Data science, Machine learning, and LLM prompt engineering.' },
+      { iconName: 'Rocket', title: 'Startup & Leadership Track', description: 'Product design, business models, and startup fundamentals.' },
+    ],
+    faqsJson: [
+      { question: 'Is prior coding knowledge required?', answer: 'No prior experience is necessary. We start from basic Python syntax and progress into AI models.' },
+      { question: 'What grade levels is this suited for?', answer: 'This course is tailored specifically for students in Grades 11 and 12.' },
+      { question: 'Will students receive a certificate?', answer: 'Yes, students receive a verified Digital Guru Future Leaders Certificate upon capstone completion.' },
+    ],
+    curriculum: [
+      { title: 'Module 1: Python Fundamentals', topics: ['Use variables, conditions, loops and functions.', 'Writing clean Python scripts', 'Debugging common runtime errors'] },
+      { title: 'Module 2: Data Handling with Python', topics: ['Organise, clean and analyse simple datasets.', 'Working with CSV files', 'Data transformation fundamentals'] },
+      { title: 'Module 3: Data Visualisation', topics: ['Communicate findings through clear charts.', 'Plotting with Matplotlib and Seaborn', 'Interactive dashboards'] },
+      { title: 'Module 4: Machine Learning Fundamentals', topics: ['Understand data, features, models and predictions.', 'Supervised vs Unsupervised learning', 'Evaluating accuracy'] },
+      { title: 'Module 5: Generative AI and Language Models', topics: ['Explore modern content and task support.', 'How LLMs process natural language', 'Creative problem solving'] },
+      { title: 'Module 6: Prompt Engineering', topics: ['Use context, constraints, examples and formats.', 'Zero-shot and Few-shot prompting', 'Chaining prompts for complex workflows'] },
+      { title: 'Module 7: Application Programming Interfaces', topics: ['Learn how applications exchange information.', 'REST API basics', 'Calling OpenAI endpoints'] },
+      { title: 'Module 8: AI Automation', topics: ['Connect tools, data and AI-supported workflows.', 'Trigger-based automation', 'Building intelligent chatbots'] },
+      { title: 'Module 9: AI Product Development', topics: ['Plan an AI service around a clear user need.', 'Wireframing and user stories', 'Rapid MVP prototyping'] },
+      { title: 'Module 10: Market and User Research', topics: ['Study users, industries and current solutions.', 'Conducting user interviews', 'Competitive landscape analysis'] },
+      { title: 'Module 11: Business Models and Startup Strategy', topics: ['Explore value, customers, revenue and costs.', 'Unit economics for AI startups', 'Pitch deck structure'] },
+      { title: 'Module 12: Introduction to AI Agents', topics: ['Understand tool use and multi-step task planning.', 'Autonomous task delegation', 'Agentic safety and ethics'] },
+      { title: 'Module 13: Future AI Careers', topics: ['Explore technical, product and research pathways.', 'Emerging roles in the AI industry', 'College program recommendations'] },
+      { title: 'Module 14: Portfolio Development', topics: ['Organise projects, presentations and achievements.', 'Hosting projects on GitHub', 'Building a showcase website'] },
+      { title: 'Module 15: Resume and LinkedIn Preparation', topics: ['Present skills and experience professionally.', 'Highlighting hands-on projects', 'Networking with industry mentors'] },
+      { title: 'Module 16: Interview and Presentation Skills', topics: ['Explain projects clearly and confidently.', 'Technical demo rehearsals', 'Final Capstone demonstration'] },
+    ],
+  },
+
+  // 4. DATA SCIENCE WITH AI
+  {
+    slug: 'data-science-with-ai',
+    categorySlug: 'data-science-ai',
+    title: 'Advanced Data Science with AI Program',
+    subTitle: 'Master Data Analysis, Machine Learning & AI',
+    description:
+      'Learn to analyze complex data, build predictive models, and leverage artificial intelligence to solve real-world business problems.',
+    format: 'Online & Offline Campuses',
+    duration: '4 to 6 Months',
+    level: 'Intermediate to Advanced',
+    price: 0,
+    status: CourseStatus.PUBLISHED,
+    thumbnailUrl: '/uploads/courses/1789124003189-react-js-full-stack-developer-course-card.webp',
+    bannerUrl: '/uploads/courses/1789124027228-react-js-full-stack-developer-banner.jpg.webp',
+    brochureUrl: '/Courses/Data Science with AI Course.pdf',
+    learningOutcomes: [
+      'Analyze and interpret complex datasets using Python and SQL',
+      'Build and evaluate predictive machine learning models',
+      'Develop deep learning architectures with TensorFlow and Keras',
+      'Create interactive data visualizations and business dashboards',
+      'Master Natural Language Processing and Generative AI workflows',
+      'Deploy production-ready machine learning pipelines to cloud infrastructure',
+    ],
+    targetAudience: ['Data Enthusiasts', 'Software Developers', 'Business Analysts', 'Graduates'],
+    toolsCovered: ['Python', 'SQL', 'Pandas & NumPy', 'Scikit-Learn', 'TensorFlow & Keras', 'Tableau / PowerBI', 'Jupyter Notebooks', 'Git & GitHub'],
+    overviewJson: {
+      batchInfo: 'New Batches Starting Soon | 14 Modules',
+      location: 'Online & Offline Campuses',
+      originalPrice: '—',
+      discountedPrice: 'Contact Us',
+      showCareerFeatures: true,
+      usps: [
+        'Industry-Relevant Curriculum',
+        'Hands-on Real-Time Projects',
+        'Expert Trainers',
+        'AI & Machine Learning Focus',
+        'Placement Guidance',
+        'Portfolio Building',
+      ],
+      overviewDescription: [
+        'In this program, you will transition from fundamental data operations into state-of-the-art predictive modeling and machine learning applications.',
+        'Through practical assignments, you will master data storytelling, advanced statistical hypothesis testing, and deep neural networks applied to production engineering.',
+      ],
+      overviewLearnings: [
+        'Python for Data Science & Pandas DataFrames',
+        'Interactive Dashboards with Plotly and Seaborn',
+        'Supervised & Unsupervised Machine Learning Algorithms',
+        'Deep Learning with TensorFlow & Keras',
+        'Natural Language Processing & Large Language Models',
+        'Cloud Deployment & Production Model Monitoring',
+      ],
+      whoIsThisForData: [
+        {
+          role: 'Data Enthusiasts',
+          title: 'Data Enthusiasts',
+          iconName: 'BarChart3',
+          desc: 'Start a career in data science and business intelligence.',
+          description: 'Start a career in data science and business intelligence.',
+          points: ['Learn Python and SQL', 'Understand data visualization', 'Master data storytelling'],
+          bullets: ['Learn Python and SQL', 'Understand data visualization', 'Master data storytelling'],
+        },
+        {
+          role: 'Developers',
+          title: 'Developers',
+          iconName: 'Code2',
+          desc: 'Transition into Machine Learning and Artificial Intelligence engineering.',
+          description: 'Transition into Machine Learning and Artificial Intelligence engineering.',
+          points: ['Master ML algorithms', 'Build AI models', 'Deploy model APIs'],
+          bullets: ['Master ML algorithms', 'Build AI models', 'Deploy model APIs'],
+        },
+      ],
+      categorizedToolsData: [
+        {
+          category: 'Data Science & ML',
+          description: 'Core scientific computing libraries and platforms.',
+          tools: [
+            { name: 'Python', iconUrl: '/tools/openai.svg' },
+            { name: 'Pandas', iconUrl: '/tools/openai.svg' },
+            { name: 'Google Ads', iconUrl: '/tools/googleads.svg' },
+          ],
+        },
+      ],
+    },
+    designedToHelpJson: {
+      title: 'Designed for Real-World Data & AI Intelligence',
+      description: 'Master quantitative analysis, predictive modeling, and modern AI algorithms.',
+      benefits: [
+        { iconName: 'Blocks', title: 'Data Wrangling at Scale', description: 'Clean, transform, and analyze multi-gigabyte datasets with Pandas and SQL.' },
+        { iconName: 'Sparkles', title: 'Predictive Modeling', description: 'Train supervised regression, classification, and ensemble algorithms.' },
+        { iconName: 'Rocket', title: 'Deep Learning & GenAI', description: 'Build neural networks and integrate foundational language models.' },
+      ],
+    },
+    numberedFeaturesJson: {
+      title: 'Core Pillars of Data Science with AI',
+      description: 'A structured path from raw data to intelligent production systems.',
+      features: [
+        { num: '01', iconName: 'BarChart3', title: 'Statistical Analysis', description: 'Rigorous hypothesis testing, probability, and exploratory data analysis.' },
+        { num: '02', iconName: 'BrainCircuit', title: 'Machine Learning', description: 'Regression, Decision Trees, Random Forests, and Gradient Boosting.' },
+        { num: '03', iconName: 'Cpu', title: 'Deep Neural Networks', description: 'Computer vision, NLP embeddings, and transformer architectures.' },
+      ],
+    },
+    whyDigitalGhuruJson: {
+      title: 'Why Study Data Science with Digital Guru?',
+      reasons: [
+        { num: '01', iconName: 'Search', title: 'Hands-on Projects', description: 'Analyze authentic production datasets from finance, retail, and tech.' },
+        { num: '02', iconName: 'Users', title: 'Industry Mentorship', description: 'Learn directly from practicing senior data scientists and ML engineers.' },
+      ],
+    },
+    topHighlightsJson: [
+      { iconName: 'Award', title: 'Industry Recognized Credentials', description: 'Graduate with certified data science proof-of-work.' },
+      { iconName: 'BriefcaseBusiness', title: 'Placement Assistance', description: 'Dedicated interview preparation, portfolio reviews, and resume polishing.' },
+    ],
+    faqsJson: [
+      { question: 'Do I need prior math or coding experience?', answer: 'We begin with basic Python and statistics fundamentals, making it accessible to committed beginners.' },
+      { question: 'What tools are covered?', answer: 'Python, SQL, Pandas, NumPy, Scikit-Learn, TensorFlow, and PowerBI.' },
+    ],
+    curriculum: [
+      { title: 'Module 1: Introduction to Data Science', topics: ['What is Data Science?', 'Data Science Lifecycle', 'Applications of Data Science', 'Data Ethics'] },
+      { title: 'Module 2: Python for Data Science', topics: ['Python Basics', 'Data Structures', 'Functions & Modules', 'Object-Oriented Programming'] },
+      { title: 'Module 3: Data Manipulation with Pandas', topics: ['Series & DataFrames', 'Data Cleaning', 'Handling Missing Values', 'Data Aggregation'] },
+      { title: 'Module 4: Data Visualization', topics: ['Matplotlib & Seaborn', 'Plotly Dashboards', 'Data Storytelling'] },
+      { title: 'Module 5: Statistical Foundations', topics: ['Descriptive Statistics', 'Probability Distributions', 'Hypothesis Testing', 'A/B Testing'] },
+      { title: 'Module 6: SQL for Data Analysis', topics: ['Relational Databases', 'SQL Queries & Joins', 'Window Functions', 'Performance Tuning'] },
+      { title: 'Module 7: Machine Learning Basics', topics: ['Supervised vs Unsupervised', 'Model Evaluation', 'Overfitting & Regularization', 'Cross-Validation'] },
+      { title: 'Module 8: Supervised Learning Algorithms', topics: ['Linear Regression', 'Logistic Regression', 'Decision Trees', 'Random Forests'] },
+      { title: 'Module 9: Deep Learning Foundations', topics: ['Artificial Neural Networks', 'Backpropagation', 'Activation Functions', 'TensorFlow Basics'] },
+      { title: 'Module 10: Capstone Project & Deployment', topics: ['End-to-End ML Pipeline', 'Model Serving via FastAPI', 'Portfolio Presentation'] },
+    ],
+  },
+
+  // 5. CREATIVE DESIGN AND VIDEO EDITING
+  {
+    slug: 'creative-design-and-video-editing',
+    categorySlug: 'design-media',
+    title: 'Advanced Creative Design & Video Editing Program with AI',
+    subTitle: 'Master Visual Design, Branding & Professional Video Editing',
+    description:
+      'Learn to create stunning digital creatives, edit high-performing videos, build complete brand assets, and confidently work on client projects.',
+    format: 'Online & Offline Campuses',
+    duration: '2 to 3 Months',
+    level: 'Beginner to Professional',
+    price: 0,
+    status: CourseStatus.PUBLISHED,
+    thumbnailUrl: '/uploads/courses/1789123754349-ai-powered-digital-marketing-course-card.webp',
+    bannerUrl: '/uploads/courses/1789123324736-ai-powered-digital-marketing-banner.jpg.webp',
+    brochureUrl: '/Courses/Creative Design and video editing course.pdf',
+    learningOutcomes: [
+      'Create stunning digital creatives using Photoshop and Illustrator',
+      'Edit high-performing reels, commercials, and YouTube videos in Premiere Pro',
+      'Build complete corporate visual identity and branding guidelines',
+      'Animate typography and motion graphics with After Effects',
+      'Use Generative AI design tools for rapid creative asset generation',
+      'Establish a high-paying freelancing profile on Behance and Dribbble',
+    ],
+    targetAudience: ['Graphic Designers', 'Video Editors', 'Freelancers', 'Content Creators'],
+    toolsCovered: ['Adobe Photoshop', 'Adobe Illustrator', 'Canva', 'Adobe Premiere Pro', 'Adobe After Effects', 'CapCut', 'Figma', 'AI Design Tools'],
+    overviewJson: {
+      batchInfo: 'New Batches Starting Soon | 16 Modules',
+      location: 'Online & Offline Campuses',
+      originalPrice: '—',
+      discountedPrice: 'Contact Us',
+      showCareerFeatures: true,
+      usps: [
+        'Live Interactive Classes',
+        'Industry Expert Trainers',
+        'Hands-on Real-Time Projects',
+        'AI Tools & Industry Exposure',
+        'Placement Guidance & Career Support',
+        'Beginner-Friendly Curriculum',
+      ],
+      overviewDescription: [
+        'Design and video editing are among the fastest growing creative digital skills globally. This program covers the full suite of creative tools from Photoshop and Illustrator to Premiere Pro and After Effects.',
+        'You will build brand assets, master color harmony, motion graphics, and integrate generative AI tools like Midjourney to supercharge your design production.',
+      ],
+      overviewLearnings: [
+        'Design Fundamentals & Color Theory',
+        'Adobe Photoshop Creative Retouching & Compositing',
+        'Adobe Illustrator Vector Graphics & Logo Systems',
+        'Social Media Creative & Carousel Design',
+        'Video Editing & Color Grading in Premiere Pro',
+        'Motion Graphics & Keyframe Animation in After Effects',
+      ],
+      whoIsThisForData: [
+        {
+          role: 'Graphic Designers',
+          title: 'Graphic Designers',
+          iconName: 'PenTool',
+          desc: 'Design high-quality digital assets for web and print.',
+          description: 'Design high-quality digital assets for web and print.',
+          points: ['Master Adobe tools', 'Create branding elements', 'Design viral social graphics'],
+          bullets: ['Master Adobe tools', 'Create branding elements', 'Design viral social graphics'],
+        },
+        {
+          role: 'Video Editors',
+          title: 'Video Editors',
+          iconName: 'Video',
+          desc: 'Edit professional long-form and short-form video content.',
+          description: 'Edit professional long-form and short-form video content.',
+          points: ['Learn Premiere Pro', 'Create reels and ads', 'Motion graphics animation'],
+          bullets: ['Learn Premiere Pro', 'Create reels and ads', 'Motion graphics animation'],
+        },
+      ],
+      categorizedToolsData: [
+        {
+          category: 'Creative Design Tools',
+          description: 'Industry-standard vector and raster design software.',
+          tools: [
+            { name: 'Canva', iconUrl: '/tools/canva.svg' },
+            { name: 'Midjourney', iconUrl: '/tools/midjourney.svg' },
+          ],
+        },
+      ],
+    },
+    designedToHelpJson: {
+      title: 'Designed to Launch Your Creative Career',
+      description: 'Master visual design, brand storytelling, and video production with AI tools.',
+      benefits: [
+        { iconName: 'Blocks', title: 'Complete Brand Identity', description: 'Design logos, color systems, and typography palettes for global brands.' },
+        { iconName: 'Sparkles', title: 'Cinematic Video Editing', description: 'Cut, transition, and color-grade high-impact commercials and reels.' },
+        { iconName: 'Rocket', title: 'AI Accelerated Workflows', description: 'Generate concepts, upscale assets, and automate captions with AI.' },
+      ],
+    },
+    numberedFeaturesJson: {
+      title: 'What You Will Master',
+      description: 'A comprehensive creative curriculum covering raster, vector, and timeline editing.',
+      features: [
+        { num: '01', iconName: 'FileImage', title: 'Vector & Raster Mastery', description: 'Precision vector drawing and photo manipulation.' },
+        { num: '02', iconName: 'PlayCircle', title: 'Video Storytelling', description: 'Pacing, sound design, and color grading for YouTube and social media.' },
+        { num: '03', iconName: 'Sparkles', title: 'Generative AI Workflows', description: 'AI voiceovers, automated subtitling, and AI image synthesis.' },
+      ],
+    },
+    whyDigitalGhuruJson: {
+      title: 'Why Creative Media with Digital Guru?',
+      reasons: [
+        { num: '01', iconName: 'PenTool', title: 'Showreel Creation', description: 'Build an impressive visual portfolio on Behance and Dribbble.' },
+        { num: '02', iconName: 'DollarSign', title: 'Client Acquisition', description: 'Learn how to pitch, price, and land freelance clients internationally.' },
+      ],
+    },
+    topHighlightsJson: [
+      { iconName: 'Award', title: 'Professional Creative Certification', description: 'Recognized proof of design and video competence.' },
+      { iconName: 'FolderKanban', title: 'Complete Client Portfolio', description: 'Graduate with 10+ real-world creative project case studies.' },
+    ],
+    faqsJson: [
+      { question: 'Is this suitable for beginners?', answer: 'Yes, we start from design fundamentals and basic tool operations.' },
+      { question: 'What software will I need?', answer: 'Adobe Photoshop, Illustrator, Premiere Pro, and Canva.' },
+    ],
+    curriculum: [
+      { title: 'Module 1: Design Fundamentals', topics: ['Principles of Design', 'Color Theory', 'Typography Basics', 'Layout & Composition'] },
+      { title: 'Module 2: Adobe Photoshop Fundamentals', topics: ['Interface & Tools', 'Selection Techniques', 'Image Retouching', 'Poster Design'] },
+      { title: 'Module 3: Adobe Illustrator Vector Design', topics: ['Pen Tool Mastery', 'Vector Shapes', 'Logo Creation', 'Icon Design'] },
+      { title: 'Module 4: Branding & Visual Identity', topics: ['Brand Guidelines', 'Logo Systems', 'Color Palettes', 'Stationery Design'] },
+      { title: 'Module 5: Social Media Creative Design', topics: ['Instagram Carousels', 'Ad Creatives', 'Story Designs', 'Cover Graphics'] },
+      { title: 'Module 6: Video Editing Fundamentals', topics: ['Cuts & Transitions', 'Storytelling', 'Audio Syncing', 'Color Grading Basics'] },
+      { title: 'Module 7: Advanced Video Editing', topics: ['Cinematic Workflows', 'Special Effects', 'Multicam Editing', 'Export Settings'] },
+      { title: 'Module 8: Motion Graphics & Animation', topics: ['Keyframing', 'Text Animation', 'Visual Effects', 'Tracking'] },
+      { title: 'Module 9: AI-Powered Creative Workflows', topics: ['AI Design Tools', 'AI Video Editing', 'Automated Subtitles', 'Workflow Optimization'] },
+      { title: 'Module 10: Portfolio & Freelancing', topics: ['Showreel Creation', 'Behance Setup', 'Client Pricing', 'Contracts & Delivery'] },
+    ],
+  },
 ];
 
 function withSchemaUrl(rawUrl: string, schema: string): string {
@@ -484,16 +917,20 @@ function withSchemaUrl(rawUrl: string, schema: string): string {
   return url.toString();
 }
 
-async function main() {
-  const { dryRun, schema, permitFranchiseId } = parseArgs();
+export async function importCatalogue(options?: Partial<CliOptions>) {
+  const parsed = parseArgs();
+  const dryRun = options?.dryRun !== undefined ? options.dryRun : parsed.dryRun;
+  const schema = options?.schema || parsed.schema;
+  const permitFranchiseId = options?.permitFranchiseId || parsed.permitFranchiseId;
+
   const baseUrl = process.env.DATABASE_URL;
   if (!baseUrl) {
     throw new Error('DATABASE_URL is missing in environment');
   }
 
-  console.log(`\n=== Digital Guru Source Catalogue Importer ===`);
+  console.log(`\n=== Digital Guru Complete Source Catalogue Importer ===`);
   console.log(`Mode: ${dryRun ? 'DRY-RUN (no writes)' : 'EXECUTE'} | Target Schema: ${schema}`);
-  console.log(`Authentic Source Catalogue Count: ${SOURCE_COURSES.length} courses, ${SOURCE_CATEGORIES.length} categories\n`);
+  console.log(`Authentic Source Catalogue Count: ${SOURCE_COURSES.length} courses across ${SOURCE_CATEGORIES.length} categories\n`);
 
   const prisma = new PrismaClient({
     datasources: { db: { url: withSchemaUrl(baseUrl, schema) } },
@@ -504,6 +941,7 @@ async function main() {
     categoriesSkipped: 0,
     coursesCreated: 0,
     coursesSkipped: 0,
+    aliasesCreated: 0,
     modulesCreated: 0,
     chaptersCreated: 0,
   };
@@ -511,6 +949,7 @@ async function main() {
   try {
     const categoryIdBySlug = new Map<string, string>();
 
+    // 1. Import Categories
     for (const cat of SOURCE_CATEGORIES) {
       const existing = await prisma.courseCategory.findUnique({ where: { slug: cat.slug } });
       if (existing) {
@@ -529,6 +968,7 @@ async function main() {
       }
     }
 
+    // 2. Import Courses
     for (const course of SOURCE_COURSES) {
       const existingBySlug = await prisma.globalCourse.findUnique({ where: { slug: course.slug } });
       const existingByAlias = existingBySlug
@@ -540,6 +980,19 @@ async function main() {
         console.log(
           `[Course] SKIP (already exists via ${existingBySlug ? 'slug' : 'alias'}): ${course.title} (${course.slug})`
         );
+        // Ensure aliases are present even if course was previously created
+        if (!dryRun && course.slugAliases && course.slugAliases.length > 0 && existingBySlug) {
+          for (const aliasSlug of course.slugAliases) {
+            const aliasExists = await prisma.courseSlugAlias.findUnique({ where: { slug: aliasSlug } });
+            if (!aliasExists) {
+              await prisma.courseSlugAlias.create({
+                data: { courseId: existingBySlug.id, slug: aliasSlug },
+              });
+              summary.aliasesCreated++;
+              console.log(`  [Alias] ADDED: ${aliasSlug} -> ${existingBySlug.slug}`);
+            }
+          }
+        }
         continue;
       }
 
@@ -550,6 +1003,9 @@ async function main() {
         summary.coursesCreated++;
         summary.modulesCreated += modCount;
         summary.chaptersCreated += chapCount;
+        if (course.slugAliases) {
+          summary.aliasesCreated += course.slugAliases.length;
+        }
         console.log(
           `[Course] WOULD CREATE: ${course.title} (${course.slug}) | ${modCount} modules | ${chapCount} lessons | Status=${course.status}`
         );
@@ -584,6 +1040,21 @@ async function main() {
           },
         });
 
+        // Insert Slug Aliases
+        if (course.slugAliases && course.slugAliases.length > 0) {
+          for (const aliasSlug of course.slugAliases) {
+            await tx.courseSlugAlias.create({
+              data: {
+                courseId: createdCourse.id,
+                slug: aliasSlug,
+              },
+            });
+            summary.aliasesCreated++;
+            console.log(`  [Alias] CREATED: ${aliasSlug} -> ${createdCourse.slug}`);
+          }
+        }
+
+        // Version 1 Curriculum
         const version = await tx.courseCurriculumVersion.create({
           data: {
             courseId: createdCourse.id,
@@ -642,7 +1113,7 @@ async function main() {
             },
           });
         }
-      }, { maxWait: 20000, timeout: 60000 });
+      }, { maxWait: 25000, timeout: 90000 });
 
       summary.coursesCreated++;
       summary.modulesCreated += modCount;
@@ -654,12 +1125,15 @@ async function main() {
 
     console.log('\n=== Import Summary ===');
     console.log(JSON.stringify({ dryRun, schema, ...summary }, null, 2));
+    return summary;
   } finally {
     await prisma.$disconnect();
   }
 }
 
-main().catch((err) => {
-  console.error('❌ Catalogue import failed:', err);
-  process.exit(1);
-});
+if (process.argv[1] && process.argv[1].endsWith('import-catalogue.ts')) {
+  importCatalogue().catch((err) => {
+    console.error('❌ Catalogue import failed:', err);
+    process.exit(1);
+  });
+}

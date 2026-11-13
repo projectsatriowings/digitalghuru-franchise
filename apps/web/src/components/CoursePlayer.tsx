@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   PlayCircle,
   FileText,
@@ -87,9 +87,16 @@ export const CoursePlayer: React.FC<CoursePlayerProps> = ({
   const [videoMediaUrl, setVideoMediaUrl] = useState<string>('');
   const [isVideoLoading, setIsVideoLoading] = useState<boolean>(false);
 
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const retryCountRef = useRef<number>(0);
+  const pendingSeekRef = useRef<{ time: number; play: boolean } | null>(null);
+
   // Automatically request short-lived media token for active lesson video
   useEffect(() => {
     let isCancelled = false;
+    retryCountRef.current = 0;
+    pendingSeekRef.current = null;
+
     const url = activeLesson?.videoUrl;
     if (!url || url.includes('drive.google.com') || url.includes('youtube.com') || url.includes('youtu.be')) {
       setVideoMediaUrl(url || '');
@@ -116,9 +123,36 @@ export const CoursePlayer: React.FC<CoursePlayerProps> = ({
     };
   }, [courseId, activeLesson?.id, activeLesson?.videoUrl]);
 
+  // Proactive token refresh before 15-minute token expiry during continuous playback (refreshes at 12 minutes)
+  useEffect(() => {
+    if (!videoMediaUrl || (!videoMediaUrl.includes('mt=') && !videoMediaUrl.includes('token='))) {
+      return;
+    }
+
+    const refreshTimer = setTimeout(async () => {
+      try {
+        const savedTime = videoRef.current?.currentTime || 0;
+        const wasPlaying = videoRef.current ? !videoRef.current.paused : false;
+        const freshUrl = await requestShortLivedMediaUrl(courseId, activeLesson?.videoUrl);
+        if (freshUrl && freshUrl !== videoMediaUrl) {
+          pendingSeekRef.current = { time: savedTime, play: wasPlaying };
+          setVideoMediaUrl(freshUrl);
+        }
+      } catch (err) {
+        console.warn('[CoursePlayer] Proactive media token refresh failed:', err);
+      }
+    }, 12 * 60 * 1000); // 12 minutes
+
+    return () => clearTimeout(refreshTimer);
+  }, [videoMediaUrl, courseId, activeLesson?.videoUrl]);
+
   const handleOpenResource = async (rawUrl?: string | null) => {
     if (!rawUrl) return;
     try {
+      if (rawUrl.includes('drive.google.com') || rawUrl.includes('youtube.com') || rawUrl.includes('youtu.be')) {
+        window.open(rawUrl, '_blank', 'noopener,noreferrer');
+        return;
+      }
       const authorizedUrl = await requestShortLivedMediaUrl(courseId, rawUrl);
       window.open(authorizedUrl, '_blank', 'noopener,noreferrer');
     } catch (err: any) {
@@ -365,16 +399,37 @@ export const CoursePlayer: React.FC<CoursePlayerProps> = ({
 
     return (
       <video
-        key={videoMediaUrl}
+        ref={videoRef}
+        key={activeLesson?.id || 'active-video'}
         src={videoMediaUrl}
         controls
         className="w-full h-full object-contain bg-black"
         onEnded={handleCompleteAndNext}
+        onLoadedMetadata={() => {
+          if (pendingSeekRef.current && videoRef.current) {
+            const { time, play } = pendingSeekRef.current;
+            pendingSeekRef.current = null;
+            if (time > 0) {
+              videoRef.current.currentTime = time;
+            }
+            if (play) {
+              videoRef.current.play().catch(() => {});
+            }
+          }
+        }}
         onError={async () => {
-          console.warn('[CoursePlayer] Video stream error or expired token, refreshing...');
-          const freshUrl = await requestShortLivedMediaUrl(courseId, activeLesson?.videoUrl);
-          if (freshUrl && freshUrl !== videoMediaUrl) {
-            setVideoMediaUrl(freshUrl);
+          if (retryCountRef.current < 2) {
+            retryCountRef.current += 1;
+            console.warn(`[CoursePlayer] Video stream error or expired token, refreshing (retry #${retryCountRef.current})...`);
+            const savedTime = videoRef.current?.currentTime || 0;
+            const wasPlaying = videoRef.current ? !videoRef.current.paused : false;
+            const freshUrl = await requestShortLivedMediaUrl(courseId, activeLesson?.videoUrl);
+            if (freshUrl && freshUrl !== videoMediaUrl) {
+              pendingSeekRef.current = { time: savedTime, play: wasPlaying };
+              setVideoMediaUrl(freshUrl);
+            }
+          } else {
+            console.error('[CoursePlayer] Max video refresh retries reached without recovery');
           }
         }}
       >

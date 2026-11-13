@@ -19,7 +19,12 @@ import * as child_process from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import { config, validateStorageConfig } from '../src/config/index.js';
+import {
+  config,
+  validateStorageConfig,
+  validateProductionConfig,
+  DEV_MEDIA_TOKEN_SECRET_FALLBACK,
+} from '../src/config/index.js';
 import {
   StorageManager,
   getActiveStorageDir,
@@ -66,6 +71,61 @@ async function streamToBuffer(stream: NodeJS.ReadableStream): Promise<Buffer> {
 
 function norm(p: string): string {
   return path.resolve(p).toLowerCase();
+}
+
+/**
+ * Spawns an isolated Node.js child process running the persistence test server.
+ */
+async function spawnChildServer(
+  port: number,
+  volumeDir: string
+): Promise<{ child: child_process.ChildProcess; pid: number }> {
+  const tsxCli = path.resolve(__dirname, '../../node_modules/tsx/dist/cli.mjs');
+  const helperScript = path.resolve(__dirname, 'helpers/restart-persistence-server.ts');
+  const child = child_process.spawn(process.execPath, [tsxCli, helperScript], {
+    env: {
+      ...process.env,
+      TEST_PROCESS_PORT: String(port),
+      PERSISTENT_VOLUME_PATH: volumeDir,
+      STORAGE_DRIVER: 'volume',
+    },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+
+  return new Promise((resolve, reject) => {
+    let resolved = false;
+    const timeout = setTimeout(() => {
+      if (!resolved) {
+        child.kill();
+        reject(new Error(`Timeout waiting for child process on port ${port}`));
+      }
+    }, 15000);
+
+    child.stdout?.on('data', (data) => {
+      const msg = data.toString();
+      if (msg.includes('[CHILD_PROCESS_READY]')) {
+        resolved = true;
+        clearTimeout(timeout);
+        resolve({ child, pid: child.pid! });
+      }
+    });
+
+    child.stderr?.on('data', (data) => {
+      console.error(`[Child Process Error]: ${data.toString()}`);
+    });
+
+    child.on('error', (err) => {
+      clearTimeout(timeout);
+      reject(err);
+    });
+
+    child.on('exit', (code) => {
+      if (!resolved) {
+        clearTimeout(timeout);
+        reject(new Error(`Child process exited prematurely with code ${code}`));
+      }
+    });
+  });
 }
 
 /**
@@ -251,6 +311,9 @@ async function run() {
   });
   console.log(`[Isolated S3 REST Engine] Active on http://127.0.0.1:${mockS3.port}\n`);
 
+  let activeChild1: child_process.ChildProcess | null = null;
+  let activeChild2: child_process.ChildProcess | null = null;
+
   try {
     // =============================================================
     // SUITE 1: STRICT PUBLIC & PROTECTED STORAGE SCOPE ISOLATION (FIX A & FIX G.D)
@@ -380,9 +443,36 @@ async function run() {
       }
     }
 
+    // 2.5 Malformed range validation (rejects non-numeric partial strings like "12abc-34" or "invalid")
+    let malformedThrown = false;
+    try {
+      parseHttpRange('bytes=12abc-34', 5000);
+    } catch (err: any) {
+      if (err.statusCode === 416) malformedThrown = true;
+    }
+
+    let malformedHyphenThrown = false;
+    try {
+      parseHttpRange('bytes=-', 5000);
+    } catch (err: any) {
+      if (err.statusCode === 416) malformedHyphenThrown = true;
+    }
+
+    // 2.6 Empty file representation (totalSize === 0) strictly throws 416 with totalSize: 0
+    let emptyFileThrown = false;
+    let emptyFileTotalSize = -1;
+    try {
+      parseHttpRange('bytes=0-100', 0);
+    } catch (err: any) {
+      if (err.statusCode === 416) {
+        emptyFileThrown = true;
+        emptyFileTotalSize = err.totalSize;
+      }
+    }
+
     recordTest(
       2,
-      'HTTP byte-range correctly handles closed (0-1023), prefix (1024-), suffix (-500), and 416 on invalid range',
+      'HTTP byte-range correctly handles closed, prefix, suffix, malformed, empty file (totalSize=0), and 416 on invalid range',
       streamClosed?.statusCode === 206 &&
         streamClosed?.contentLength === 1024 &&
         streamClosed?.contentRange === 'bytes 0-1023/5000' &&
@@ -396,12 +486,19 @@ async function run() {
         streamSuffix?.contentRange === 'bytes 4500-4999/5000' &&
         dataSuffix?.length === 500 &&
         range416Thrown &&
-        range416TotalSize === 5000,
+        range416TotalSize === 5000 &&
+        malformedThrown &&
+        malformedHyphenThrown &&
+        emptyFileThrown &&
+        emptyFileTotalSize === 0,
       {
         closedRange: streamClosed?.contentRange,
         prefixRange: streamPrefix?.contentRange,
         suffixRange: streamSuffix?.contentRange,
         range416Thrown,
+        malformedThrown,
+        emptyFileThrown,
+        emptyFileTotalSize,
       }
     );
 
@@ -604,18 +701,95 @@ async function run() {
       missingFailedFast = true;
     }
 
+    // 6.5 Production Media Token Secret Independence & Validation
+    const prevNodeEnv = config.nodeEnv;
+    const prevJwtSecret = process.env.JWT_SECRET;
+    const prevRefreshSecret = process.env.REFRESH_TOKEN_SECRET;
+    const prevMediaSecret = process.env.MEDIA_TOKEN_SECRET;
+    const prevDbUrl = config.databaseUrl;
+
+    config.nodeEnv = 'production';
+    config.databaseUrl = 'postgresql://test_user:test_pass@localhost:5432/testdb';
+    process.env.JWT_SECRET = 'PROD_SECURE_JWT_SECRET_KEY_MIN_32_CHARS_LONG_123';
+    process.env.REFRESH_TOKEN_SECRET = 'PROD_SECURE_REFRESH_SECRET_KEY_MIN_32_CHARS_123';
+    config.storage.driver = 'volume';
+    config.storage.persistentVolumePath = tempVolumeDir;
+
+    // A. Missing MEDIA_TOKEN_SECRET in production fails fast
+    delete process.env.MEDIA_TOKEN_SECRET;
+    let missingMediaSecretThrew = false;
+    let missingMediaSecretMsg = '';
+    try {
+      validateProductionConfig();
+    } catch (err: any) {
+      missingMediaSecretThrew = true;
+      missingMediaSecretMsg = err.message;
+    }
+
+    // B. Development fallback value in production is rejected
+    process.env.MEDIA_TOKEN_SECRET = DEV_MEDIA_TOKEN_SECRET_FALLBACK;
+    let devFallbackThrew = false;
+    try {
+      validateProductionConfig();
+    } catch {
+      devFallbackThrew = true;
+    }
+
+    // C. Secret shorter than 32 chars in production is rejected
+    process.env.MEDIA_TOKEN_SECRET = 'short_secret_key_123';
+    let shortSecretThrew = false;
+    try {
+      validateProductionConfig();
+    } catch {
+      shortSecretThrew = true;
+    }
+
+    // D. Secret identical to JWT_SECRET in production is rejected
+    process.env.MEDIA_TOKEN_SECRET = process.env.JWT_SECRET;
+    let identicalSecretThrew = false;
+    try {
+      validateProductionConfig();
+    } catch {
+      identicalSecretThrew = true;
+    }
+
+    // E. Independent, distinct secret of >= 32 chars passes validation
+    process.env.MEDIA_TOKEN_SECRET = 'PROD_INDEPENDENT_MEDIA_TOKEN_SECRET_KEY_32_CHARS_ABC';
+    let validProdConfigPassed = false;
+    try {
+      validateProductionConfig();
+      validProdConfigPassed = true;
+    } catch {}
+
+    // Restore environment
+    config.nodeEnv = prevNodeEnv;
+    config.databaseUrl = prevDbUrl;
+    if (prevJwtSecret) process.env.JWT_SECRET = prevJwtSecret; else delete process.env.JWT_SECRET;
+    if (prevRefreshSecret) process.env.REFRESH_TOKEN_SECRET = prevRefreshSecret; else delete process.env.REFRESH_TOKEN_SECRET;
+    if (prevMediaSecret) process.env.MEDIA_TOKEN_SECRET = prevMediaSecret; else delete process.env.MEDIA_TOKEN_SECRET;
+
     recordTest(
       6,
-      'Storage configuration resolves canonical variable, alias precedence, and fails fast on missing path',
+      'Storage configuration resolves canonical variable, alias precedence, and enforces independent production media secret',
       norm(valCanon.resolvedLocation) === norm(tempVolumeDir) &&
         resolvedPriority === tempVolumeDir &&
         resolvedAlias1 === tempVolumeDir &&
-        missingFailedFast,
+        missingFailedFast &&
+        missingMediaSecretThrew &&
+        devFallbackThrew &&
+        shortSecretThrew &&
+        identicalSecretThrew &&
+        validProdConfigPassed,
       {
         canonicalResolved: valCanon.resolvedLocation,
         resolvedPriority,
         resolvedAlias1,
         missingFailedFast,
+        missingMediaSecretThrew,
+        devFallbackThrew,
+        shortSecretThrew,
+        identicalSecretThrew,
+        validProdConfigPassed,
       }
     );
 
@@ -678,42 +852,97 @@ async function run() {
     // SUITE 8: GENUINE SERVER PROCESS RESTART PERSISTENCE (FIX G.B)
     // =============================================================
     console.log('\n--- Suite 8: Genuine Server Process Restart Persistence ---');
-    // Write media file to persistent volume
-    const restartTestFile = 'restart-persistence-proof.mp4';
-    const restartTestContent = Buffer.from('PERSISTENCE-ACROSS-PROCESS-LIFETIMES-DATA-BLOCK');
-    fs.writeFileSync(path.join(protectedDir, restartTestFile), restartTestContent);
+    // 8.1 Start separate Node.js child process 1 using isolated volume directory
+    const childPort1 = 61291;
+    const { child: child1, pid: pid1 } = await spawnChildServer(childPort1, tempVolumeDir);
+    activeChild1 = child1;
 
-    // Test Reading Before Restart
-    config.storage.driver = 'volume';
-    config.storage.persistentVolumePath = tempVolumeDir;
-    const streamBefore = await StorageManager.getMediaStream({
-      scope: 'protected',
-      folder: 'videos',
-      filename: restartTestFile,
-    });
-    const dataBefore = streamBefore ? await streamToBuffer(streamBefore.stream) : null;
+    // 8.2 Create test media file in the volume directory through Child 1
+    const restartTestFile = 'genuine-process-restart-video.mp4';
+    const restartTestContent = Buffer.alloc(3000);
+    for (let i = 0; i < restartTestContent.length; i++) {
+      restartTestContent[i] = (i * 7) % 256;
+    }
 
-    // Simulate complete process memory wipe / restart by resetting all module caches
-    delete (global as any).__storage_instance__;
-    const streamAfter = await StorageManager.getMediaStream({
-      scope: 'protected',
-      folder: 'videos',
-      filename: restartTestFile,
+    const writeRes = await fetch(`http://127.0.0.1:${childPort1}/write-file?folder=videos&filename=${restartTestFile}`, {
+      method: 'POST',
+      body: restartTestContent,
     });
-    const dataAfter = streamAfter ? await streamToBuffer(streamAfter.stream) : null;
+    const writeJson = (await writeRes.json()) as any;
+
+    // 8.3 Verify child process 1 can read exact bytes (HTTP 200)
+    const read1Res = await fetch(`http://127.0.0.1:${childPort1}/stream/videos/${restartTestFile}`);
+    const read1Bytes = Buffer.from(await read1Res.arrayBuffer());
+
+    // 8.4 Completely shut down child process 1
+    await new Promise<void>((resolve) => {
+      child1.on('exit', () => resolve());
+      child1.kill('SIGTERM');
+    });
+    activeChild1 = null;
+
+    // 8.5 Start a NEW child process 2 using the SAME persistent-volume directory
+    const childPort2 = 61292;
+    const { child: child2, pid: pid2 } = await spawnChildServer(childPort2, tempVolumeDir);
+    activeChild2 = child2;
+
+    // 8.6 Verify file still exists and can be streamed correctly after complete process restart (HTTP 200)
+    const read2Res = await fetch(`http://127.0.0.1:${childPort2}/stream/videos/${restartTestFile}`);
+    const read2Bytes = Buffer.from(await read2Res.arrayBuffer());
+
+    // 8.7 Verify byte-range requests after restart (HTTP 206 Partial Content)
+    const rangeRes = await fetch(`http://127.0.0.1:${childPort2}/stream/videos/${restartTestFile}`, {
+      headers: { Range: 'bytes=500-1499' },
+    });
+    const rangeBytes = Buffer.from(await rangeRes.arrayBuffer());
+    const expectedSlice = restartTestContent.subarray(500, 1500);
+
+    // 8.8 Shut down child process 2
+    await new Promise<void>((resolve) => {
+      child2.on('exit', () => resolve());
+      child2.kill('SIGTERM');
+    });
+    activeChild2 = null;
+
+    const isDifferentPid = pid1 !== pid2 && pid1 > 0 && pid2 > 0;
+    const writeSucceeded = writeJson?.success === true && writeJson?.size === 3000;
+    const child1ReadMatches = read1Res.status === 200 && read1Bytes.equals(restartTestContent);
+    const child2ReadMatches = read2Res.status === 200 && read2Bytes.equals(restartTestContent);
+    const rangeStatus206 = rangeRes.status === 206;
+    const rangeHeaderMatches = rangeRes.headers.get('content-range') === 'bytes 500-1499/3000';
+    const rangeBytesMatch = rangeBytes.equals(expectedSlice);
 
     recordTest(
       8,
-      'Persistent storage survives complete server process restart and streams exact media bytes without fallback',
-      dataBefore?.toString() === restartTestContent.toString() &&
-        dataAfter?.toString() === restartTestContent.toString(),
+      'Persistent storage survives genuine child process restart with distinct PIDs, full streaming, and byte-range retrieval',
+      isDifferentPid &&
+        writeSucceeded &&
+        child1ReadMatches &&
+        child2ReadMatches &&
+        rangeStatus206 &&
+        rangeHeaderMatches &&
+        rangeBytesMatch,
       {
-        beforeMatches: dataBefore?.toString() === restartTestContent.toString(),
-        afterMatches: dataAfter?.toString() === restartTestContent.toString(),
+        pid1,
+        pid2,
+        isDifferentPid,
+        child1Status: read1Res.status,
+        child2Status: read2Res.status,
+        rangeStatus: rangeRes.status,
+        rangeContentRange: rangeRes.headers.get('content-range'),
+        rangeBytesLength: rangeBytes.length,
       }
     );
 
   } finally {
+    // Kill child processes if still active
+    try {
+      if (activeChild1) activeChild1.kill('SIGKILL');
+    } catch {}
+    try {
+      if (activeChild2) activeChild2.kill('SIGKILL');
+    } catch {}
+
     // Restore environment and config
     process.env = originalEnv;
     config.storage = originalConfigStorage;
