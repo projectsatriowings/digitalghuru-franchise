@@ -17,6 +17,7 @@ import {
   Building2,
   Paperclip,
   Trophy,
+  AlertCircle,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { apiFetch } from '../services/api';
@@ -86,6 +87,7 @@ export const CoursePlayer: React.FC<CoursePlayerProps> = ({
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [videoMediaUrl, setVideoMediaUrl] = useState<string>('');
   const [isVideoLoading, setIsVideoLoading] = useState<boolean>(false);
+  const [streamError, setStreamError] = useState<string | null>(null);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const retryCountRef = useRef<number>(0);
@@ -95,6 +97,7 @@ export const CoursePlayer: React.FC<CoursePlayerProps> = ({
   useEffect(() => {
     let isCancelled = false;
     retryCountRef.current = 0;
+    setStreamError(null);
     pendingSeekRef.current = null;
 
     const url = activeLesson?.videoUrl;
@@ -388,6 +391,32 @@ export const CoursePlayer: React.FC<CoursePlayerProps> = ({
     }
 
     // Direct MP4/WebM/Stream video (with dedicated short-lived media token and auto-refresh)
+    if (streamError) {
+      return (
+        <div className="flex flex-col items-center justify-center p-8 space-y-4 bg-slate-900 text-white rounded-2xl h-full min-h-[360px]">
+          <AlertCircle className="w-12 h-12 text-rose-500 animate-pulse" />
+          <div className="text-center space-y-1">
+            <h3 className="text-sm font-bold text-white">Stream Authorization Failed</h3>
+            <p className="text-xs text-slate-400 max-w-sm">{streamError}</p>
+          </div>
+          <button
+            type="button"
+            onClick={async () => {
+              setStreamError(null);
+              retryCountRef.current = 0;
+              setIsVideoLoading(true);
+              const freshUrl = await requestShortLivedMediaUrl(courseId, activeLesson?.videoUrl);
+              setVideoMediaUrl(freshUrl);
+              setIsVideoLoading(false);
+            }}
+            className="px-5 py-2.5 bg-[#006FFF] hover:bg-blue-600 rounded-xl text-xs font-bold text-white transition-colors shadow-md"
+          >
+            Retry Playback
+          </button>
+        </div>
+      );
+    }
+
     if (isVideoLoading && !videoMediaUrl) {
       return (
         <div className="flex flex-col items-center justify-center p-8 space-y-2">
@@ -406,6 +435,8 @@ export const CoursePlayer: React.FC<CoursePlayerProps> = ({
         className="w-full h-full object-contain bg-black"
         onEnded={handleCompleteAndNext}
         onLoadedMetadata={() => {
+          setStreamError(null);
+          retryCountRef.current = 0;
           if (pendingSeekRef.current && videoRef.current) {
             const { time, play } = pendingSeekRef.current;
             pendingSeekRef.current = null;
@@ -418,19 +449,22 @@ export const CoursePlayer: React.FC<CoursePlayerProps> = ({
           }
         }}
         onError={async () => {
-          if (retryCountRef.current < 2) {
+          // Allow exactly ONE automatic retry after a media-stream failure
+          if (retryCountRef.current < 1) {
             retryCountRef.current += 1;
-            console.warn(`[CoursePlayer] Video stream error or expired token, refreshing (retry #${retryCountRef.current})...`);
+            console.warn('[CoursePlayer] Video stream error, executing single automatic token refresh and retry (retry #1)...');
             const savedTime = videoRef.current?.currentTime || 0;
             const wasPlaying = videoRef.current ? !videoRef.current.paused : false;
             const freshUrl = await requestShortLivedMediaUrl(courseId, activeLesson?.videoUrl);
             if (freshUrl && freshUrl !== videoMediaUrl) {
               pendingSeekRef.current = { time: savedTime, play: wasPlaying };
               setVideoMediaUrl(freshUrl);
+              return;
             }
-          } else {
-            console.error('[CoursePlayer] Max video refresh retries reached without recovery');
           }
+          // Exactly one retry has been exhausted: show clear error state and stop loop
+          console.error('[CoursePlayer] Single automatic retry exhausted without recovery. Halting refresh loop.');
+          setStreamError('The lesson video stream could not be loaded or authorized. Please check your network connection or click retry below.');
         }}
       >
         Your browser does not support HTML5 video playback.
