@@ -307,47 +307,34 @@ export const FranchiseManagement: React.FC = () => {
   const loadData = async () => {
     try {
       setLoading(true);
-      const dashRes = await apiFetch('/franchises/dashboard/super-admin');
+      const [dashRes, listRes, instRes, unassignedRes, monthlyRes] = await Promise.all([
+        apiFetch('/franchises/dashboard/super-admin'),
+        apiFetch('/franchises'),
+        apiFetch('/franchises/all/installments').catch(() => ({ success: false, data: { installments: [] } })),
+        apiFetch('/franchises/unassigned-branches').catch(() => ({ success: false, data: { branches: [] } })),
+        apiFetch('/franchises/all/royalties').catch(() => ({ success: false, data: { royaltyRecords: [] } })),
+      ]);
+
       if (dashRes.success) {
         setDashboardStats(dashRes.data);
       }
 
-      const listRes = await apiFetch('/franchises');
       if (listRes.success) {
         const fetchedFranchises: Franchise[] = listRes.data.franchises || [];
         setFranchises(fetchedFranchises);
+      }
 
-        // Collect all installments across franchises
-        const allInsts: any[] = [];
-        for (const fr of fetchedFranchises) {
-          try {
-            const instRes = await apiFetch(`/franchises/${fr.id}/installments`);
-            if (instRes.success && instRes.data.installments) {
-              for (const item of instRes.data.installments) {
-                allInsts.push({
-                  ...item,
-                  franchiseName: fr.name,
-                  franchiseCode: fr.code,
-                  ownerName: fr.ownerName,
-                });
-              }
-            }
-          } catch (e) {
-            // Ignore individual fetch failure
-          }
-        }
-        setInstallments(allInsts);
+      if (instRes.success && Array.isArray(instRes.data?.installments)) {
+        setInstallments(instRes.data.installments);
       }
-      // Refresh unassigned campus branches
-      try {
-        const unassignedRes = await apiFetch('/franchises/unassigned-branches');
-        if (unassignedRes.success && Array.isArray(unassignedRes.data?.branches)) {
-          setUnassignedBranches(unassignedRes.data.branches);
-        }
-      } catch {
-        // non-blocking
+
+      if (unassignedRes.success && Array.isArray(unassignedRes.data?.branches)) {
+        setUnassignedBranches(unassignedRes.data.branches);
       }
-      await loadMonthlyRecords();
+
+      if (monthlyRes.success && Array.isArray(monthlyRes.data?.royaltyRecords)) {
+        setMonthlyRecords(monthlyRes.data.royaltyRecords);
+      }
     } catch (err: any) {
       showToast(err.message || 'Failed to load franchise data', 'error');
     } finally {
@@ -559,21 +546,26 @@ export const FranchiseManagement: React.FC = () => {
   const handleCreateFranchise = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      const dgPct = Number(createForm.initialAgreement.digitalGuruRevenuePercentage || 50);
+      const partnerPct = createForm.initialAgreement.calculationMethod === 'PERCENTAGE_REVENUE'
+        ? (100 - dgPct)
+        : Number(createForm.initialAgreement.partnerRevenuePercentage || 50);
+
       const payload: any = {
-        name: createForm.name,
-        ownerName: createForm.ownerName,
-        email: createForm.email,
-        phone: createForm.phone,
+        name: createForm.name.trim(),
+        ownerName: createForm.ownerName.trim(),
+        email: createForm.email.trim().toLowerCase(),
+        phone: createForm.phone.trim(),
         password: createForm.password || undefined,
-        address: createForm.address,
-        city: createForm.city,
-        state: createForm.state,
-        postalCode: createForm.postalCode,
+        address: createForm.address.trim() || undefined,
+        city: createForm.city.trim() || undefined,
+        state: createForm.state.trim() || undefined,
+        postalCode: createForm.postalCode.trim() || undefined,
         country: createForm.country || 'India',
         authorizedContact: createForm.authorizedContact.name ? createForm.authorizedContact : undefined,
         businessDetails: {
-          gstin: createForm.gstin,
-          pan: createForm.pan,
+          gstin: createForm.gstin.trim() || undefined,
+          pan: createForm.pan.trim() || undefined,
         },
         // Optional Campus / Institute Association
         branchOption: createForm.branchOption,
@@ -582,11 +574,11 @@ export const FranchiseManagement: React.FC = () => {
           ? {
               name: createForm.newBranch.name.trim(),
               code: createForm.newBranch.code.trim() || undefined,
-              city: createForm.newBranch.city.trim() || createForm.city,
-              state: createForm.newBranch.state.trim() || createForm.state,
-              address: createForm.newBranch.address.trim() || createForm.address,
-              phone: createForm.newBranch.phone.trim() || createForm.phone,
-              email: createForm.newBranch.email.trim() || createForm.email,
+              city: createForm.newBranch.city.trim() || createForm.city.trim(),
+              state: createForm.newBranch.state.trim() || createForm.state.trim(),
+              address: createForm.newBranch.address.trim() || createForm.address.trim(),
+              phone: createForm.newBranch.phone.trim() || createForm.phone.trim(),
+              email: createForm.newBranch.email.trim() || createForm.email.trim().toLowerCase(),
             }
           : undefined,
         initialAgreement: {
@@ -596,9 +588,9 @@ export const FranchiseManagement: React.FC = () => {
           endDate: createForm.initialAgreement.endDate,
           calculationMethod: createForm.initialAgreement.calculationMethod,
           annualRoyaltyAmount: Number(createForm.initialAgreement.annualRoyaltyAmount || 0),
-          royaltyPercentage: Number(createForm.initialAgreement.digitalGuruRevenuePercentage || 50),
-          digitalGuruRevenuePercentage: Number(createForm.initialAgreement.digitalGuruRevenuePercentage || 50),
-          partnerRevenuePercentage: Number(createForm.initialAgreement.partnerRevenuePercentage || 50),
+          royaltyPercentage: dgPct,
+          digitalGuruRevenuePercentage: dgPct,
+          partnerRevenuePercentage: partnerPct,
           revenueCalculationBasis: createForm.initialAgreement.revenueCalculationBasis,
           settlementFrequency: createForm.initialAgreement.settlementFrequency,
           totalInvestment: Number(createForm.initialAgreement.totalInvestment || 0),
