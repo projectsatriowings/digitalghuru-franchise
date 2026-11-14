@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import {
   createFranchise,
+  checkFranchiseDuplicates,
   listFranchises,
   getFranchiseById,
   updateFranchise,
@@ -48,6 +49,7 @@ router.get('/agreement-templates', requireRole('SUPER_ADMIN', 'FRANCHISE_OWNER')
 // -------------------------------------------------------------
 // CORE FRANCHISE CRUD
 // -------------------------------------------------------------
+router.post('/check-duplicates', requireRole('SUPER_ADMIN'), checkFranchiseDuplicates);
 router.post('/', requireRole('SUPER_ADMIN'), createFranchise);
 router.get('/', requireRole('SUPER_ADMIN', 'FRANCHISE_OWNER'), listFranchises);
 router.get('/:id', requireRole('SUPER_ADMIN', 'FRANCHISE_OWNER'), getFranchiseById);

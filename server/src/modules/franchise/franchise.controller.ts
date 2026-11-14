@@ -401,6 +401,98 @@ const createFranchiseSchema = z.object({
   }).optional(),
 });
 
+export const checkFranchiseDuplicatesSchema = z.object({
+  email: z.string().email('Invalid email address').optional().nullable().or(z.literal('')),
+  phone: z.string().optional().nullable().or(z.literal('')),
+  code: z.string().optional().nullable().or(z.literal('')),
+  name: z.string().optional().nullable().or(z.literal('')),
+});
+
+/**
+ * Pre-validate availability of franchise email, owner phone, and franchise code
+ */
+export async function checkFranchiseDuplicates(req: AuthenticatedRequest, res: Response) {
+  try {
+    const parse = checkFranchiseDuplicatesSchema.safeParse(req.body);
+    if (!parse.success) {
+      return res.status(400).json({ success: false, error: parse.error.errors[0]?.message || 'Invalid parameters' });
+    }
+
+    const { email, phone, code, name } = parse.data;
+
+    let emailConflict: { isDuplicate: boolean; model?: string; message?: string } = { isDuplicate: false };
+    if (email && email.trim()) {
+      const normEmail = email.trim().toLowerCase();
+      const franchiseMatch = await prisma.franchise.findFirst({
+        where: { email: { equals: normEmail, mode: 'insensitive' } },
+        select: { id: true, code: true, name: true },
+      });
+      if (franchiseMatch) {
+        emailConflict = {
+          isDuplicate: true,
+          model: 'Franchise',
+          message: `A franchise with email '${normEmail}' already exists (${franchiseMatch.name} [${franchiseMatch.code}])`,
+        };
+      } else {
+        const userMatch = await prisma.user.findFirst({
+          where: { email: { equals: normEmail, mode: 'insensitive' } },
+          select: { id: true, fullName: true, role: true },
+        });
+        if (userMatch) {
+          emailConflict = {
+            isDuplicate: true,
+            model: 'User',
+            message: `A user account with email '${normEmail}' already exists (${userMatch.fullName}, Role: ${userMatch.role}).`,
+          };
+        }
+      }
+    }
+
+    let phoneConflict: { isDuplicate: boolean; model?: string; message?: string } = { isDuplicate: false };
+    if (phone && phone.trim()) {
+      const cleanPhone = phone.trim();
+      const userPhoneMatch = await prisma.user.findFirst({
+        where: { phone: cleanPhone },
+        select: { id: true, fullName: true, role: true },
+      });
+      if (userPhoneMatch) {
+        phoneConflict = {
+          isDuplicate: true,
+          model: 'User',
+          message: `A user account with phone '${cleanPhone}' already exists (${userPhoneMatch.fullName}, Role: ${userPhoneMatch.role})`,
+        };
+      }
+    }
+
+    let codeConflict: { isDuplicate: boolean; message?: string } = { isDuplicate: false };
+    if (code && code.trim()) {
+      const cleanCode = code.trim().toUpperCase();
+      const codeMatch = await prisma.franchise.findUnique({
+        where: { code: cleanCode },
+        select: { id: true, name: true },
+      });
+      if (codeMatch) {
+        codeConflict = {
+          isDuplicate: true,
+          message: `A franchise with code '${cleanCode}' already exists (${codeMatch.name})`,
+        };
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        email: emailConflict,
+        phone: phoneConflict,
+        code: codeConflict,
+      },
+    });
+  } catch (err: any) {
+    console.error('[checkFranchiseDuplicates error]', err);
+    return res.status(500).json({ success: false, error: 'Failed to check duplicates' });
+  }
+}
+
 export async function createFranchise(req: AuthenticatedRequest, res: Response) {
   try {
     if (req.user?.role !== 'SUPER_ADMIN') {
@@ -425,7 +517,7 @@ export async function createFranchise(req: AuthenticatedRequest, res: Response) 
       where: { email: { equals: normalizedEmail, mode: 'insensitive' } },
     });
     if (existingFranchise) {
-      return res.status(409).json({ success: false, error: `A franchise with email '${data.email}' already exists` });
+      return res.status(409).json({ success: false, error: `A franchise with email '${normalizedEmail}' already exists` });
     }
 
     // Check if manually supplied franchise code already exists
@@ -485,58 +577,12 @@ export async function createFranchise(req: AuthenticatedRequest, res: Response) 
       }
     }
 
-    const code = data.code || await generateFranchiseCode();
+    const code = data.code ? data.code.trim().toUpperCase() : await generateFranchiseCode();
 
     // 1. Franchise Owner User Account & Password Handling
-    let ownerUser = await prisma.user.findFirst({ where: { email: data.email } });
     const initialPassword = data.password || `DG#Owner_${crypto.randomBytes(3).toString('hex')}!`;
     const passwordHash = await hashPassword(initialPassword);
 
-    if (!ownerUser) {
-      ownerUser = await prisma.user.create({
-        data: {
-          email: data.email,
-          phone: data.phone,
-          fullName: data.ownerName,
-          passwordHash,
-          role: 'FRANCHISE_OWNER',
-          isActive: true,
-          mustChangePassword: !data.password,
-        },
-      });
-    } else {
-      // Update role & activate if existing
-      await prisma.user.update({
-        where: { id: ownerUser.id },
-        data: { role: 'FRANCHISE_OWNER', isActive: true, passwordHash },
-      });
-    }
-
-    // 2. Create Franchise Record with complete address and contact details
-    const franchise = await prisma.franchise.create({
-      data: {
-        code,
-        name: data.name,
-        ownerName: data.ownerName,
-        email: data.email,
-        phone: data.phone,
-        address: data.address,
-        city: data.city,
-        state: data.state,
-        postalCode: data.postalCode,
-        country: data.country || 'India',
-        authorizedContact: data.authorizedContact || {},
-        businessDetails: data.businessDetails || {},
-        status: 'ACTIVE',
-        ownerUserId: ownerUser.id,
-        notes: data.notes,
-      },
-      include: {
-        ownerUser: { select: { id: true, email: true, fullName: true, phone: true } },
-      },
-    });
-
-    // 3. Create Annual Franchise Agreement (or default if omitted)
     const year = agreementStartDate.getFullYear();
     const agreementNumber = await generateUniqueAgreementNumber(year);
 
@@ -553,134 +599,208 @@ export async function createFranchise(req: AuthenticatedRequest, res: Response) 
     const isMonthly = data.initialAgreement?.settlementFrequency === 'MONTHLY';
     const installmentCount = isMonthly ? 0 : 2;
 
-    const agreement = await prisma.franchiseAgreement.create({
-      data: {
-        franchiseId: franchise.id,
-        agreementNumber,
-        title: data.initialAgreement?.title || 'Annual Master Franchise Agreement',
-        startDate: agreementStartDate,
-        endDate: agreementEndDate,
-        agreementType: (data.initialAgreement?.agreementType as any) || 'CUSTOM_AGREEMENT',
-        annualRoyaltyAmount,
-        calculationMethod,
-        perStudentFee,
-        royaltyPercentage,
-        digitalGuruRevenuePercentage: new Prisma.Decimal(dgPct),
-        partnerRevenuePercentage: new Prisma.Decimal(partnerPct),
-        revenueCalculationBasis: (data.initialAgreement?.revenueCalculationBasis as any) || 'GROSS_COURSE_FEES',
-        settlementFrequency: (data.initialAgreement?.settlementFrequency as any) || (isMonthly ? 'MONTHLY' : 'YEARLY'),
-        totalInvestment: data.initialAgreement?.totalInvestment !== undefined ? new Prisma.Decimal(data.initialAgreement.totalInvestment) : null,
-        digitalGuruInvestmentAmount: data.initialAgreement?.digitalGuruInvestmentAmount !== undefined ? new Prisma.Decimal(data.initialAgreement.digitalGuruInvestmentAmount) : null,
-        partnerInvestmentAmount: data.initialAgreement?.partnerInvestmentAmount !== undefined ? new Prisma.Decimal(data.initialAgreement.partnerInvestmentAmount) : null,
-        digitalGuruInvestmentPercentage: data.initialAgreement?.digitalGuruInvestmentPercentage !== undefined ? new Prisma.Decimal(data.initialAgreement.digitalGuruInvestmentPercentage) : null,
-        partnerInvestmentPercentage: data.initialAgreement?.partnerInvestmentPercentage !== undefined ? new Prisma.Decimal(data.initialAgreement.partnerInvestmentPercentage) : null,
-        operationalSetupContribution: data.initialAgreement?.operationalSetupContribution !== undefined ? new Prisma.Decimal(data.initialAgreement.operationalSetupContribution) : null,
-        investmentNotes: data.initialAgreement?.investmentNotes || null,
-        expenseResponsibilities: (data.initialAgreement?.expenseResponsibilities as any) ?? Prisma.DbNull,
-        marketingResponsibleParty: (data.initialAgreement?.marketingResponsibleParty as any) || 'DIGITAL_GURU',
-        marketingSupportDurationMonths: data.initialAgreement?.marketingSupportDurationMonths !== undefined ? Number(data.initialAgreement.marketingSupportDurationMonths) : 3,
-        marketingPostSupportParty: (data.initialAgreement?.marketingPostSupportParty as any) || 'PARTNER',
-        marketingBudget: data.initialAgreement?.marketingBudget !== undefined ? new Prisma.Decimal(data.initialAgreement.marketingBudget) : null,
-        marketingEffectiveStartDate: data.initialAgreement?.marketingEffectiveStartDate ? new Date(data.initialAgreement.marketingEffectiveStartDate) : null,
-        marketingNotes: data.initialAgreement?.marketingNotes || null,
-        courseSoftwareAccessEnabled: data.initialAgreement?.courseSoftwareAccessEnabled !== undefined ? Boolean(data.initialAgreement.courseSoftwareAccessEnabled) : true,
-        courseSoftwarePricingNotes: data.initialAgreement?.courseSoftwarePricingNotes || null,
-        version: 1,
-        royaltyBasis,
-        paymentFrequency: isMonthly ? 'MONTHLY' : 'ANNUAL',
-        dueDay,
-        installmentCount,
-        status: 'ACTIVE',
-        terms: data.initialAgreement?.terms,
-        notes: data.initialAgreement?.notes,
-        createdById: req.user?.userId,
-      },
-    });
-
-    // 4. Generate installments ONLY for YEARLY settlement frequency
-    let installments: any[] = [];
-    if (!isMonthly) {
-      installments = await generateAnnualInstallments({
-        franchiseId: franchise.id,
-        agreementId: agreement.id,
-        startDate: agreementStartDate,
-        endDate: agreementEndDate,
-        calculationMethod,
-        annualRoyaltyAmount: Number(annualRoyaltyAmount),
-        royaltyPercentage: Number(royaltyPercentage),
-        royaltyBasis,
-        perStudentFee: perStudentFee ? Number(perStudentFee) : null,
-        dueDay,
-        installment1DueDate: data.initialAgreement?.installment1DueDate,
-        installment2DueDate: data.initialAgreement?.installment2DueDate,
-      });
-    }
-
-    // 4.5. Optional Institute / Campus Linking or Creation
-    let attachedBranches: any[] = [];
-    if (data.branchOption === 'LINK_EXISTING' || (data.linkedInstituteIds && data.linkedInstituteIds.length > 0) || data.linkedInstituteId) {
-      const instituteIds = data.linkedInstituteIds || (data.linkedInstituteId ? [data.linkedInstituteId] : []);
-      if (instituteIds.length > 0) {
-        await prisma.institute.updateMany({
-          where: { id: { in: instituteIds } },
-          data: { franchiseId: franchise.id },
+    // Execute entire creation atomically inside a single transaction with extended timeout for Neon cloud PostgreSQL WAN latency
+    const txResult = await prisma.$transaction(
+      async (tx) => {
+        // Find existing user or create owner user
+        let ownerUser = await tx.user.findFirst({
+          where: { email: { equals: normalizedEmail, mode: 'insensitive' } },
         });
-        attachedBranches = await prisma.institute.findMany({
-          where: { id: { in: instituteIds } },
-          select: {
-            id: true,
-            code: true,
-            name: true,
-            city: true,
-            state: true,
-            status: true,
-            _count: { select: { students: true } },
+
+        if (!ownerUser) {
+          ownerUser = await tx.user.create({
+            data: {
+              email: normalizedEmail,
+              phone: cleanPhone,
+              fullName: data.ownerName.trim(),
+              passwordHash,
+              role: 'FRANCHISE_OWNER',
+              isActive: true,
+              mustChangePassword: !data.password,
+            },
+          });
+        } else {
+          // Promote/activate existing user as franchise owner
+          ownerUser = await tx.user.update({
+            where: { id: ownerUser.id },
+            data: {
+              role: 'FRANCHISE_OWNER',
+              isActive: true,
+              passwordHash,
+              ...(!ownerUser.phone ? { phone: cleanPhone } : {}),
+            },
+          });
+        }
+
+        // 2. Create Franchise Record with complete address and contact details
+        const franchise = await tx.franchise.create({
+          data: {
+            code,
+            name: data.name.trim(),
+            ownerName: data.ownerName.trim(),
+            email: normalizedEmail,
+            phone: cleanPhone,
+            address: data.address?.trim() || null,
+            city: data.city?.trim() || null,
+            state: data.state?.trim() || null,
+            postalCode: data.postalCode?.trim() || null,
+            country: data.country || 'India',
+            authorizedContact: data.authorizedContact || {},
+            businessDetails: data.businessDetails || {},
+            status: 'ACTIVE',
+            ownerUserId: ownerUser.id,
+            notes: data.notes || null,
+          },
+          include: {
+            ownerUser: { select: { id: true, email: true, fullName: true, phone: true } },
           },
         });
-      }
-    } else if (data.branchOption === 'CREATE_NEW' && data.newBranch?.name) {
-      const branchName = data.newBranch.name;
-      let branchCode = data.newBranch.code;
-      if (!branchCode) {
-        const count = await prisma.institute.count();
-        branchCode = `BR-${String(count + 1).padStart(3, '0')}`;
-        let exists = await prisma.institute.findUnique({ where: { code: branchCode } });
-        let offset = 1;
-        while (exists) {
-          branchCode = `BR-${String(count + 1 + offset).padStart(3, '0')}`;
-          exists = await prisma.institute.findUnique({ where: { code: branchCode } });
-          offset++;
-        }
-      }
 
-      const newInst = await prisma.institute.create({
-        data: {
-          name: branchName,
-          code: branchCode,
-          city: data.newBranch.city || data.city,
-          state: data.newBranch.state || data.state,
-          address: data.newBranch.address || data.address,
-          phone: data.newBranch.phone || data.phone,
-          email: data.newBranch.email || data.email,
-          franchiseId: franchise.id,
-          status: 'ACTIVE',
-        },
-        select: {
-          id: true,
-          code: true,
-          name: true,
-          city: true,
-          state: true,
-          status: true,
-          _count: { select: { students: true } },
-        },
-      });
-      attachedBranches = [newInst];
-    }
+        // 3. Create Annual Franchise Agreement (or default if omitted)
+        const agreement = await tx.franchiseAgreement.create({
+          data: {
+            franchiseId: franchise.id,
+            agreementNumber,
+            title: data.initialAgreement?.title || 'Annual Master Franchise Agreement',
+            startDate: agreementStartDate,
+            endDate: agreementEndDate,
+            agreementType: (data.initialAgreement?.agreementType as any) || 'CUSTOM_AGREEMENT',
+            annualRoyaltyAmount,
+            calculationMethod,
+            perStudentFee,
+            royaltyPercentage,
+            digitalGuruRevenuePercentage: new Prisma.Decimal(dgPct),
+            partnerRevenuePercentage: new Prisma.Decimal(partnerPct),
+            revenueCalculationBasis: (data.initialAgreement?.revenueCalculationBasis as any) || 'GROSS_COURSE_FEES',
+            settlementFrequency: (data.initialAgreement?.settlementFrequency as any) || (isMonthly ? 'MONTHLY' : 'YEARLY'),
+            totalInvestment: data.initialAgreement?.totalInvestment !== undefined ? new Prisma.Decimal(data.initialAgreement.totalInvestment) : null,
+            digitalGuruInvestmentAmount: data.initialAgreement?.digitalGuruInvestmentAmount !== undefined ? new Prisma.Decimal(data.initialAgreement.digitalGuruInvestmentAmount) : null,
+            partnerInvestmentAmount: data.initialAgreement?.partnerInvestmentAmount !== undefined ? new Prisma.Decimal(data.initialAgreement.partnerInvestmentAmount) : null,
+            digitalGuruInvestmentPercentage: data.initialAgreement?.digitalGuruInvestmentPercentage !== undefined ? new Prisma.Decimal(data.initialAgreement.digitalGuruInvestmentPercentage) : null,
+            partnerInvestmentPercentage: data.initialAgreement?.partnerInvestmentPercentage !== undefined ? new Prisma.Decimal(data.initialAgreement.partnerInvestmentPercentage) : null,
+            operationalSetupContribution: data.initialAgreement?.operationalSetupContribution !== undefined ? new Prisma.Decimal(data.initialAgreement.operationalSetupContribution) : null,
+            investmentNotes: data.initialAgreement?.investmentNotes || null,
+            expenseResponsibilities: (data.initialAgreement?.expenseResponsibilities as any) ?? Prisma.DbNull,
+            marketingResponsibleParty: (data.initialAgreement?.marketingResponsibleParty as any) || 'DIGITAL_GURU',
+            marketingSupportDurationMonths: data.initialAgreement?.marketingSupportDurationMonths !== undefined ? Number(data.initialAgreement.marketingSupportDurationMonths) : 3,
+            marketingPostSupportParty: (data.initialAgreement?.marketingPostSupportParty as any) || 'PARTNER',
+            marketingBudget: data.initialAgreement?.marketingBudget !== undefined ? new Prisma.Decimal(data.initialAgreement.marketingBudget) : null,
+            marketingEffectiveStartDate: data.initialAgreement?.marketingEffectiveStartDate ? new Date(data.initialAgreement.marketingEffectiveStartDate) : null,
+            marketingNotes: data.initialAgreement?.marketingNotes || null,
+            courseSoftwareAccessEnabled: data.initialAgreement?.courseSoftwareAccessEnabled !== undefined ? Boolean(data.initialAgreement.courseSoftwareAccessEnabled) : true,
+            courseSoftwarePricingNotes: data.initialAgreement?.courseSoftwarePricingNotes || null,
+            version: 1,
+            royaltyBasis,
+            paymentFrequency: isMonthly ? 'MONTHLY' : 'ANNUAL',
+            dueDay,
+            installmentCount,
+            status: 'ACTIVE',
+            terms: data.initialAgreement?.terms,
+            notes: data.initialAgreement?.notes,
+            createdById: req.user?.userId,
+          },
+        });
+
+        // 4. Generate installments ONLY for YEARLY settlement frequency
+        let installments: any[] = [];
+        if (!isMonthly) {
+          installments = await generateAnnualInstallments({
+            franchiseId: franchise.id,
+            agreementId: agreement.id,
+            startDate: agreementStartDate,
+            endDate: agreementEndDate,
+            calculationMethod,
+            annualRoyaltyAmount: Number(annualRoyaltyAmount),
+            royaltyPercentage: Number(royaltyPercentage),
+            royaltyBasis,
+            perStudentFee: perStudentFee ? Number(perStudentFee) : null,
+            dueDay,
+            installment1DueDate: data.initialAgreement?.installment1DueDate,
+            installment2DueDate: data.initialAgreement?.installment2DueDate,
+            prismaClient: tx,
+          });
+        }
+
+        // 4.5. Optional Institute / Campus Linking or Creation
+        let attachedBranches: any[] = [];
+        if (data.branchOption === 'LINK_EXISTING' || (data.linkedInstituteIds && data.linkedInstituteIds.length > 0) || data.linkedInstituteId) {
+          const instituteIds = data.linkedInstituteIds || (data.linkedInstituteId ? [data.linkedInstituteId] : []);
+          if (instituteIds.length > 0) {
+            await tx.institute.updateMany({
+              where: { id: { in: instituteIds } },
+              data: { franchiseId: franchise.id },
+            });
+            attachedBranches = await tx.institute.findMany({
+              where: { id: { in: instituteIds } },
+              select: {
+                id: true,
+                code: true,
+                name: true,
+                city: true,
+                state: true,
+                status: true,
+                _count: { select: { students: true } },
+              },
+            });
+          }
+        } else if (data.branchOption === 'CREATE_NEW' && data.newBranch?.name) {
+          const branchName = data.newBranch.name.trim();
+          let branchCode = data.newBranch.code?.trim();
+          if (!branchCode) {
+            const count = await tx.institute.count();
+            branchCode = `BR-${String(count + 1).padStart(3, '0')}`;
+            let exists = await tx.institute.findUnique({ where: { code: branchCode } });
+            let offset = 1;
+            while (exists) {
+              branchCode = `BR-${String(count + 1 + offset).padStart(3, '0')}`;
+              exists = await tx.institute.findUnique({ where: { code: branchCode } });
+              offset++;
+            }
+          }
+
+          const branchEmail = data.newBranch.email?.trim() ? data.newBranch.email.trim().toLowerCase() : null;
+
+          const newInst = await tx.institute.create({
+            data: {
+              name: branchName,
+              code: branchCode,
+              city: data.newBranch.city?.trim() || data.city?.trim() || null,
+              state: data.newBranch.state?.trim() || data.state?.trim() || null,
+              address: data.newBranch.address?.trim() || data.address?.trim() || null,
+              phone: data.newBranch.phone?.trim() || cleanPhone,
+              email: branchEmail,
+              franchiseId: franchise.id,
+              status: 'ACTIVE',
+            },
+            select: {
+              id: true,
+              code: true,
+              name: true,
+              city: true,
+              state: true,
+              status: true,
+              _count: { select: { students: true } },
+            },
+          });
+          attachedBranches = [newInst];
+        }
+
+        return {
+          franchise,
+          agreement,
+          installments,
+          attachedBranches,
+        };
+      },
+      {
+        timeout: 35000,
+        maxWait: 10000,
+      }
+    );
 
     const franchiseWithBranches = {
-      ...franchise,
-      branches: attachedBranches,
+      ...txResult.franchise,
+      branches: txResult.attachedBranches,
     };
 
     return res.status(201).json({
@@ -690,11 +810,11 @@ export async function createFranchise(req: AuthenticatedRequest, res: Response) 
         : 'Franchise, Owner Account, and 2 Annual Installments created successfully',
       data: {
         franchise: franchiseWithBranches,
-        agreement,
-        initialAgreement: agreement,
-        installments,
+        agreement: txResult.agreement,
+        initialAgreement: txResult.agreement,
+        installments: txResult.installments,
         ownerCredentials: {
-          email: data.email,
+          email: normalizedEmail,
           temporaryPassword: initialPassword,
           role: 'FRANCHISE_OWNER',
         },
@@ -703,10 +823,31 @@ export async function createFranchise(req: AuthenticatedRequest, res: Response) 
   } catch (err: any) {
     console.error('[Create Franchise Error]', err);
     if (err.code === 'P2002') {
-      const field = Array.isArray(err.meta?.target) ? err.meta.target.join(', ') : 'unique constraint';
+      const target = Array.isArray(err.meta?.target) ? err.meta.target.join(', ') : String(err.meta?.target || '');
+      const model = err.meta?.modelName || '';
+
+      if (target.toLowerCase().includes('email') || target.includes('email_normalized')) {
+        return res.status(409).json({
+          success: false,
+          error: `A ${model ? model.toLowerCase() : 'record'} with email '${req.body?.email || ''}' already exists. Please provide a unique email address.`,
+        });
+      }
+      if (target.toLowerCase().includes('phone')) {
+        return res.status(409).json({
+          success: false,
+          error: `A ${model ? model.toLowerCase() : 'record'} with phone number '${req.body?.phone || ''}' already exists. Please provide a unique phone number.`,
+        });
+      }
+      if (target.toLowerCase().includes('code')) {
+        return res.status(409).json({
+          success: false,
+          error: `A franchise or institute with code '${req.body?.code || ''}' already exists. Please provide a unique code.`,
+        });
+      }
+
       return res.status(409).json({
         success: false,
-        error: `A record with this ${field} already exists. Please verify code, email, and phone.`,
+        error: `A record with this ${target || 'unique field'} already exists. Please verify franchise email, code, and phone.`,
       });
     }
     return res.status(500).json({ success: false, error: err.message || 'Failed to create franchise' });
@@ -938,7 +1079,7 @@ export async function updateFranchise(req: AuthenticatedRequest, res: Response) 
             state: newBranch.state || undefined,
             address: newBranch.address || undefined,
             phone: newBranch.phone || undefined,
-            email: newBranch.email || undefined,
+            email: newBranch.email?.trim() ? newBranch.email.trim().toLowerCase() : null,
             franchiseId: id,
             status: 'ACTIVE',
           },
@@ -1126,7 +1267,7 @@ export async function addBranchToFranchise(req: AuthenticatedRequest, res: Respo
           state,
           address,
           phone,
-          email,
+          email: email?.trim() ? email.trim().toLowerCase() : null,
           franchiseId,
           status: 'ACTIVE',
         },

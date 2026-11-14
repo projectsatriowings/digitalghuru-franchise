@@ -31,6 +31,7 @@ import {
   Printer,
   Lock,
   Check,
+  Loader2,
 } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
 
@@ -238,6 +239,7 @@ export const FranchiseManagement: React.FC = () => {
 
   // Forms
   const [createForm, setCreateForm] = useState(initialCreateForm);
+  const [isSubmittingFranchise, setIsSubmittingFranchise] = useState(false);
 
   // Edit Franchise & Manage Linked Institutes State
   const [showEditFranchiseModal, setShowEditFranchiseModal] = useState(false);
@@ -489,10 +491,17 @@ export const FranchiseManagement: React.FC = () => {
     return true;
   };
 
+  const duplicateFranchiseMatch = React.useMemo(() => {
+    if (!createForm.email?.trim()) return null;
+    const norm = createForm.email.trim().toLowerCase();
+    return franchises.find((f) => f.email?.trim().toLowerCase() === norm) || null;
+  }, [createForm.email, franchises]);
+
   const isProfileStepComplete = Boolean(
     createForm.name?.trim() &&
     createForm.ownerName?.trim() &&
     createForm.email?.trim() &&
+    !duplicateFranchiseMatch &&
     createForm.phone?.trim() &&
     createForm.address?.trim() &&
     createForm.city?.trim() &&
@@ -545,6 +554,15 @@ export const FranchiseManagement: React.FC = () => {
 
   const handleCreateFranchise = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmittingFranchise) return;
+
+    if (duplicateFranchiseMatch) {
+      showToast(`Cannot create franchise: '${createForm.email}' is already registered to ${duplicateFranchiseMatch.name} (${duplicateFranchiseMatch.code}).`, 'error');
+      setCreateModalTab('profile');
+      return;
+    }
+
+    setIsSubmittingFranchise(true);
     try {
       const dgPct = Number(createForm.initialAgreement.digitalGuruRevenuePercentage || 50);
       const partnerPct = createForm.initialAgreement.calculationMethod === 'PERCENTAGE_REVENUE'
@@ -637,6 +655,8 @@ export const FranchiseManagement: React.FC = () => {
       }
     } catch (err: any) {
       showToast(err.message || 'Failed to create franchise', 'error');
+    } finally {
+      setIsSubmittingFranchise(false);
     }
   };
 
@@ -2071,8 +2091,16 @@ export const FranchiseManagement: React.FC = () => {
                             placeholder="owner@dgchennai.com"
                             value={createForm.email}
                             onChange={(e) => setCreateForm({ ...createForm, email: e.target.value })}
-                            className="mt-1 w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-[#006FFF]"
+                            className={`mt-1 w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-[#006FFF] ${
+                              duplicateFranchiseMatch ? 'border-rose-400 bg-rose-50/40 text-rose-900' : ''
+                            }`}
                           />
+                          {duplicateFranchiseMatch && (
+                            <p className="mt-1 text-xs text-rose-600 font-medium flex items-center gap-1">
+                              <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                              A franchise with this email already exists ({duplicateFranchiseMatch.name} [{duplicateFranchiseMatch.code}]).
+                            </p>
+                          )}
                         </div>
 
                         <div>
@@ -3160,11 +3188,23 @@ export const FranchiseManagement: React.FC = () => {
                   ) : (
                     <button
                       type="submit"
-                      className="px-6 py-2.5 bg-[#FEDC32] hover:bg-[#FEDC32]/90 text-slate-900 font-bold rounded-xl text-xs shadow-md transition-all flex items-center gap-2 cursor-pointer"
+                      disabled={isSubmittingFranchise || Boolean(duplicateFranchiseMatch)}
+                      className={`px-6 py-2.5 font-bold rounded-xl text-xs shadow-md transition-all flex items-center gap-2 ${
+                        isSubmittingFranchise || duplicateFranchiseMatch
+                          ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
+                          : 'bg-[#FEDC32] hover:bg-[#FEDC32]/90 text-slate-900 cursor-pointer'
+                      }`}
                     >
-                      {createForm.initialAgreement.settlementFrequency === 'YEARLY'
-                        ? 'Create Franchise & Generate 2 Annual Installments'
-                        : 'Create Franchise (Monthly Settlement)'}
+                      {isSubmittingFranchise ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Creating Franchise & Installments...
+                        </>
+                      ) : createForm.initialAgreement.settlementFrequency === 'YEARLY' ? (
+                        'Create Franchise & Generate 2 Annual Installments'
+                      ) : (
+                        'Create Franchise (Monthly Settlement)'
+                      )}
                     </button>
                   )}
                 </div>
