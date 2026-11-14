@@ -4,6 +4,13 @@ import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { apiFetch } from '../../services/api';
 import { Batch, StaffMember } from '../../types';
 import {
+  sanitizePhoneInput,
+  getPhoneValidationError,
+  getEmailValidationError,
+  isValidPhone,
+  isValidEmail,
+} from '../../utils/validation';
+import {
   X,
   User,
   Briefcase,
@@ -189,6 +196,28 @@ export const AddStaffModal: React.FC<AddStaffModalProps> = ({
       setError('Staff full name is required');
       return;
     }
+    if (phone.trim()) {
+      const phoneErr = getPhoneValidationError(phone, false);
+      if (phoneErr) {
+        setError(phoneErr);
+        return;
+      }
+    }
+    if (personalEmail.trim()) {
+      const emailErr = getEmailValidationError(personalEmail, false);
+      if (emailErr) {
+        setError(emailErr);
+        return;
+      }
+    }
+    if (dob) {
+      const selectedDate = new Date(dob);
+      const today = new Date();
+      if (selectedDate > today) {
+        setError('Date of birth cannot be in the future.');
+        return;
+      }
+    }
     setError(null);
     if (!loginEmail) {
       const cleanName = fullName.toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -219,6 +248,28 @@ export const AddStaffModal: React.FC<AddStaffModalProps> = ({
     if (!fullName.trim() || !designation.trim() || !loginEmail.trim() || !password.trim()) {
       setError('Please fill in all mandatory fields');
       return;
+    }
+
+    const loginEmailErr = getEmailValidationError(loginEmail, true);
+    if (loginEmailErr) {
+      setError(`Portal Login Email: ${loginEmailErr}`);
+      return;
+    }
+
+    if (phone.trim()) {
+      const phoneErr = getPhoneValidationError(phone, false);
+      if (phoneErr) {
+        setError(`Primary Phone: ${phoneErr}`);
+        return;
+      }
+    }
+
+    if (personalEmail.trim()) {
+      const personalEmailErr = getEmailValidationError(personalEmail, false);
+      if (personalEmailErr) {
+        setError(`Personal Email: ${personalEmailErr}`);
+        return;
+      }
     }
 
     try {
@@ -524,10 +575,27 @@ export const AddStaffModal: React.FC<AddStaffModalProps> = ({
                 <input
                   type="tel"
                   value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  placeholder="e.g. +91 9876543210"
-                  className="w-full bg-[#FAF8F5] border border-[#E2E8F0] rounded-xl px-3.5 py-2.5 text-xs text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#006FFF]/20"
+                  onChange={(e) => {
+                    const sanitized = sanitizePhoneInput(e.target.value);
+                    setPhone(sanitized);
+                    if (error && (error.includes('phone') || error.includes('Phone'))) setError(null);
+                  }}
+                  placeholder="e.g. +91 9876543210 or 9876543210"
+                  className={`w-full bg-[#FAF8F5] border rounded-xl px-3.5 py-2.5 text-xs text-[#0F172A] focus:outline-none focus:ring-2 transition-colors ${
+                    phone.trim() && getPhoneValidationError(phone)
+                      ? 'border-rose-400 focus:ring-rose-200 bg-rose-50/30'
+                      : 'border-[#E2E8F0] focus:ring-[#006FFF]/20'
+                  }`}
                 />
+                {phone.trim() && getPhoneValidationError(phone) ? (
+                  <p className="text-[11px] text-rose-600 mt-1 font-medium">
+                    {getPhoneValidationError(phone)}
+                  </p>
+                ) : (
+                  <p className="text-[10px] text-[#94A3B8] mt-1">
+                    10-digit mobile number (e.g. 9876543210 or +91 9876543210)
+                  </p>
+                )}
               </div>
               <div>
                 <label className="block text-xs font-semibold text-[#0F172A] mb-1">
@@ -536,10 +604,27 @@ export const AddStaffModal: React.FC<AddStaffModalProps> = ({
                 <input
                   type="email"
                   value={personalEmail}
-                  onChange={(e) => setPersonalEmail(e.target.value)}
+                  onChange={(e) => {
+                    const val = e.target.value.trim();
+                    setPersonalEmail(val);
+                    if (error && (error.includes('email') || error.includes('Email'))) setError(null);
+                  }}
                   placeholder="e.g. faculty.personal@gmail.com"
-                  className="w-full bg-[#FAF8F5] border border-[#E2E8F0] rounded-xl px-3.5 py-2.5 text-xs text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#006FFF]/20"
+                  className={`w-full bg-[#FAF8F5] border rounded-xl px-3.5 py-2.5 text-xs text-[#0F172A] focus:outline-none focus:ring-2 transition-colors ${
+                    personalEmail.trim() && getEmailValidationError(personalEmail)
+                      ? 'border-rose-400 focus:ring-rose-200 bg-rose-50/30'
+                      : 'border-[#E2E8F0] focus:ring-[#006FFF]/20'
+                  }`}
                 />
+                {personalEmail.trim() && getEmailValidationError(personalEmail) ? (
+                  <p className="text-[11px] text-rose-600 mt-1 font-medium">
+                    {getEmailValidationError(personalEmail)}
+                  </p>
+                ) : (
+                  <p className="text-[10px] text-[#94A3B8] mt-1">
+                    Valid email format (e.g. name@domain.com)
+                  </p>
+                )}
               </div>
             </div>
 
@@ -550,6 +635,7 @@ export const AddStaffModal: React.FC<AddStaffModalProps> = ({
                 </label>
                 <input
                   type="date"
+                  max={new Date().toISOString().split('T')[0]}
                   value={dob}
                   onChange={(e) => setDob(e.target.value)}
                   className="w-full bg-[#FAF8F5] border border-[#E2E8F0] rounded-xl px-3.5 py-2.5 text-xs text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#006FFF]/20"
@@ -786,13 +872,26 @@ export const AddStaffModal: React.FC<AddStaffModalProps> = ({
                 type="email"
                 required
                 value={loginEmail}
-                onChange={(e) => setLoginEmail(e.target.value)}
+                onChange={(e) => {
+                  setLoginEmail(e.target.value.trim());
+                  if (error && (error.includes('email') || error.includes('Email'))) setError(null);
+                }}
                 placeholder="faculty@institute.edu"
-                className="w-full bg-[#FAF8F5] border border-[#E2E8F0] rounded-xl px-3.5 py-2.5 text-xs text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#006FFF]/20"
+                className={`w-full bg-[#FAF8F5] border rounded-xl px-3.5 py-2.5 text-xs text-[#0F172A] focus:outline-none focus:ring-2 transition-colors ${
+                  loginEmail.trim() && getEmailValidationError(loginEmail, true)
+                    ? 'border-rose-400 focus:ring-rose-200 bg-rose-50/30'
+                    : 'border-[#E2E8F0] focus:ring-[#006FFF]/20'
+                }`}
               />
-              <span className="text-[10px] text-[#94A3B8] mt-1 block">
-                This will be the employee's username for web & mobile app login.
-              </span>
+              {loginEmail.trim() && getEmailValidationError(loginEmail, true) ? (
+                <p className="text-[11px] text-rose-600 mt-1 font-medium">
+                  {getEmailValidationError(loginEmail, true)}
+                </p>
+              ) : (
+                <span className="text-[10px] text-[#94A3B8] mt-1 block">
+                  This will be the employee's username for web & mobile app login.
+                </span>
+              )}
             </div>
 
             <div>

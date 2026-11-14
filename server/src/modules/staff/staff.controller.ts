@@ -15,10 +15,42 @@ function safeParseDate(dateVal?: string | null): Date | null {
   return isNaN(d.getTime()) ? null : d;
 }
 
+const optionalPhoneValidator = z
+  .string()
+  .trim()
+  .optional()
+  .nullable()
+  .refine(
+    (val) => {
+      if (!val) return true;
+      if (/[a-zA-Z]/.test(val)) return false;
+      const digits = val.replace(/\D/g, '');
+      return digits.length >= 10 && digits.length <= 15;
+    },
+    {
+      message: 'Phone number must be between 10 and 15 digits and cannot contain letters',
+    }
+  );
+
+const optionalEmailValidator = z
+  .string()
+  .trim()
+  .optional()
+  .nullable()
+  .refine(
+    (val) => {
+      if (!val) return true;
+      return /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(val);
+    },
+    {
+      message: 'Please enter a valid email address format (e.g. user@example.com)',
+    }
+  );
+
 export const createStaffSchema = z.object({
   fullName: z.string().min(2, 'Staff full name is required'),
-  email: z.string().email('Valid email is required'),
-  phone: z.string().optional().nullable(),
+  email: z.string().trim().email('Valid email is required'),
+  phone: optionalPhoneValidator,
   employeeCode: z.string().optional().nullable(),
   designation: z.string().min(2, 'Designation is required'), // e.g., "Senior Mathematics Faculty"
   qualification: z.string().optional().nullable(),
@@ -32,11 +64,11 @@ export const createStaffSchema = z.object({
   // Personal Details
   dob: z.string().optional().nullable(),
   gender: z.string().optional().nullable(),
-  altPhone: z.string().optional().nullable(),
-  personalEmail: z.string().optional().nullable(),
+  altPhone: optionalPhoneValidator,
+  personalEmail: optionalEmailValidator,
   emergencyContactName: z.string().optional().nullable(),
   emergencyContactRelation: z.string().optional().nullable(),
-  emergencyContactPhone: z.string().optional().nullable(),
+  emergencyContactPhone: optionalPhoneValidator,
 
   // Addresses
   currentAddressLine1: z.string().optional().nullable(),
@@ -65,7 +97,7 @@ export const createStaffSchema = z.object({
 
 export const updateStaffSchema = z.object({
   fullName: z.string().min(2).optional(),
-  phone: z.string().optional().nullable(),
+  phone: optionalPhoneValidator,
   employeeCode: z.string().optional(),
   designation: z.string().min(2).optional(),
   qualification: z.string().optional().nullable(),
@@ -76,11 +108,11 @@ export const updateStaffSchema = z.object({
   // Personal Details
   dob: z.string().optional().nullable(),
   gender: z.string().optional().nullable(),
-  altPhone: z.string().optional().nullable(),
-  personalEmail: z.string().optional().nullable(),
+  altPhone: optionalPhoneValidator,
+  personalEmail: optionalEmailValidator,
   emergencyContactName: z.string().optional().nullable(),
   emergencyContactRelation: z.string().optional().nullable(),
-  emergencyContactPhone: z.string().optional().nullable(),
+  emergencyContactPhone: optionalPhoneValidator,
 
   // Addresses
   currentAddressLine1: z.string().optional().nullable(),
