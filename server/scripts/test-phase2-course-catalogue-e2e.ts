@@ -221,6 +221,7 @@ async function runPhase2Tests() {
       role: 'SUPER_ADMIN',
     });
 
+<<<<<<< HEAD
     // 0b. Franchise Owner Actor & Franchise
     const franchiseOwnerUser = await prisma.user.create({
       data: {
@@ -245,6 +246,28 @@ async function runPhase2Tests() {
     });
     cleanupFranchiseIds.push(franchise.id);
 
+=======
+    // Find active student with linked User account and franchise branch
+    const student = await prisma.student.findFirst({
+      where: { userId: { not: null }, institute: { franchiseId: { not: null } } },
+      include: {
+        user: true,
+        institute: {
+          include: {
+            franchise: { include: { ownerUser: true, branches: { include: { batches: true } } } },
+            batches: true,
+          },
+        },
+      },
+    });
+    if (!student || !student.user || !student.institute?.franchise) {
+      throw new Error('No test student with user account and franchise found in database');
+    }
+
+    const franchise = student.institute.franchise;
+    const franchiseOwner = franchise.ownerUser;
+    if (!franchiseOwner) throw new Error('No Franchise Owner user found in database');
+>>>>>>> feat/global-course-catalogue-integration
     const franchiseOwnerToken = generateAccessToken({
       userId: franchiseOwnerUser.id,
       email: franchiseOwnerUser.email!,
@@ -252,6 +275,7 @@ async function runPhase2Tests() {
       franchiseId: franchise.id,
     });
 
+<<<<<<< HEAD
     // 0c. Branch & Batch for Offline Testing
     const testInstitute = await prisma.institute.create({
       data: {
@@ -307,9 +331,32 @@ async function runPhase2Tests() {
       email: studentUser1.email!,
       role: 'STUDENT',
       instituteId: testInstitute.id,
+=======
+    const testInstitute = student.institute;
+    let testBatch = testInstitute.batches[0];
+    if (!testBatch) {
+      testBatch = await prisma.batch.create({
+        data: {
+          instituteId: testInstitute.id,
+          name: 'Regular Batch 2026',
+          academicYear: '2026-2027',
+          schedule: 'Mon-Fri 10:00 AM - 12:00 PM',
+          startDate: new Date(),
+        },
+      });
+    }
+    assert(Boolean(testInstitute && testBatch), '0.1 Found Franchise branch and active batch for offline testing');
+
+    const studentToken = generateAccessToken({
+      userId: student.user.id,
+      email: student.user.email || 'student@digitalguru.local',
+      role: 'STUDENT',
+      instituteId: student.instituteId,
+>>>>>>> feat/global-course-catalogue-integration
     });
     assert(Boolean(studentToken1), '0.2 Resolved student actor and generated authentication JWT');
 
+<<<<<<< HEAD
     // 0e. Student 2 Actor (for Version 2 new enrollment test)
     const studentUser2 = await prisma.user.create({
       data: {
@@ -317,6 +364,48 @@ async function runPhase2Tests() {
         passwordHash: 'dummy_hash',
         role: UserRole.STUDENT,
         fullName: 'Student Two Test Actor',
+=======
+    // -------------------------------------------------------------
+    // Test 1: Course Import Idempotency & Slug Aliases
+    // -------------------------------------------------------------
+    console.log('\n--- 1. Course Catalogue Import & Idempotency ---');
+    const importDryRun = await importCatalogue({ dryRun: true, schema: 'public' });
+    assert(
+      importDryRun.coursesCreated === 5 || importDryRun.coursesSkipped > 0,
+      '1.1 Import Dry-Run: Correctly parsed all 5 authentic courses without error'
+    );
+    assert(importDryRun.categoriesCreated >= 2, '1.2 Import Dry-Run: Parsed categories accurately');
+
+    // -------------------------------------------------------------
+    // Test 2: 10-Step CourseWizard Full Payload Creation & Ordering
+    // -------------------------------------------------------------
+    console.log('\n--- 2. CourseWizard 10-Step Full Field Creation ---');
+    const wizardSlug = `test-wizard-course-${Date.now()}`;
+    const wizardPayload = {
+      title: 'Full 10-Step Test Course',
+      slug: wizardSlug,
+      subTitle: 'Preserving All CourseWizard Fields',
+      description: 'Comprehensive test ensuring zero field drop across 10 steps',
+      format: 'Classroom + Online',
+      duration: '3 Months',
+      level: 'Beginner to Advanced',
+      price: 9999,
+      status: 'DRAFT',
+      thumbnailUrl: '/uploads/courses/1789123754349-ai-powered-digital-marketing-course-card.webp',
+      bannerUrl: '/uploads/courses/1789123324736-ai-powered-digital-marketing-banner.jpg.webp',
+      brochureUrl: '/Courses/AI Powered Digital Marketing Course.pdf',
+      learningOutcomes: ['Outcome 1', 'Outcome 2', 'Outcome 3'],
+      targetAudience: ['Students', 'Professionals', 'Entrepreneurs'],
+      toolsCovered: ['ChatGPT', 'Canva', 'Python', 'React'],
+      overviewJson: {
+        batchInfo: 'Morning Batch | 2 Modules',
+        location: 'Anna Nagar Campus',
+        originalPrice: '12999',
+        discountedPrice: '9999',
+        usps: ['USP 1', 'USP 2'],
+        overviewDescription: ['Paragraph 1 of overview description', 'Paragraph 2 of overview description'],
+        overviewLearnings: ['Key learning 1', 'Key learning 2'],
+>>>>>>> feat/global-course-catalogue-integration
       },
     });
     cleanupUserIds.push(studentUser2.id);
@@ -1012,8 +1101,18 @@ async function runPhase2Tests() {
           },
         });
       }
+<<<<<<< HEAD
       if (cleanupFranchiseIds.length > 0) {
         await prisma.franchiseCourseSelection.deleteMany({ where: { franchiseId: { in: cleanupFranchiseIds } } });
+=======
+      if (cleanupCourseIds.length > 0) {
+        await prisma.franchiseCourseSelection.deleteMany({ where: { courseId: { in: cleanupCourseIds } } });
+        await prisma.courseSlugAlias.deleteMany({ where: { courseId: { in: cleanupCourseIds } } });
+        await prisma.globalCourse.updateMany({
+          where: { id: { in: cleanupCourseIds } },
+          data: { status: 'ARCHIVED', activeCurriculumVersionId: null },
+        });
+>>>>>>> feat/global-course-catalogue-integration
       }
       if (cleanupStudentIds.length > 0) {
         await prisma.student.deleteMany({ where: { id: { in: cleanupStudentIds } } });

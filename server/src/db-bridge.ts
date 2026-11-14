@@ -13,12 +13,9 @@ const NEON_PORT = 5432;
  * Forwards 127.0.0.1:5433 -> 3.14.138.241:5432 and attaches the Neon endpoint identifier.
  */
 export function ensureDatabaseBridge(): void {
+  dotenv.config({ path: path.resolve(__dirname, '../.env') });
   if (process.env.DISABLE_DB_BRIDGE === 'true') {
     return;
-  }
-
-  if (!process.env.DATABASE_URL) {
-    dotenv.config({ path: path.resolve(__dirname, '../.env') });
   }
 
   const currentUrl = process.env.DATABASE_URL;
