@@ -32,3 +32,4 @@
 ### Verification
 - **Functional Index:** `Institute_email_normalized_unique_idx` active.
 - **Active Duplicates:** 0 across all institutes.
+
