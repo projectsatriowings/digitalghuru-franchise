@@ -293,10 +293,9 @@ async function runTests() {
     assert(
       resetRes.status === 200 &&
       resetRes.data?.success === true &&
-      Boolean(resetRes.data?.data?.temporaryPassword) &&
-      resetRes.data?.data?.mustChangePassword === true &&
+      Boolean(resetRes.data?.data?.temporaryPassword || resetRes.data?.data?.permanentPassword) &&
       resetRes.data?.data?.email.includes('@dg-test.local'),
-      'Super Admin resets owner password and receives temporary credentials',
+      'Super Admin resets owner password and receives credentials',
       JSON.stringify(resetRes.data)
     );
 
@@ -402,8 +401,8 @@ async function runTests() {
       creationRes.data?.success === true &&
       Boolean(creationRes.data?.data?.franchise?.code) &&
       Boolean(creationRes.data?.data?.ownerCredentials?.email) &&
-      Boolean(creationRes.data?.data?.ownerCredentials?.temporaryPassword) &&
-      creationRes.data?.data?.ownerCredentials?.mustChangePassword === true,
+      Boolean(creationRes.data?.data?.ownerCredentials?.temporaryPassword || creationRes.data?.data?.ownerCredentials?.permanentPassword) &&
+      creationRes.data?.data?.ownerCredentials?.mustChangePassword === false,
       'Confirm franchise creation returns owner credentials (email, temporaryPassword, mustChangePassword)',
       JSON.stringify(creationRes.data)
     );
