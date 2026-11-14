@@ -417,11 +417,40 @@ export async function createFranchise(req: AuthenticatedRequest, res: Response) 
     }
 
     const data = parse.data;
+    const normalizedEmail = data.email.trim().toLowerCase();
+    const cleanPhone = data.phone.trim();
 
-    // Check if franchise email already exists
-    const existingFranchise = await prisma.franchise.findUnique({ where: { email: data.email } });
+    // Check if franchise email already exists (case-insensitive)
+    const existingFranchise = await prisma.franchise.findFirst({
+      where: { email: { equals: normalizedEmail, mode: 'insensitive' } },
+    });
     if (existingFranchise) {
-      return res.status(400).json({ success: false, error: 'A franchise with this email address already exists' });
+      return res.status(409).json({ success: false, error: `A franchise with email '${data.email}' already exists` });
+    }
+
+    // Check if manually supplied franchise code already exists
+    if (data.code && data.code.trim()) {
+      const existingCode = await prisma.franchise.findUnique({
+        where: { code: data.code.trim().toUpperCase() },
+      });
+      if (existingCode) {
+        return res.status(409).json({ success: false, error: `A franchise with code '${data.code.trim().toUpperCase()}' already exists` });
+      }
+    }
+
+    // Check if phone number is already registered to a different user
+    const existingUserPhone = await prisma.user.findFirst({
+      where: { phone: cleanPhone },
+    });
+    const existingUserEmail = await prisma.user.findFirst({
+      where: { email: { equals: normalizedEmail, mode: 'insensitive' } },
+    });
+
+    if (existingUserPhone && (!existingUserEmail || existingUserPhone.id !== existingUserEmail.id)) {
+      return res.status(409).json({
+        success: false,
+        error: `A user account with phone number '${cleanPhone}' already exists. Please provide a unique phone number.`,
+      });
     }
 
     // Pre-validate initialAgreement parameters before creating any records
@@ -673,6 +702,13 @@ export async function createFranchise(req: AuthenticatedRequest, res: Response) 
     });
   } catch (err: any) {
     console.error('[Create Franchise Error]', err);
+    if (err.code === 'P2002') {
+      const field = Array.isArray(err.meta?.target) ? err.meta.target.join(', ') : 'unique constraint';
+      return res.status(409).json({
+        success: false,
+        error: `A record with this ${field} already exists. Please verify code, email, and phone.`,
+      });
+    }
     return res.status(500).json({ success: false, error: err.message || 'Failed to create franchise' });
   }
 }
@@ -2235,15 +2271,21 @@ export async function getAgreementPdfData(req: AuthenticatedRequest, res: Respon
 export async function listFranchiseInstallments(req: AuthenticatedRequest, res: Response) {
   try {
     const { id: franchiseId } = req.params;
-    const { authorized } = await verifyFranchiseAccess(req.user!.userId, req.user!.role, franchiseId);
+    const isSuperAdminAll = franchiseId === 'all' && req.user!.role === 'SUPER_ADMIN';
 
-    if (!authorized) {
-      return res.status(403).json({ success: false, error: 'Forbidden' });
+    if (!isSuperAdminAll) {
+      const { authorized } = await verifyFranchiseAccess(req.user!.userId, req.user!.role, franchiseId);
+      if (!authorized) {
+        return res.status(403).json({ success: false, error: 'Forbidden' });
+      }
     }
 
+    const whereClause = isSuperAdminAll ? {} : { franchiseId };
+
     const installments = await prisma.franchiseRoyaltyInstallment.findMany({
-      where: { franchiseId },
+      where: whereClause,
       include: {
+        franchise: { select: { id: true, name: true, code: true, ownerName: true } },
         agreement: { select: { id: true, agreementNumber: true, title: true, status: true, calculationMethod: true } },
         payments: {
           select: {
@@ -2261,8 +2303,11 @@ export async function listFranchiseInstallments(req: AuthenticatedRequest, res: 
       orderBy: [{ agreement: { startDate: 'desc' } }, { installmentNumber: 'asc' }],
     });
 
-    const withLiveStatus = installments.map((inst) => ({
+    const withLiveStatus = installments.map((inst: any) => ({
       ...inst,
+      franchiseName: inst.franchise?.name,
+      franchiseCode: inst.franchise?.code,
+      ownerName: inst.franchise?.ownerName,
       liveStatus: computeInstallmentLiveStatus(inst),
     }));
 

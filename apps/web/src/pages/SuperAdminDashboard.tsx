@@ -9,6 +9,7 @@ import {
   Search,
   CheckCircle,
   AlertTriangle,
+  AlertCircle,
   GraduationCap,
   Layers,
   Phone,
@@ -36,6 +37,16 @@ interface AcademicAdminAccount extends User {
   createdAt?: string;
 }
 
+interface FranchiseOption {
+  id: string;
+  code: string;
+  name: string;
+  city?: string | null;
+  state?: string | null;
+  ownerName?: string;
+  status: string;
+}
+
 interface InstituteDetailData {
   institute: Institute;
   adminAccount: AcademicAdminAccount | null;
@@ -44,7 +55,9 @@ interface InstituteDetailData {
 export const SuperAdminDashboard: React.FC = () => {
   const [metrics, setMetrics] = useState<any>(null);
   const [institutes, setInstitutes] = useState<Institute[]>([]);
-  const [availableFranchises, setAvailableFranchises] = useState<any[]>([]);
+  const [availableFranchises, setAvailableFranchises] = useState<FranchiseOption[]>([]);
+  const [franchiseOptionsLoading, setFranchiseOptionsLoading] = useState(false);
+  const [franchiseOptionsError, setFranchiseOptionsError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
@@ -65,6 +78,31 @@ export const SuperAdminDashboard: React.FC = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [createLoading, setCreateLoading] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+
+  const loadAvailableFranchises = async () => {
+    try {
+      setFranchiseOptionsLoading(true);
+      setFranchiseOptionsError(null);
+      const res = await apiFetch('/franchises', { skipCache: true });
+      if (res && res.success && Array.isArray(res.data?.franchises)) {
+        setAvailableFranchises(res.data.franchises);
+      } else {
+        setAvailableFranchises([]);
+        setFranchiseOptionsError(res?.error || 'Failed to load franchise centres');
+      }
+    } catch (err: any) {
+      setAvailableFranchises([]);
+      setFranchiseOptionsError(err.message || 'Failed to load franchise centres');
+    } finally {
+      setFranchiseOptionsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (showCreateModal) {
+      loadAvailableFranchises();
+    }
+  }, [showCreateModal]);
 
   // Form fields
   const [newInst, setNewInst] = useState({
@@ -119,6 +157,82 @@ export const SuperAdminDashboard: React.FC = () => {
         }));
       }
     }
+  };
+
+  // Duplicate validation and collision states
+  const [emailConflictError, setEmailConflictError] = useState<string | null>(null);
+  const [nameConflictWarning, setNameConflictWarning] = useState<string | null>(null);
+  const [nameCollisionError, setNameCollisionError] = useState<string | null>(null);
+  const [phoneConflictWarning, setPhoneConflictWarning] = useState<string | null>(null);
+  const [confirmPhoneDuplicate, setConfirmPhoneDuplicate] = useState(false);
+  const [, setValidatingField] = useState<string | null>(null);
+
+  const runDuplicateCheck = async (field?: 'email' | 'name' | 'phone') => {
+    try {
+      if (field) setValidatingField(field);
+      const res = await apiFetch('/institutes/check-duplicates', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: newInst.name.trim() || undefined,
+          email: newInst.email.trim() || undefined,
+          phone: newInst.phone.trim() || undefined,
+          franchiseId: newInst.franchiseId || undefined,
+          city: newInst.city.trim() || undefined,
+        }),
+      });
+
+      if (res.success && res.data) {
+        if (res.data.emailConflict?.isDuplicate) {
+          setEmailConflictError(res.data.emailConflict.message || 'Duplicate email detected');
+        } else {
+          setEmailConflictError(null);
+        }
+
+        if (res.data.nameConflict?.isDuplicate) {
+          if (!res.data.nameConflict.allowCreation) {
+            setNameCollisionError(res.data.nameConflict.message || 'Name collision detected in same center');
+            setNameConflictWarning(null);
+          } else {
+            setNameCollisionError(null);
+            setNameConflictWarning(res.data.nameConflict.warning || null);
+          }
+        } else {
+          setNameCollisionError(null);
+          setNameConflictWarning(null);
+        }
+
+        if (res.data.phoneConflict?.isDuplicate) {
+          setPhoneConflictWarning(res.data.phoneConflict.warning || null);
+        } else {
+          setPhoneConflictWarning(null);
+          setConfirmPhoneDuplicate(false);
+        }
+      }
+    } catch {
+      // Non-blocking background duplicate verification
+    } finally {
+      setValidatingField(null);
+    }
+  };
+
+  const handleOpenCreateModal = () => {
+    setCreateError(null);
+    setEmailConflictError(null);
+    setNameConflictWarning(null);
+    setNameCollisionError(null);
+    setPhoneConflictWarning(null);
+    setConfirmPhoneDuplicate(false);
+    setShowCreateModal(true);
+  };
+
+  const handleCloseCreateModal = () => {
+    setShowCreateModal(false);
+    setCreateError(null);
+    setEmailConflictError(null);
+    setNameConflictWarning(null);
+    setNameCollisionError(null);
+    setPhoneConflictWarning(null);
+    setConfirmPhoneDuplicate(false);
   };
 
   // Success Created Institute Modal State
@@ -180,16 +294,12 @@ export const SuperAdminDashboard: React.FC = () => {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [metricsRes, institutesRes, franchisesRes] = await Promise.all([
+      const [metricsRes, institutesRes] = await Promise.all([
         apiFetch('/institutes/dashboard/summary'),
         apiFetch(`/institutes?search=${encodeURIComponent(search)}&status=${statusFilter}`),
-        apiFetch('/franchises?limit=100').catch(() => ({ success: false, data: null })),
       ]);
       setMetrics(metricsRes.data);
       setInstitutes(institutesRes.data?.institutes || []);
-      if (franchisesRes.success && Array.isArray(franchisesRes.data?.franchises)) {
-        setAvailableFranchises(franchisesRes.data.franchises);
-      }
     } catch (err: any) {
       console.error('Failed to load institutes', err);
       showNotification('error', err.message || 'Failed to load institute directory');
@@ -256,6 +366,18 @@ export const SuperAdminDashboard: React.FC = () => {
       setCreateError('Institute name is required');
       return;
     }
+    if (nameCollisionError) {
+      setCreateError(nameCollisionError);
+      return;
+    }
+    if (emailConflictError) {
+      setCreateError(emailConflictError);
+      return;
+    }
+    if (phoneConflictWarning && !confirmPhoneDuplicate) {
+      setCreateError('Please confirm the shared institute phone number before continuing.');
+      return;
+    }
     if (!newInst.adminFullName.trim()) {
       setCreateError('Academic Admin full name is required');
       return;
@@ -287,6 +409,7 @@ export const SuperAdminDashboard: React.FC = () => {
         phone: newInst.phone.trim() || undefined,
         email: newInst.email.trim() || undefined,
         franchiseId: newInst.franchiseId || undefined,
+        confirmDuplicatePhone: confirmPhoneDuplicate || undefined,
         adminFullName: newInst.adminFullName.trim(),
         adminEmail: newInst.adminEmail.trim().toLowerCase(),
         adminPhone: newInst.adminPhone.trim() || undefined,
@@ -321,9 +444,21 @@ export const SuperAdminDashboard: React.FC = () => {
           adminInitialPassword: '',
           confirmPassword: '',
         });
+        setEmailConflictError(null);
+        setNameConflictWarning(null);
+        setNameCollisionError(null);
+        setPhoneConflictWarning(null);
+        setConfirmPhoneDuplicate(false);
         fetchData();
         showNotification('success', `Institute "${res.data.institute.name}" created successfully with code ${res.data.institute.code}`);
       } else {
+        if (res.conflictField === 'email') {
+          setEmailConflictError(res.error);
+        } else if (res.conflictField === 'name') {
+          setNameCollisionError(res.error);
+        } else if (res.conflictField === 'phone' || res.warningType === 'DUPLICATE_PHONE') {
+          setPhoneConflictWarning(res.error);
+        }
         setCreateError(res.error || 'Failed to create institute');
       }
     } catch (err: any) {
@@ -491,11 +626,10 @@ export const SuperAdminDashboard: React.FC = () => {
       {notification && (
         <div className="fixed top-5 right-5 z-50 max-w-md animate-in fade-in slide-in-from-top-4 duration-300">
           <div
-            className={`p-4 rounded-2xl shadow-xl border flex items-start gap-3 ${
-              notification.type === 'success'
+            className={`p-4 rounded-2xl shadow-xl border flex items-start gap-3 ${notification.type === 'success'
                 ? 'bg-emerald-50 border-emerald-300 text-emerald-900'
                 : 'bg-rose-50 border-rose-300 text-rose-900'
-            }`}
+              }`}
           >
             {notification.type === 'success' ? (
               <CheckCircle className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
@@ -522,7 +656,7 @@ export const SuperAdminDashboard: React.FC = () => {
           </p>
         </div>
         <button
-          onClick={() => setShowCreateModal(true)}
+          onClick={handleOpenCreateModal}
           className="inline-flex items-center gap-2 bg-[#006FFF] hover:bg-[#0058D4] text-white text-sm font-semibold px-4 py-2.5 rounded-xl shadow-md shadow-[#006FFF]/20 transition-all self-start active:scale-95"
         >
           <Plus className="w-4 h-4" /> Add New Institute
@@ -637,19 +771,27 @@ export const SuperAdminDashboard: React.FC = () => {
                 </tr>
               ) : (
                 institutes.map((inst) => (
-                  <tr key={inst.id} className="hover:bg-[#FFFFFF] transition-colors">
+                  <tr
+                    key={inst.id}
+                    onClick={() => handleOpenDetails(inst.id)}
+                    className="hover:bg-blue-50/50 cursor-pointer transition-colors group"
+                    title={`Click to view details for ${inst.name}`}
+                  >
                     <td className="py-3.5 px-4">
-                      <div className="font-bold text-[#0F172A] text-sm">{inst.name}</div>
+                      <div className="font-bold text-[#0F172A] text-sm group-hover:text-[#006FFF] transition-colors flex items-center gap-1.5">
+                        <span>{inst.name}</span>
+                        <Eye className="w-3.5 h-3.5 text-[#006FFF] opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+                      </div>
                       {inst.email && <div className="text-[11px] text-[#64748B]">{inst.email}</div>}
                     </td>
                     <td className="py-3.5 px-4 font-mono font-semibold text-[#006FFF] whitespace-nowrap">
-                      <span className="bg-[#F8FAFC] border border-[#E2E8F0] px-2.5 py-1 rounded text-xs whitespace-nowrap inline-block tracking-wide">
+                      <span className="bg-[#F8FAFC] border border-[#E2E8F0] px-2.5 py-1 rounded text-xs whitespace-nowrap inline-block tracking-wide group-hover:border-blue-300 transition-colors">
                         {inst.code}
                       </span>
                     </td>
                     <td className="py-3.5 px-4 whitespace-nowrap">
                       {inst.franchise ? (
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-blue-50 text-[#006FFF] border border-blue-200" title={`Franchise: ${inst.franchise.name} (${inst.franchise.code})`}>
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-blue-50 text-[#006FFF] border border-blue-200 group-hover:bg-blue-100/70 transition-colors" title={`Franchise: ${inst.franchise.name} (${inst.franchise.code})`}>
                           <Building2 className="w-3.5 h-3.5 text-[#006FFF]" />
                           {inst.franchise.code} - {inst.franchise.name}
                         </span>
@@ -686,7 +828,11 @@ export const SuperAdminDashboard: React.FC = () => {
                       <div className="inline-flex items-center gap-2">
                         {/* View Details Action */}
                         <button
-                          onClick={() => handleOpenDetails(inst.id)}
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleOpenDetails(inst.id);
+                          }}
                           className="inline-flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg border border-[#E2E8F0] text-[#006FFF] hover:bg-[#F8FAFC] transition"
                         >
                           <Eye className="w-3.5 h-3.5" /> View Details
@@ -694,12 +840,15 @@ export const SuperAdminDashboard: React.FC = () => {
 
                         {/* Suspend or Activate Action */}
                         <button
-                          onClick={() => setStatusActionTarget(inst)}
-                          className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition ${
-                            inst.status === 'ACTIVE'
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setStatusActionTarget(inst);
+                          }}
+                          className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition ${inst.status === 'ACTIVE'
                               ? 'border-rose-300 text-rose-800 hover:bg-rose-50'
                               : 'border-emerald-300 text-emerald-800 hover:bg-emerald-50'
-                          }`}
+                            }`}
                         >
                           {inst.status === 'ACTIVE' ? 'Suspend' : 'Activate'}
                         </button>
@@ -730,7 +879,7 @@ export const SuperAdminDashboard: React.FC = () => {
                 </div>
               </div>
               <button
-                onClick={() => setShowCreateModal(false)}
+                onClick={handleCloseCreateModal}
                 className="text-[#94A3B8] hover:text-[#0F172A] p-1.5 rounded-xl hover:bg-[#F8FAFC] transition"
               >
                 <X className="w-5 h-5" />
@@ -764,28 +913,84 @@ export const SuperAdminDashboard: React.FC = () => {
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                   {/* Franchise Center Association Field */}
-                  <div className="sm:col-span-2 p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1.5">
+                  <div className="sm:col-span-2 p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
                     <div className="flex items-center justify-between">
                       <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
                         <Building2 className="w-3.5 h-3.5 text-[#006FFF]" />
                         Attach to Franchise Center (Optional)
                       </label>
-                      <span className="text-[10px] font-semibold text-slate-500 bg-white px-2 py-0.5 rounded border border-slate-200">
-                        Optional
-                      </span>
+                      <div className="flex items-center gap-2">
+                        {franchiseOptionsLoading && (
+                          <span className="text-[10px] text-blue-600 flex items-center gap-1 font-medium">
+                            <RefreshCw className="w-2.5 h-2.5 animate-spin" />
+                            Loading...
+                          </span>
+                        )}
+                        <button
+                          type="button"
+                          onClick={loadAvailableFranchises}
+                          disabled={franchiseOptionsLoading}
+                          title="Refresh franchise list"
+                          className="text-[10px] font-semibold text-slate-500 hover:text-blue-600 bg-white hover:bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 transition flex items-center gap-1 disabled:opacity-50"
+                        >
+                          <RefreshCw className={`w-2.5 h-2.5 ${franchiseOptionsLoading ? 'animate-spin' : ''}`} />
+                          Refresh
+                        </button>
+                        <span className="text-[10px] font-semibold text-slate-500 bg-white px-2 py-0.5 rounded border border-slate-200">
+                          Optional
+                        </span>
+                      </div>
                     </div>
-                    <select
-                      value={newInst.franchiseId}
-                      onChange={(e) => setNewInst({ ...newInst, franchiseId: e.target.value })}
-                      className="w-full bg-white border border-[#E2E8F0] rounded-xl px-3 py-2 text-xs text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#006FFF]/20"
-                    >
-                      <option value="">Standalone / Independent Institute (No Franchise)</option>
-                      {availableFranchises.map((fr: any) => (
-                        <option key={fr.id} value={fr.id}>
-                          {fr.code} — {fr.name} ({fr.city || 'Tamil Nadu'}) — Owner: {fr.ownerName}
-                        </option>
-                      ))}
-                    </select>
+
+                    {franchiseOptionsError ? (
+                      <div className="p-2.5 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <AlertTriangle className="w-4 h-4 shrink-0 text-rose-500" />
+                          <span className="truncate">{franchiseOptionsError}</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={loadAvailableFranchises}
+                          disabled={franchiseOptionsLoading}
+                          className="px-2.5 py-1 text-xs font-semibold bg-rose-600 hover:bg-rose-700 text-white rounded-md flex items-center gap-1 shadow-sm transition shrink-0 active:scale-95 disabled:opacity-50"
+                        >
+                          <RefreshCw className={`w-3 h-3 ${franchiseOptionsLoading ? 'animate-spin' : ''}`} />
+                          Retry
+                        </button>
+                      </div>
+                    ) : (
+                      <>
+                        <select
+                          value={newInst.franchiseId}
+                          onChange={(e) => setNewInst({ ...newInst, franchiseId: e.target.value })}
+                          disabled={franchiseOptionsLoading}
+                          className="w-full bg-white border border-[#E2E8F0] rounded-xl px-3 py-2 text-xs text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#006FFF]/20 disabled:bg-slate-100 disabled:text-slate-400"
+                        >
+                          <option value="">Standalone / Independent Institute (No Franchise)</option>
+                          {franchiseOptionsLoading && availableFranchises.length === 0 && (
+                            <option disabled value="__loading">Loading franchise centres...</option>
+                          )}
+                          {availableFranchises.map((fr) => {
+                            const statusLabel = fr.status === 'ACTIVE' ? 'Active' : fr.status || 'Unknown';
+                            const location = fr.city || fr.state || 'Tamil Nadu';
+                            const owner = fr.ownerName || 'Unassigned';
+                            return (
+                              <option key={fr.id} value={fr.id}>
+                                {fr.code} — {fr.name} ({location}) — Owner: {owner} [{statusLabel}]
+                              </option>
+                            );
+                          })}
+                        </select>
+
+                        {!franchiseOptionsLoading && availableFranchises.length === 0 && (
+                          <div className="p-2 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-[11px] flex items-center gap-1.5">
+                            <Info className="w-3.5 h-3.5 shrink-0 text-amber-600" />
+                            <span>No franchise centres registered yet. You can create a standalone institute, or create a franchise center in Franchise Management.</span>
+                          </div>
+                        )}
+                      </>
+                    )}
+
                     <p className="text-[10px] text-slate-500">
                       If selected, this institute campus will be attached directly to the Franchisee Admin's center.
                     </p>
@@ -799,10 +1004,28 @@ export const SuperAdminDashboard: React.FC = () => {
                       type="text"
                       required
                       value={newInst.name}
-                      onChange={(e) => setNewInst({ ...newInst, name: e.target.value })}
+                      onChange={(e) => {
+                        setNewInst({ ...newInst, name: e.target.value });
+                        if (nameCollisionError) setNameCollisionError(null);
+                      }}
+                      onBlur={() => runDuplicateCheck('name')}
                       placeholder="e.g. Cambridge Academy of Sciences"
-                      className="w-full bg-[#FFFFFF] border border-[#E2E8F0] rounded-xl px-3.5 py-2.5 text-xs text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#006FFF]/20"
+                      className={`w-full bg-[#FFFFFF] border rounded-xl px-3.5 py-2.5 text-xs text-[#0F172A] focus:outline-none focus:ring-2 ${
+                        nameCollisionError ? 'border-rose-400 focus:ring-rose-400/20' : 'border-[#E2E8F0] focus:ring-[#006FFF]/20'
+                      }`}
                     />
+                    {nameCollisionError && (
+                      <div className="text-rose-600 text-[11px] mt-1.5 flex items-start gap-1.5 font-medium">
+                        <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5 text-rose-500" />
+                        <span>{nameCollisionError}</span>
+                      </div>
+                    )}
+                    {nameConflictWarning && !nameCollisionError && (
+                      <div className="text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-2 text-[11px] mt-1.5 flex items-start gap-1.5 font-medium">
+                        <Info className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
+                        <span>{nameConflictWarning}</span>
+                      </div>
+                    )}
                   </div>
 
                   <div>
@@ -832,10 +1055,22 @@ export const SuperAdminDashboard: React.FC = () => {
                     <input
                       type="email"
                       value={newInst.email}
-                      onChange={(e) => setNewInst({ ...newInst, email: e.target.value })}
+                      onChange={(e) => {
+                        setNewInst({ ...newInst, email: e.target.value });
+                        if (emailConflictError) setEmailConflictError(null);
+                      }}
+                      onBlur={() => runDuplicateCheck('email')}
                       placeholder="contact@institute.edu"
-                      className="w-full bg-[#FFFFFF] border border-[#E2E8F0] rounded-xl px-3.5 py-2.5 text-xs text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#006FFF]/20"
+                      className={`w-full bg-[#FFFFFF] border rounded-xl px-3.5 py-2.5 text-xs text-[#0F172A] focus:outline-none focus:ring-2 ${
+                        emailConflictError ? 'border-rose-400 focus:ring-rose-400/20' : 'border-[#E2E8F0] focus:ring-[#006FFF]/20'
+                      }`}
                     />
+                    {emailConflictError && (
+                      <div className="text-rose-600 text-[11px] mt-1.5 flex items-start gap-1.5 font-medium">
+                        <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5 text-rose-500" />
+                        <span>{emailConflictError}</span>
+                      </div>
+                    )}
                   </div>
 
                   <div>
@@ -843,10 +1078,36 @@ export const SuperAdminDashboard: React.FC = () => {
                     <input
                       type="tel"
                       value={newInst.phone}
-                      onChange={(e) => setNewInst({ ...newInst, phone: e.target.value })}
+                      onChange={(e) => {
+                        setNewInst({ ...newInst, phone: e.target.value });
+                        if (phoneConflictWarning) {
+                          setPhoneConflictWarning(null);
+                          setConfirmPhoneDuplicate(false);
+                        }
+                      }}
+                      onBlur={() => runDuplicateCheck('phone')}
                       placeholder="+91 98765 43210"
-                      className="w-full bg-[#FFFFFF] border border-[#E2E8F0] rounded-xl px-3.5 py-2.5 text-xs text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#006FFF]/20"
+                      className={`w-full bg-[#FFFFFF] border rounded-xl px-3.5 py-2.5 text-xs text-[#0F172A] focus:outline-none focus:ring-2 ${
+                        phoneConflictWarning && !confirmPhoneDuplicate ? 'border-amber-400 focus:ring-amber-400/20' : 'border-[#E2E8F0] focus:ring-[#006FFF]/20'
+                      }`}
                     />
+                    {phoneConflictWarning && (
+                      <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-900 mt-2 space-y-2">
+                        <div className="flex items-start gap-1.5 font-medium">
+                          <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                          <span>{phoneConflictWarning}</span>
+                        </div>
+                        <label className="flex items-center gap-2 cursor-pointer font-bold text-amber-950 text-[11px] pt-1.5 border-t border-amber-200/80">
+                          <input
+                            type="checkbox"
+                            checked={confirmPhoneDuplicate}
+                            onChange={(e) => setConfirmPhoneDuplicate(e.target.checked)}
+                            className="rounded border-amber-400 text-[#006FFF] focus:ring-[#006FFF]/20"
+                          />
+                          <span>I confirm this institute uses this shared contact phone number</span>
+                        </label>
+                      </div>
+                    )}
                   </div>
 
                   <div className="sm:col-span-2">
@@ -1006,11 +1267,10 @@ export const SuperAdminDashboard: React.FC = () => {
                         value={newInst.confirmPassword}
                         onChange={(e) => setNewInst({ ...newInst, confirmPassword: e.target.value })}
                         placeholder="Re-enter password"
-                        className={`w-full bg-[#FFFFFF] border rounded-xl pl-3.5 pr-10 py-2.5 text-xs text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#006FFF]/20 ${
-                          newInst.confirmPassword && newInst.adminInitialPassword !== newInst.confirmPassword
+                        className={`w-full bg-[#FFFFFF] border rounded-xl pl-3.5 pr-10 py-2.5 text-xs text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#006FFF]/20 ${newInst.confirmPassword && newInst.adminInitialPassword !== newInst.confirmPassword
                             ? 'border-rose-400 focus:ring-rose-400'
                             : 'border-[#E2E8F0]'
-                        }`}
+                          }`}
                       />
                       <button
                         type="button"
@@ -1030,14 +1290,14 @@ export const SuperAdminDashboard: React.FC = () => {
               <div className="pt-4 flex items-center justify-end gap-3 border-t border-[#F1F5F9]">
                 <button
                   type="button"
-                  onClick={() => setShowCreateModal(false)}
+                  onClick={handleCloseCreateModal}
                   className="px-4 py-2.5 text-xs font-semibold text-[#64748B] hover:text-[#0F172A] transition rounded-xl"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  disabled={createLoading}
+                  disabled={createLoading || Boolean(emailConflictError) || Boolean(nameCollisionError) || (Boolean(phoneConflictWarning) && !confirmPhoneDuplicate)}
                   className="bg-[#006FFF] hover:bg-[#0058D4] text-white text-xs font-semibold px-5 py-2.5 rounded-xl shadow-md shadow-[#006FFF]/20 transition disabled:opacity-50 flex items-center gap-2"
                 >
                   {createLoading ? (
@@ -1157,11 +1417,10 @@ export const SuperAdminDashboard: React.FC = () => {
                     </h2>
                     {detailData?.institute.status && (
                       <span
-                        className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                          detailData.institute.status === 'ACTIVE'
+                        className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${detailData.institute.status === 'ACTIVE'
                             ? 'bg-emerald-50 text-emerald-800 border border-emerald-300'
                             : 'bg-rose-50 text-rose-800 border border-rose-300'
-                        }`}
+                          }`}
                       >
                         {detailData.institute.status}
                       </span>
@@ -1240,11 +1499,10 @@ export const SuperAdminDashboard: React.FC = () => {
                         onClick={() => {
                           setStatusActionTarget(detailData.institute);
                         }}
-                        className={`text-xs font-semibold px-2.5 py-1 rounded-lg border transition ${
-                          detailData.institute.status === 'ACTIVE'
+                        className={`text-xs font-semibold px-2.5 py-1 rounded-lg border transition ${detailData.institute.status === 'ACTIVE'
                             ? 'border-rose-300 text-rose-800 hover:bg-rose-50'
                             : 'border-emerald-300 text-emerald-800 hover:bg-emerald-50'
-                        }`}
+                          }`}
                       >
                         {detailData.institute.status === 'ACTIVE' ? 'Suspend Institute' : 'Activate Institute'}
                       </button>
@@ -1578,22 +1836,20 @@ export const SuperAdminDashboard: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setResetPassMode('AUTO')}
-                    className={`py-2 px-3 rounded-xl border text-xs font-semibold transition ${
-                      resetPassMode === 'AUTO'
+                    className={`py-2 px-3 rounded-xl border text-xs font-semibold transition ${resetPassMode === 'AUTO'
                         ? 'bg-[#006FFF] text-white border-[#006FFF]'
                         : 'bg-[#FFFFFF] text-[#006FFF] border-[#E2E8F0] hover:bg-[#F8FAFC]'
-                    }`}
+                      }`}
                   >
                     Auto-Generate
                   </button>
                   <button
                     type="button"
                     onClick={() => setResetPassMode('MANUAL')}
-                    className={`py-2 px-3 rounded-xl border text-xs font-semibold transition ${
-                      resetPassMode === 'MANUAL'
+                    className={`py-2 px-3 rounded-xl border text-xs font-semibold transition ${resetPassMode === 'MANUAL'
                         ? 'bg-[#006FFF] text-white border-[#006FFF]'
                         : 'bg-[#FFFFFF] text-[#006FFF] border-[#E2E8F0] hover:bg-[#F8FAFC]'
-                    }`}
+                      }`}
                   >
                     Set Manually
                   </button>
@@ -1750,11 +2006,10 @@ export const SuperAdminDashboard: React.FC = () => {
           <div className="bg-white border border-[#E2E8F0] rounded-3xl w-full max-w-md p-6 shadow-2xl text-[#0F172A]">
             <div className="flex items-center gap-3 pb-4 border-b border-[#F1F5F9]">
               <div
-                className={`w-10 h-10 rounded-2xl flex items-center justify-center ${
-                  statusActionTarget.status === 'ACTIVE'
+                className={`w-10 h-10 rounded-2xl flex items-center justify-center ${statusActionTarget.status === 'ACTIVE'
                     ? 'bg-rose-50 border border-rose-200 text-rose-800'
                     : 'bg-emerald-50 border border-emerald-200 text-emerald-800'
-                }`}
+                  }`}
               >
                 <AlertTriangle className="w-5 h-5" />
               </div>
@@ -1796,11 +2051,10 @@ export const SuperAdminDashboard: React.FC = () => {
                 type="button"
                 onClick={handleConfirmStatusToggle}
                 disabled={statusUpdating}
-                className={`text-xs font-semibold px-4 py-2 rounded-xl text-white transition shadow-sm flex items-center gap-1.5 ${
-                  statusActionTarget.status === 'ACTIVE'
+                className={`text-xs font-semibold px-4 py-2 rounded-xl text-white transition shadow-sm flex items-center gap-1.5 ${statusActionTarget.status === 'ACTIVE'
                     ? 'bg-rose-700 hover:bg-rose-800'
                     : 'bg-emerald-700 hover:bg-emerald-800'
-                }`}
+                  }`}
               >
                 {statusUpdating ? (
                   <>
