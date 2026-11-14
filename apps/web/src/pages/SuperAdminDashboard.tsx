@@ -9,6 +9,7 @@ import {
   Search,
   CheckCircle,
   AlertTriangle,
+  AlertCircle,
   GraduationCap,
   Layers,
   Phone,
@@ -158,6 +159,82 @@ export const SuperAdminDashboard: React.FC = () => {
     }
   };
 
+  // Duplicate validation and collision states
+  const [emailConflictError, setEmailConflictError] = useState<string | null>(null);
+  const [nameConflictWarning, setNameConflictWarning] = useState<string | null>(null);
+  const [nameCollisionError, setNameCollisionError] = useState<string | null>(null);
+  const [phoneConflictWarning, setPhoneConflictWarning] = useState<string | null>(null);
+  const [confirmPhoneDuplicate, setConfirmPhoneDuplicate] = useState(false);
+  const [, setValidatingField] = useState<string | null>(null);
+
+  const runDuplicateCheck = async (field?: 'email' | 'name' | 'phone') => {
+    try {
+      if (field) setValidatingField(field);
+      const res = await apiFetch('/institutes/check-duplicates', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: newInst.name.trim() || undefined,
+          email: newInst.email.trim() || undefined,
+          phone: newInst.phone.trim() || undefined,
+          franchiseId: newInst.franchiseId || undefined,
+          city: newInst.city.trim() || undefined,
+        }),
+      });
+
+      if (res.success && res.data) {
+        if (res.data.emailConflict?.isDuplicate) {
+          setEmailConflictError(res.data.emailConflict.message || 'Duplicate email detected');
+        } else {
+          setEmailConflictError(null);
+        }
+
+        if (res.data.nameConflict?.isDuplicate) {
+          if (!res.data.nameConflict.allowCreation) {
+            setNameCollisionError(res.data.nameConflict.message || 'Name collision detected in same center');
+            setNameConflictWarning(null);
+          } else {
+            setNameCollisionError(null);
+            setNameConflictWarning(res.data.nameConflict.warning || null);
+          }
+        } else {
+          setNameCollisionError(null);
+          setNameConflictWarning(null);
+        }
+
+        if (res.data.phoneConflict?.isDuplicate) {
+          setPhoneConflictWarning(res.data.phoneConflict.warning || null);
+        } else {
+          setPhoneConflictWarning(null);
+          setConfirmPhoneDuplicate(false);
+        }
+      }
+    } catch {
+      // Non-blocking background duplicate verification
+    } finally {
+      setValidatingField(null);
+    }
+  };
+
+  const handleOpenCreateModal = () => {
+    setCreateError(null);
+    setEmailConflictError(null);
+    setNameConflictWarning(null);
+    setNameCollisionError(null);
+    setPhoneConflictWarning(null);
+    setConfirmPhoneDuplicate(false);
+    setShowCreateModal(true);
+  };
+
+  const handleCloseCreateModal = () => {
+    setShowCreateModal(false);
+    setCreateError(null);
+    setEmailConflictError(null);
+    setNameConflictWarning(null);
+    setNameCollisionError(null);
+    setPhoneConflictWarning(null);
+    setConfirmPhoneDuplicate(false);
+  };
+
   // Success Created Institute Modal State
   const [createdInstitute, setCreatedInstitute] = useState<{
     name: string;
@@ -289,6 +366,18 @@ export const SuperAdminDashboard: React.FC = () => {
       setCreateError('Institute name is required');
       return;
     }
+    if (nameCollisionError) {
+      setCreateError(nameCollisionError);
+      return;
+    }
+    if (emailConflictError) {
+      setCreateError(emailConflictError);
+      return;
+    }
+    if (phoneConflictWarning && !confirmPhoneDuplicate) {
+      setCreateError('Please confirm the shared institute phone number before continuing.');
+      return;
+    }
     if (!newInst.adminFullName.trim()) {
       setCreateError('Academic Admin full name is required');
       return;
@@ -320,6 +409,7 @@ export const SuperAdminDashboard: React.FC = () => {
         phone: newInst.phone.trim() || undefined,
         email: newInst.email.trim() || undefined,
         franchiseId: newInst.franchiseId || undefined,
+        confirmDuplicatePhone: confirmPhoneDuplicate || undefined,
         adminFullName: newInst.adminFullName.trim(),
         adminEmail: newInst.adminEmail.trim().toLowerCase(),
         adminPhone: newInst.adminPhone.trim() || undefined,
@@ -354,9 +444,21 @@ export const SuperAdminDashboard: React.FC = () => {
           adminInitialPassword: '',
           confirmPassword: '',
         });
+        setEmailConflictError(null);
+        setNameConflictWarning(null);
+        setNameCollisionError(null);
+        setPhoneConflictWarning(null);
+        setConfirmPhoneDuplicate(false);
         fetchData();
         showNotification('success', `Institute "${res.data.institute.name}" created successfully with code ${res.data.institute.code}`);
       } else {
+        if (res.conflictField === 'email') {
+          setEmailConflictError(res.error);
+        } else if (res.conflictField === 'name') {
+          setNameCollisionError(res.error);
+        } else if (res.conflictField === 'phone' || res.warningType === 'DUPLICATE_PHONE') {
+          setPhoneConflictWarning(res.error);
+        }
         setCreateError(res.error || 'Failed to create institute');
       }
     } catch (err: any) {
@@ -554,7 +656,7 @@ export const SuperAdminDashboard: React.FC = () => {
           </p>
         </div>
         <button
-          onClick={() => setShowCreateModal(true)}
+          onClick={handleOpenCreateModal}
           className="inline-flex items-center gap-2 bg-[#006FFF] hover:bg-[#0058D4] text-white text-sm font-semibold px-4 py-2.5 rounded-xl shadow-md shadow-[#006FFF]/20 transition-all self-start active:scale-95"
         >
           <Plus className="w-4 h-4" /> Add New Institute
@@ -777,7 +879,7 @@ export const SuperAdminDashboard: React.FC = () => {
                 </div>
               </div>
               <button
-                onClick={() => setShowCreateModal(false)}
+                onClick={handleCloseCreateModal}
                 className="text-[#94A3B8] hover:text-[#0F172A] p-1.5 rounded-xl hover:bg-[#F8FAFC] transition"
               >
                 <X className="w-5 h-5" />
@@ -902,10 +1004,28 @@ export const SuperAdminDashboard: React.FC = () => {
                       type="text"
                       required
                       value={newInst.name}
-                      onChange={(e) => setNewInst({ ...newInst, name: e.target.value })}
+                      onChange={(e) => {
+                        setNewInst({ ...newInst, name: e.target.value });
+                        if (nameCollisionError) setNameCollisionError(null);
+                      }}
+                      onBlur={() => runDuplicateCheck('name')}
                       placeholder="e.g. Cambridge Academy of Sciences"
-                      className="w-full bg-[#FFFFFF] border border-[#E2E8F0] rounded-xl px-3.5 py-2.5 text-xs text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#006FFF]/20"
+                      className={`w-full bg-[#FFFFFF] border rounded-xl px-3.5 py-2.5 text-xs text-[#0F172A] focus:outline-none focus:ring-2 ${
+                        nameCollisionError ? 'border-rose-400 focus:ring-rose-400/20' : 'border-[#E2E8F0] focus:ring-[#006FFF]/20'
+                      }`}
                     />
+                    {nameCollisionError && (
+                      <div className="text-rose-600 text-[11px] mt-1.5 flex items-start gap-1.5 font-medium">
+                        <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5 text-rose-500" />
+                        <span>{nameCollisionError}</span>
+                      </div>
+                    )}
+                    {nameConflictWarning && !nameCollisionError && (
+                      <div className="text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-2 text-[11px] mt-1.5 flex items-start gap-1.5 font-medium">
+                        <Info className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
+                        <span>{nameConflictWarning}</span>
+                      </div>
+                    )}
                   </div>
 
                   <div>
@@ -935,10 +1055,22 @@ export const SuperAdminDashboard: React.FC = () => {
                     <input
                       type="email"
                       value={newInst.email}
-                      onChange={(e) => setNewInst({ ...newInst, email: e.target.value })}
+                      onChange={(e) => {
+                        setNewInst({ ...newInst, email: e.target.value });
+                        if (emailConflictError) setEmailConflictError(null);
+                      }}
+                      onBlur={() => runDuplicateCheck('email')}
                       placeholder="contact@institute.edu"
-                      className="w-full bg-[#FFFFFF] border border-[#E2E8F0] rounded-xl px-3.5 py-2.5 text-xs text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#006FFF]/20"
+                      className={`w-full bg-[#FFFFFF] border rounded-xl px-3.5 py-2.5 text-xs text-[#0F172A] focus:outline-none focus:ring-2 ${
+                        emailConflictError ? 'border-rose-400 focus:ring-rose-400/20' : 'border-[#E2E8F0] focus:ring-[#006FFF]/20'
+                      }`}
                     />
+                    {emailConflictError && (
+                      <div className="text-rose-600 text-[11px] mt-1.5 flex items-start gap-1.5 font-medium">
+                        <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5 text-rose-500" />
+                        <span>{emailConflictError}</span>
+                      </div>
+                    )}
                   </div>
 
                   <div>
@@ -946,10 +1078,36 @@ export const SuperAdminDashboard: React.FC = () => {
                     <input
                       type="tel"
                       value={newInst.phone}
-                      onChange={(e) => setNewInst({ ...newInst, phone: e.target.value })}
+                      onChange={(e) => {
+                        setNewInst({ ...newInst, phone: e.target.value });
+                        if (phoneConflictWarning) {
+                          setPhoneConflictWarning(null);
+                          setConfirmPhoneDuplicate(false);
+                        }
+                      }}
+                      onBlur={() => runDuplicateCheck('phone')}
                       placeholder="+91 98765 43210"
-                      className="w-full bg-[#FFFFFF] border border-[#E2E8F0] rounded-xl px-3.5 py-2.5 text-xs text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#006FFF]/20"
+                      className={`w-full bg-[#FFFFFF] border rounded-xl px-3.5 py-2.5 text-xs text-[#0F172A] focus:outline-none focus:ring-2 ${
+                        phoneConflictWarning && !confirmPhoneDuplicate ? 'border-amber-400 focus:ring-amber-400/20' : 'border-[#E2E8F0] focus:ring-[#006FFF]/20'
+                      }`}
                     />
+                    {phoneConflictWarning && (
+                      <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-900 mt-2 space-y-2">
+                        <div className="flex items-start gap-1.5 font-medium">
+                          <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                          <span>{phoneConflictWarning}</span>
+                        </div>
+                        <label className="flex items-center gap-2 cursor-pointer font-bold text-amber-950 text-[11px] pt-1.5 border-t border-amber-200/80">
+                          <input
+                            type="checkbox"
+                            checked={confirmPhoneDuplicate}
+                            onChange={(e) => setConfirmPhoneDuplicate(e.target.checked)}
+                            className="rounded border-amber-400 text-[#006FFF] focus:ring-[#006FFF]/20"
+                          />
+                          <span>I confirm this institute uses this shared contact phone number</span>
+                        </label>
+                      </div>
+                    )}
                   </div>
 
                   <div className="sm:col-span-2">
@@ -1132,14 +1290,14 @@ export const SuperAdminDashboard: React.FC = () => {
               <div className="pt-4 flex items-center justify-end gap-3 border-t border-[#F1F5F9]">
                 <button
                   type="button"
-                  onClick={() => setShowCreateModal(false)}
+                  onClick={handleCloseCreateModal}
                   className="px-4 py-2.5 text-xs font-semibold text-[#64748B] hover:text-[#0F172A] transition rounded-xl"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  disabled={createLoading}
+                  disabled={createLoading || Boolean(emailConflictError) || Boolean(nameCollisionError) || (Boolean(phoneConflictWarning) && !confirmPhoneDuplicate)}
                   className="bg-[#006FFF] hover:bg-[#0058D4] text-white text-xs font-semibold px-5 py-2.5 rounded-xl shadow-md shadow-[#006FFF]/20 transition disabled:opacity-50 flex items-center gap-2"
                 >
                   {createLoading ? (

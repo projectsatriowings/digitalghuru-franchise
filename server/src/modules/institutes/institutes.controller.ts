@@ -14,9 +14,15 @@ export const createInstituteSchema = z.object({
   city: z.string().optional(),
   state: z.string().optional(),
   postalCode: z.string().optional(),
-  phone: z.string().optional(),
-  email: z.string().email('Invalid institute email').optional().or(z.literal('')),
+  phone: z.string().optional().or(z.literal('')),
+  email: z.preprocess(
+    (val) => (typeof val === 'string' ? val.trim() : val),
+    z.string().email('Invalid institute email').optional().nullable().or(z.literal(''))
+  ),
   franchiseId: z.string().uuid().optional().nullable(),
+  // Duplicate confirmation flags
+  confirmDuplicatePhone: z.boolean().optional(),
+  confirmDuplicateName: z.boolean().optional(),
   // Required initial Academic Admin provisioning
   adminFullName: z.string().min(2, 'Academic Admin full name is required').max(100),
   adminEmail: z.string().email('Valid Academic Admin login email is required'),
@@ -26,16 +32,176 @@ export const createInstituteSchema = z.object({
 
 export const updateInstituteSchema = z.object({
   name: z.string().min(2).optional(),
-  legalName: z.string().optional(),
-  address: z.string().optional(),
-  city: z.string().optional(),
-  state: z.string().optional(),
-  postalCode: z.string().optional(),
-  phone: z.string().optional(),
-  email: z.string().email().optional().or(z.literal('')),
+  legalName: z.string().optional().nullable(),
+  address: z.string().optional().nullable(),
+  city: z.string().optional().nullable(),
+  state: z.string().optional().nullable(),
+  postalCode: z.string().optional().nullable(),
+  phone: z.string().optional().nullable().or(z.literal('')),
+  email: z.preprocess(
+    (val) => (typeof val === 'string' ? val.trim() : val),
+    z.string().email('Invalid institute email').optional().nullable().or(z.literal(''))
+  ),
   franchiseId: z.string().uuid().optional().nullable(),
+  confirmDuplicatePhone: z.boolean().optional(),
+  confirmDuplicateName: z.boolean().optional(),
   settingsJson: z.record(z.any()).optional(),
 });
+
+export const checkDuplicatesSchema = z.object({
+  name: z.string().optional(),
+  email: z.preprocess(
+    (val) => (typeof val === 'string' ? val.trim() : val),
+    z.string().email('Invalid institute email').optional().nullable().or(z.literal(''))
+  ),
+  phone: z.string().optional(),
+  franchiseId: z.string().uuid().optional().nullable(),
+  city: z.string().optional().nullable(),
+  excludeInstituteId: z.string().uuid().optional(),
+});
+
+/**
+ * Check for duplicate institute email, name, or phone before submission
+ */
+export async function checkInstituteDuplicates(req: AuthenticatedRequest, res: Response) {
+  try {
+    const parse = checkDuplicatesSchema.safeParse(req.body);
+    if (!parse.success) {
+      return res.status(400).json({ success: false, error: parse.error.errors[0]?.message || 'Invalid parameters' });
+    }
+
+    const { name, email, phone, franchiseId, city, excludeInstituteId } = parse.data;
+
+    let emailConflict: { isDuplicate: boolean; message?: string } = { isDuplicate: false };
+    if (email && email.trim()) {
+      const normEmail = email.trim().toLowerCase();
+      const match = await prisma.institute.findFirst({
+        where: {
+          email: { equals: normEmail, mode: 'insensitive' },
+          ...(excludeInstituteId ? { NOT: { id: excludeInstituteId } } : {}),
+        },
+        select: { id: true, code: true, name: true },
+      });
+      if (match) {
+        emailConflict = {
+          isDuplicate: true,
+          message: `An institute with email '${normEmail}' already exists (${match.name} [${match.code}])`,
+        };
+      }
+    }
+
+    let nameConflict: {
+      isDuplicate: boolean;
+      isSameFranchise: boolean;
+      warning?: string;
+      message?: string;
+      allowCreation: boolean;
+    } = { isDuplicate: false, isSameFranchise: false, allowCreation: true };
+
+    if (name && name.trim()) {
+      const normName = name.trim();
+      const matches = await prisma.institute.findMany({
+        where: {
+          name: { equals: normName, mode: 'insensitive' },
+          ...(excludeInstituteId ? { NOT: { id: excludeInstituteId } } : {}),
+        },
+        include: { franchise: { select: { id: true, code: true, name: true } } },
+      });
+
+      if (matches.length > 0) {
+        const targetFranchiseId = franchiseId || null;
+        const targetCity = (city || '').trim().toLowerCase();
+
+        const sameScopeMatch = matches.find((m) => {
+          if (targetFranchiseId) {
+            return m.franchiseId === targetFranchiseId;
+          }
+          if (!m.franchiseId && !targetFranchiseId) {
+            const mCity = (m.city || '').trim().toLowerCase();
+            return mCity === targetCity || (!mCity && !targetCity);
+          }
+          return false;
+        });
+
+        if (sameScopeMatch) {
+          const scopeDesc = targetFranchiseId
+            ? `this franchise center (${sameScopeMatch.franchise?.code || ''})`
+            : `standalone campuses in ${sameScopeMatch.city || 'this location'}`;
+          nameConflict = {
+            isDuplicate: true,
+            isSameFranchise: true,
+            allowCreation: false,
+            message: `An institute named '${normName}' already exists within ${scopeDesc} (${sameScopeMatch.code}). Duplicate names in the same center are not permitted.`,
+          };
+        } else {
+          const first = matches[0];
+          const loc = [first.city, first.state].filter(Boolean).join(', ');
+          nameConflict = {
+            isDuplicate: true,
+            isSameFranchise: false,
+            allowCreation: true,
+            warning: `Notice: Another institute named '${first.name}' exists at ${loc || 'another center'} (${first.franchise?.code || 'Standalone'} — ${first.code}). Legitimate creation is permitted.`,
+          };
+        }
+      }
+    }
+
+    let phoneConflict: {
+      isDuplicate: boolean;
+      warning?: string;
+      requiresConfirmation: boolean;
+      existingInstitute?: any;
+    } = { isDuplicate: false, requiresConfirmation: false };
+
+    if (phone && phone.trim()) {
+      const cleanPhone = phone.trim();
+      const phoneDigits = cleanPhone.replace(/\D/g, '');
+      if (phoneDigits.length >= 7) {
+        const last10Digits = phoneDigits.slice(-10);
+        const queryParams: any[] = [`%${last10Digits}`];
+        let sql = `
+          SELECT id, code, name, phone, city, state
+          FROM "Institute"
+          WHERE REGEXP_REPLACE(COALESCE(phone, ''), '\\D', '', 'g') LIKE $1
+        `;
+        if (excludeInstituteId) {
+          sql += ` AND id <> $2`;
+          queryParams.push(excludeInstituteId);
+        }
+        sql += ` LIMIT 1`;
+
+        const matchingRows: any[] = await prisma.$queryRawUnsafe(sql, ...queryParams);
+        const match = matchingRows[0] || null;
+
+        if (match) {
+          const loc = [match.city, match.state].filter(Boolean).join(', ');
+          phoneConflict = {
+            isDuplicate: true,
+            requiresConfirmation: true,
+            warning: `Institute phone '${cleanPhone}' is already registered to ${match.name} (${match.code})${loc ? ` in ${loc}` : ''}. Explicit confirmation is required to use this shared phone number.`,
+            existingInstitute: {
+              id: match.id,
+              name: match.name,
+              code: match.code,
+              location: loc,
+            },
+          };
+        }
+      }
+    }
+
+    return res.json({
+      success: true,
+      data: {
+        emailConflict,
+        nameConflict,
+        phoneConflict,
+      },
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message || 'Failed to check duplicates' });
+  }
+}
 
 export const updateStatusSchema = z.object({
   status: z.enum(['ACTIVE', 'SUSPENDED', 'PENDING_SETUP']),
@@ -137,7 +303,7 @@ export async function createInstitute(req: AuthenticatedRequest, res: Response) 
 
     const data = parse.data;
 
-    // Check if admin email already exists before proceeding
+    // 1. Admin Email Validation (globally unique across users)
     const normalizedAdminEmail = data.adminEmail.trim().toLowerCase();
     const existingUser = await prisma.user.findUnique({
       where: { email: normalizedAdminEmail },
@@ -146,23 +312,27 @@ export async function createInstitute(req: AuthenticatedRequest, res: Response) 
     if (existingUser) {
       return res.status(409).json({
         success: false,
+        conflictField: 'adminEmail',
         error: `User with email '${normalizedAdminEmail}' already exists`,
       });
     }
 
-    // Check duplicate phone if provided
+    // 2. Admin Phone Validation (globally unique across users if provided)
     if (data.adminPhone && data.adminPhone.trim()) {
+      const cleanAdminPhone = data.adminPhone.trim();
       const existingPhone = await prisma.user.findUnique({
-        where: { phone: data.adminPhone.trim() },
+        where: { phone: cleanAdminPhone },
       });
       if (existingPhone) {
         return res.status(409).json({
           success: false,
-          error: `User with phone '${data.adminPhone.trim()}' already exists`,
+          conflictField: 'adminPhone',
+          error: `User with phone '${cleanAdminPhone}' already exists`,
         });
       }
     }
 
+    // 3. Institute Code Validation & Auto-generation
     let instituteCode = data.code?.toUpperCase().trim();
 
     if (!instituteCode) {
@@ -187,25 +357,154 @@ export async function createInstitute(req: AuthenticatedRequest, res: Response) 
       if (existingInst) {
         return res.status(409).json({
           success: false,
+          conflictField: 'code',
           error: `An institute with code '${instituteCode}' already exists`,
         });
       }
     }
 
-    // Execute in transaction
+    // 4. Institute Contact Email Validation (Globally unique, trimmed, case-insensitive)
+    const rawEmail = (data.email || '').trim();
+    const normalizedInstituteEmail = rawEmail ? rawEmail.toLowerCase() : null;
+
+    if (normalizedInstituteEmail) {
+      const existingInstEmail = await prisma.institute.findFirst({
+        where: {
+          email: { equals: normalizedInstituteEmail, mode: 'insensitive' },
+        },
+        select: { id: true, code: true, name: true, email: true },
+      });
+
+      if (existingInstEmail) {
+        return res.status(409).json({
+          success: false,
+          conflictField: 'email',
+          error: `An institute with email '${normalizedInstituteEmail}' already exists (${existingInstEmail.name} [${existingInstEmail.code}])`,
+        });
+      }
+    }
+
+    // 5. Institute Name Validation (Case-insensitive check within same franchise or standalone scope)
+    const trimmedName = data.name.trim();
+    const targetFranchiseId = data.franchiseId || null;
+
+    const sameNameInstitutes = await prisma.institute.findMany({
+      where: {
+        name: { equals: trimmedName, mode: 'insensitive' },
+      },
+      select: {
+        id: true,
+        code: true,
+        name: true,
+        city: true,
+        state: true,
+        franchiseId: true,
+        franchise: { select: { code: true, name: true } },
+      },
+    });
+
+    let nameWarning: string | null = null;
+    if (sameNameInstitutes.length > 0) {
+      const sameScopeMatch = sameNameInstitutes.find((inst) => {
+        if (targetFranchiseId) {
+          return inst.franchiseId === targetFranchiseId;
+        }
+        if (!inst.franchiseId && !targetFranchiseId) {
+          const instCity = (inst.city || '').trim().toLowerCase();
+          const targetCity = (data.city || '').trim().toLowerCase();
+          return instCity === targetCity || (!instCity && !targetCity);
+        }
+        return false;
+      });
+
+      if (sameScopeMatch) {
+        const scopeDesc = targetFranchiseId
+          ? `this franchise center (${sameScopeMatch.franchise?.code || ''})`
+          : `standalone campuses in ${sameScopeMatch.city || 'this location'}`;
+        return res.status(409).json({
+          success: false,
+          conflictField: 'name',
+          error: `An institute with name '${trimmedName}' already exists within ${scopeDesc} (${sameScopeMatch.code})`,
+        });
+      }
+
+      // If matching in different franchise or different location:
+      const firstMatch = sameNameInstitutes[0];
+      const loc = [firstMatch.city, firstMatch.state].filter(Boolean).join(', ');
+      nameWarning = `Notice: Another institute named '${firstMatch.name}' exists at ${loc || 'another center'} (${firstMatch.franchise?.code || 'Standalone'} — ${firstMatch.code}). Legitimate creation is permitted.`;
+    }
+
+    // 6. Institute Phone Validation (Whitespace & format normalization, duplicate warning with explicit confirmation)
+    const rawPhone = (data.phone || '').trim();
+    const normalizedPhoneDigits = rawPhone.replace(/\D/g, '');
+    let phoneWarning: string | null = null;
+
+    if (normalizedPhoneDigits.length >= 7) {
+      const last10Digits = normalizedPhoneDigits.slice(-10);
+      const matchingRows: any[] = await prisma.$queryRawUnsafe(`
+        SELECT id, code, name, phone, city, state
+        FROM "Institute"
+        WHERE REGEXP_REPLACE(COALESCE(phone, ''), '\\D', '', 'g') LIKE $1
+        LIMIT 1
+      `, `%${last10Digits}`);
+      const matchingPhoneInst = matchingRows[0] || null;
+
+      if (matchingPhoneInst) {
+        const loc = [matchingPhoneInst.city, matchingPhoneInst.state].filter(Boolean).join(', ');
+        const phoneMsg = `Institute phone '${rawPhone}' is already registered to ${matchingPhoneInst.name} (${matchingPhoneInst.code})${loc ? ` in ${loc}` : ''}.`;
+
+        if (data.confirmDuplicatePhone !== true) {
+          return res.status(409).json({
+            success: false,
+            requiresConfirmation: true,
+            warningType: 'DUPLICATE_PHONE',
+            conflictField: 'phone',
+            error: `${phoneMsg} Explicit confirmation is required to proceed with this shared phone number.`,
+            existingInstitute: {
+              id: matchingPhoneInst.id,
+              name: matchingPhoneInst.name,
+              code: matchingPhoneInst.code,
+              location: loc,
+            },
+          });
+        } else {
+          phoneWarning = `${phoneMsg} (Confirmed by administrator).`;
+        }
+      }
+    }
+
+    // 7. Execute in Transaction with Concurrency Advisory Lock on Normalized Institute Email
     const result = await prisma.$transaction(async (tx) => {
+      // Concurrency safety: acquire transaction-scoped advisory lock on hashed normalized email
+      if (normalizedInstituteEmail) {
+        await tx.$executeRawUnsafe(
+          `SELECT pg_advisory_xact_lock(hashtext($1))`,
+          `inst_email_${normalizedInstituteEmail}`
+        );
+
+        // Re-verify inside lock to prevent concurrent insert race condition
+        const doubleCheck = await tx.institute.findFirst({
+          where: {
+            email: { equals: normalizedInstituteEmail, mode: 'insensitive' },
+          },
+        });
+        if (doubleCheck) {
+          throw new Error(`An institute with email '${normalizedInstituteEmail}' already exists (${doubleCheck.name} [${doubleCheck.code}])`);
+        }
+      }
+
       const institute = await tx.institute.create({
         data: {
           code: instituteCode,
-          name: data.name.trim(),
+          name: trimmedName,
           legalName: data.legalName?.trim() || null,
           address: data.address?.trim() || null,
           city: data.city?.trim() || null,
           state: data.state?.trim() || null,
           postalCode: data.postalCode?.trim() || null,
-          phone: data.phone?.trim() || null,
-          email: data.email?.trim() || null,
-          franchiseId: data.franchiseId || null,
+          phone: rawPhone || null,
+          email: normalizedInstituteEmail,
+          franchiseId: targetFranchiseId,
           status: 'ACTIVE',
         },
       });
@@ -257,6 +556,7 @@ export async function createInstitute(req: AuthenticatedRequest, res: Response) 
     return res.status(201).json({
       success: true,
       message: 'Institute and initial Academic Admin created successfully',
+      warnings: [nameWarning, phoneWarning].filter(Boolean),
       data: {
         institute: result.institute,
         initialAdmin: {
@@ -271,11 +571,18 @@ export async function createInstitute(req: AuthenticatedRequest, res: Response) 
       },
     });
   } catch (err: any) {
+    if (err.code === 'P2002') {
+      const target = Array.isArray(err.meta?.target) ? err.meta.target.join(', ') : 'unique constraint';
+      return res.status(409).json({
+        success: false,
+        error: `A record with this ${target} already exists. Please verify institute email, code, and admin credentials.`,
+      });
+    }
     if (err.message && err.message.includes('already exists')) {
       return res.status(409).json({ success: false, error: err.message });
     }
     console.error('[Create Institute Error]', err);
-    return res.status(500).json({ success: false, error: 'Failed to create institute' });
+    return res.status(500).json({ success: false, error: err.message || 'Failed to create institute' });
   }
 }
 
@@ -379,14 +686,133 @@ export async function updateInstitute(req: AuthenticatedRequest, res: Response) 
       });
     }
 
+    const data = parse.data;
     const existing = await prisma.institute.findUnique({ where: { id } });
     if (!existing) {
       return res.status(404).json({ success: false, error: 'Institute not found' });
     }
 
+    // 1. Email check if changing email (exclude self)
+    let normalizedEmail: string | null | undefined = undefined;
+    if (data.email !== undefined) {
+      const rawEmail = (data.email || '').trim();
+      normalizedEmail = rawEmail ? rawEmail.toLowerCase() : null;
+
+      if (normalizedEmail) {
+        const conflictInst = await prisma.institute.findFirst({
+          where: {
+            email: { equals: normalizedEmail, mode: 'insensitive' },
+            NOT: { id },
+          },
+          select: { id: true, code: true, name: true, email: true },
+        });
+
+        if (conflictInst) {
+          return res.status(409).json({
+            success: false,
+            conflictField: 'email',
+            error: `An institute with email '${normalizedEmail}' already exists (${conflictInst.name} [${conflictInst.code}])`,
+          });
+        }
+      }
+    }
+
+    // 2. Name check if changing name or franchise (exclude self)
+    const targetName = data.name !== undefined ? data.name.trim() : existing.name;
+    const targetFranchiseId = data.franchiseId !== undefined ? data.franchiseId : existing.franchiseId;
+    const targetCity = data.city !== undefined ? (data.city || '').trim().toLowerCase() : (existing.city || '').trim().toLowerCase();
+
+    if (data.name !== undefined || data.franchiseId !== undefined) {
+      const sameNameInstitutes = await prisma.institute.findMany({
+        where: {
+          name: { equals: targetName, mode: 'insensitive' },
+          NOT: { id },
+        },
+        select: { id: true, code: true, name: true, city: true, franchiseId: true, franchise: { select: { code: true } } },
+      });
+
+      if (sameNameInstitutes.length > 0) {
+        const sameScopeMatch = sameNameInstitutes.find((inst) => {
+          if (targetFranchiseId) {
+            return inst.franchiseId === targetFranchiseId;
+          }
+          if (!inst.franchiseId && !targetFranchiseId) {
+            const instCity = (inst.city || '').trim().toLowerCase();
+            return instCity === targetCity || (!instCity && !targetCity);
+          }
+          return false;
+        });
+
+        if (sameScopeMatch) {
+          const scopeDesc = targetFranchiseId ? 'this franchise center' : `standalone campuses in ${sameScopeMatch.city || 'this location'}`;
+          return res.status(409).json({
+            success: false,
+            conflictField: 'name',
+            error: `An institute with name '${targetName}' already exists within ${scopeDesc} (${sameScopeMatch.code})`,
+          });
+        }
+      }
+    }
+
+    // 3. Phone check if changing phone (exclude self)
+    if (data.phone !== undefined) {
+      const rawPhone = (data.phone || '').trim();
+      const phoneDigits = rawPhone.replace(/\D/g, '');
+      if (phoneDigits.length >= 7) {
+        const last10Digits = phoneDigits.slice(-10);
+        const matchingRows: any[] = await prisma.$queryRawUnsafe(`
+          SELECT id, code, name, phone, city, state
+          FROM "Institute"
+          WHERE REGEXP_REPLACE(COALESCE(phone, ''), '\\D', '', 'g') LIKE $1
+            AND id <> $2
+          LIMIT 1
+        `, `%${last10Digits}`, id);
+        const matchingPhoneInst = matchingRows[0] || null;
+
+        if (matchingPhoneInst && data.confirmDuplicatePhone !== true) {
+          const loc = matchingPhoneInst.city ? ` in ${matchingPhoneInst.city}` : '';
+          return res.status(409).json({
+            success: false,
+            requiresConfirmation: true,
+            warningType: 'DUPLICATE_PHONE',
+            conflictField: 'phone',
+            error: `Institute phone '${rawPhone}' is already registered to ${matchingPhoneInst.name} (${matchingPhoneInst.code})${loc}. Explicit confirmation is required to proceed with this shared phone number.`,
+          });
+        }
+      }
+    }
+
+    const updatePayload: any = { ...data };
+    if (normalizedEmail !== undefined) {
+      updatePayload.email = normalizedEmail;
+    }
+    if (data.name !== undefined) {
+      updatePayload.name = data.name.trim();
+    }
+    if (data.legalName !== undefined) {
+      updatePayload.legalName = data.legalName ? data.legalName.trim() : null;
+    }
+    if (data.address !== undefined) {
+      updatePayload.address = data.address ? data.address.trim() : null;
+    }
+    if (data.city !== undefined) {
+      updatePayload.city = data.city ? data.city.trim() : null;
+    }
+    if (data.state !== undefined) {
+      updatePayload.state = data.state ? data.state.trim() : null;
+    }
+    if (data.postalCode !== undefined) {
+      updatePayload.postalCode = data.postalCode ? data.postalCode.trim() : null;
+    }
+    if (data.phone !== undefined) {
+      updatePayload.phone = data.phone ? data.phone.trim() : null;
+    }
+    delete updatePayload.confirmDuplicatePhone;
+    delete updatePayload.confirmDuplicateName;
+
     const updated = await prisma.institute.update({
       where: { id },
-      data: parse.data,
+      data: updatePayload,
     });
 
     // Record Audit Log
@@ -408,7 +834,15 @@ export async function updateInstitute(req: AuthenticatedRequest, res: Response) 
       data: { institute: updated },
     });
   } catch (err: any) {
-    return res.status(500).json({ success: false, error: 'Failed to update institute' });
+    if (err.code === 'P2002') {
+      const target = Array.isArray(err.meta?.target) ? err.meta.target.join(', ') : 'unique constraint';
+      return res.status(409).json({
+        success: false,
+        error: `A record with this ${target} already exists.`,
+      });
+    }
+    console.error('[Update Institute Error]', err);
+    return res.status(500).json({ success: false, error: err.message || 'Failed to update institute' });
   }
 }
 
