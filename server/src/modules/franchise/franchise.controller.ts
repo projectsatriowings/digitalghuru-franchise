@@ -2,7 +2,7 @@ import { Response } from 'express';
 import { prisma } from '../../prisma.js';
 import { z } from 'zod';
 import { AuthenticatedRequest } from '../../middleware/auth.js';
-import { hashPassword } from '../../utils/security.js';
+import { hashPassword, generatePermanentPassword } from '../../utils/security.js';
 import { Prisma } from '@prisma/client';
 import crypto from 'crypto';
 
@@ -17,9 +17,28 @@ export async function verifyFranchiseAccess(
   const franchise = await prisma.franchise.findUnique({
     where: { id: franchiseId },
     include: {
-      branches: true,
+      branches: {
+        include: {
+          _count: {
+            select: { students: true },
+          },
+        },
+      },
       agreements: { orderBy: { createdAt: 'desc' } },
-      ownerUser: { select: { id: true, email: true, fullName: true, phone: true } },
+      ownerUser: {
+        select: {
+          id: true,
+          email: true,
+          fullName: true,
+          phone: true,
+          role: true,
+          isActive: true,
+          mustChangePassword: true,
+          lastLoginAt: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      },
     },
   });
 
@@ -333,8 +352,14 @@ export async function generateAnnualInstallments(params: {
 const createFranchiseSchema = z.object({
   name: z.string().min(2, 'Franchise/business name is required'),
   ownerName: z.string().min(2, "Owner's full name is required"),
-  email: z.string().email('Valid email is required'),
-  phone: z.string().min(7, 'Primary mobile number is required'),
+  email: z.preprocess(
+    (val) => (typeof val === 'string' ? val.trim() : val),
+    z.string().email('Valid email is required')
+  ),
+  phone: z.preprocess(
+    (val) => (typeof val === 'string' ? val.trim() : val),
+    z.string().min(7, 'Primary mobile number is required')
+  ),
   password: z.string().min(8, 'Password must be at least 8 characters').optional(),
   address: z.string().optional().default('Main Campus Address'),
   city: z.string().optional().default('Chennai'),
@@ -401,6 +426,132 @@ const createFranchiseSchema = z.object({
   }).optional(),
 });
 
+export const checkFranchiseDuplicatesSchema = z.object({
+  email: z.preprocess(
+    (val) => (typeof val === 'string' ? val.trim() : val),
+    z.string().email('Invalid email address').optional().nullable().or(z.literal(''))
+  ),
+  phone: z.preprocess(
+    (val) => (typeof val === 'string' ? val.trim() : val),
+    z.string().optional().nullable().or(z.literal(''))
+  ),
+  code: z.string().optional().nullable().or(z.literal('')),
+  name: z.string().optional().nullable().or(z.literal('')),
+});
+
+/**
+ * Pre-validate availability of franchise email, owner phone, and franchise code
+ */
+export async function checkFranchiseDuplicates(req: AuthenticatedRequest, res: Response) {
+  try {
+    if (req.user?.role !== 'SUPER_ADMIN') {
+      return res.status(403).json({ success: false, error: 'Forbidden: Only Super Admin can check duplicates' });
+    }
+
+    const parse = checkFranchiseDuplicatesSchema.safeParse(req.body);
+    if (!parse.success) {
+      return res.status(400).json({ success: false, error: parse.error.errors[0]?.message || 'Invalid parameters' });
+    }
+
+    const { email, phone, code, name } = parse.data;
+
+    let emailConflict: { isDuplicate: boolean; model?: string; message?: string; canReuseAsOwner?: boolean } = { isDuplicate: false };
+    const normEmail = email && email.trim() ? email.trim().toLowerCase() : '';
+
+    if (normEmail) {
+      const franchiseMatch = await prisma.franchise.findFirst({
+        where: { email: { equals: normEmail, mode: 'insensitive' } },
+        select: { id: true, code: true, name: true },
+      });
+      if (franchiseMatch) {
+        emailConflict = {
+          isDuplicate: true,
+          model: 'Franchise',
+          message: `A franchise with email '${normEmail}' already exists (${franchiseMatch.name} [${franchiseMatch.code}]).`,
+          canReuseAsOwner: false,
+        };
+      } else {
+        const userMatch = await prisma.user.findFirst({
+          where: { email: { equals: normEmail, mode: 'insensitive' } },
+          select: { id: true, email: true, role: true },
+        });
+        if (userMatch) {
+          emailConflict = {
+            isDuplicate: true,
+            model: 'User',
+            message: `An existing user account was found with email '${normEmail}'. This account will be designated as the Franchise Owner.`,
+            canReuseAsOwner: true,
+          };
+        }
+      }
+    }
+
+    let phoneConflict: { isDuplicate: boolean; model?: string; message?: string } = { isDuplicate: false };
+    if (phone && phone.trim()) {
+      const cleanPhone = phone.trim();
+      const userPhoneMatch = await prisma.user.findFirst({
+        where: { phone: cleanPhone },
+        select: { id: true, email: true, role: true },
+      });
+      if (userPhoneMatch) {
+        const isSameUser = normEmail && userPhoneMatch.email?.toLowerCase() === normEmail;
+        if (!isSameUser) {
+          phoneConflict = {
+            isDuplicate: true,
+            model: 'User',
+            message: `A user account with phone '${cleanPhone}' already exists. Please provide a unique phone number.`,
+          };
+        }
+      }
+    }
+
+    let codeConflict: { isDuplicate: boolean; message?: string } = { isDuplicate: false };
+    if (code && code.trim()) {
+      const cleanCode = code.trim().toUpperCase();
+      const codeMatch = await prisma.franchise.findUnique({
+        where: { code: cleanCode },
+        select: { id: true, name: true },
+      });
+      if (codeMatch) {
+        codeConflict = {
+          isDuplicate: true,
+          message: `A franchise with code '${cleanCode}' already exists (${codeMatch.name}).`,
+        };
+      }
+    }
+
+    const hasBlockingConflict = Boolean(
+      (emailConflict.isDuplicate && emailConflict.model === 'Franchise') ||
+      codeConflict.isDuplicate ||
+      phoneConflict.isDuplicate
+    );
+
+    if (req.query.strict === 'true' && hasBlockingConflict) {
+      return res.status(409).json({
+        success: false,
+        error: emailConflict.model === 'Franchise' ? emailConflict.message : (codeConflict.message || phoneConflict.message || 'Duplicate detected'),
+        data: {
+          email: emailConflict,
+          phone: phoneConflict,
+          code: codeConflict,
+        },
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        email: emailConflict,
+        phone: phoneConflict,
+        code: codeConflict,
+      },
+    });
+  } catch (err: any) {
+    console.error('[checkFranchiseDuplicates error]', err);
+    return res.status(500).json({ success: false, error: 'Failed to check duplicates' });
+  }
+}
+
 export async function createFranchise(req: AuthenticatedRequest, res: Response) {
   try {
     if (req.user?.role !== 'SUPER_ADMIN') {
@@ -425,7 +576,10 @@ export async function createFranchise(req: AuthenticatedRequest, res: Response) 
       where: { email: { equals: normalizedEmail, mode: 'insensitive' } },
     });
     if (existingFranchise) {
-      return res.status(409).json({ success: false, error: `A franchise with email '${data.email}' already exists` });
+      return res.status(409).json({
+        success: false,
+        error: `Franchise contact email is already registered to ${existingFranchise.name} (${existingFranchise.code}). Please provide a unique email address.`,
+      });
     }
 
     // Check if manually supplied franchise code already exists
@@ -434,7 +588,10 @@ export async function createFranchise(req: AuthenticatedRequest, res: Response) 
         where: { code: data.code.trim().toUpperCase() },
       });
       if (existingCode) {
-        return res.status(409).json({ success: false, error: `A franchise with code '${data.code.trim().toUpperCase()}' already exists` });
+        return res.status(409).json({
+          success: false,
+          error: `Franchise code '${data.code.trim().toUpperCase()}' already exists. Please provide a unique franchise code.`,
+        });
       }
     }
 
@@ -449,7 +606,7 @@ export async function createFranchise(req: AuthenticatedRequest, res: Response) 
     if (existingUserPhone && (!existingUserEmail || existingUserPhone.id !== existingUserEmail.id)) {
       return res.status(409).json({
         success: false,
-        error: `A user account with phone number '${cleanPhone}' already exists. Please provide a unique phone number.`,
+        error: `Phone number '${cleanPhone}' already belongs to another franchise or user account. Please provide a unique phone number.`,
       });
     }
 
@@ -485,58 +642,12 @@ export async function createFranchise(req: AuthenticatedRequest, res: Response) 
       }
     }
 
-    const code = data.code || await generateFranchiseCode();
+    const code = data.code ? data.code.trim().toUpperCase() : await generateFranchiseCode();
 
-    // 1. Franchise Owner User Account & Password Handling
-    let ownerUser = await prisma.user.findFirst({ where: { email: data.email } });
-    const initialPassword = data.password || `DG#Owner_${crypto.randomBytes(3).toString('hex')}!`;
-    const passwordHash = await hashPassword(initialPassword);
+    // 1. Franchise Owner User Account & Permanent Password Handling (at least 16 bytes entropy)
+    const permanentPassword = data.password || generatePermanentPassword(16);
+    const passwordHash = await hashPassword(permanentPassword);
 
-    if (!ownerUser) {
-      ownerUser = await prisma.user.create({
-        data: {
-          email: data.email,
-          phone: data.phone,
-          fullName: data.ownerName,
-          passwordHash,
-          role: 'FRANCHISE_OWNER',
-          isActive: true,
-          mustChangePassword: !data.password,
-        },
-      });
-    } else {
-      // Update role & activate if existing
-      await prisma.user.update({
-        where: { id: ownerUser.id },
-        data: { role: 'FRANCHISE_OWNER', isActive: true, passwordHash },
-      });
-    }
-
-    // 2. Create Franchise Record with complete address and contact details
-    const franchise = await prisma.franchise.create({
-      data: {
-        code,
-        name: data.name,
-        ownerName: data.ownerName,
-        email: data.email,
-        phone: data.phone,
-        address: data.address,
-        city: data.city,
-        state: data.state,
-        postalCode: data.postalCode,
-        country: data.country || 'India',
-        authorizedContact: data.authorizedContact || {},
-        businessDetails: data.businessDetails || {},
-        status: 'ACTIVE',
-        ownerUserId: ownerUser.id,
-        notes: data.notes,
-      },
-      include: {
-        ownerUser: { select: { id: true, email: true, fullName: true, phone: true } },
-      },
-    });
-
-    // 3. Create Annual Franchise Agreement (or default if omitted)
     const year = agreementStartDate.getFullYear();
     const agreementNumber = await generateUniqueAgreementNumber(year);
 
@@ -553,134 +664,209 @@ export async function createFranchise(req: AuthenticatedRequest, res: Response) 
     const isMonthly = data.initialAgreement?.settlementFrequency === 'MONTHLY';
     const installmentCount = isMonthly ? 0 : 2;
 
-    const agreement = await prisma.franchiseAgreement.create({
-      data: {
-        franchiseId: franchise.id,
-        agreementNumber,
-        title: data.initialAgreement?.title || 'Annual Master Franchise Agreement',
-        startDate: agreementStartDate,
-        endDate: agreementEndDate,
-        agreementType: (data.initialAgreement?.agreementType as any) || 'CUSTOM_AGREEMENT',
-        annualRoyaltyAmount,
-        calculationMethod,
-        perStudentFee,
-        royaltyPercentage,
-        digitalGuruRevenuePercentage: new Prisma.Decimal(dgPct),
-        partnerRevenuePercentage: new Prisma.Decimal(partnerPct),
-        revenueCalculationBasis: (data.initialAgreement?.revenueCalculationBasis as any) || 'GROSS_COURSE_FEES',
-        settlementFrequency: (data.initialAgreement?.settlementFrequency as any) || (isMonthly ? 'MONTHLY' : 'YEARLY'),
-        totalInvestment: data.initialAgreement?.totalInvestment !== undefined ? new Prisma.Decimal(data.initialAgreement.totalInvestment) : null,
-        digitalGuruInvestmentAmount: data.initialAgreement?.digitalGuruInvestmentAmount !== undefined ? new Prisma.Decimal(data.initialAgreement.digitalGuruInvestmentAmount) : null,
-        partnerInvestmentAmount: data.initialAgreement?.partnerInvestmentAmount !== undefined ? new Prisma.Decimal(data.initialAgreement.partnerInvestmentAmount) : null,
-        digitalGuruInvestmentPercentage: data.initialAgreement?.digitalGuruInvestmentPercentage !== undefined ? new Prisma.Decimal(data.initialAgreement.digitalGuruInvestmentPercentage) : null,
-        partnerInvestmentPercentage: data.initialAgreement?.partnerInvestmentPercentage !== undefined ? new Prisma.Decimal(data.initialAgreement.partnerInvestmentPercentage) : null,
-        operationalSetupContribution: data.initialAgreement?.operationalSetupContribution !== undefined ? new Prisma.Decimal(data.initialAgreement.operationalSetupContribution) : null,
-        investmentNotes: data.initialAgreement?.investmentNotes || null,
-        expenseResponsibilities: (data.initialAgreement?.expenseResponsibilities as any) ?? Prisma.DbNull,
-        marketingResponsibleParty: (data.initialAgreement?.marketingResponsibleParty as any) || 'DIGITAL_GURU',
-        marketingSupportDurationMonths: data.initialAgreement?.marketingSupportDurationMonths !== undefined ? Number(data.initialAgreement.marketingSupportDurationMonths) : 3,
-        marketingPostSupportParty: (data.initialAgreement?.marketingPostSupportParty as any) || 'PARTNER',
-        marketingBudget: data.initialAgreement?.marketingBudget !== undefined ? new Prisma.Decimal(data.initialAgreement.marketingBudget) : null,
-        marketingEffectiveStartDate: data.initialAgreement?.marketingEffectiveStartDate ? new Date(data.initialAgreement.marketingEffectiveStartDate) : null,
-        marketingNotes: data.initialAgreement?.marketingNotes || null,
-        courseSoftwareAccessEnabled: data.initialAgreement?.courseSoftwareAccessEnabled !== undefined ? Boolean(data.initialAgreement.courseSoftwareAccessEnabled) : true,
-        courseSoftwarePricingNotes: data.initialAgreement?.courseSoftwarePricingNotes || null,
-        version: 1,
-        royaltyBasis,
-        paymentFrequency: isMonthly ? 'MONTHLY' : 'ANNUAL',
-        dueDay,
-        installmentCount,
-        status: 'ACTIVE',
-        terms: data.initialAgreement?.terms,
-        notes: data.initialAgreement?.notes,
-        createdById: req.user?.userId,
-      },
-    });
-
-    // 4. Generate installments ONLY for YEARLY settlement frequency
-    let installments: any[] = [];
-    if (!isMonthly) {
-      installments = await generateAnnualInstallments({
-        franchiseId: franchise.id,
-        agreementId: agreement.id,
-        startDate: agreementStartDate,
-        endDate: agreementEndDate,
-        calculationMethod,
-        annualRoyaltyAmount: Number(annualRoyaltyAmount),
-        royaltyPercentage: Number(royaltyPercentage),
-        royaltyBasis,
-        perStudentFee: perStudentFee ? Number(perStudentFee) : null,
-        dueDay,
-        installment1DueDate: data.initialAgreement?.installment1DueDate,
-        installment2DueDate: data.initialAgreement?.installment2DueDate,
-      });
-    }
-
-    // 4.5. Optional Institute / Campus Linking or Creation
-    let attachedBranches: any[] = [];
-    if (data.branchOption === 'LINK_EXISTING' || (data.linkedInstituteIds && data.linkedInstituteIds.length > 0) || data.linkedInstituteId) {
-      const instituteIds = data.linkedInstituteIds || (data.linkedInstituteId ? [data.linkedInstituteId] : []);
-      if (instituteIds.length > 0) {
-        await prisma.institute.updateMany({
-          where: { id: { in: instituteIds } },
-          data: { franchiseId: franchise.id },
+    // Execute entire creation atomically inside a single transaction with extended timeout for Neon cloud PostgreSQL WAN latency
+    const txResult = await prisma.$transaction(
+      async (tx) => {
+        // Find existing user or create owner user
+        let ownerUser = await tx.user.findFirst({
+          where: { email: { equals: normalizedEmail, mode: 'insensitive' } },
         });
-        attachedBranches = await prisma.institute.findMany({
-          where: { id: { in: instituteIds } },
-          select: {
-            id: true,
-            code: true,
-            name: true,
-            city: true,
-            state: true,
-            status: true,
-            _count: { select: { students: true } },
+
+        if (!ownerUser) {
+          ownerUser = await tx.user.create({
+            data: {
+              email: normalizedEmail,
+              phone: cleanPhone,
+              fullName: data.ownerName.trim(),
+              passwordHash,
+              role: 'FRANCHISE_OWNER',
+              isActive: true,
+              mustChangePassword: false, // Permanent Franchise Owner credentials: no forced first-login change
+            },
+          });
+        } else {
+          // Promote/activate existing user as franchise owner with permanent credentials
+          ownerUser = await tx.user.update({
+            where: { id: ownerUser.id },
+            data: {
+              role: 'FRANCHISE_OWNER',
+              isActive: true,
+              passwordHash,
+              mustChangePassword: false,
+              ...(!ownerUser.phone ? { phone: cleanPhone } : {}),
+            },
+          });
+        }
+
+        // 2. Create Franchise Record with complete address and contact details
+        const franchise = await tx.franchise.create({
+          data: {
+            code,
+            name: data.name.trim(),
+            ownerName: data.ownerName.trim(),
+            email: normalizedEmail,
+            phone: cleanPhone,
+            address: data.address?.trim() || null,
+            city: data.city?.trim() || null,
+            state: data.state?.trim() || null,
+            postalCode: data.postalCode?.trim() || null,
+            country: data.country || 'India',
+            authorizedContact: data.authorizedContact || {},
+            businessDetails: data.businessDetails || {},
+            status: 'ACTIVE',
+            ownerUserId: ownerUser.id,
+            notes: data.notes || null,
+          },
+          include: {
+            ownerUser: { select: { id: true, email: true, fullName: true, phone: true } },
           },
         });
-      }
-    } else if (data.branchOption === 'CREATE_NEW' && data.newBranch?.name) {
-      const branchName = data.newBranch.name;
-      let branchCode = data.newBranch.code;
-      if (!branchCode) {
-        const count = await prisma.institute.count();
-        branchCode = `BR-${String(count + 1).padStart(3, '0')}`;
-        let exists = await prisma.institute.findUnique({ where: { code: branchCode } });
-        let offset = 1;
-        while (exists) {
-          branchCode = `BR-${String(count + 1 + offset).padStart(3, '0')}`;
-          exists = await prisma.institute.findUnique({ where: { code: branchCode } });
-          offset++;
-        }
-      }
 
-      const newInst = await prisma.institute.create({
-        data: {
-          name: branchName,
-          code: branchCode,
-          city: data.newBranch.city || data.city,
-          state: data.newBranch.state || data.state,
-          address: data.newBranch.address || data.address,
-          phone: data.newBranch.phone || data.phone,
-          email: data.newBranch.email || data.email,
-          franchiseId: franchise.id,
-          status: 'ACTIVE',
-        },
-        select: {
-          id: true,
-          code: true,
-          name: true,
-          city: true,
-          state: true,
-          status: true,
-          _count: { select: { students: true } },
-        },
-      });
-      attachedBranches = [newInst];
-    }
+        // 3. Create Annual Franchise Agreement (or default if omitted)
+        const agreement = await tx.franchiseAgreement.create({
+          data: {
+            franchiseId: franchise.id,
+            agreementNumber,
+            title: data.initialAgreement?.title || 'Annual Master Franchise Agreement',
+            startDate: agreementStartDate,
+            endDate: agreementEndDate,
+            agreementType: (data.initialAgreement?.agreementType as any) || 'CUSTOM_AGREEMENT',
+            annualRoyaltyAmount,
+            calculationMethod,
+            perStudentFee,
+            royaltyPercentage,
+            digitalGuruRevenuePercentage: new Prisma.Decimal(dgPct),
+            partnerRevenuePercentage: new Prisma.Decimal(partnerPct),
+            revenueCalculationBasis: (data.initialAgreement?.revenueCalculationBasis as any) || 'GROSS_COURSE_FEES',
+            settlementFrequency: (data.initialAgreement?.settlementFrequency as any) || (isMonthly ? 'MONTHLY' : 'YEARLY'),
+            totalInvestment: data.initialAgreement?.totalInvestment !== undefined ? new Prisma.Decimal(data.initialAgreement.totalInvestment) : null,
+            digitalGuruInvestmentAmount: data.initialAgreement?.digitalGuruInvestmentAmount !== undefined ? new Prisma.Decimal(data.initialAgreement.digitalGuruInvestmentAmount) : null,
+            partnerInvestmentAmount: data.initialAgreement?.partnerInvestmentAmount !== undefined ? new Prisma.Decimal(data.initialAgreement.partnerInvestmentAmount) : null,
+            digitalGuruInvestmentPercentage: data.initialAgreement?.digitalGuruInvestmentPercentage !== undefined ? new Prisma.Decimal(data.initialAgreement.digitalGuruInvestmentPercentage) : null,
+            partnerInvestmentPercentage: data.initialAgreement?.partnerInvestmentPercentage !== undefined ? new Prisma.Decimal(data.initialAgreement.partnerInvestmentPercentage) : null,
+            operationalSetupContribution: data.initialAgreement?.operationalSetupContribution !== undefined ? new Prisma.Decimal(data.initialAgreement.operationalSetupContribution) : null,
+            investmentNotes: data.initialAgreement?.investmentNotes || null,
+            expenseResponsibilities: (data.initialAgreement?.expenseResponsibilities as any) ?? Prisma.DbNull,
+            marketingResponsibleParty: (data.initialAgreement?.marketingResponsibleParty as any) || 'DIGITAL_GURU',
+            marketingSupportDurationMonths: data.initialAgreement?.marketingSupportDurationMonths !== undefined ? Number(data.initialAgreement.marketingSupportDurationMonths) : 3,
+            marketingPostSupportParty: (data.initialAgreement?.marketingPostSupportParty as any) || 'PARTNER',
+            marketingBudget: data.initialAgreement?.marketingBudget !== undefined ? new Prisma.Decimal(data.initialAgreement.marketingBudget) : null,
+            marketingEffectiveStartDate: data.initialAgreement?.marketingEffectiveStartDate ? new Date(data.initialAgreement.marketingEffectiveStartDate) : null,
+            marketingNotes: data.initialAgreement?.marketingNotes || null,
+            courseSoftwareAccessEnabled: data.initialAgreement?.courseSoftwareAccessEnabled !== undefined ? Boolean(data.initialAgreement.courseSoftwareAccessEnabled) : true,
+            courseSoftwarePricingNotes: data.initialAgreement?.courseSoftwarePricingNotes || null,
+            version: 1,
+            royaltyBasis,
+            paymentFrequency: isMonthly ? 'MONTHLY' : 'ANNUAL',
+            dueDay,
+            installmentCount,
+            status: 'ACTIVE',
+            terms: data.initialAgreement?.terms,
+            notes: data.initialAgreement?.notes,
+            createdById: req.user?.userId,
+          },
+        });
+
+        // 4. Generate installments ONLY for YEARLY settlement frequency
+        let installments: any[] = [];
+        if (!isMonthly) {
+          installments = await generateAnnualInstallments({
+            franchiseId: franchise.id,
+            agreementId: agreement.id,
+            startDate: agreementStartDate,
+            endDate: agreementEndDate,
+            calculationMethod,
+            annualRoyaltyAmount: Number(annualRoyaltyAmount),
+            royaltyPercentage: Number(royaltyPercentage),
+            royaltyBasis,
+            perStudentFee: perStudentFee ? Number(perStudentFee) : null,
+            dueDay,
+            installment1DueDate: data.initialAgreement?.installment1DueDate,
+            installment2DueDate: data.initialAgreement?.installment2DueDate,
+            prismaClient: tx,
+          });
+        }
+
+        // 4.5. Optional Institute / Campus Linking or Creation
+        let attachedBranches: any[] = [];
+        if (data.branchOption === 'LINK_EXISTING' || (data.linkedInstituteIds && data.linkedInstituteIds.length > 0) || data.linkedInstituteId) {
+          const instituteIds = data.linkedInstituteIds || (data.linkedInstituteId ? [data.linkedInstituteId] : []);
+          if (instituteIds.length > 0) {
+            await tx.institute.updateMany({
+              where: { id: { in: instituteIds } },
+              data: { franchiseId: franchise.id },
+            });
+            attachedBranches = await tx.institute.findMany({
+              where: { id: { in: instituteIds } },
+              select: {
+                id: true,
+                code: true,
+                name: true,
+                city: true,
+                state: true,
+                status: true,
+                _count: { select: { students: true } },
+              },
+            });
+          }
+        } else if (data.branchOption === 'CREATE_NEW' && data.newBranch?.name) {
+          const branchName = data.newBranch.name.trim();
+          let branchCode = data.newBranch.code?.trim();
+          if (!branchCode) {
+            const count = await tx.institute.count();
+            branchCode = `BR-${String(count + 1).padStart(3, '0')}`;
+            let exists = await tx.institute.findUnique({ where: { code: branchCode } });
+            let offset = 1;
+            while (exists) {
+              branchCode = `BR-${String(count + 1 + offset).padStart(3, '0')}`;
+              exists = await tx.institute.findUnique({ where: { code: branchCode } });
+              offset++;
+            }
+          }
+
+          const branchEmail = data.newBranch.email?.trim() ? data.newBranch.email.trim().toLowerCase() : null;
+
+          const newInst = await tx.institute.create({
+            data: {
+              name: branchName,
+              code: branchCode,
+              city: data.newBranch.city?.trim() || data.city?.trim() || null,
+              state: data.newBranch.state?.trim() || data.state?.trim() || null,
+              address: data.newBranch.address?.trim() || data.address?.trim() || null,
+              phone: data.newBranch.phone?.trim() || cleanPhone,
+              email: branchEmail,
+              franchiseId: franchise.id,
+              status: 'ACTIVE',
+            },
+            select: {
+              id: true,
+              code: true,
+              name: true,
+              city: true,
+              state: true,
+              status: true,
+              _count: { select: { students: true } },
+            },
+          });
+          attachedBranches = [newInst];
+        }
+
+        return {
+          franchise,
+          agreement,
+          installments,
+          attachedBranches,
+        };
+      },
+      {
+        timeout: 35000,
+        maxWait: 10000,
+      }
+    );
 
     const franchiseWithBranches = {
-      ...franchise,
-      branches: attachedBranches,
+      ...txResult.franchise,
+      branches: txResult.attachedBranches,
     };
 
     return res.status(201).json({
@@ -690,23 +876,50 @@ export async function createFranchise(req: AuthenticatedRequest, res: Response) 
         : 'Franchise, Owner Account, and 2 Annual Installments created successfully',
       data: {
         franchise: franchiseWithBranches,
-        agreement,
-        initialAgreement: agreement,
-        installments,
+        agreement: txResult.agreement,
+        initialAgreement: txResult.agreement,
+        installments: txResult.installments,
         ownerCredentials: {
-          email: data.email,
-          temporaryPassword: initialPassword,
+          fullName: data.ownerName.trim(),
+          email: normalizedEmail,
+          password: permanentPassword,
+          permanentPassword,
+          temporaryPassword: permanentPassword,
           role: 'FRANCHISE_OWNER',
+          mustChangePassword: false,
         },
       },
     });
   } catch (err: any) {
     console.error('[Create Franchise Error]', err);
     if (err.code === 'P2002') {
-      const field = Array.isArray(err.meta?.target) ? err.meta.target.join(', ') : 'unique constraint';
+      const target = Array.isArray(err.meta?.target) ? err.meta.target.join(', ') : String(err.meta?.target || '');
+      const model = err.meta?.modelName || '';
+
+      if (target.toLowerCase().includes('email') || target.includes('email_normalized')) {
+        return res.status(409).json({
+          success: false,
+          error: model === 'User'
+            ? `Owner email '${req.body?.email || ''}' already belongs to an existing account.`
+            : `Franchise contact email is already registered. Please provide a unique email address.`,
+        });
+      }
+      if (target.toLowerCase().includes('phone')) {
+        return res.status(409).json({
+          success: false,
+          error: `Phone number already belongs to another franchise or user account. Please provide a unique phone number.`,
+        });
+      }
+      if (target.toLowerCase().includes('code')) {
+        return res.status(409).json({
+          success: false,
+          error: `Franchise code already exists. Please choose a unique code.`,
+        });
+      }
+
       return res.status(409).json({
         success: false,
-        error: `A record with this ${field} already exists. Please verify code, email, and phone.`,
+        error: `A record with this ${target || 'unique field'} already exists. Please verify franchise email, code, and phone.`,
       });
     }
     return res.status(500).json({ success: false, error: err.message || 'Failed to create franchise' });
@@ -792,6 +1005,35 @@ export async function getFranchiseById(req: AuthenticatedRequest, res: Response)
         success: false,
         error: 'Forbidden: You do not have permission to access this franchise',
       });
+    }
+
+    // Self-healing: if ownerUser was not loaded because ownerUserId was null or unlinked
+    if (!franchise.ownerUser && franchise.email) {
+      const normEmail = franchise.email.trim().toLowerCase();
+      const matchedUser = await prisma.user.findFirst({
+        where: { email: { equals: normEmail, mode: 'insensitive' } },
+        select: {
+          id: true,
+          email: true,
+          fullName: true,
+          phone: true,
+          role: true,
+          isActive: true,
+          mustChangePassword: true,
+          lastLoginAt: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      });
+      if (matchedUser) {
+        if (!franchise.ownerUserId) {
+          await prisma.franchise.update({
+            where: { id: franchise.id },
+            data: { ownerUserId: matchedUser.id },
+          });
+        }
+        franchise.ownerUser = matchedUser;
+      }
     }
 
     // Compute aggregate metrics for this franchise
@@ -938,7 +1180,7 @@ export async function updateFranchise(req: AuthenticatedRequest, res: Response) 
             state: newBranch.state || undefined,
             address: newBranch.address || undefined,
             phone: newBranch.phone || undefined,
-            email: newBranch.email || undefined,
+            email: newBranch.email?.trim() ? newBranch.email.trim().toLowerCase() : null,
             franchiseId: id,
             status: 'ACTIVE',
           },
@@ -1025,33 +1267,149 @@ export async function resetFranchiseOwnerPassword(req: AuthenticatedRequest, res
     }
 
     const { id } = req.params;
-    const franchise = await prisma.franchise.findUnique({
+    let franchise = await prisma.franchise.findUnique({
       where: { id },
-      include: { ownerUser: true },
-    });
-
-    if (!franchise || !franchise.ownerUser) {
-      return res.status(404).json({ success: false, error: 'Franchise or owner user not found' });
-    }
-
-    const temporaryPassword = `DG#Reset_${crypto.randomBytes(3).toString('hex')}!`;
-    const passwordHash = await hashPassword(temporaryPassword);
-
-    await prisma.user.update({
-      where: { id: franchise.ownerUser.id },
-      data: {
-        passwordHash,
-        mustChangePassword: true,
+      include: {
+        ownerUser: {
+          select: {
+            id: true,
+            email: true,
+            fullName: true,
+            phone: true,
+            role: true,
+            isActive: true,
+            mustChangePassword: true,
+            lastLoginAt: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        },
       },
     });
 
+    if (!franchise) {
+      return res.status(404).json({ success: false, error: 'Franchise not found' });
+    }
+
+    let ownerUser = franchise.ownerUser;
+
+    // Self-healing: if ownerUser relation is missing, attempt to find user by email or create owner account
+    if (!ownerUser) {
+      const normEmail = franchise.email?.trim().toLowerCase();
+      if (normEmail) {
+        const found = await prisma.user.findFirst({
+          where: { email: { equals: normEmail, mode: 'insensitive' } },
+        });
+        if (found) {
+          ownerUser = {
+            id: found.id,
+            email: found.email,
+            fullName: found.fullName,
+            phone: found.phone,
+            role: found.role,
+            isActive: found.isActive,
+            mustChangePassword: found.mustChangePassword,
+            lastLoginAt: found.lastLoginAt,
+            createdAt: found.createdAt,
+            updatedAt: found.updatedAt,
+          };
+          await prisma.franchise.update({
+            where: { id: franchise.id },
+            data: { ownerUserId: found.id },
+          });
+        } else {
+          // Provision missing owner user account
+          const initialPwd = generatePermanentPassword(16);
+          const initialHash = await hashPassword(initialPwd);
+          const created = await prisma.user.create({
+            data: {
+              email: normEmail,
+              phone: franchise.phone || `+9199999${Math.floor(10000 + Math.random() * 90000)}`,
+              fullName: franchise.ownerName || franchise.name,
+              passwordHash: initialHash,
+              role: 'FRANCHISE_OWNER',
+              isActive: franchise.status === 'ACTIVE',
+              mustChangePassword: false,
+            },
+          });
+          ownerUser = {
+            id: created.id,
+            email: created.email,
+            fullName: created.fullName,
+            phone: created.phone,
+            role: created.role,
+            isActive: created.isActive,
+            mustChangePassword: created.mustChangePassword,
+            lastLoginAt: created.lastLoginAt,
+            createdAt: created.createdAt,
+            updatedAt: created.updatedAt,
+          };
+          await prisma.franchise.update({
+            where: { id: franchise.id },
+            data: { ownerUserId: created.id },
+          });
+        }
+      }
+    }
+
+    if (!ownerUser) {
+      return res.status(404).json({ success: false, error: 'Franchise owner user account could not be found or provisioned' });
+    }
+
+    const permanentPassword = generatePermanentPassword(16);
+    const passwordHash = await hashPassword(permanentPassword);
+
+    await prisma.user.update({
+      where: { id: ownerUser.id },
+      data: {
+        passwordHash,
+        mustChangePassword: false,
+        updatedAt: new Date(),
+      },
+    });
+
+    // Invalidate any active password reset tokens for this user
+    await prisma.passwordResetToken.deleteMany({
+      where: { userId: ownerUser.id },
+    }).catch(() => { });
+
+    // Record the password reset in audit log (without logging password or hash)
+    await prisma.auditLog.create({
+      data: {
+        userId: req.user?.userId || null,
+        action: 'FRANCHISE_OWNER_PASSWORD_RESET',
+        entityType: 'User',
+        entityId: ownerUser.id,
+        newValues: {
+          franchiseId: franchise.id,
+          franchiseCode: franchise.code,
+          franchiseName: franchise.name,
+          ownerEmail: ownerUser.email,
+          ownerName: ownerUser.fullName,
+          resetBy: req.user?.userId || 'SUPER_ADMIN',
+          mustChangePassword: false,
+          resetAt: new Date().toISOString(),
+        },
+      },
+    }).catch((logErr) => {
+      console.error('[AuditLog Error]', logErr?.message || logErr);
+    });
+
+    // Ensure reset response is not cached
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+
     return res.json({
       success: true,
-      message: 'Owner password reset successfully',
+      message: 'Owner permanent password generated and updated successfully',
       data: {
-        email: franchise.ownerUser.email,
-        temporaryPassword,
-        mustChangePassword: true,
+        email: ownerUser.email,
+        fullName: ownerUser.fullName,
+        password: permanentPassword,
+        permanentPassword,
+        temporaryPassword: permanentPassword,
+        mustChangePassword: false,
       },
     });
   } catch (err: any) {
@@ -1126,7 +1484,7 @@ export async function addBranchToFranchise(req: AuthenticatedRequest, res: Respo
           state,
           address,
           phone,
-          email,
+          email: email?.trim() ? email.trim().toLowerCase() : null,
           franchiseId,
           status: 'ACTIVE',
         },
@@ -2784,12 +3142,12 @@ export async function calculateRoyalty(req: AuthenticatedRequest, res: Response)
       ? Number(applicableAgreement.partnerRevenuePercentage)
       : (100 - dgPercentage);
 
-    const calculationBasis = (req.body.revenueCalculationBasis as string) || 
-      applicableAgreement?.revenueCalculationBasis || 
+    const calculationBasis = (req.body.revenueCalculationBasis as string) ||
+      applicableAgreement?.revenueCalculationBasis ||
       'GROSS_COURSE_FEES';
 
-    const calculationMethod = (req.body.calculationMethod as string) || 
-      applicableAgreement?.calculationMethod || 
+    const calculationMethod = (req.body.calculationMethod as string) ||
+      applicableAgreement?.calculationMethod ||
       'PERCENTAGE_REVENUE';
 
     // Query fee payments in scope
@@ -2811,7 +3169,7 @@ export async function calculateRoyalty(req: AuthenticatedRequest, res: Response)
     });
 
     const grossCollection = Math.round(payments.reduce((sum, p) => sum + Number(p.amountPaid), 0) * 100) / 100;
-    
+
     // Determine eligible revenue / profit pool based on calculationBasis
     let eligibleRevenue = grossCollection;
     let deductionsOrExpenses = 0;
@@ -2846,7 +3204,7 @@ export async function calculateRoyalty(req: AuthenticatedRequest, res: Response)
 
     if (calculationMethod === 'PER_STUDENT') {
       perStudentFee = Number(req.body.perStudentFee ?? applicableAgreement?.perStudentFee ?? 0);
-      
+
       // Query candidate students in franchise branch(es) admitted on or before period end
       const candidateStudents = await prisma.student.findMany({
         where: {
@@ -3000,8 +3358,8 @@ export async function calculateRoyalty(req: AuthenticatedRequest, res: Response)
 
     if (record) {
       const isFinalized = Boolean(
-        record.status === 'PAID' || 
-        Number(record.royaltyPaid) > 0 || 
+        record.status === 'PAID' ||
+        Number(record.royaltyPaid) > 0 ||
         (record.payments && record.payments.length > 0)
       );
 
@@ -3696,327 +4054,327 @@ export async function getFranchiseOwnerDashboard(req: AuthenticatedRequest, res:
       where: { instituteId: { in: targetBranchIds }, status: 'ACTIVE' },
     });
 
-      // 2. Staff Count
-      const totalStaff = await prisma.staffProfile.count({
-        where: { instituteId: { in: targetBranchIds }, user: { isActive: true } },
-      });
+    // 2. Staff Count
+    const totalStaff = await prisma.staffProfile.count({
+      where: { instituteId: { in: targetBranchIds }, user: { isActive: true } },
+    });
 
-      // 3. Batches Count
-      const activeBatches = await prisma.batch.count({
-        where: { instituteId: { in: targetBranchIds }, isActive: true },
-      });
+    // 3. Batches Count
+    const activeBatches = await prisma.batch.count({
+      where: { instituteId: { in: targetBranchIds }, isActive: true },
+    });
 
-      // 4. Today's Student Attendance
-      const todayStart = new Date();
-      todayStart.setHours(0, 0, 0, 0);
-      const todayEnd = new Date();
-      todayEnd.setHours(23, 59, 59, 999);
+    // 4. Today's Student Attendance
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const todayEnd = new Date();
+    todayEnd.setHours(23, 59, 59, 999);
 
-      const todayPresent = await prisma.attendanceEvent.count({
+    const todayPresent = await prisma.attendanceEvent.count({
+      where: {
+        instituteId: { in: targetBranchIds },
+        eventDate: { gte: todayStart, lte: todayEnd },
+        eventType: 'CHECK_IN',
+      },
+    });
+
+    const todayLate = await prisma.attendanceEvent.count({
+      where: {
+        instituteId: { in: targetBranchIds },
+        eventDate: { gte: todayStart, lte: todayEnd },
+        eventType: 'CHECK_IN',
+        isLate: true,
+      },
+    });
+
+    const todayAbsent = Math.max(0, totalStudents - todayPresent);
+    const todayTotalMarked = totalStudents > 0 ? totalStudents : todayPresent;
+    const attendanceRate = todayTotalMarked > 0 ? Number(((todayPresent / todayTotalMarked) * 100).toFixed(1)) : 100.0;
+
+    // 5. Monthly & Total Fee Collections (net of REFUND adjustments)
+    const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+    const [monthlyPaymentAgg, monthlyRefundAgg, totalPaymentAgg, totalRefundAgg] = await Promise.all([
+      prisma.payment.aggregate({
         where: {
           instituteId: { in: targetBranchIds },
-          eventDate: { gte: todayStart, lte: todayEnd },
-          eventType: 'CHECK_IN',
+          status: 'SUCCESS',
+          paidAt: { gte: startOfMonth },
         },
-      });
-
-      const todayLate = await prisma.attendanceEvent.count({
+        _sum: { amountPaid: true },
+      }),
+      prisma.paymentAdjustment.aggregate({
         where: {
-          instituteId: { in: targetBranchIds },
-          eventDate: { gte: todayStart, lte: todayEnd },
-          eventType: 'CHECK_IN',
-          isLate: true,
-        },
-      });
-
-      const todayAbsent = Math.max(0, totalStudents - todayPresent);
-      const todayTotalMarked = totalStudents > 0 ? totalStudents : todayPresent;
-      const attendanceRate = todayTotalMarked > 0 ? Number(((todayPresent / todayTotalMarked) * 100).toFixed(1)) : 100.0;
-
-      // 5. Monthly & Total Fee Collections (net of REFUND adjustments)
-      const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
-      const [monthlyPaymentAgg, monthlyRefundAgg, totalPaymentAgg, totalRefundAgg] = await Promise.all([
-        prisma.payment.aggregate({
-          where: {
+          adjustmentType: 'REFUND',
+          payment: {
             instituteId: { in: targetBranchIds },
             status: 'SUCCESS',
             paidAt: { gte: startOfMonth },
           },
-          _sum: { amountPaid: true },
-        }),
-        prisma.paymentAdjustment.aggregate({
-          where: {
-            adjustmentType: 'REFUND',
-            payment: {
-              instituteId: { in: targetBranchIds },
-              status: 'SUCCESS',
-              paidAt: { gte: startOfMonth },
-            },
-          },
-          _sum: { amount: true },
-        }),
-        prisma.payment.aggregate({
-          where: {
+        },
+        _sum: { amount: true },
+      }),
+      prisma.payment.aggregate({
+        where: {
+          instituteId: { in: targetBranchIds },
+          status: 'SUCCESS',
+        },
+        _sum: { amountPaid: true },
+      }),
+      prisma.paymentAdjustment.aggregate({
+        where: {
+          adjustmentType: 'REFUND',
+          payment: {
             instituteId: { in: targetBranchIds },
             status: 'SUCCESS',
           },
-          _sum: { amountPaid: true },
-        }),
-        prisma.paymentAdjustment.aggregate({
-          where: {
-            adjustmentType: 'REFUND',
-            payment: {
-              instituteId: { in: targetBranchIds },
-              status: 'SUCCESS',
-            },
-          },
-          _sum: { amount: true },
-        }),
-      ]);
-      const monthlyFeeCollection = Math.max(
-        0,
-        Math.round((Number(monthlyPaymentAgg._sum?.amountPaid || 0) - Number(monthlyRefundAgg._sum?.amount || 0)) * 100) / 100
-      );
-      const totalRevenue = Math.max(
-        0,
-        Math.round((Number(totalPaymentAgg._sum?.amountPaid || 0) - Number(totalRefundAgg._sum?.amount || 0)) * 100) / 100
-      );
+        },
+        _sum: { amount: true },
+      }),
+    ]);
+    const monthlyFeeCollection = Math.max(
+      0,
+      Math.round((Number(monthlyPaymentAgg._sum?.amountPaid || 0) - Number(monthlyRefundAgg._sum?.amount || 0)) * 100) / 100
+    );
+    const totalRevenue = Math.max(
+      0,
+      Math.round((Number(totalPaymentAgg._sum?.amountPaid || 0) - Number(totalRefundAgg._sum?.amount || 0)) * 100) / 100
+    );
 
-      // 6. Pending Fees (net of REFUNDS)
-      const pendingAssignments = await prisma.studentFeeAssignment.findMany({
-        where: {
-          student: { instituteId: { in: targetBranchIds } },
-          status: { in: ['PENDING', 'PARTIALLY_PAID', 'OVERDUE'] },
-        },
-        include: {
-          payments: {
-            where: { status: 'SUCCESS' },
-            select: {
-              amountPaid: true,
-              adjustments: { where: { adjustmentType: 'REFUND' }, select: { amount: true } },
-            },
+    // 6. Pending Fees (net of REFUNDS)
+    const pendingAssignments = await prisma.studentFeeAssignment.findMany({
+      where: {
+        student: { instituteId: { in: targetBranchIds } },
+        status: { in: ['PENDING', 'PARTIALLY_PAID', 'OVERDUE'] },
+      },
+      include: {
+        payments: {
+          where: { status: 'SUCCESS' },
+          select: {
+            amountPaid: true,
+            adjustments: { where: { adjustmentType: 'REFUND' }, select: { amount: true } },
           },
         },
-      });
-      let pendingFees = 0;
-      for (const a of pendingAssignments) {
-        const netPaidSum = a.payments.reduce((acc, p) => {
-          const refunded = (p.adjustments || []).reduce((rAcc, adj) => rAcc + Number(adj.amount), 0);
-          return acc + Number(p.amountPaid) - refunded;
-        }, 0);
-        pendingFees += Math.max(0, Number(a.finalAmount) - netPaidSum);
-      }
-      pendingFees = Math.round(pendingFees * 100) / 100;
+      },
+    });
+    let pendingFees = 0;
+    for (const a of pendingAssignments) {
+      const netPaidSum = a.payments.reduce((acc, p) => {
+        const refunded = (p.adjustments || []).reduce((rAcc, adj) => rAcc + Number(adj.amount), 0);
+        return acc + Number(p.amountPaid) - refunded;
+      }, 0);
+      pendingFees += Math.max(0, Number(a.finalAmount) - netPaidSum);
+    }
+    pendingFees = Math.round(pendingFees * 100) / 100;
 
     // 7. Upcoming Examinations
     const upcomingExamsList = await prisma.examination.findMany({
-        where: {
-          instituteId: { in: targetBranchIds },
-          examDate: { gte: todayStart },
-        },
-        include: {
-          subject: { select: { name: true, code: true } },
-          institute: { select: { id: true, name: true, code: true } },
-        },
-        orderBy: { examDate: 'asc' },
-        take: 5,
-      });
-      const upcomingExamsCount = await prisma.examination.count({
-        where: {
-          instituteId: { in: targetBranchIds },
-          examDate: { gte: todayStart },
-        },
-      });
+      where: {
+        instituteId: { in: targetBranchIds },
+        examDate: { gte: todayStart },
+      },
+      include: {
+        subject: { select: { name: true, code: true } },
+        institute: { select: { id: true, name: true, code: true } },
+      },
+      orderBy: { examDate: 'asc' },
+      take: 5,
+    });
+    const upcomingExamsCount = await prisma.examination.count({
+      where: {
+        instituteId: { in: targetBranchIds },
+        examDate: { gte: todayStart },
+      },
+    });
 
-      // 8. Homework & Learning Activity
-      const homeworkCount = await prisma.learningMaterial.count({
-        where: { instituteId: { in: targetBranchIds }, type: 'HOMEWORK' },
-      });
-      const materialsCount = await prisma.learningMaterial.count({
-        where: { instituteId: { in: targetBranchIds }, type: { not: 'HOMEWORK' } },
-      });
+    // 8. Homework & Learning Activity
+    const homeworkCount = await prisma.learningMaterial.count({
+      where: { instituteId: { in: targetBranchIds }, type: 'HOMEWORK' },
+    });
+    const materialsCount = await prisma.learningMaterial.count({
+      where: { instituteId: { in: targetBranchIds }, type: { not: 'HOMEWORK' } },
+    });
 
-      // 9. Branch Performance Cards (Individual Branch Statistics for Comparison)
-      const branchCards = await Promise.all(
-        franchise.branches.map(async (b) => {
-          const bStudents = await prisma.student.count({
-            where: { instituteId: b.id, status: 'ACTIVE' },
-          });
-          const bStaff = await prisma.staffProfile.count({
-            where: { instituteId: b.id, user: { isActive: true } },
-          });
-          const bBatches = await prisma.batch.count({
-            where: { instituteId: b.id, isActive: true },
-          });
-          const [bPayment, bRefundAgg, bMonthly, bMonthlyRefundAgg] = await Promise.all([
-            prisma.payment.aggregate({
-              where: { instituteId: b.id, status: 'SUCCESS' },
-              _sum: { amountPaid: true },
-            }),
-            prisma.paymentAdjustment.aggregate({
-              where: {
-                adjustmentType: 'REFUND',
-                payment: { instituteId: b.id, status: 'SUCCESS' },
-              },
-              _sum: { amount: true },
-            }),
-            prisma.payment.aggregate({
-              where: { instituteId: b.id, status: 'SUCCESS', paidAt: { gte: startOfMonth } },
-              _sum: { amountPaid: true },
-            }),
-            prisma.paymentAdjustment.aggregate({
-              where: {
-                adjustmentType: 'REFUND',
-                payment: { instituteId: b.id, status: 'SUCCESS', paidAt: { gte: startOfMonth } },
-              },
-              _sum: { amount: true },
-            }),
-          ]);
-          const bTotalRevenue = Math.max(
-            0,
-            Math.round((Number(bPayment._sum?.amountPaid || 0) - Number(bRefundAgg._sum?.amount || 0)) * 100) / 100
-          );
-          const bMonthlyRevenue = Math.max(
-            0,
-            Math.round((Number(bMonthly._sum?.amountPaid || 0) - Number(bMonthlyRefundAgg._sum?.amount || 0)) * 100) / 100
-          );
-          const bPresent = await prisma.attendanceEvent.count({
+    // 9. Branch Performance Cards (Individual Branch Statistics for Comparison)
+    const branchCards = await Promise.all(
+      franchise.branches.map(async (b) => {
+        const bStudents = await prisma.student.count({
+          where: { instituteId: b.id, status: 'ACTIVE' },
+        });
+        const bStaff = await prisma.staffProfile.count({
+          where: { instituteId: b.id, user: { isActive: true } },
+        });
+        const bBatches = await prisma.batch.count({
+          where: { instituteId: b.id, isActive: true },
+        });
+        const [bPayment, bRefundAgg, bMonthly, bMonthlyRefundAgg] = await Promise.all([
+          prisma.payment.aggregate({
+            where: { instituteId: b.id, status: 'SUCCESS' },
+            _sum: { amountPaid: true },
+          }),
+          prisma.paymentAdjustment.aggregate({
             where: {
-              instituteId: b.id,
-              eventDate: { gte: todayStart, lte: todayEnd },
-              eventType: 'CHECK_IN',
+              adjustmentType: 'REFUND',
+              payment: { instituteId: b.id, status: 'SUCCESS' },
             },
-          });
-          const bAbsent = Math.max(0, bStudents - bPresent);
-          const bTotalMarked = bStudents > 0 ? bStudents : bPresent;
-          const bRate = bTotalMarked > 0 ? Number(((bPresent / bTotalMarked) * 100).toFixed(1)) : 100.0;
-
-          const bAssignments = await prisma.studentFeeAssignment.findMany({
+            _sum: { amount: true },
+          }),
+          prisma.payment.aggregate({
+            where: { instituteId: b.id, status: 'SUCCESS', paidAt: { gte: startOfMonth } },
+            _sum: { amountPaid: true },
+          }),
+          prisma.paymentAdjustment.aggregate({
             where: {
-              student: { instituteId: b.id },
-              status: { in: ['PENDING', 'PARTIALLY_PAID', 'OVERDUE'] },
+              adjustmentType: 'REFUND',
+              payment: { instituteId: b.id, status: 'SUCCESS', paidAt: { gte: startOfMonth } },
             },
-            include: {
-              payments: {
-                where: { status: 'SUCCESS' },
-                select: {
-                  amountPaid: true,
-                  adjustments: { where: { adjustmentType: 'REFUND' }, select: { amount: true } },
-                },
+            _sum: { amount: true },
+          }),
+        ]);
+        const bTotalRevenue = Math.max(
+          0,
+          Math.round((Number(bPayment._sum?.amountPaid || 0) - Number(bRefundAgg._sum?.amount || 0)) * 100) / 100
+        );
+        const bMonthlyRevenue = Math.max(
+          0,
+          Math.round((Number(bMonthly._sum?.amountPaid || 0) - Number(bMonthlyRefundAgg._sum?.amount || 0)) * 100) / 100
+        );
+        const bPresent = await prisma.attendanceEvent.count({
+          where: {
+            instituteId: b.id,
+            eventDate: { gte: todayStart, lte: todayEnd },
+            eventType: 'CHECK_IN',
+          },
+        });
+        const bAbsent = Math.max(0, bStudents - bPresent);
+        const bTotalMarked = bStudents > 0 ? bStudents : bPresent;
+        const bRate = bTotalMarked > 0 ? Number(((bPresent / bTotalMarked) * 100).toFixed(1)) : 100.0;
+
+        const bAssignments = await prisma.studentFeeAssignment.findMany({
+          where: {
+            student: { instituteId: b.id },
+            status: { in: ['PENDING', 'PARTIALLY_PAID', 'OVERDUE'] },
+          },
+          include: {
+            payments: {
+              where: { status: 'SUCCESS' },
+              select: {
+                amountPaid: true,
+                adjustments: { where: { adjustmentType: 'REFUND' }, select: { amount: true } },
               },
             },
-          });
-          let bPending = 0;
-          for (const a of bAssignments) {
-            const pNetSum = a.payments.reduce((acc, p) => {
-              const ref = (p.adjustments || []).reduce((rAcc, adj) => rAcc + Number(adj.amount), 0);
-              return acc + Number(p.amountPaid) - ref;
-            }, 0);
-            bPending += Math.max(0, Number(a.finalAmount) - pNetSum);
-          }
-          bPending = Math.round(bPending * 100) / 100;
-
-          return {
-            id: b.id,
-            code: b.code,
-            name: b.name,
-            city: b.city,
-            state: b.state,
-            address: b.address,
-            phone: b.phone,
-            email: b.email,
-            status: b.status,
-            activeStudents: bStudents,
-            staffCount: bStaff,
-            activeBatches: bBatches,
-            totalRevenue: bTotalRevenue,
-            monthlyRevenue: bMonthlyRevenue,
-            pendingFees: bPending,
-            attendanceRate: bRate,
-            todayAttendance: {
-              present: bPresent,
-              absent: bAbsent,
-              totalMarked: bTotalMarked,
-              rate: bRate,
-            },
-          };
-        })
-      );
-
-      // 10. Franchise Agreement & Two-Installment Schedule
-      const activeAgreement = franchise.agreements.find((a) => a.status === 'ACTIVE');
-      const installmentsWithStatus = franchise.installments.map((inst) => ({
-        ...inst,
-        liveStatus: computeInstallmentLiveStatus(inst),
-      }));
-
-      const totalObligations = installmentsWithStatus.reduce((sum, i) => sum + Number(i.amount), 0);
-      const totalPaid = installmentsWithStatus.reduce((sum, i) => sum + Number(i.paidAmount), 0);
-      const totalOutstanding = installmentsWithStatus.reduce((sum, i) => sum + Number(i.outstandingBalance), 0);
-      const totalOverdue = installmentsWithStatus
-        .filter((i) => i.liveStatus === 'OVERDUE')
-        .reduce((sum, i) => sum + Number(i.outstandingBalance), 0);
-
-      return res.json({
-        success: true,
-        data: {
-          franchise: {
-            id: franchise.id,
-            code: franchise.code,
-            name: franchise.name,
-            ownerName: franchise.ownerName,
-            email: franchise.email,
-            phone: franchise.phone,
-            address: franchise.address,
-            city: franchise.city,
-            state: franchise.state,
-            postalCode: franchise.postalCode,
-            country: franchise.country,
-            authorizedContact: franchise.authorizedContact,
-            status: franchise.status,
           },
-          selectedBranch,
-          isConsolidated,
-          activeAgreement,
-          agreements: franchise.agreements,
-          installments: installmentsWithStatus,
-          metrics: {
-            totalBranches: franchise.branches.length,
-            activeBranchesCount: franchise.branches.filter((b) => b.status === 'ACTIVE').length,
-            totalStudents,
-            totalStaff,
-            activeBatches,
-            todayAttendance: {
-              present: todayPresent,
-              absent: todayAbsent,
-              late: todayLate,
-              totalMarked: todayTotalMarked,
-              rate: attendanceRate,
-            },
-            monthlyFeeCollection,
-            totalRevenue,
-            pendingFees,
-            upcomingExamsCount,
-            homeworkCount,
-            materialsCount,
-            annualRoyaltyAmount: activeAgreement?.annualRoyaltyAmount
-              ? Number(activeAgreement.annualRoyaltyAmount)
-              : totalObligations,
-            calculationMethod: activeAgreement?.calculationMethod || 'FIXED_ANNUAL',
-            totalRoyaltyObligations: totalObligations,
-            totalRoyaltyPaid: totalPaid,
-            outstandingRoyalty: totalOutstanding,
-            overdueRoyalty: totalOverdue,
+        });
+        let bPending = 0;
+        for (const a of bAssignments) {
+          const pNetSum = a.payments.reduce((acc, p) => {
+            const ref = (p.adjustments || []).reduce((rAcc, adj) => rAcc + Number(adj.amount), 0);
+            return acc + Number(p.amountPaid) - ref;
+          }, 0);
+          bPending += Math.max(0, Number(a.finalAmount) - pNetSum);
+        }
+        bPending = Math.round(bPending * 100) / 100;
+
+        return {
+          id: b.id,
+          code: b.code,
+          name: b.name,
+          city: b.city,
+          state: b.state,
+          address: b.address,
+          phone: b.phone,
+          email: b.email,
+          status: b.status,
+          activeStudents: bStudents,
+          staffCount: bStaff,
+          activeBatches: bBatches,
+          totalRevenue: bTotalRevenue,
+          monthlyRevenue: bMonthlyRevenue,
+          pendingFees: bPending,
+          attendanceRate: bRate,
+          todayAttendance: {
+            present: bPresent,
+            absent: bAbsent,
+            totalMarked: bTotalMarked,
+            rate: bRate,
           },
-          upcomingExaminations: upcomingExamsList,
-          branches: franchise.branches,
-          branchCards,
-          recentPayments: franchise.royaltyPayments,
-          royaltyRecords: franchise.royaltyRecords || [],
+        };
+      })
+    );
+
+    // 10. Franchise Agreement & Two-Installment Schedule
+    const activeAgreement = franchise.agreements.find((a) => a.status === 'ACTIVE');
+    const installmentsWithStatus = franchise.installments.map((inst) => ({
+      ...inst,
+      liveStatus: computeInstallmentLiveStatus(inst),
+    }));
+
+    const totalObligations = installmentsWithStatus.reduce((sum, i) => sum + Number(i.amount), 0);
+    const totalPaid = installmentsWithStatus.reduce((sum, i) => sum + Number(i.paidAmount), 0);
+    const totalOutstanding = installmentsWithStatus.reduce((sum, i) => sum + Number(i.outstandingBalance), 0);
+    const totalOverdue = installmentsWithStatus
+      .filter((i) => i.liveStatus === 'OVERDUE')
+      .reduce((sum, i) => sum + Number(i.outstandingBalance), 0);
+
+    return res.json({
+      success: true,
+      data: {
+        franchise: {
+          id: franchise.id,
+          code: franchise.code,
+          name: franchise.name,
+          ownerName: franchise.ownerName,
+          email: franchise.email,
+          phone: franchise.phone,
+          address: franchise.address,
+          city: franchise.city,
+          state: franchise.state,
+          postalCode: franchise.postalCode,
+          country: franchise.country,
+          authorizedContact: franchise.authorizedContact,
+          status: franchise.status,
         },
-      });
-    } catch (err: any) {
-      console.error('[Franchise Owner Dashboard Error]', err);
-      return res.status(500).json({ success: false, error: 'Failed to load Franchisee Admin Dashboard' });
-    }
+        selectedBranch,
+        isConsolidated,
+        activeAgreement,
+        agreements: franchise.agreements,
+        installments: installmentsWithStatus,
+        metrics: {
+          totalBranches: franchise.branches.length,
+          activeBranchesCount: franchise.branches.filter((b) => b.status === 'ACTIVE').length,
+          totalStudents,
+          totalStaff,
+          activeBatches,
+          todayAttendance: {
+            present: todayPresent,
+            absent: todayAbsent,
+            late: todayLate,
+            totalMarked: todayTotalMarked,
+            rate: attendanceRate,
+          },
+          monthlyFeeCollection,
+          totalRevenue,
+          pendingFees,
+          upcomingExamsCount,
+          homeworkCount,
+          materialsCount,
+          annualRoyaltyAmount: activeAgreement?.annualRoyaltyAmount
+            ? Number(activeAgreement.annualRoyaltyAmount)
+            : totalObligations,
+          calculationMethod: activeAgreement?.calculationMethod || 'FIXED_ANNUAL',
+          totalRoyaltyObligations: totalObligations,
+          totalRoyaltyPaid: totalPaid,
+          outstandingRoyalty: totalOutstanding,
+          overdueRoyalty: totalOverdue,
+        },
+        upcomingExaminations: upcomingExamsList,
+        branches: franchise.branches,
+        branchCards,
+        recentPayments: franchise.royaltyPayments,
+        royaltyRecords: franchise.royaltyRecords || [],
+      },
+    });
+  } catch (err: any) {
+    console.error('[Franchise Owner Dashboard Error]', err);
+    return res.status(500).json({ success: false, error: 'Failed to load Franchisee Admin Dashboard' });
   }
+}

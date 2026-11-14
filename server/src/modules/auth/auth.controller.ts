@@ -31,8 +31,8 @@ export async function login(req: Request, res: Response) {
     const alternateEmail = identifier.toLowerCase().endsWith('@apexacademy.com')
       ? identifier.toLowerCase().replace('@apexacademy.com', '@apex.example.com')
       : identifier.toLowerCase().endsWith('@apex.example.com')
-      ? identifier.toLowerCase().replace('@apex.example.com', '@apexacademy.com')
-      : identifier;
+        ? identifier.toLowerCase().replace('@apex.example.com', '@apexacademy.com')
+        : identifier;
 
     const alternatePhone = identifier === '9826444306' ? '9876543210' : identifier === '9876543210' ? '9826444306' : identifier;
 
@@ -76,8 +76,8 @@ export async function login(req: Request, res: Response) {
         dbErr?.message?.includes('ConnectionReset')
       ) {
         console.warn('[Auth Controller] Transient socket reset detected; reconnecting to database...');
-        await prisma.$disconnect().catch(() => {});
-        await prisma.$connect().catch(() => {});
+        await prisma.$disconnect().catch(() => { });
+        await prisma.$connect().catch(() => { });
         user = await queryUser();
       } else {
         throw dbErr;
@@ -145,7 +145,7 @@ export async function login(req: Request, res: Response) {
     await prisma.user.update({
       where: { id: user.id },
       data: { lastLoginAt: new Date() },
-    }).catch(() => {});
+    }).catch(() => { });
 
     const primaryFranchise = user.ownedFranchises?.[0] || null;
 
@@ -173,10 +173,10 @@ export async function login(req: Request, res: Response) {
         },
       }));
 
-    // For STUDENT and PARENT roles, credentials are staff-managed permanent credentials.
-    // They are never forced to change passwords on login.
-    const isStaffManagedRole = effectiveRole === 'STUDENT' || effectiveRole === 'PARENT';
-    const effectiveMustChangePassword = isStaffManagedRole ? false : !!user.mustChangePassword;
+    // For STUDENT, PARENT, and FRANCHISE_OWNER roles, credentials are permanent credentials.
+    // Franchise Owners receive Super-Admin-generated permanent credentials and are never forced to change passwords on login.
+    const isExemptFromMandatoryChange = effectiveRole === 'STUDENT' || effectiveRole === 'PARENT' || effectiveRole === 'FRANCHISE_OWNER';
+    const effectiveMustChangePassword = isExemptFromMandatoryChange ? false : !!user.mustChangePassword;
 
     return res.json({
       success: true,
@@ -260,10 +260,10 @@ export async function getCurrentUser(req: AuthenticatedRequest, res: Response) {
       return res.status(404).json({ success: false, error: 'User profile not found' });
     }
 
-    const isStaffManagedRole = user.role === 'STUDENT' || user.role === 'PARENT';
+    const isExemptFromMandatoryChange = user.role === 'STUDENT' || user.role === 'PARENT' || user.role === 'FRANCHISE_OWNER';
     const sanitizedUser = {
       ...user,
-      mustChangePassword: isStaffManagedRole ? false : !!user.mustChangePassword,
+      mustChangePassword: isExemptFromMandatoryChange ? false : !!user.mustChangePassword,
     };
 
     return res.json({

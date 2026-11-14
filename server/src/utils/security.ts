@@ -61,6 +61,17 @@ export function generateSecureRandomToken(bytes: number = 32): string {
   return crypto.randomBytes(bytes).toString('hex');
 }
 
+/**
+ * Generates a strong permanent password with at least 16 cryptographically random bytes of entropy.
+ * 16 bytes = 128 bits of entropy.
+ * Format: DG#<32-hex-characters>!
+ */
+export function generatePermanentPassword(bytes: number = 16): string {
+  const entropyBytes = Math.max(16, bytes);
+  const randomHex = crypto.randomBytes(entropyBytes).toString('hex');
+  return `DG#${randomHex}!`;
+}
+
 
 // -------------------------------------------------------------
 // DEDICATED SHORT-LIVED MEDIA AUTHORIZATION TOKENS (PHASE 1.1.2)

@@ -31,6 +31,12 @@ import {
   Printer,
   Lock,
   Check,
+  Loader2,
+  Eye,
+  Copy,
+  GraduationCap,
+  UserX,
+  CheckCircle,
 } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
 
@@ -93,6 +99,12 @@ export const FranchiseManagement: React.FC = () => {
   const [showResetPasswordModal, setShowResetPasswordModal] = useState(false);
   const [selectedFranchiseForReset, setSelectedFranchiseForReset] = useState<any>(null);
   const [resetResult, setResetResult] = useState<any>(null);
+
+  // Franchise Details Drawer State
+  const [selectedFranchiseId, setSelectedFranchiseId] = useState<string | null>(null);
+  const [detailData, setDetailData] = useState<any>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
 
   const [showAmendModal, setShowAmendModal] = useState(false);
   const [selectedAgreementForAmend, setSelectedAgreementForAmend] = useState<any>(null);
@@ -165,6 +177,7 @@ export const FranchiseManagement: React.FC = () => {
   };
 
   const initialCreateForm = {
+    code: '',
     name: '',
     ownerName: '',
     email: '',
@@ -238,6 +251,7 @@ export const FranchiseManagement: React.FC = () => {
 
   // Forms
   const [createForm, setCreateForm] = useState(initialCreateForm);
+  const [isSubmittingFranchise, setIsSubmittingFranchise] = useState(false);
 
   // Edit Franchise & Manage Linked Institutes State
   const [showEditFranchiseModal, setShowEditFranchiseModal] = useState(false);
@@ -489,10 +503,77 @@ export const FranchiseManagement: React.FC = () => {
     return true;
   };
 
+  const [duplicateCheckResult, setDuplicateCheckResult] = useState<{
+    emailConflict?: { isDuplicate: boolean; model?: string; message?: string; canReuseAsOwner?: boolean };
+    phoneConflict?: { isDuplicate: boolean; model?: string; message?: string };
+    codeConflict?: { isDuplicate: boolean; message?: string };
+    isChecking?: boolean;
+  }>({});
+
+  useEffect(() => {
+    if (!showCreateModal) {
+      setDuplicateCheckResult({});
+      return;
+    }
+
+    const emailTrimmed = createForm.email?.trim().toLowerCase();
+    const phoneTrimmed = createForm.phone?.trim();
+    const codeTrimmed = createForm.code?.trim().toUpperCase();
+
+    if (!emailTrimmed && !phoneTrimmed && !codeTrimmed) {
+      setDuplicateCheckResult({});
+      return;
+    }
+
+    setDuplicateCheckResult((prev) => ({ ...prev, isChecking: true }));
+
+    const timer = setTimeout(async () => {
+      try {
+        const res = await apiFetch('/franchises/check-duplicates', {
+          method: 'POST',
+          body: JSON.stringify({
+            email: emailTrimmed || undefined,
+            phone: phoneTrimmed || undefined,
+            code: codeTrimmed || undefined,
+          }),
+        });
+
+        if (res.success && res.data) {
+          setDuplicateCheckResult({
+            emailConflict: res.data.email,
+            phoneConflict: res.data.phone,
+            codeConflict: res.data.code,
+            isChecking: false,
+          });
+        } else {
+          setDuplicateCheckResult((prev) => ({ ...prev, isChecking: false }));
+        }
+      } catch {
+        setDuplicateCheckResult((prev) => ({ ...prev, isChecking: false }));
+      }
+    }, 400);
+
+    return () => clearTimeout(timer);
+  }, [createForm.email, createForm.phone, createForm.code, showCreateModal]);
+
+  const duplicateFranchiseMatch = React.useMemo(() => {
+    if (!createForm.email?.trim()) return null;
+    const norm = createForm.email.trim().toLowerCase();
+    return franchises.find((f) => f.email?.trim().toLowerCase() === norm) || null;
+  }, [createForm.email, franchises]);
+
+  const hasBlockingConflict = Boolean(
+    duplicateFranchiseMatch ||
+    (duplicateCheckResult.emailConflict?.isDuplicate && duplicateCheckResult.emailConflict.model === 'Franchise') ||
+    duplicateCheckResult.phoneConflict?.isDuplicate ||
+    duplicateCheckResult.codeConflict?.isDuplicate
+  );
+
   const isProfileStepComplete = Boolean(
     createForm.name?.trim() &&
     createForm.ownerName?.trim() &&
     createForm.email?.trim() &&
+    !hasBlockingConflict &&
     createForm.phone?.trim() &&
     createForm.address?.trim() &&
     createForm.city?.trim() &&
@@ -509,7 +590,7 @@ export const FranchiseManagement: React.FC = () => {
   const isFinancialsStepComplete = Boolean(
     isModelStepComplete &&
     Number(createForm.initialAgreement.digitalGuruRevenuePercentage || 0) +
-      Number(createForm.initialAgreement.partnerRevenuePercentage || 0) === 100 &&
+    Number(createForm.initialAgreement.partnerRevenuePercentage || 0) === 100 &&
     (createForm.initialAgreement.calculationMethod !== 'FIXED_ANNUAL' || Number(createForm.initialAgreement.annualRoyaltyAmount) > 0) &&
     (createForm.initialAgreement.calculationMethod !== 'PER_STUDENT' || Number(createForm.initialAgreement.perStudentFee) > 0)
   );
@@ -545,6 +626,23 @@ export const FranchiseManagement: React.FC = () => {
 
   const handleCreateFranchise = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmittingFranchise) return;
+
+    if (hasBlockingConflict) {
+      const conflictMsg =
+        (duplicateCheckResult.emailConflict?.isDuplicate && duplicateCheckResult.emailConflict.model === 'Franchise'
+          ? duplicateCheckResult.emailConflict.message
+          : null) ||
+        (duplicateCheckResult.codeConflict?.isDuplicate ? duplicateCheckResult.codeConflict.message : null) ||
+        (duplicateCheckResult.phoneConflict?.isDuplicate ? duplicateCheckResult.phoneConflict.message : null) ||
+        (duplicateFranchiseMatch ? `Cannot create franchise: '${createForm.email}' is already registered to ${duplicateFranchiseMatch.name} (${duplicateFranchiseMatch.code}).` : 'Please resolve the highlighted duplicate conflicts before submitting.');
+      showToast(conflictMsg, 'error');
+      setCreateModalTab('profile');
+      return;
+    }
+
+    setIsSubmittingFrmittingFranchise:
+    setIsSubmittingFranchise(true);
     try {
       const dgPct = Number(createForm.initialAgreement.digitalGuruRevenuePercentage || 50);
       const partnerPct = createForm.initialAgreement.calculationMethod === 'PERCENTAGE_REVENUE'
@@ -552,6 +650,7 @@ export const FranchiseManagement: React.FC = () => {
         : Number(createForm.initialAgreement.partnerRevenuePercentage || 50);
 
       const payload: any = {
+        code: createForm.code?.trim().toUpperCase() || undefined,
         name: createForm.name.trim(),
         ownerName: createForm.ownerName.trim(),
         email: createForm.email.trim().toLowerCase(),
@@ -572,14 +671,14 @@ export const FranchiseManagement: React.FC = () => {
         linkedInstituteId: createForm.branchOption === 'LINK_EXISTING' ? createForm.linkedInstituteId : undefined,
         newBranch: createForm.branchOption === 'CREATE_NEW' && createForm.newBranch.name.trim()
           ? {
-              name: createForm.newBranch.name.trim(),
-              code: createForm.newBranch.code.trim() || undefined,
-              city: createForm.newBranch.city.trim() || createForm.city.trim(),
-              state: createForm.newBranch.state.trim() || createForm.state.trim(),
-              address: createForm.newBranch.address.trim() || createForm.address.trim(),
-              phone: createForm.newBranch.phone.trim() || createForm.phone.trim(),
-              email: createForm.newBranch.email.trim() || createForm.email.trim().toLowerCase(),
-            }
+            name: createForm.newBranch.name.trim(),
+            code: createForm.newBranch.code.trim() || undefined,
+            city: createForm.newBranch.city.trim() || createForm.city.trim(),
+            state: createForm.newBranch.state.trim() || createForm.state.trim(),
+            address: createForm.newBranch.address.trim() || createForm.address.trim(),
+            phone: createForm.newBranch.phone.trim() || createForm.phone.trim(),
+            email: createForm.newBranch.email.trim() || createForm.email.trim().toLowerCase(),
+          }
           : undefined,
         initialAgreement: {
           agreementType: createForm.initialAgreement.agreementType,
@@ -637,6 +736,8 @@ export const FranchiseManagement: React.FC = () => {
       }
     } catch (err: any) {
       showToast(err.message || 'Failed to create franchise', 'error');
+    } finally {
+      setIsSubmittingFranchise(false);
     }
   };
 
@@ -865,19 +966,58 @@ export const FranchiseManagement: React.FC = () => {
     setShowResetPasswordModal(true);
   };
 
+  const handleCloseResetPasswordModal = () => {
+    setShowResetPasswordModal(false);
+    setSelectedFranchiseForReset(null);
+    setResetResult(null);
+  };
+
   const executeResetPassword = async () => {
     if (!selectedFranchiseForReset) return;
     try {
       const res = await apiFetch(`/franchises/${selectedFranchiseForReset.id}/owner/reset-password`, {
         method: 'POST',
       });
-      if (res.success) {
+      if (res.success && res.data) {
         setResetResult(res.data);
-        showToast('Password reset successfully', 'success');
+        showToast('Password reset successfully. Please securely share the credentials with the owner.', 'success');
+        if (selectedFranchiseId === selectedFranchiseForReset.id) {
+          fetchFranchiseDetails(selectedFranchiseForReset.id);
+        }
+      } else {
+        showToast(res.error || 'Failed to reset password', 'error');
       }
     } catch (err: any) {
       showToast(err.message || 'Failed to reset password', 'error');
     }
+  };
+
+  const fetchFranchiseDetails = async (id: string) => {
+    setDetailLoading(true);
+    setDetailError(null);
+    try {
+      const res = await apiFetch(`/franchises/${id}`, { skipCache: true });
+      if (res.success && res.data) {
+        setDetailData(res.data);
+      } else {
+        setDetailError(res.error || 'Failed to load franchise details');
+      }
+    } catch (err: any) {
+      setDetailError(err.message || 'Failed to load franchise details');
+    } finally {
+      setDetailLoading(false);
+    }
+  };
+
+  const handleOpenDetails = (id: string) => {
+    setSelectedFranchiseId(id);
+    fetchFranchiseDetails(id);
+  };
+
+  const handleCloseDetails = () => {
+    setSelectedFranchiseId(null);
+    setDetailData(null);
+    setDetailError(null);
   };
 
   const openAddBranchModal = async (fr: Franchise) => {
@@ -1126,7 +1266,7 @@ export const FranchiseManagement: React.FC = () => {
                     setUnassignedBranches(res.data.branches);
                   }
                 })
-                .catch(() => {});
+                .catch(() => { });
               setCreateModalTab('profile');
               setShowCreateModal(true);
             }}
@@ -1252,8 +1392,8 @@ export const FranchiseManagement: React.FC = () => {
         <button
           onClick={() => setActiveTab('franchises')}
           className={`py-3.5 px-2 text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${activeTab === 'franchises'
-              ? 'border-[#006FFF] text-[#006FFF]'
-              : 'border-transparent text-slate-600 hover:text-slate-900'
+            ? 'border-[#006FFF] text-[#006FFF]'
+            : 'border-transparent text-slate-600 hover:text-slate-900'
             }`}
         >
           <Building2 className="w-4 h-4" /> Franchises & Owners ({franchises.length})
@@ -1262,8 +1402,8 @@ export const FranchiseManagement: React.FC = () => {
         <button
           onClick={() => setActiveTab('installments')}
           className={`py-3.5 px-2 text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${activeTab === 'installments'
-              ? 'border-[#006FFF] text-[#006FFF]'
-              : 'border-transparent text-slate-600 hover:text-slate-900'
+            ? 'border-[#006FFF] text-[#006FFF]'
+            : 'border-transparent text-slate-600 hover:text-slate-900'
             }`}
         >
           <DollarSign className="w-4 h-4" /> 2-Installment Royalty Schedule ({installments.length})
@@ -1272,8 +1412,8 @@ export const FranchiseManagement: React.FC = () => {
         <button
           onClick={() => setActiveTab('agreements')}
           className={`py-3.5 px-2 text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${activeTab === 'agreements'
-              ? 'border-[#006FFF] text-[#006FFF]'
-              : 'border-transparent text-slate-600 hover:text-slate-900'
+            ? 'border-[#006FFF] text-[#006FFF]'
+            : 'border-transparent text-slate-600 hover:text-slate-900'
             }`}
         >
           <FileText className="w-4 h-4" /> Agreements & Renewals
@@ -1282,8 +1422,8 @@ export const FranchiseManagement: React.FC = () => {
         <button
           onClick={() => setActiveTab('monthly_settlements')}
           className={`py-3.5 px-2 text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${activeTab === 'monthly_settlements'
-              ? 'border-[#006FFF] text-[#006FFF]'
-              : 'border-transparent text-slate-600 hover:text-slate-900'
+            ? 'border-[#006FFF] text-[#006FFF]'
+            : 'border-transparent text-slate-600 hover:text-slate-900'
             }`}
         >
           <Layers className="w-4 h-4" /> Monthly Royalty Settlements ({monthlyRecords.length})
@@ -1332,14 +1472,17 @@ export const FranchiseManagement: React.FC = () => {
                 ) : (
                   filteredFranchises.map((fr) => (
                     <React.Fragment key={fr.id}>
-                      <tr className="hover:bg-slate-50 transition-colors">
+                      <tr
+                        onClick={() => handleOpenDetails(fr.id)}
+                        className="hover:bg-blue-50/40 cursor-pointer transition-colors group"
+                      >
                         <td className="px-4 py-3.5 whitespace-nowrap">
                           <span className="font-mono font-bold text-xs bg-blue-50 text-[#006FFF] px-2.5 py-1 rounded border border-blue-200 whitespace-nowrap inline-block tracking-wide">
                             {fr.code}
                           </span>
                         </td>
                         <td className="px-4 py-3.5">
-                          <div className="font-bold text-slate-900">{fr.name}</div>
+                          <div className="font-bold text-slate-900 group-hover:text-[#006FFF] transition-colors">{fr.name}</div>
                         </td>
                         <td className="px-4 py-3.5">
                           <div className="font-medium text-slate-900">{fr.ownerName}</div>
@@ -1355,7 +1498,11 @@ export const FranchiseManagement: React.FC = () => {
                         </td>
                         <td className="px-4 py-3.5">
                           <button
-                            onClick={() => setExpandedFranchiseId(expandedFranchiseId === fr.id ? null : fr.id)}
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setExpandedFranchiseId(expandedFranchiseId === fr.id ? null : fr.id);
+                            }}
                             className="px-2.5 py-1 text-xs font-bold rounded-md bg-slate-100 hover:bg-slate-200 text-slate-800 transition-colors inline-flex items-center gap-1.5"
                             title="Click to view assigned branches and manage assignments"
                           >
@@ -1366,43 +1513,69 @@ export const FranchiseManagement: React.FC = () => {
                         </td>
                         <td className="px-4 py-3.5">
                           <span
-                            className={`px-2.5 py-1 text-xs font-bold rounded-full ${
-                              fr.status === 'ACTIVE'
-                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                : 'bg-rose-50 text-rose-700 border border-rose-200'
-                            }`}
+                            className={`px-2.5 py-1 text-xs font-bold rounded-full ${fr.status === 'ACTIVE'
+                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                              : 'bg-rose-50 text-rose-700 border border-rose-200'
+                              }`}
                           >
                             {fr.status}
                           </span>
                         </td>
                         <td className="px-4 py-3.5 text-right space-x-1.5 whitespace-nowrap">
                           <button
-                            onClick={() => openEditFranchiseModal(fr)}
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleOpenDetails(fr.id);
+                            }}
+                            className="px-2.5 py-1 text-xs font-semibold bg-white hover:bg-blue-50 text-[#006FFF] rounded-md transition-all inline-flex items-center gap-1 border border-blue-200 shadow-xs"
+                            title="View full franchise details and owner credentials"
+                          >
+                            <Eye className="w-3.5 h-3.5" /> View Details
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openEditFranchiseModal(fr);
+                            }}
                             className="px-2.5 py-1 text-xs font-semibold bg-blue-50 hover:bg-blue-100 text-[#006FFF] rounded-md transition-all inline-flex items-center gap-1 border border-blue-200"
                             title="Edit franchise details and manage linked institutes"
                           >
                             <Edit3 className="w-3 h-3" /> Edit
                           </button>
                           <button
-                            onClick={() => openAddBranchModal(fr)}
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openAddBranchModal(fr);
+                            }}
                             className="px-2.5 py-1 text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-md transition-all"
                             title="Assign existing branch or create new campus"
                           >
                             + Campus
                           </button>
                           <button
-                            onClick={() => handleResetPassword(fr)}
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleResetPassword(fr);
+                            }}
                             className="px-2.5 py-1 text-xs font-semibold bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-md transition-all inline-flex items-center gap-1"
+                            title="Reset Franchise Owner Password"
                           >
                             <Key className="w-3 h-3" /> Password
                           </button>
                           <button
-                            onClick={() => handleStatusToggle(fr.id, fr.status)}
-                            className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-all ${
-                              fr.status === 'ACTIVE'
-                                ? 'bg-rose-50 hover:bg-rose-100 text-rose-700'
-                                : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700'
-                            }`}
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleStatusToggle(fr.id, fr.status);
+                            }}
+                            className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-all ${fr.status === 'ACTIVE'
+                              ? 'bg-rose-50 hover:bg-rose-100 text-rose-700'
+                              : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700'
+                              }`}
                           >
                             {fr.status === 'ACTIVE' ? 'Suspend' : 'Activate'}
                           </button>
@@ -1693,8 +1866,8 @@ export const FranchiseManagement: React.FC = () => {
                             <span>{agr.agreementNumber}</span>
                             <span
                               className={`px-2 py-0.5 rounded text-[10px] font-bold ${agr.status === 'ACTIVE'
-                                  ? 'bg-emerald-100 text-emerald-800'
-                                  : 'bg-slate-200 text-slate-700'
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : 'bg-slate-200 text-slate-700'
                                 }`}
                             >
                               {agr.status}
@@ -1919,13 +2092,12 @@ export const FranchiseManagement: React.FC = () => {
                         </td>
                         <td className="px-4 py-3">
                           <span
-                            className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${
-                              rec.status === 'PAID'
-                                ? 'bg-emerald-100 text-emerald-800'
-                                : rec.status === 'OVERDUE'
-                                  ? 'bg-rose-100 text-rose-800'
-                                  : 'bg-amber-100 text-amber-800'
-                            }`}
+                            className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${rec.status === 'PAID'
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : rec.status === 'OVERDUE'
+                                ? 'bg-rose-100 text-rose-800'
+                                : 'bg-amber-100 text-amber-800'
+                              }`}
                           >
                             {rec.status}
                           </span>
@@ -1984,34 +2156,31 @@ export const FranchiseManagement: React.FC = () => {
                       type="button"
                       onClick={() => handleTabClick(t.id as any)}
                       title={isLocked ? 'Complete the previous section to unlock this step' : undefined}
-                      className={`text-left p-2.5 rounded-xl border transition-all ${
-                        isActive
-                          ? 'bg-blue-50/90 border-[#006FFF] shadow-xs ring-1 ring-[#006FFF]'
-                          : isLocked
-                            ? 'bg-slate-50 border-slate-200 text-slate-400 opacity-60 cursor-not-allowed'
-                            : t.isComplete
-                              ? 'bg-emerald-50/40 border-emerald-300 text-slate-700 hover:bg-emerald-50 cursor-pointer'
-                              : 'bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-600 cursor-pointer'
-                      }`}
+                      className={`text-left p-2.5 rounded-xl border transition-all ${isActive
+                        ? 'bg-blue-50/90 border-[#006FFF] shadow-xs ring-1 ring-[#006FFF]'
+                        : isLocked
+                          ? 'bg-slate-50 border-slate-200 text-slate-400 opacity-60 cursor-not-allowed'
+                          : t.isComplete
+                            ? 'bg-emerald-50/40 border-emerald-300 text-slate-700 hover:bg-emerald-50 cursor-pointer'
+                            : 'bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-600 cursor-pointer'
+                        }`}
                     >
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
                           <span
-                            className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold ${
-                              isActive
-                                ? 'bg-[#006FFF] text-white'
-                                : t.isComplete
-                                  ? 'bg-emerald-600 text-white'
-                                  : isLocked
-                                    ? 'bg-slate-200 text-slate-400'
-                                    : 'bg-slate-200 text-slate-700'
-                            }`}
+                            className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold ${isActive
+                              ? 'bg-[#006FFF] text-white'
+                              : t.isComplete
+                                ? 'bg-emerald-600 text-white'
+                                : isLocked
+                                  ? 'bg-slate-200 text-slate-400'
+                                  : 'bg-slate-200 text-slate-700'
+                              }`}
                           >
                             {t.isComplete && !isActive ? '✓' : t.step}
                           </span>
-                          <span className={`text-xs font-bold leading-tight ${
-                            isActive ? 'text-[#006FFF]' : isLocked ? 'text-slate-400' : 'text-slate-800'
-                          }`}>
+                          <span className={`text-xs font-bold leading-tight ${isActive ? 'text-[#006FFF]' : isLocked ? 'text-slate-400' : 'text-slate-800'
+                            }`}>
                             {t.title}
                           </span>
                         </div>
@@ -2052,6 +2221,24 @@ export const FranchiseManagement: React.FC = () => {
                         </div>
 
                         <div>
+                          <label className="block text-xs font-medium text-slate-700">Franchise Code (Optional)</label>
+                          <input
+                            type="text"
+                            placeholder="Auto-generated if left blank (e.g. DG-FR-1001)"
+                            value={createForm.code}
+                            onChange={(e) => setCreateForm({ ...createForm, code: e.target.value.toUpperCase() })}
+                            className={`mt-1 w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-[#006FFF] ${duplicateCheckResult.codeConflict?.isDuplicate ? 'border-rose-400 bg-rose-50/40 text-rose-900' : ''
+                              }`}
+                          />
+                          {duplicateCheckResult.codeConflict?.isDuplicate && (
+                            <p className="mt-1 text-xs text-rose-600 font-medium flex items-center gap-1">
+                              <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                              {duplicateCheckResult.codeConflict.message}
+                            </p>
+                          )}
+                        </div>
+
+                        <div>
                           <label className="block text-xs font-medium text-slate-700">Owner Full Name *</label>
                           <input
                             type="text"
@@ -2071,8 +2258,25 @@ export const FranchiseManagement: React.FC = () => {
                             placeholder="owner@dgchennai.com"
                             value={createForm.email}
                             onChange={(e) => setCreateForm({ ...createForm, email: e.target.value })}
-                            className="mt-1 w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-[#006FFF]"
+                            className={`mt-1 w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-[#006FFF] ${(duplicateFranchiseMatch || (duplicateCheckResult.emailConflict?.isDuplicate && duplicateCheckResult.emailConflict.model === 'Franchise'))
+                              ? 'border-rose-400 bg-rose-50/40 text-rose-900'
+                              : duplicateCheckResult.emailConflict?.isDuplicate && duplicateCheckResult.emailConflict.model === 'User'
+                                ? 'border-blue-400 bg-blue-50/30'
+                                : ''
+                              }`}
                           />
+                          {(duplicateFranchiseMatch || (duplicateCheckResult.emailConflict?.isDuplicate && duplicateCheckResult.emailConflict.model === 'Franchise')) && (
+                            <p className="mt-1 text-xs text-rose-600 font-medium flex items-center gap-1">
+                              <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                              {duplicateCheckResult.emailConflict?.message || `A franchise with this email already exists (${duplicateFranchiseMatch?.name} [${duplicateFranchiseMatch?.code}]).`}
+                            </p>
+                          )}
+                          {!duplicateFranchiseMatch && duplicateCheckResult.emailConflict?.isDuplicate && duplicateCheckResult.emailConflict.model === 'User' && (
+                            <p className="mt-1 text-xs text-blue-600 font-medium flex items-center gap-1">
+                              <Info className="w-3.5 h-3.5 shrink-0" />
+                              {duplicateCheckResult.emailConflict.message}
+                            </p>
+                          )}
                         </div>
 
                         <div>
@@ -2083,8 +2287,15 @@ export const FranchiseManagement: React.FC = () => {
                             placeholder="+91 98765 43210"
                             value={createForm.phone}
                             onChange={(e) => setCreateForm({ ...createForm, phone: e.target.value })}
-                            className="mt-1 w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-[#006FFF]"
+                            className={`mt-1 w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-[#006FFF] ${duplicateCheckResult.phoneConflict?.isDuplicate ? 'border-rose-400 bg-rose-50/40 text-rose-900' : ''
+                              }`}
                           />
+                          {duplicateCheckResult.phoneConflict?.isDuplicate && (
+                            <p className="mt-1 text-xs text-rose-600 font-medium flex items-center gap-1">
+                              <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                              {duplicateCheckResult.phoneConflict.message}
+                            </p>
+                          )}
                         </div>
                       </div>
 
@@ -2198,11 +2409,10 @@ export const FranchiseManagement: React.FC = () => {
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
                         <div
                           onClick={() => setCreateForm({ ...createForm, branchOption: 'NONE' })}
-                          className={`p-3 rounded-xl border cursor-pointer transition-all flex flex-col justify-between ${
-                            createForm.branchOption === 'NONE'
-                              ? 'bg-blue-50/70 border-[#006FFF] ring-1 ring-[#006FFF]'
-                              : 'bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-600'
-                          }`}
+                          className={`p-3 rounded-xl border cursor-pointer transition-all flex flex-col justify-between ${createForm.branchOption === 'NONE'
+                            ? 'bg-blue-50/70 border-[#006FFF] ring-1 ring-[#006FFF]'
+                            : 'bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-600'
+                            }`}
                         >
                           <div className="flex items-center justify-between mb-1.5">
                             <span className="text-xs font-bold text-slate-900">Skip for now</span>
@@ -2221,11 +2431,10 @@ export const FranchiseManagement: React.FC = () => {
 
                         <div
                           onClick={() => setCreateForm({ ...createForm, branchOption: 'LINK_EXISTING' })}
-                          className={`p-3 rounded-xl border cursor-pointer transition-all flex flex-col justify-between ${
-                            createForm.branchOption === 'LINK_EXISTING'
-                              ? 'bg-blue-50/70 border-[#006FFF] ring-1 ring-[#006FFF]'
-                              : 'bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-600'
-                          }`}
+                          className={`p-3 rounded-xl border cursor-pointer transition-all flex flex-col justify-between ${createForm.branchOption === 'LINK_EXISTING'
+                            ? 'bg-blue-50/70 border-[#006FFF] ring-1 ring-[#006FFF]'
+                            : 'bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-600'
+                            }`}
                         >
                           <div className="flex items-center justify-between mb-1.5">
                             <span className="text-xs font-bold text-slate-900">Link Existing Institute</span>
@@ -2258,11 +2467,10 @@ export const FranchiseManagement: React.FC = () => {
                               },
                             });
                           }}
-                          className={`p-3 rounded-xl border cursor-pointer transition-all flex flex-col justify-between ${
-                            createForm.branchOption === 'CREATE_NEW'
-                              ? 'bg-blue-50/70 border-[#006FFF] ring-1 ring-[#006FFF]'
-                              : 'bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-600'
-                          }`}
+                          className={`p-3 rounded-xl border cursor-pointer transition-all flex flex-col justify-between ${createForm.branchOption === 'CREATE_NEW'
+                            ? 'bg-blue-50/70 border-[#006FFF] ring-1 ring-[#006FFF]'
+                            : 'bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-600'
+                            }`}
                         >
                           <div className="flex items-center justify-between mb-1.5">
                             <span className="text-xs font-bold text-slate-900">Create & Link New Campus</span>
@@ -2270,7 +2478,7 @@ export const FranchiseManagement: React.FC = () => {
                               type="radio"
                               name="branchOption"
                               checked={createForm.branchOption === 'CREATE_NEW'}
-                              onChange={() => {}}
+                              onChange={() => { }}
                               className="text-[#006FFF]"
                             />
                           </div>
@@ -2458,11 +2666,10 @@ export const FranchiseManagement: React.FC = () => {
                                       },
                                     });
                                   }}
-                                  className={`p-3 rounded-xl text-left border text-xs transition-all ${
-                                    isSelected
-                                      ? 'bg-blue-50 border-[#006FFF] text-[#006FFF] font-bold shadow-sm ring-1 ring-[#006FFF]'
-                                      : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300'
-                                  }`}
+                                  className={`p-3 rounded-xl text-left border text-xs transition-all ${isSelected
+                                    ? 'bg-blue-50 border-[#006FFF] text-[#006FFF] font-bold shadow-sm ring-1 ring-[#006FFF]'
+                                    : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300'
+                                    }`}
                                 >
                                   <div className="font-bold text-[12px] leading-tight">{tmpl.label}</div>
                                   <div className="text-[10px] text-slate-500 mt-1">
@@ -2648,13 +2855,12 @@ export const FranchiseManagement: React.FC = () => {
                       <div className="flex items-center justify-between">
                         <span className="text-xs font-bold text-slate-800">Revenue Sharing Configuration</span>
                         <span
-                          className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                            Number(createForm.initialAgreement.digitalGuruRevenuePercentage) +
-                              Number(createForm.initialAgreement.partnerRevenuePercentage) ===
+                          className={`px-2 py-0.5 rounded text-[10px] font-bold ${Number(createForm.initialAgreement.digitalGuruRevenuePercentage) +
+                            Number(createForm.initialAgreement.partnerRevenuePercentage) ===
                             100
-                              ? 'bg-emerald-100 text-emerald-800'
-                              : 'bg-rose-100 text-rose-800'
-                          }`}
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : 'bg-rose-100 text-rose-800'
+                            }`}
                         >
                           Total:{' '}
                           {Number(createForm.initialAgreement.digitalGuruRevenuePercentage || 0) +
@@ -3160,11 +3366,22 @@ export const FranchiseManagement: React.FC = () => {
                   ) : (
                     <button
                       type="submit"
-                      className="px-6 py-2.5 bg-[#FEDC32] hover:bg-[#FEDC32]/90 text-slate-900 font-bold rounded-xl text-xs shadow-md transition-all flex items-center gap-2 cursor-pointer"
+                      disabled={isSubmittingFranchise || Boolean(duplicateFranchiseMatch)}
+                      className={`px-6 py-2.5 font-bold rounded-xl text-xs shadow-md transition-all flex items-center gap-2 ${isSubmittingFranchise || duplicateFranchiseMatch
+                        ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
+                        : 'bg-[#FEDC32] hover:bg-[#FEDC32]/90 text-slate-900 cursor-pointer'
+                        }`}
                     >
-                      {createForm.initialAgreement.settlementFrequency === 'YEARLY'
-                        ? 'Create Franchise & Generate 2 Annual Installments'
-                        : 'Create Franchise (Monthly Settlement)'}
+                      {isSubmittingFranchise ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Creating Franchise & Installments...
+                        </>
+                      ) : createForm.initialAgreement.settlementFrequency === 'YEARLY' ? (
+                        'Create Franchise & Generate 2 Annual Installments'
+                      ) : (
+                        'Create Franchise (Monthly Settlement)'
+                      )}
                     </button>
                   )}
                 </div>
@@ -3198,15 +3415,72 @@ export const FranchiseManagement: React.FC = () => {
                 <span className="text-slate-500">Agreement Number:</span>
                 <span className="font-mono text-slate-800">{createdResultModal.agreement?.agreementNumber}</span>
               </div>
-              <div className="border-t border-slate-200 pt-2 flex justify-between">
-                <span className="text-slate-500">Login Email:</span>
-                <span className="font-bold text-slate-900">{createdResultModal.ownerCredentials?.email}</span>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Owner Full Name:</span>
+                <span className="font-bold text-slate-900">{createdResultModal.ownerCredentials?.fullName || createdResultModal.franchise?.ownerName}</span>
               </div>
-              <div className="flex justify-between items-center bg-amber-50 p-2 rounded-lg border border-amber-200">
-                <span className="text-xs font-semibold text-amber-800">Initial Temporary Password:</span>
-                <span className="font-mono font-bold text-amber-950 text-sm">
-                  {createdResultModal.ownerCredentials?.temporaryPassword}
+              <div className="border-t border-slate-200 pt-2 flex justify-between items-center">
+                <span className="text-slate-500">Login Email / Username:</span>
+                <span className="font-mono font-bold text-slate-900">{createdResultModal.ownerCredentials?.email}</span>
+              </div>
+              <div className="flex justify-between items-center bg-emerald-50 p-2.5 rounded-lg border border-emerald-200">
+                <div>
+                  <span className="text-xs font-semibold text-emerald-800 block">Permanent Login Password:</span>
+                  <span className="text-[11px] text-emerald-700">Account ready for direct login (no mandatory password change)</span>
+                </div>
+                <span className="font-mono font-bold text-emerald-950 text-base select-all">
+                  {createdResultModal.ownerCredentials?.permanentPassword || createdResultModal.ownerCredentials?.password || createdResultModal.ownerCredentials?.temporaryPassword}
                 </span>
+              </div>
+            </div>
+
+            <div className="mt-4 p-3 bg-blue-50/60 rounded-xl border border-blue-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div className="text-xs text-blue-900">
+                <span className="font-semibold block">Deliver Permanent Credentials to Owner:</span>
+                <span className="text-[11px] text-blue-700">Copy permanent login credentials and portal URL to share with Franchise Owner securely.</span>
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const email = createdResultModal.ownerCredentials?.email || '';
+                    navigator.clipboard.writeText(email);
+                    showToast('Owner email copied to clipboard!', 'success');
+                  }}
+                  className="px-2.5 py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-lg text-xs font-semibold transition flex items-center gap-1 shadow-xs cursor-pointer"
+                >
+                  <Copy className="w-3 h-3" /> Copy Email
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const pwd = createdResultModal.ownerCredentials?.permanentPassword || createdResultModal.ownerCredentials?.password || createdResultModal.ownerCredentials?.temporaryPassword || '';
+                    navigator.clipboard.writeText(pwd);
+                    showToast('Permanent password copied to clipboard!', 'success');
+                  }}
+                  className="px-2.5 py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-lg text-xs font-semibold transition flex items-center gap-1 shadow-xs cursor-pointer"
+                >
+                  <Copy className="w-3 h-3" /> Copy Password
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const pwd = createdResultModal.ownerCredentials?.permanentPassword || createdResultModal.ownerCredentials?.password || createdResultModal.ownerCredentials?.temporaryPassword || '';
+                    const creds = [
+                      `Digital Guru Franchise Center Onboarding`,
+                      `Franchise Center: ${createdResultModal.franchise?.name} (${createdResultModal.franchise?.code})`,
+                      `Owner: ${createdResultModal.ownerCredentials?.fullName || createdResultModal.franchise?.ownerName}`,
+                      `Portal URL: ${window.location.origin}/login`,
+                      `Login Username / Email: ${createdResultModal.ownerCredentials?.email}`,
+                      `Permanent Password: ${pwd}`,
+                    ].join('\n');
+                    navigator.clipboard.writeText(creds);
+                    showToast('Franchise owner credentials copied to clipboard!', 'success');
+                  }}
+                  className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition flex items-center gap-1.5 shadow-xs cursor-pointer"
+                >
+                  <Copy className="w-3.5 h-3.5" /> Copy All Credentials
+                </button>
               </div>
             </div>
 
@@ -3559,14 +3833,26 @@ export const FranchiseManagement: React.FC = () => {
       )}
 
       {/* ============================================================= */}
-      {/* MODAL 6: RESET OWNER PASSWORD                                 */}
+      {/* MODAL 6: RESET OWNER PASSWORD (SUPER ADMIN ONLY)              */}
       {/* ============================================================= */}
       {showResetPasswordModal && selectedFranchiseForReset && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-start justify-center p-4 sm:p-6 overflow-y-auto min-h-screen">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl my-6 sm:my-8 border border-slate-200">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl my-6 sm:my-8 border border-slate-200 animate-in fade-in duration-200">
             <div className="flex justify-between items-center border-b pb-3 mb-4">
-              <h3 className="text-lg font-bold text-slate-900">Reset Owner Password</h3>
-              <button onClick={() => setShowResetPasswordModal(false)} className="text-slate-400 hover:text-slate-600">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-blue-50 text-[#006FFF] flex items-center justify-center">
+                  <Key className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">Reset Owner Password</h3>
+                  <p className="text-[11px] text-slate-500">Permanent Credential Generation</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={handleCloseResetPasswordModal}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100 transition"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -3574,44 +3860,110 @@ export const FranchiseManagement: React.FC = () => {
             {!resetResult ? (
               <div className="space-y-4">
                 <p className="text-sm text-slate-600">
-                  Are you sure you want to generate a new temporary password for{' '}
-                  <strong>{selectedFranchiseForReset.ownerName}</strong> ({selectedFranchiseForReset.email})?
+                  Generate a new permanent password for{' '}
+                  <strong className="text-slate-900">{selectedFranchiseForReset.ownerName}</strong> ({selectedFranchiseForReset.email})?
                 </p>
-                <div className="flex justify-end gap-3 pt-3 border-t">
+                <div className="bg-amber-50 border border-amber-200 p-3 rounded-xl text-xs text-amber-800 space-y-1">
+                  <div className="font-semibold flex items-center gap-1.5">
+                    <AlertTriangle className="w-3.5 h-3.5 shrink-0 text-amber-600" />
+                    Security Notice
+                  </div>
+                  <div>
+                    The owner's previous password will be invalidated immediately. The owner will be able to log in directly using the newly generated permanent password without forced password change.
+                  </div>
+                </div>
+                <div className="flex justify-end gap-2.5 pt-3 border-t border-slate-100">
                   <button
                     type="button"
-                    onClick={() => setShowResetPasswordModal(false)}
-                    className="px-4 py-2 border text-slate-600 rounded-lg text-sm font-semibold"
+                    onClick={handleCloseResetPasswordModal}
+                    className="px-4 py-2 border border-slate-200 text-slate-600 hover:bg-slate-50 rounded-xl text-xs font-semibold transition"
                   >
                     Cancel
                   </button>
                   <button
+                    type="button"
                     onClick={executeResetPassword}
-                    className="px-5 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-lg text-sm shadow"
+                    className="px-5 py-2 bg-[#006FFF] hover:bg-[#0058D4] text-white font-bold rounded-xl text-xs shadow-xs transition cursor-pointer"
                   >
-                    Confirm Reset
+                    Generate New Permanent Password
                   </button>
                 </div>
               </div>
             ) : (
               <div className="space-y-4">
-                <div className="bg-emerald-50 border border-emerald-200 p-4 rounded-xl text-xs space-y-2">
-                  <div className="font-bold text-emerald-800 text-sm">Password Reset Successful!</div>
-                  <div className="text-slate-600">Email: {resetResult.email}</div>
-                  <div className="bg-white p-2.5 rounded border border-emerald-200 font-mono font-bold text-emerald-950 text-base text-center">
-                    {resetResult.temporaryPassword}
+                <div className="bg-emerald-50 border border-emerald-200 p-4 rounded-xl text-xs space-y-2.5">
+                  <div className="font-bold text-emerald-800 text-sm flex items-center gap-1.5">
+                    <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+                    Permanent Password Generated!
                   </div>
-                  <div className="text-[11px] text-slate-500">
-                    Hand this temporary password securely to the franchisee admin. They will be prompted to update it upon sign in.
+                  <div className="text-slate-700 flex justify-between items-center">
+                    <span className="text-slate-500">Owner Name:</span>
+                    <span className="font-semibold text-slate-900">{selectedFranchiseForReset?.ownerName || resetResult.fullName}</span>
+                  </div>
+                  <div className="text-slate-700 flex justify-between items-center">
+                    <span className="text-slate-500">Login Email:</span>
+                    <span className="font-mono font-semibold text-slate-900">{resetResult.email}</span>
+                  </div>
+                  <div className="bg-white p-3 rounded-xl border border-emerald-200">
+                    <span className="text-[11px] text-slate-500 block mb-1">New Permanent Password:</span>
+                    <div className="font-mono font-bold text-emerald-950 text-base text-center tracking-wider selection:bg-emerald-100 select-all">
+                      {resetResult.permanentPassword || resetResult.password || resetResult.temporaryPassword}
+                    </div>
+                  </div>
+                  <div className="text-[11px] text-slate-600 leading-relaxed">
+                    Please securely convey this permanent password to the Franchise Owner. It is now active for direct sign-in.
                   </div>
                 </div>
 
-                <div className="flex justify-end">
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100">
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(resetResult.email);
+                        showToast('Email copied to clipboard!', 'success');
+                      }}
+                      className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold transition flex items-center gap-1 cursor-pointer"
+                    >
+                      <Copy className="w-3 h-3" /> Copy Email
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const pwd = resetResult.permanentPassword || resetResult.password || resetResult.temporaryPassword;
+                        navigator.clipboard.writeText(pwd);
+                        showToast('Password copied to clipboard!', 'success');
+                      }}
+                      className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold transition flex items-center gap-1 cursor-pointer"
+                    >
+                      <Copy className="w-3 h-3" /> Copy Password
+                    </button>
+                  </div>
                   <button
-                    onClick={() => setShowResetPasswordModal(false)}
-                    className="px-5 py-2 bg-[#006FFF] text-white font-bold rounded-lg text-sm"
+                    type="button"
+                    onClick={() => {
+                      const pwd = resetResult.permanentPassword || resetResult.password || resetResult.temporaryPassword;
+                      const creds = [
+                        `Digital Guru Franchise Login Credentials`,
+                        `Franchise: ${selectedFranchiseForReset?.name || 'Digital Guru Franchise'}`,
+                        `Owner: ${selectedFranchiseForReset?.ownerName || resetResult.fullName}`,
+                        `Portal URL: ${window.location.origin}/login`,
+                        `Login Email: ${resetResult.email}`,
+                        `Permanent Password: ${pwd}`,
+                      ].join('\n');
+                      navigator.clipboard.writeText(creds);
+                      showToast('All credentials copied to clipboard!', 'success');
+                    }}
+                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-xs cursor-pointer"
                   >
-                    Done
+                    <Copy className="w-3.5 h-3.5" /> Copy All Credentials
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleCloseResetPasswordModal}
+                    className="px-5 py-2 bg-[#006FFF] hover:bg-[#0058D4] text-white font-bold rounded-xl text-xs shadow-xs transition"
+                  >
+                    Done & Close
                   </button>
                 </div>
               </div>
@@ -3636,79 +3988,79 @@ export const FranchiseManagement: React.FC = () => {
               </button>
             </div>
 
-              {/* Mode Selector Tabs */}
-              <div className="flex bg-slate-100 p-1 rounded-xl mb-4 text-xs font-semibold">
-                <button
-                  type="button"
-                  onClick={() => setBranchModalMode('existing')}
-                  className={`flex-1 py-1.5 rounded-lg transition-all ${branchModalMode === 'existing'
-                      ? 'bg-white text-[#006FFF] shadow-sm font-bold'
-                      : 'text-slate-600 hover:text-slate-900'
-                    }`}
-                >
-                  Assign Existing ({unassignedBranches.length} Available)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setBranchModalMode('new')}
-                  className={`flex-1 py-1.5 rounded-lg transition-all ${branchModalMode === 'new'
-                      ? 'bg-white text-[#006FFF] shadow-sm font-bold'
-                      : 'text-slate-600 hover:text-slate-900'
-                    }`}
-                >
-                  Create & Attach New
-                </button>
-              </div>
+            {/* Mode Selector Tabs */}
+            <div className="flex bg-slate-100 p-1 rounded-xl mb-4 text-xs font-semibold">
+              <button
+                type="button"
+                onClick={() => setBranchModalMode('existing')}
+                className={`flex-1 py-1.5 rounded-lg transition-all ${branchModalMode === 'existing'
+                  ? 'bg-white text-[#006FFF] shadow-sm font-bold'
+                  : 'text-slate-600 hover:text-slate-900'
+                  }`}
+              >
+                Assign Existing ({unassignedBranches.length} Available)
+              </button>
+              <button
+                type="button"
+                onClick={() => setBranchModalMode('new')}
+                className={`flex-1 py-1.5 rounded-lg transition-all ${branchModalMode === 'new'
+                  ? 'bg-white text-[#006FFF] shadow-sm font-bold'
+                  : 'text-slate-600 hover:text-slate-900'
+                  }`}
+              >
+                Create & Attach New
+              </button>
+            </div>
 
-                {/* MODE 1: ASSIGN EXISTING BRANCH */}
-                {branchModalMode === 'existing' ? (
-                  <form onSubmit={handleAssignExistingBranch} className="space-y-4">
-                    {unassignedBranches.length === 0 ? (
-                      <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-xs">
-                        No unassigned campus branches are currently available. Please use &ldquo;Create & Attach New&rdquo; to establish a new campus for this franchise.
-                      </div>
-                    ) : (
-                      <div>
-                        <label className="block text-xs font-medium text-slate-700 mb-1">
-                          Select Available Campus Branch *
-                        </label>
-                        <select
-                          required
-                          value={selectedExistingBranchId}
-                          onChange={(e) => setSelectedExistingBranchId(e.target.value)}
-                          className="w-full px-3 py-2 border rounded-lg text-sm bg-white"
-                        >
-                          <option value="">-- Choose an unassigned campus branch --</option>
-                          {unassignedBranches.map((b) => (
-                            <option key={b.id} value={b.id}>
-                              {b.name} ({b.code}) - {b.city || 'Tamil Nadu'}
-                            </option>
-                          ))}
-                        </select>
-                        <p className="text-[11px] text-slate-500 mt-1">
-                          Assigning this branch will grant the Franchisee Admin full operational access while preserving all historical students, staff, and tuition payments.
-                        </p>
-                      </div>
-                    )}
-
-                    <div className="flex justify-end gap-3 pt-3 border-t">
-                      <button
-                        type="button"
-                        onClick={() => setShowAddBranchModal(false)}
-                        className="px-4 py-2 border text-slate-600 rounded-lg text-sm font-semibold"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="submit"
-                        disabled={unassignedBranches.length === 0 || !selectedExistingBranchId}
-                        className="px-6 py-2 bg-[#006FFF] hover:bg-[#0055CC] disabled:opacity-50 text-white font-bold rounded-lg text-sm shadow"
-                      >
-                        Assign Branch to Franchise
-                      </button>
-                    </div>
-                  </form>
+            {/* MODE 1: ASSIGN EXISTING BRANCH */}
+            {branchModalMode === 'existing' ? (
+              <form onSubmit={handleAssignExistingBranch} className="space-y-4">
+                {unassignedBranches.length === 0 ? (
+                  <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-xs">
+                    No unassigned campus branches are currently available. Please use &ldquo;Create & Attach New&rdquo; to establish a new campus for this franchise.
+                  </div>
                 ) : (
+                  <div>
+                    <label className="block text-xs font-medium text-slate-700 mb-1">
+                      Select Available Campus Branch *
+                    </label>
+                    <select
+                      required
+                      value={selectedExistingBranchId}
+                      onChange={(e) => setSelectedExistingBranchId(e.target.value)}
+                      className="w-full px-3 py-2 border rounded-lg text-sm bg-white"
+                    >
+                      <option value="">-- Choose an unassigned campus branch --</option>
+                      {unassignedBranches.map((b) => (
+                        <option key={b.id} value={b.id}>
+                          {b.name} ({b.code}) - {b.city || 'Tamil Nadu'}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-[11px] text-slate-500 mt-1">
+                      Assigning this branch will grant the Franchisee Admin full operational access while preserving all historical students, staff, and tuition payments.
+                    </p>
+                  </div>
+                )}
+
+                <div className="flex justify-end gap-3 pt-3 border-t">
+                  <button
+                    type="button"
+                    onClick={() => setShowAddBranchModal(false)}
+                    className="px-4 py-2 border text-slate-600 rounded-lg text-sm font-semibold"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={unassignedBranches.length === 0 || !selectedExistingBranchId}
+                    className="px-6 py-2 bg-[#006FFF] hover:bg-[#0055CC] disabled:opacity-50 text-white font-bold rounded-lg text-sm shadow"
+                  >
+                    Assign Branch to Franchise
+                  </button>
+                </div>
+              </form>
+            ) : (
               /* MODE 2: CREATE & ATTACH NEW BRANCH */
               <form onSubmit={handleAddBranch} className="space-y-4">
                 <div>
@@ -3759,27 +4111,27 @@ export const FranchiseManagement: React.FC = () => {
                   />
                 </div>
 
-            <div className="flex justify-end gap-3 pt-3 border-t">
-              <button
-                type="button"
-                onClick={() => setShowAddBranchModal(false)}
-                className="px-4 py-2 border text-slate-600 rounded-lg text-sm font-semibold"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                className="px-6 py-2 bg-[#006FFF] hover:bg-[#0055CC] text-white font-bold rounded-lg text-sm shadow"
-              >
-                Create & Attach Campus
-              </button>
-            </div>
-          </form>
+                <div className="flex justify-end gap-3 pt-3 border-t">
+                  <button
+                    type="button"
+                    onClick={() => setShowAddBranchModal(false)}
+                    className="px-4 py-2 border text-slate-600 rounded-lg text-sm font-semibold"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-6 py-2 bg-[#006FFF] hover:bg-[#0055CC] text-white font-bold rounded-lg text-sm shadow"
+                  >
+                    Create & Attach Campus
+                  </button>
+                </div>
+              </form>
             )}
+          </div>
         </div>
-        </div>
-  )
-}
+      )
+      }
 
       {/* ============================================================= */}
       {/* MODAL 8: REVISE AGREEMENT (NEW VERSION N+1)                   */}
@@ -3836,11 +4188,10 @@ export const FranchiseManagement: React.FC = () => {
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-slate-800">Revenue Sharing Split & Basis</span>
                   <span
-                    className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                      Number(reviseForm.digitalGuruRevenuePercentage) + Number(reviseForm.partnerRevenuePercentage) === 100
-                        ? 'bg-emerald-100 text-emerald-800'
-                        : 'bg-rose-100 text-rose-800'
-                    }`}
+                    className={`px-2 py-0.5 rounded text-[10px] font-bold ${Number(reviseForm.digitalGuruRevenuePercentage) + Number(reviseForm.partnerRevenuePercentage) === 100
+                      ? 'bg-emerald-100 text-emerald-800'
+                      : 'bg-rose-100 text-rose-800'
+                      }`}
                   >
                     Total: {Number(reviseForm.digitalGuruRevenuePercentage || 0) + Number(reviseForm.partnerRevenuePercentage || 0)}% (Must = 100%)
                   </span>
@@ -4235,11 +4586,10 @@ export const FranchiseManagement: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setEditFranchiseTab('details')}
-                className={`py-3 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 ${
-                  editFranchiseTab === 'details'
-                    ? 'border-[#006FFF] text-[#006FFF]'
-                    : 'border-transparent text-slate-600 hover:text-slate-900'
-                }`}
+                className={`py-3 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 ${editFranchiseTab === 'details'
+                  ? 'border-[#006FFF] text-[#006FFF]'
+                  : 'border-transparent text-slate-600 hover:text-slate-900'
+                  }`}
               >
                 <Building2 className="w-4 h-4" />
                 Franchise Profile & Contact
@@ -4247,11 +4597,10 @@ export const FranchiseManagement: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setEditFranchiseTab('campuses')}
-                className={`py-3 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 ${
-                  editFranchiseTab === 'campuses'
-                    ? 'border-[#006FFF] text-[#006FFF]'
-                    : 'border-transparent text-slate-600 hover:text-slate-900'
-                }`}
+                className={`py-3 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 ${editFranchiseTab === 'campuses'
+                  ? 'border-[#006FFF] text-[#006FFF]'
+                  : 'border-transparent text-slate-600 hover:text-slate-900'
+                  }`}
               >
                 <MapPin className="w-4 h-4" />
                 Linked Institutes / Campuses ({selectedFranchiseForEdit.branches?.length || 0})
@@ -4560,6 +4909,479 @@ export const FranchiseManagement: React.FC = () => {
                   </form>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ====================================================
+          FRANCHISE DETAILS SLIDE-OVER DRAWER
+         ==================================================== */}
+      {selectedFranchiseId && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-end bg-black/50 backdrop-blur-sm animate-in fade-in duration-200"
+          onClick={handleCloseDetails}
+        >
+          <div
+            className="bg-white border-l border-slate-200 w-full max-w-2xl h-full shadow-2xl flex flex-col text-slate-800 overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Drawer Header */}
+            <div className="p-6 border-b border-slate-100 bg-white flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 rounded-2xl bg-blue-50 border border-blue-200 flex items-center justify-center text-[#006FFF]">
+                  <Building2 className="w-6 h-6" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-lg font-bold text-slate-900">
+                      {detailData?.franchise.name || 'Franchise Details'}
+                    </h2>
+                    {detailData?.franchise.status && (
+                      <span
+                        className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${detailData.franchise.status === 'ACTIVE'
+                          ? 'bg-emerald-50 text-emerald-800 border border-emerald-300'
+                          : 'bg-rose-50 text-rose-800 border border-rose-300'
+                          }`}
+                      >
+                        {detailData.franchise.status}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-slate-500 mt-0.5">
+                    <span>Franchise Code: <strong className="font-mono text-[#006FFF]">{detailData?.franchise.code || '...'}</strong></span>
+                    {detailData?.franchise.createdAt && (
+                      <>
+                        <span>•</span>
+                        <span>Registered {new Date(detailData.franchise.createdAt).toLocaleDateString()}</span>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={handleCloseDetails}
+                className="text-slate-400 hover:text-slate-700 p-1.5 rounded-xl hover:bg-slate-100 transition"
+                title="Close drawer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Drawer Content */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+              {detailLoading ? (
+                <div className="flex flex-col items-center justify-center py-20 text-slate-500">
+                  <RefreshCw className="w-8 h-8 animate-spin text-[#006FFF] mb-3" />
+                  <span className="text-xs font-semibold">Loading franchise details...</span>
+                </div>
+              ) : detailError ? (
+                <div className="p-4 rounded-xl bg-rose-50 border border-rose-300 text-rose-800 text-xs flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 shrink-0" />
+                  <span>{detailError}</span>
+                </div>
+              ) : detailData ? (
+                <>
+                  {/* Summary Metric Cards */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
+                      <div className="text-[11px] text-slate-500 font-medium flex items-center gap-1">
+                        <Building2 className="w-3.5 h-3.5 text-[#006FFF]" /> Campuses
+                      </div>
+                      <div className="text-xl font-bold text-slate-900 mt-1">
+                        {detailData.metrics?.totalBranches ?? detailData.franchise.branches?.length ?? 0}
+                      </div>
+                    </div>
+                    <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
+                      <div className="text-[11px] text-slate-500 font-medium flex items-center gap-1">
+                        <GraduationCap className="w-3.5 h-3.5 text-emerald-600" /> Active Students
+                      </div>
+                      <div className="text-xl font-bold text-slate-900 mt-1">
+                        {detailData.metrics?.totalStudents ?? 0}
+                      </div>
+                    </div>
+                    <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
+                      <div className="text-[11px] text-slate-500 font-medium flex items-center gap-1">
+                        <Receipt className="w-3.5 h-3.5 text-blue-600" /> Royalty Paid
+                      </div>
+                      <div className="text-xl font-bold text-emerald-600 mt-1">
+                        ₹{(detailData.metrics?.totalRoyaltyPaid ?? 0).toLocaleString('en-IN')}
+                      </div>
+                    </div>
+                    <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
+                      <div className="text-[11px] text-slate-500 font-medium flex items-center gap-1">
+                        <Clock className="w-3.5 h-3.5 text-rose-600" /> Outstanding
+                      </div>
+                      <div className="text-xl font-bold text-rose-600 mt-1">
+                        ₹{(detailData.metrics?.outstandingRoyalty ?? 0).toLocaleString('en-IN')}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* SECTION 1: OWNER LOGIN CREDENTIALS & ACCESS */}
+                  <div className="p-5 rounded-2xl bg-gradient-to-br from-blue-50/50 via-white to-slate-50 border border-blue-200 shadow-sm space-y-4">
+                    <div className="flex items-center justify-between pb-3 border-b border-blue-100">
+                      <div className="text-xs font-bold uppercase tracking-wider text-[#006FFF] flex items-center gap-1.5">
+                        <ShieldCheck className="w-4 h-4 text-[#006FFF]" /> Owner Login Credentials & Access
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleResetPassword(detailData.franchise)}
+                        className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg bg-[#006FFF] hover:bg-[#0058D4] text-white transition shadow-sm cursor-pointer"
+                        title="Generate permanent password and share with owner"
+                      >
+                        <Key className="w-3.5 h-3.5" /> Reset / Generate Permanent Password
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                      <div>
+                        <span className="text-slate-500 block mb-0.5">Owner Full Name</span>
+                        <div className="font-semibold text-slate-900 text-sm">
+                          {detailData.franchise.ownerName}
+                        </div>
+                      </div>
+
+                      <div>
+                        <span className="text-slate-500 block mb-0.5">Login Email / Username</span>
+                        <div className="font-mono font-bold text-[#006FFF] bg-white px-2.5 py-1 rounded border border-blue-200 inline-block">
+                          {detailData.franchise.ownerUser?.email || detailData.franchise.email}
+                        </div>
+                      </div>
+
+                      <div>
+                        <span className="text-slate-500 block mb-0.5">Contact Phone Number</span>
+                        <div className="text-slate-900 flex items-center gap-1.5">
+                          <Phone className="w-3.5 h-3.5 text-slate-400" />
+                          {detailData.franchise.phone || '—'}
+                        </div>
+                      </div>
+
+                      <div>
+                        <span className="text-slate-500 block mb-0.5">Account Status</span>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          {(detailData.franchise.ownerUser ? detailData.franchise.ownerUser.isActive : (detailData.franchise.status === 'ACTIVE')) ? (
+                            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-800 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-300">
+                              <CheckCircle className="w-3 h-3 text-emerald-600" /> Active Account
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-rose-800 bg-rose-50 px-2.5 py-0.5 rounded-full border border-rose-300">
+                              <UserX className="w-3 h-3 text-rose-600" /> Inactive Account
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div>
+                        <span className="text-slate-500 block mb-0.5">Password Status</span>
+                        <div>
+                          {detailData.franchise.ownerUser?.mustChangePassword ? (
+                            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-800 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-300">
+                              <Clock className="w-3 h-3 text-amber-600" /> Pending Change on Next Login
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-300">
+                              <Check className="w-3 h-3 text-emerald-600" /> Permanent Password Set
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div>
+                        <span className="text-slate-500 block mb-0.5">Password Last Updated</span>
+                        <div className="text-slate-900">
+                          {detailData.franchise.ownerUser?.updatedAt
+                            ? new Date(detailData.franchise.ownerUser.updatedAt).toLocaleString()
+                            : 'Initial Provisioning'}
+                        </div>
+                      </div>
+
+                      <div>
+                        <span className="text-slate-500 block mb-0.5">Last Login Timestamp</span>
+                        <div className="text-slate-900">
+                          {detailData.franchise.ownerUser?.lastLoginAt
+                            ? new Date(detailData.franchise.ownerUser.lastLoginAt).toLocaleString()
+                            : 'Never logged in'}
+                        </div>
+                      </div>
+
+                      <div>
+                        <span className="text-slate-500 block mb-0.5">User Role</span>
+                        <div className="font-mono text-slate-700">
+                          {detailData.franchise.ownerUser?.role || 'FRANCHISE_OWNER'}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="pt-2 border-t border-blue-100 flex items-center justify-between">
+                      <div className="text-[11px] text-slate-500 flex items-center gap-1.5">
+                        <Lock className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                        <span>Password hashes are securely encrypted with Argon2. Plaintext passwords are never stored or exposed.</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const loginUrl = `${window.location.origin}/login`;
+                          const email = detailData.franchise.ownerUser?.email || detailData.franchise.email;
+                          navigator.clipboard.writeText(`Franchise Portal URL: ${loginUrl}\nLogin Username / Email: ${email}`);
+                          showToast('Login username & URL copied to clipboard', 'success');
+                        }}
+                        className="text-xs font-semibold text-[#006FFF] hover:text-[#0058D4] inline-flex items-center gap-1 shrink-0 ml-2 cursor-pointer"
+                      >
+                        <Copy className="w-3.5 h-3.5" /> Copy Login URL
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* SECTION 2: FRANCHISE CENTER DETAILS & REGISTERED ADDRESS */}
+                  <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-4">
+                    <div className="text-xs font-bold uppercase tracking-wider text-[#006FFF] flex items-center justify-between pb-3 border-b border-slate-100">
+                      <span className="flex items-center gap-1.5">
+                        <Building2 className="w-4 h-4 text-slate-400" /> Center Overview & Registered Address
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => openEditFranchiseModal(detailData.franchise)}
+                          className="text-xs font-semibold px-2.5 py-1 rounded-lg border border-slate-200 text-[#006FFF] hover:bg-slate-50 transition cursor-pointer"
+                        >
+                          <Edit3 className="w-3.5 h-3.5 inline mr-1" /> Edit Center
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            handleStatusToggle(detailData.franchise.id, detailData.franchise.status);
+                            fetchFranchiseDetails(detailData.franchise.id);
+                          }}
+                          className={`text-xs font-semibold px-2.5 py-1 rounded-lg border transition cursor-pointer ${detailData.franchise.status === 'ACTIVE'
+                            ? 'border-rose-300 text-rose-800 hover:bg-rose-50'
+                            : 'border-emerald-300 text-emerald-800 hover:bg-emerald-50'
+                            }`}
+                        >
+                          {detailData.franchise.status === 'ACTIVE' ? 'Suspend' : 'Activate'}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                      <div>
+                        <span className="text-slate-500 block mb-0.5">Franchise Center Name</span>
+                        <div className="font-semibold text-slate-900">{detailData.franchise.name}</div>
+                      </div>
+
+                      <div>
+                        <span className="text-slate-500 block mb-0.5">Franchise Code</span>
+                        <div className="font-mono font-bold text-[#006FFF] bg-slate-50 px-2 py-0.5 rounded border border-slate-200 inline-block">
+                          {detailData.franchise.code}
+                        </div>
+                      </div>
+
+                      <div>
+                        <span className="text-slate-500 block mb-0.5">Contact Email</span>
+                        <div className="text-slate-900 flex items-center gap-1.5">
+                          <Mail className="w-3.5 h-3.5 text-slate-400" />
+                          {detailData.franchise.email}
+                        </div>
+                      </div>
+
+                      <div>
+                        <span className="text-slate-500 block mb-0.5">Contact Phone</span>
+                        <div className="text-slate-900 flex items-center gap-1.5">
+                          <Phone className="w-3.5 h-3.5 text-slate-400" />
+                          {detailData.franchise.phone}
+                        </div>
+                      </div>
+
+                      <div className="sm:col-span-2">
+                        <span className="text-slate-500 block mb-0.5">Registered Address</span>
+                        <div className="text-slate-900 flex items-start gap-1.5">
+                          <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0 mt-0.5" />
+                          <span>
+                            {[
+                              detailData.franchise.address,
+                              detailData.franchise.city,
+                              detailData.franchise.state,
+                              detailData.franchise.postalCode ? `PIN: ${detailData.franchise.postalCode}` : null,
+                              detailData.franchise.country,
+                            ]
+                              .filter(Boolean)
+                              .join(', ') || 'No registered address specified'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {detailData.franchise.notes && (
+                        <div className="sm:col-span-2">
+                          <span className="text-slate-500 block mb-0.5">Internal Notes & History</span>
+                          <div className="text-xs text-slate-600 bg-slate-50 p-2.5 rounded-lg border border-slate-200">
+                            {detailData.franchise.notes}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* SECTION 3: ASSOCIATED CAMPUSES / BRANCHES */}
+                  <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-4">
+                    <div className="text-xs font-bold uppercase tracking-wider text-[#006FFF] flex items-center justify-between pb-3 border-b border-slate-100">
+                      <span className="flex items-center gap-1.5">
+                        <Building2 className="w-4 h-4 text-slate-400" /> Associated Branch Campuses ({detailData.franchise.branches?.length || 0})
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => openAddBranchModal(detailData.franchise)}
+                        className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-blue-50 text-[#006FFF] hover:bg-blue-100 transition border border-blue-200 cursor-pointer"
+                      >
+                        + Attach Campus
+                      </button>
+                    </div>
+
+                    {!detailData.franchise.branches || detailData.franchise.branches.length === 0 ? (
+                      <div className="py-6 text-center text-slate-400 text-xs">
+                        No campuses currently attached to this franchise center. Click "+ Attach Campus" above to link or create one.
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {detailData.franchise.branches.map((b: any) => (
+                          <div
+                            key={b.id}
+                            className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between text-xs"
+                          >
+                            <div className="space-y-0.5">
+                              <div className="flex items-center gap-2">
+                                <span className="font-bold text-slate-900">{b.name}</span>
+                                <span className="font-mono text-[10px] text-[#006FFF] bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">
+                                  {b.code}
+                                </span>
+                              </div>
+                              <div className="text-slate-500 flex items-center gap-2">
+                                <span>{b.city || 'Location unassigned'}</span>
+                                <span>•</span>
+                                <span className="text-emerald-700 font-medium">
+                                  {b._count?.students ?? 0} Active Students
+                                </span>
+                              </div>
+                            </div>
+                            <span
+                              className={`px-2 py-0.5 rounded text-[10px] font-bold ${b.status === 'ACTIVE'
+                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                : 'bg-rose-50 text-rose-700 border border-rose-200'
+                                }`}
+                            >
+                              {b.status}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* SECTION 4: AGREEMENTS & COMMERCIAL TERMS */}
+                  <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-4">
+                    <div className="text-xs font-bold uppercase tracking-wider text-[#006FFF] flex items-center justify-between pb-3 border-b border-slate-100">
+                      <span className="flex items-center gap-1.5">
+                        <FileText className="w-4 h-4 text-slate-400" /> Commercial Agreements & Royalty Terms
+                      </span>
+                      <span className="text-xs text-slate-500">
+                        {detailData.franchise.agreements?.length || 0} Agreement(s)
+                      </span>
+                    </div>
+
+                    {!detailData.franchise.agreements || detailData.franchise.agreements.length === 0 ? (
+                      <div className="py-6 text-center text-slate-400 text-xs">
+                        No agreements registered for this franchise center.
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {detailData.franchise.agreements.map((agr: any) => (
+                          <div
+                            key={agr.id}
+                            className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-2 text-xs"
+                          >
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <span className="font-bold text-slate-900 block">{agr.title}</span>
+                                <span className="font-mono text-[11px] text-[#006FFF]">{agr.agreementNumber}</span>
+                              </div>
+                              <span
+                                className={`px-2 py-0.5 rounded text-[10px] font-bold ${agr.status === 'ACTIVE'
+                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                  : 'bg-slate-100 text-slate-600 border border-slate-200'
+                                  }`}
+                              >
+                                {agr.status}
+                              </span>
+                            </div>
+
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-2 border-t border-slate-200 text-[11px]">
+                              <div>
+                                <span className="text-slate-500 block">Calculation Method:</span>
+                                <span className="font-semibold text-slate-800">{agr.royaltyCalculationMethod || agr.calculationMethod || 'PERCENTAGE_REVENUE'}</span>
+                              </div>
+                              <div>
+                                <span className="text-slate-500 block">Royalty Share:</span>
+                                <span className="font-semibold text-slate-800">
+                                  DG {agr.digitalGuruRevenuePercentage ?? 50}% / Partner {agr.partnerRevenuePercentage ?? 50}%
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-slate-500 block">Validity Period:</span>
+                                <span className="text-slate-800">
+                                  {agr.startDate ? new Date(agr.startDate).toLocaleDateString() : 'N/A'} → {agr.endDate ? new Date(agr.endDate).toLocaleDateString() : 'N/A'}
+                                </span>
+                              </div>
+                              {agr.upfrontRoyaltyFee > 0 && (
+                                <div>
+                                  <span className="text-slate-500 block">Upfront Royalty Fee:</span>
+                                  <span className="font-semibold text-slate-800">₹{Number(agr.upfrontRoyaltyFee).toLocaleString('en-IN')}</span>
+                                </div>
+                              )}
+                              {agr.fixedMonthlyRoyalty > 0 && (
+                                <div>
+                                  <span className="text-slate-500 block">Fixed Monthly Royalty:</span>
+                                  <span className="font-semibold text-slate-800">₹{Number(agr.fixedMonthlyRoyalty).toLocaleString('en-IN')}</span>
+                                </div>
+                              )}
+                              {agr.annualRoyaltyAmount > 0 && (
+                                <div>
+                                  <span className="text-slate-500 block">Annual Royalty Obligation:</span>
+                                  <span className="font-semibold text-slate-800">₹{Number(agr.annualRoyaltyAmount).toLocaleString('en-IN')}</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </>
+              ) : null}
+            </div>
+
+            {/* Drawer Footer */}
+            <div className="p-4 border-t border-slate-100 bg-white flex items-center justify-between">
+              <div className="text-xs text-slate-400">
+                Digital Guru Franchise Management Enterprise v2.0
+              </div>
+              <div className="flex items-center gap-2">
+                {detailData?.franchise && (
+                  <button
+                    type="button"
+                    onClick={() => handleResetPassword(detailData.franchise)}
+                    className="px-3.5 py-2 text-xs font-semibold text-[#006FFF] hover:bg-blue-50 rounded-xl transition border border-blue-200 cursor-pointer"
+                  >
+                    <Key className="w-3.5 h-3.5 inline mr-1" /> Reset / Generate Permanent Password
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={handleCloseDetails}
+                  className="px-5 py-2 text-xs font-semibold text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-xl transition shadow-xs cursor-pointer"
+                >
+                  Close Drawer
+                </button>
+              </div>
             </div>
           </div>
         </div>
