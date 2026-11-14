@@ -7,21 +7,21 @@ async function main() {
   console.log('=== Checking & Seeding Demo Credentials ===');
 
   const defaultPassword = 'Password#123';
-  const superAdminPassword = 'AdminSecurePassword#2026';
+  const superAdminPassword = 'admin@123';
 
   const defaultHash = await hashPassword(defaultPassword);
   const superAdminHash = await hashPassword(superAdminPassword);
 
   // 1. Super Admin
   const superAdmin = await prisma.user.upsert({
-    where: { email: 'superadmin@platform.local' },
+    where: { email: 'superadmin@gmail.com' },
     update: {
       passwordHash: superAdminHash,
       isActive: true,
       mustChangePassword: false,
     },
     create: {
-      email: 'superadmin@platform.local',
+      email: 'superadmin@gmail.com',
       fullName: 'Super Administrator',
       passwordHash: superAdminHash,
       role: 'SUPER_ADMIN',

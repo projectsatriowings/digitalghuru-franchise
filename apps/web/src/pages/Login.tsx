@@ -39,8 +39,8 @@ const DEMO_ACCOUNTS: DemoAccount[] = [
     label: 'Super Admin',
     roleBadgeColor: 'text-slate-900',
     badgeBg: 'bg-slate-100 border-slate-300',
-    identifier: 'superadmin@platform.local',
-    password: 'AdminSecurePassword#2026',
+    identifier: 'superadmin@gmail.com',
+    password: 'admin@123',
     subtext: 'Platform Master Portal',
   },
   {
