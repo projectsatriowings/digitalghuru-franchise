@@ -771,7 +771,10 @@ Please keep this login and password safe. Use your registered mobile number and 
       if (fr?.id) {
         const fcRes = await apiFetch(`/courses/franchise/${fr.id}`);
         const allCourses = fcRes?.data || [];
-        setEnabledGlobalCourses(allCourses.filter((c: any) => c.isSelected));
+        const uniqueCourses = Array.from(
+          new Map(allCourses.filter((c: any) => c.isSelected).map((c: any) => [c.id, c])).values()
+        );
+        setEnabledGlobalCourses(uniqueCourses);
       } else {
         setEnabledGlobalCourses([]);
       }
@@ -2100,7 +2103,7 @@ Please keep this login and password safe. Use your registered mobile number and 
                       <option value="">-- Skip Global Course Enrollment (or enroll later) --</option>
                       {enabledGlobalCourses.map((c: any) => (
                         <option key={c.id} value={c.id}>
-                          {c.title} {c.code ? `(${c.code})` : ''}
+                          {c.title}{c.duration ? ` (${c.duration})` : ''}{c.format ? ` • ${c.format}` : ''}
                         </option>
                       ))}
                     </select>

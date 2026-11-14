@@ -134,7 +134,9 @@ export const FranchiseCourses: React.FC = () => {
 
   // Open Enroll Modal
   const openEnrollModal = (prefillCourseId = '') => {
-    const enabledCourses = courses.filter((c) => c.isSelected);
+    const enabledCourses = Array.from(
+      new Map(courses.filter((c) => c.isSelected).map((c) => [c.id, c])).values()
+    );
     const defaultBranchId =
       activeInstitute && activeInstitute.id !== 'ALL' ? activeInstitute.id : branches[0]?.id || '';
     const defaultBatchId =
@@ -648,7 +650,7 @@ export const FranchiseCourses: React.FC = () => {
                   <option value="">Select Course...</option>
                   {enabledCourses.map((c) => (
                     <option key={c.id} value={c.id}>
-                      {c.title}
+                      {c.title}{c.duration ? ` (${c.duration})` : ''}{c.format ? ` • ${c.format}` : ''}
                     </option>
                   ))}
                 </select>
