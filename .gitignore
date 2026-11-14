@@ -58,6 +58,10 @@ coverage/
 
 # Scratch / Temporary Dev Scripts
 scratch/
+backup-*.json
+*remediation*.json
+remediation-*.json
+*.backup.json
 *.tsbuildinfo
 
 
