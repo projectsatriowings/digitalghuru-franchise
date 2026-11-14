@@ -524,11 +524,10 @@ export const SuperAdminDashboard: React.FC = () => {
       {notification && (
         <div className="fixed top-5 right-5 z-50 max-w-md animate-in fade-in slide-in-from-top-4 duration-300">
           <div
-            className={`p-4 rounded-2xl shadow-xl border flex items-start gap-3 ${
-              notification.type === 'success'
+            className={`p-4 rounded-2xl shadow-xl border flex items-start gap-3 ${notification.type === 'success'
                 ? 'bg-emerald-50 border-emerald-300 text-emerald-900'
                 : 'bg-rose-50 border-rose-300 text-rose-900'
-            }`}
+              }`}
           >
             {notification.type === 'success' ? (
               <CheckCircle className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
@@ -670,19 +669,27 @@ export const SuperAdminDashboard: React.FC = () => {
                 </tr>
               ) : (
                 institutes.map((inst) => (
-                  <tr key={inst.id} className="hover:bg-[#FFFFFF] transition-colors">
+                  <tr
+                    key={inst.id}
+                    onClick={() => handleOpenDetails(inst.id)}
+                    className="hover:bg-blue-50/50 cursor-pointer transition-colors group"
+                    title={`Click to view details for ${inst.name}`}
+                  >
                     <td className="py-3.5 px-4">
-                      <div className="font-bold text-[#0F172A] text-sm">{inst.name}</div>
+                      <div className="font-bold text-[#0F172A] text-sm group-hover:text-[#006FFF] transition-colors flex items-center gap-1.5">
+                        <span>{inst.name}</span>
+                        <Eye className="w-3.5 h-3.5 text-[#006FFF] opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+                      </div>
                       {inst.email && <div className="text-[11px] text-[#64748B]">{inst.email}</div>}
                     </td>
                     <td className="py-3.5 px-4 font-mono font-semibold text-[#006FFF] whitespace-nowrap">
-                      <span className="bg-[#F8FAFC] border border-[#E2E8F0] px-2.5 py-1 rounded text-xs whitespace-nowrap inline-block tracking-wide">
+                      <span className="bg-[#F8FAFC] border border-[#E2E8F0] px-2.5 py-1 rounded text-xs whitespace-nowrap inline-block tracking-wide group-hover:border-blue-300 transition-colors">
                         {inst.code}
                       </span>
                     </td>
                     <td className="py-3.5 px-4 whitespace-nowrap">
                       {inst.franchise ? (
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-blue-50 text-[#006FFF] border border-blue-200" title={`Franchise: ${inst.franchise.name} (${inst.franchise.code})`}>
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-blue-50 text-[#006FFF] border border-blue-200 group-hover:bg-blue-100/70 transition-colors" title={`Franchise: ${inst.franchise.name} (${inst.franchise.code})`}>
                           <Building2 className="w-3.5 h-3.5 text-[#006FFF]" />
                           {inst.franchise.code} - {inst.franchise.name}
                         </span>
@@ -719,7 +726,11 @@ export const SuperAdminDashboard: React.FC = () => {
                       <div className="inline-flex items-center gap-2">
                         {/* View Details Action */}
                         <button
-                          onClick={() => handleOpenDetails(inst.id)}
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleOpenDetails(inst.id);
+                          }}
                           className="inline-flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg border border-[#E2E8F0] text-[#006FFF] hover:bg-[#F8FAFC] transition"
                         >
                           <Eye className="w-3.5 h-3.5" /> View Details
@@ -727,12 +738,15 @@ export const SuperAdminDashboard: React.FC = () => {
 
                         {/* Suspend or Activate Action */}
                         <button
-                          onClick={() => setStatusActionTarget(inst)}
-                          className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition ${
-                            inst.status === 'ACTIVE'
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setStatusActionTarget(inst);
+                          }}
+                          className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition ${inst.status === 'ACTIVE'
                               ? 'border-rose-300 text-rose-800 hover:bg-rose-50'
                               : 'border-emerald-300 text-emerald-800 hover:bg-emerald-50'
-                          }`}
+                            }`}
                         >
                           {inst.status === 'ACTIVE' ? 'Suspend' : 'Activate'}
                         </button>
@@ -1095,11 +1109,10 @@ export const SuperAdminDashboard: React.FC = () => {
                         value={newInst.confirmPassword}
                         onChange={(e) => setNewInst({ ...newInst, confirmPassword: e.target.value })}
                         placeholder="Re-enter password"
-                        className={`w-full bg-[#FFFFFF] border rounded-xl pl-3.5 pr-10 py-2.5 text-xs text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#006FFF]/20 ${
-                          newInst.confirmPassword && newInst.adminInitialPassword !== newInst.confirmPassword
+                        className={`w-full bg-[#FFFFFF] border rounded-xl pl-3.5 pr-10 py-2.5 text-xs text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#006FFF]/20 ${newInst.confirmPassword && newInst.adminInitialPassword !== newInst.confirmPassword
                             ? 'border-rose-400 focus:ring-rose-400'
                             : 'border-[#E2E8F0]'
-                        }`}
+                          }`}
                       />
                       <button
                         type="button"
@@ -1246,11 +1259,10 @@ export const SuperAdminDashboard: React.FC = () => {
                     </h2>
                     {detailData?.institute.status && (
                       <span
-                        className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                          detailData.institute.status === 'ACTIVE'
+                        className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${detailData.institute.status === 'ACTIVE'
                             ? 'bg-emerald-50 text-emerald-800 border border-emerald-300'
                             : 'bg-rose-50 text-rose-800 border border-rose-300'
-                        }`}
+                          }`}
                       >
                         {detailData.institute.status}
                       </span>
@@ -1329,11 +1341,10 @@ export const SuperAdminDashboard: React.FC = () => {
                         onClick={() => {
                           setStatusActionTarget(detailData.institute);
                         }}
-                        className={`text-xs font-semibold px-2.5 py-1 rounded-lg border transition ${
-                          detailData.institute.status === 'ACTIVE'
+                        className={`text-xs font-semibold px-2.5 py-1 rounded-lg border transition ${detailData.institute.status === 'ACTIVE'
                             ? 'border-rose-300 text-rose-800 hover:bg-rose-50'
                             : 'border-emerald-300 text-emerald-800 hover:bg-emerald-50'
-                        }`}
+                          }`}
                       >
                         {detailData.institute.status === 'ACTIVE' ? 'Suspend Institute' : 'Activate Institute'}
                       </button>
@@ -1667,22 +1678,20 @@ export const SuperAdminDashboard: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setResetPassMode('AUTO')}
-                    className={`py-2 px-3 rounded-xl border text-xs font-semibold transition ${
-                      resetPassMode === 'AUTO'
+                    className={`py-2 px-3 rounded-xl border text-xs font-semibold transition ${resetPassMode === 'AUTO'
                         ? 'bg-[#006FFF] text-white border-[#006FFF]'
                         : 'bg-[#FFFFFF] text-[#006FFF] border-[#E2E8F0] hover:bg-[#F8FAFC]'
-                    }`}
+                      }`}
                   >
                     Auto-Generate
                   </button>
                   <button
                     type="button"
                     onClick={() => setResetPassMode('MANUAL')}
-                    className={`py-2 px-3 rounded-xl border text-xs font-semibold transition ${
-                      resetPassMode === 'MANUAL'
+                    className={`py-2 px-3 rounded-xl border text-xs font-semibold transition ${resetPassMode === 'MANUAL'
                         ? 'bg-[#006FFF] text-white border-[#006FFF]'
                         : 'bg-[#FFFFFF] text-[#006FFF] border-[#E2E8F0] hover:bg-[#F8FAFC]'
-                    }`}
+                      }`}
                   >
                     Set Manually
                   </button>
@@ -1839,11 +1848,10 @@ export const SuperAdminDashboard: React.FC = () => {
           <div className="bg-white border border-[#E2E8F0] rounded-3xl w-full max-w-md p-6 shadow-2xl text-[#0F172A]">
             <div className="flex items-center gap-3 pb-4 border-b border-[#F1F5F9]">
               <div
-                className={`w-10 h-10 rounded-2xl flex items-center justify-center ${
-                  statusActionTarget.status === 'ACTIVE'
+                className={`w-10 h-10 rounded-2xl flex items-center justify-center ${statusActionTarget.status === 'ACTIVE'
                     ? 'bg-rose-50 border border-rose-200 text-rose-800'
                     : 'bg-emerald-50 border border-emerald-200 text-emerald-800'
-                }`}
+                  }`}
               >
                 <AlertTriangle className="w-5 h-5" />
               </div>
@@ -1885,11 +1893,10 @@ export const SuperAdminDashboard: React.FC = () => {
                 type="button"
                 onClick={handleConfirmStatusToggle}
                 disabled={statusUpdating}
-                className={`text-xs font-semibold px-4 py-2 rounded-xl text-white transition shadow-sm flex items-center gap-1.5 ${
-                  statusActionTarget.status === 'ACTIVE'
+                className={`text-xs font-semibold px-4 py-2 rounded-xl text-white transition shadow-sm flex items-center gap-1.5 ${statusActionTarget.status === 'ACTIVE'
                     ? 'bg-rose-700 hover:bg-rose-800'
                     : 'bg-emerald-700 hover:bg-emerald-800'
-                }`}
+                  }`}
               >
                 {statusUpdating ? (
                   <>
