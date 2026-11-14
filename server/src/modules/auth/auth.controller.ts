@@ -31,8 +31,8 @@ export async function login(req: Request, res: Response) {
     const alternateEmail = identifier.toLowerCase().endsWith('@apexacademy.com')
       ? identifier.toLowerCase().replace('@apexacademy.com', '@apex.example.com')
       : identifier.toLowerCase().endsWith('@apex.example.com')
-      ? identifier.toLowerCase().replace('@apex.example.com', '@apexacademy.com')
-      : identifier;
+        ? identifier.toLowerCase().replace('@apex.example.com', '@apexacademy.com')
+        : identifier;
 
     const alternatePhone = identifier === '9826444306' ? '9876543210' : identifier === '9876543210' ? '9826444306' : identifier;
 
@@ -76,8 +76,8 @@ export async function login(req: Request, res: Response) {
         dbErr?.message?.includes('ConnectionReset')
       ) {
         console.warn('[Auth Controller] Transient socket reset detected; reconnecting to database...');
-        await prisma.$disconnect().catch(() => {});
-        await prisma.$connect().catch(() => {});
+        await prisma.$disconnect().catch(() => { });
+        await prisma.$connect().catch(() => { });
         user = await queryUser();
       } else {
         throw dbErr;
@@ -145,7 +145,7 @@ export async function login(req: Request, res: Response) {
     await prisma.user.update({
       where: { id: user.id },
       data: { lastLoginAt: new Date() },
-    }).catch(() => {});
+    }).catch(() => { });
 
     const primaryFranchise = user.ownedFranchises?.[0] || null;
 

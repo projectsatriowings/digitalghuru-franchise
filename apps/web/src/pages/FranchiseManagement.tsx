@@ -1514,8 +1514,8 @@ export const FranchiseManagement: React.FC = () => {
                         <td className="px-4 py-3.5">
                           <span
                             className={`px-2.5 py-1 text-xs font-bold rounded-full ${fr.status === 'ACTIVE'
-                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                : 'bg-rose-50 text-rose-700 border border-rose-200'
+                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                              : 'bg-rose-50 text-rose-700 border border-rose-200'
                               }`}
                           >
                             {fr.status}
@@ -1573,8 +1573,8 @@ export const FranchiseManagement: React.FC = () => {
                               handleStatusToggle(fr.id, fr.status);
                             }}
                             className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-all ${fr.status === 'ACTIVE'
-                                ? 'bg-rose-50 hover:bg-rose-100 text-rose-700'
-                                : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700'
+                              ? 'bg-rose-50 hover:bg-rose-100 text-rose-700'
+                              : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700'
                               }`}
                           >
                             {fr.status === 'ACTIVE' ? 'Suspend' : 'Activate'}
@@ -2093,10 +2093,10 @@ export const FranchiseManagement: React.FC = () => {
                         <td className="px-4 py-3">
                           <span
                             className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${rec.status === 'PAID'
-                                ? 'bg-emerald-100 text-emerald-800'
-                                : rec.status === 'OVERDUE'
-                                  ? 'bg-rose-100 text-rose-800'
-                                  : 'bg-amber-100 text-amber-800'
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : rec.status === 'OVERDUE'
+                                ? 'bg-rose-100 text-rose-800'
+                                : 'bg-amber-100 text-amber-800'
                               }`}
                           >
                             {rec.status}
@@ -2157,24 +2157,24 @@ export const FranchiseManagement: React.FC = () => {
                       onClick={() => handleTabClick(t.id as any)}
                       title={isLocked ? 'Complete the previous section to unlock this step' : undefined}
                       className={`text-left p-2.5 rounded-xl border transition-all ${isActive
-                          ? 'bg-blue-50/90 border-[#006FFF] shadow-xs ring-1 ring-[#006FFF]'
-                          : isLocked
-                            ? 'bg-slate-50 border-slate-200 text-slate-400 opacity-60 cursor-not-allowed'
-                            : t.isComplete
-                              ? 'bg-emerald-50/40 border-emerald-300 text-slate-700 hover:bg-emerald-50 cursor-pointer'
-                              : 'bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-600 cursor-pointer'
+                        ? 'bg-blue-50/90 border-[#006FFF] shadow-xs ring-1 ring-[#006FFF]'
+                        : isLocked
+                          ? 'bg-slate-50 border-slate-200 text-slate-400 opacity-60 cursor-not-allowed'
+                          : t.isComplete
+                            ? 'bg-emerald-50/40 border-emerald-300 text-slate-700 hover:bg-emerald-50 cursor-pointer'
+                            : 'bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-600 cursor-pointer'
                         }`}
                     >
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
                           <span
                             className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold ${isActive
-                                ? 'bg-[#006FFF] text-white'
-                                : t.isComplete
-                                  ? 'bg-emerald-600 text-white'
-                                  : isLocked
-                                    ? 'bg-slate-200 text-slate-400'
-                                    : 'bg-slate-200 text-slate-700'
+                              ? 'bg-[#006FFF] text-white'
+                              : t.isComplete
+                                ? 'bg-emerald-600 text-white'
+                                : isLocked
+                                  ? 'bg-slate-200 text-slate-400'
+                                  : 'bg-slate-200 text-slate-700'
                               }`}
                           >
                             {t.isComplete && !isActive ? '✓' : t.step}
@@ -2259,10 +2259,10 @@ export const FranchiseManagement: React.FC = () => {
                             value={createForm.email}
                             onChange={(e) => setCreateForm({ ...createForm, email: e.target.value })}
                             className={`mt-1 w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-[#006FFF] ${(duplicateFranchiseMatch || (duplicateCheckResult.emailConflict?.isDuplicate && duplicateCheckResult.emailConflict.model === 'Franchise'))
-                                ? 'border-rose-400 bg-rose-50/40 text-rose-900'
-                                : duplicateCheckResult.emailConflict?.isDuplicate && duplicateCheckResult.emailConflict.model === 'User'
-                                  ? 'border-blue-400 bg-blue-50/30'
-                                  : ''
+                              ? 'border-rose-400 bg-rose-50/40 text-rose-900'
+                              : duplicateCheckResult.emailConflict?.isDuplicate && duplicateCheckResult.emailConflict.model === 'User'
+                                ? 'border-blue-400 bg-blue-50/30'
+                                : ''
                               }`}
                           />
                           {(duplicateFranchiseMatch || (duplicateCheckResult.emailConflict?.isDuplicate && duplicateCheckResult.emailConflict.model === 'Franchise')) && (
@@ -2410,8 +2410,8 @@ export const FranchiseManagement: React.FC = () => {
                         <div
                           onClick={() => setCreateForm({ ...createForm, branchOption: 'NONE' })}
                           className={`p-3 rounded-xl border cursor-pointer transition-all flex flex-col justify-between ${createForm.branchOption === 'NONE'
-                              ? 'bg-blue-50/70 border-[#006FFF] ring-1 ring-[#006FFF]'
-                              : 'bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-600'
+                            ? 'bg-blue-50/70 border-[#006FFF] ring-1 ring-[#006FFF]'
+                            : 'bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-600'
                             }`}
                         >
                           <div className="flex items-center justify-between mb-1.5">
@@ -2432,8 +2432,8 @@ export const FranchiseManagement: React.FC = () => {
                         <div
                           onClick={() => setCreateForm({ ...createForm, branchOption: 'LINK_EXISTING' })}
                           className={`p-3 rounded-xl border cursor-pointer transition-all flex flex-col justify-between ${createForm.branchOption === 'LINK_EXISTING'
-                              ? 'bg-blue-50/70 border-[#006FFF] ring-1 ring-[#006FFF]'
-                              : 'bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-600'
+                            ? 'bg-blue-50/70 border-[#006FFF] ring-1 ring-[#006FFF]'
+                            : 'bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-600'
                             }`}
                         >
                           <div className="flex items-center justify-between mb-1.5">
@@ -2468,8 +2468,8 @@ export const FranchiseManagement: React.FC = () => {
                             });
                           }}
                           className={`p-3 rounded-xl border cursor-pointer transition-all flex flex-col justify-between ${createForm.branchOption === 'CREATE_NEW'
-                              ? 'bg-blue-50/70 border-[#006FFF] ring-1 ring-[#006FFF]'
-                              : 'bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-600'
+                            ? 'bg-blue-50/70 border-[#006FFF] ring-1 ring-[#006FFF]'
+                            : 'bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-600'
                             }`}
                         >
                           <div className="flex items-center justify-between mb-1.5">
@@ -2667,8 +2667,8 @@ export const FranchiseManagement: React.FC = () => {
                                     });
                                   }}
                                   className={`p-3 rounded-xl text-left border text-xs transition-all ${isSelected
-                                      ? 'bg-blue-50 border-[#006FFF] text-[#006FFF] font-bold shadow-sm ring-1 ring-[#006FFF]'
-                                      : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300'
+                                    ? 'bg-blue-50 border-[#006FFF] text-[#006FFF] font-bold shadow-sm ring-1 ring-[#006FFF]'
+                                    : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300'
                                     }`}
                                 >
                                   <div className="font-bold text-[12px] leading-tight">{tmpl.label}</div>
@@ -2856,10 +2856,10 @@ export const FranchiseManagement: React.FC = () => {
                         <span className="text-xs font-bold text-slate-800">Revenue Sharing Configuration</span>
                         <span
                           className={`px-2 py-0.5 rounded text-[10px] font-bold ${Number(createForm.initialAgreement.digitalGuruRevenuePercentage) +
-                              Number(createForm.initialAgreement.partnerRevenuePercentage) ===
-                              100
-                              ? 'bg-emerald-100 text-emerald-800'
-                              : 'bg-rose-100 text-rose-800'
+                            Number(createForm.initialAgreement.partnerRevenuePercentage) ===
+                            100
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : 'bg-rose-100 text-rose-800'
                             }`}
                         >
                           Total:{' '}
@@ -3368,8 +3368,8 @@ export const FranchiseManagement: React.FC = () => {
                       type="submit"
                       disabled={isSubmittingFranchise || Boolean(duplicateFranchiseMatch)}
                       className={`px-6 py-2.5 font-bold rounded-xl text-xs shadow-md transition-all flex items-center gap-2 ${isSubmittingFranchise || duplicateFranchiseMatch
-                          ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
-                          : 'bg-[#FEDC32] hover:bg-[#FEDC32]/90 text-slate-900 cursor-pointer'
+                        ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
+                        : 'bg-[#FEDC32] hover:bg-[#FEDC32]/90 text-slate-900 cursor-pointer'
                         }`}
                     >
                       {isSubmittingFranchise ? (
@@ -4189,8 +4189,8 @@ export const FranchiseManagement: React.FC = () => {
                   <span className="text-xs font-bold text-slate-800">Revenue Sharing Split & Basis</span>
                   <span
                     className={`px-2 py-0.5 rounded text-[10px] font-bold ${Number(reviseForm.digitalGuruRevenuePercentage) + Number(reviseForm.partnerRevenuePercentage) === 100
-                        ? 'bg-emerald-100 text-emerald-800'
-                        : 'bg-rose-100 text-rose-800'
+                      ? 'bg-emerald-100 text-emerald-800'
+                      : 'bg-rose-100 text-rose-800'
                       }`}
                   >
                     Total: {Number(reviseForm.digitalGuruRevenuePercentage || 0) + Number(reviseForm.partnerRevenuePercentage || 0)}% (Must = 100%)
@@ -4587,8 +4587,8 @@ export const FranchiseManagement: React.FC = () => {
                 type="button"
                 onClick={() => setEditFranchiseTab('details')}
                 className={`py-3 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 ${editFranchiseTab === 'details'
-                    ? 'border-[#006FFF] text-[#006FFF]'
-                    : 'border-transparent text-slate-600 hover:text-slate-900'
+                  ? 'border-[#006FFF] text-[#006FFF]'
+                  : 'border-transparent text-slate-600 hover:text-slate-900'
                   }`}
               >
                 <Building2 className="w-4 h-4" />
@@ -4598,8 +4598,8 @@ export const FranchiseManagement: React.FC = () => {
                 type="button"
                 onClick={() => setEditFranchiseTab('campuses')}
                 className={`py-3 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 ${editFranchiseTab === 'campuses'
-                    ? 'border-[#006FFF] text-[#006FFF]'
-                    : 'border-transparent text-slate-600 hover:text-slate-900'
+                  ? 'border-[#006FFF] text-[#006FFF]'
+                  : 'border-transparent text-slate-600 hover:text-slate-900'
                   }`}
               >
                 <MapPin className="w-4 h-4" />
@@ -4940,8 +4940,8 @@ export const FranchiseManagement: React.FC = () => {
                     {detailData?.franchise.status && (
                       <span
                         className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${detailData.franchise.status === 'ACTIVE'
-                            ? 'bg-emerald-50 text-emerald-800 border border-emerald-300'
-                            : 'bg-rose-50 text-rose-800 border border-rose-300'
+                          ? 'bg-emerald-50 text-emerald-800 border border-emerald-300'
+                          : 'bg-rose-50 text-rose-800 border border-rose-300'
                           }`}
                       >
                         {detailData.franchise.status}
@@ -5155,8 +5155,8 @@ export const FranchiseManagement: React.FC = () => {
                             fetchFranchiseDetails(detailData.franchise.id);
                           }}
                           className={`text-xs font-semibold px-2.5 py-1 rounded-lg border transition cursor-pointer ${detailData.franchise.status === 'ACTIVE'
-                              ? 'border-rose-300 text-rose-800 hover:bg-rose-50'
-                              : 'border-emerald-300 text-emerald-800 hover:bg-emerald-50'
+                            ? 'border-rose-300 text-rose-800 hover:bg-rose-50'
+                            : 'border-emerald-300 text-emerald-800 hover:bg-emerald-50'
                             }`}
                         >
                           {detailData.franchise.status === 'ACTIVE' ? 'Suspend' : 'Activate'}
@@ -5265,8 +5265,8 @@ export const FranchiseManagement: React.FC = () => {
                             </div>
                             <span
                               className={`px-2 py-0.5 rounded text-[10px] font-bold ${b.status === 'ACTIVE'
-                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                  : 'bg-rose-50 text-rose-700 border border-rose-200'
+                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                : 'bg-rose-50 text-rose-700 border border-rose-200'
                                 }`}
                             >
                               {b.status}
@@ -5306,8 +5306,8 @@ export const FranchiseManagement: React.FC = () => {
                               </div>
                               <span
                                 className={`px-2 py-0.5 rounded text-[10px] font-bold ${agr.status === 'ACTIVE'
-                                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                    : 'bg-slate-100 text-slate-600 border border-slate-200'
+                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                  : 'bg-slate-100 text-slate-600 border border-slate-200'
                                   }`}
                               >
                                 {agr.status}

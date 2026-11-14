@@ -1371,7 +1371,7 @@ export async function resetFranchiseOwnerPassword(req: AuthenticatedRequest, res
     // Invalidate any active password reset tokens for this user
     await prisma.passwordResetToken.deleteMany({
       where: { userId: ownerUser.id },
-    }).catch(() => {});
+    }).catch(() => { });
 
     // Record the password reset in audit log (without logging password or hash)
     await prisma.auditLog.create({

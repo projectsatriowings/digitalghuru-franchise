@@ -200,7 +200,7 @@ async function cleanup() {
     for (const instId of ctx.createdInstituteIds) {
       await prisma.auditLog.deleteMany({ where: { instituteId: instId } });
       await prisma.instituteMembership.deleteMany({ where: { instituteId: instId } });
-      await prisma.institute.delete({ where: { id: instId } }).catch(() => {});
+      await prisma.institute.delete({ where: { id: instId } }).catch(() => { });
     }
 
     for (const frId of ctx.createdFranchiseIds) {
@@ -208,11 +208,11 @@ async function cleanup() {
       await prisma.franchiseRoyaltyPayment.deleteMany({ where: { franchiseId: frId } });
       await prisma.franchiseRoyaltyRecord.deleteMany({ where: { franchiseId: frId } });
       await prisma.franchiseAgreement.deleteMany({ where: { franchiseId: frId } });
-      await prisma.franchise.delete({ where: { id: frId } }).catch(() => {});
+      await prisma.franchise.delete({ where: { id: frId } }).catch(() => { });
     }
 
     for (const uId of ctx.createdUserIds) {
-      await prisma.user.delete({ where: { id: uId } }).catch(() => {});
+      await prisma.user.delete({ where: { id: uId } }).catch(() => { });
     }
   } catch (err: any) {
     console.warn('[Cleanup Warning]', err.message);

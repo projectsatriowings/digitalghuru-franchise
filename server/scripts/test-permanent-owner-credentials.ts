@@ -110,22 +110,22 @@ async function teardown() {
   console.log('\n[Teardown] Cleaning up test records...');
 
   for (const fId of ctx.createdFranchiseIds) {
-    await prisma.franchiseAgreement.deleteMany({ where: { franchiseId: fId } }).catch(() => {});
-    await (prisma as any).franchiseRoyaltyInstallment?.deleteMany({ where: { franchiseId: fId } }).catch(() => {});
-    await prisma.institute.updateMany({ where: { franchiseId: fId }, data: { franchiseId: null } }).catch(() => {});
-    await prisma.franchise.deleteMany({ where: { id: fId } }).catch(() => {});
+    await prisma.franchiseAgreement.deleteMany({ where: { franchiseId: fId } }).catch(() => { });
+    await (prisma as any).franchiseRoyaltyInstallment?.deleteMany({ where: { franchiseId: fId } }).catch(() => { });
+    await prisma.institute.updateMany({ where: { franchiseId: fId }, data: { franchiseId: null } }).catch(() => { });
+    await prisma.franchise.deleteMany({ where: { id: fId } }).catch(() => { });
   }
 
   for (const instId of ctx.createdInstituteIds) {
-    await prisma.membership.deleteMany({ where: { instituteId: instId } }).catch(() => {});
-    await prisma.institute.deleteMany({ where: { id: instId } }).catch(() => {});
+    await prisma.membership.deleteMany({ where: { instituteId: instId } }).catch(() => { });
+    await prisma.institute.deleteMany({ where: { id: instId } }).catch(() => { });
   }
 
   for (const uId of ctx.createdUserIds) {
-    await prisma.auditLog.deleteMany({ where: { userId: uId } }).catch(() => {});
-    await prisma.auditLog.deleteMany({ where: { entityId: uId } }).catch(() => {});
-    await prisma.passwordResetToken.deleteMany({ where: { userId: uId } }).catch(() => {});
-    await prisma.user.deleteMany({ where: { id: uId } }).catch(() => {});
+    await prisma.auditLog.deleteMany({ where: { userId: uId } }).catch(() => { });
+    await prisma.auditLog.deleteMany({ where: { entityId: uId } }).catch(() => { });
+    await prisma.passwordResetToken.deleteMany({ where: { userId: uId } }).catch(() => { });
+    await prisma.user.deleteMany({ where: { id: uId } }).catch(() => { });
   }
 
   if (ctx.server) {
