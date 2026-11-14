@@ -277,9 +277,42 @@ export const FeesManagement: React.FC = () => {
     e.preventDefault();
     setActionError(null);
     try {
+      if (!newAssignment.studentId) {
+        setActionError('Please select a student');
+        return;
+      }
+
+      let targetFsId = newAssignment.feeStructureId;
+      if (!targetFsId) {
+        const bId = selectedStudentBatchId || batches[0]?.id;
+        const matchingFs = feeStructures.find(
+          (f) => f.batchId === bId && f.frequency === selectedStudentPlanType
+        ) || feeStructures.find((f) => f.batchId === bId);
+        targetFsId = matchingFs?.id || '';
+      }
+
+      if (!targetFsId) {
+        setActionError('No active fee plan found for the selected batch. Please verify batch selection.');
+        return;
+      }
+
+      const payload: any = {
+        studentId: newAssignment.studentId,
+        feeStructureId: targetFsId,
+        dueDate: newAssignment.dueDate,
+        discountAmount: Number(newAssignment.discountAmount) || 0,
+      };
+      if (newAssignment.midCourseDueDate) payload.midCourseDueDate = newAssignment.midCourseDueDate;
+      if (newAssignment.termLabel && newAssignment.termLabel.trim()) {
+        payload.termLabel = newAssignment.termLabel.trim();
+      }
+      if (newAssignment.academicYear && newAssignment.academicYear.trim()) {
+        payload.academicYear = newAssignment.academicYear.trim();
+      }
+
       const res = await apiFetch('/fees/assignments', {
         method: 'POST',
-        body: JSON.stringify(newAssignment),
+        body: JSON.stringify(payload),
       });
       if (res.success) {
         setActionSuccess(res.message || 'Fee assigned successfully to student.');
@@ -307,9 +340,41 @@ export const FeesManagement: React.FC = () => {
     e.preventDefault();
     setActionError(null);
     try {
+      if (!newBatchAssignment.batchId) {
+        setActionError('Please select a batch');
+        return;
+      }
+
+      let targetFsId = newBatchAssignment.feeStructureId;
+      if (!targetFsId) {
+        const matchingFs = feeStructures.find(
+          (f) => f.batchId === newBatchAssignment.batchId && f.frequency === selectedBatchPlanType
+        ) || feeStructures.find((f) => f.batchId === newBatchAssignment.batchId);
+        targetFsId = matchingFs?.id || '';
+      }
+
+      if (!targetFsId) {
+        setActionError('No active fee plan found for the selected batch.');
+        return;
+      }
+
+      const payload: any = {
+        batchId: newBatchAssignment.batchId,
+        feeStructureId: targetFsId,
+        dueDate: newBatchAssignment.dueDate,
+        defaultDiscount: Number(newBatchAssignment.defaultDiscount) || 0,
+      };
+      if (newBatchAssignment.midCourseDueDate) payload.midCourseDueDate = newBatchAssignment.midCourseDueDate;
+      if (newBatchAssignment.termLabel && newBatchAssignment.termLabel.trim()) {
+        payload.termLabel = newBatchAssignment.termLabel.trim();
+      }
+      if (newBatchAssignment.academicYear && newBatchAssignment.academicYear.trim()) {
+        payload.academicYear = newBatchAssignment.academicYear.trim();
+      }
+
       const res = await apiFetch('/fees/assignments/batch', {
         method: 'POST',
-        body: JSON.stringify(newBatchAssignment),
+        body: JSON.stringify(payload),
       });
       if (res.success) {
         setActionSuccess(res.message || 'Batch fee assignment complete.');
@@ -1438,6 +1503,18 @@ export const FeesManagement: React.FC = () => {
               </button>
             </div>
 
+            {actionError && (
+              <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+                  <span>{actionError}</span>
+                </div>
+                <button type="button" onClick={() => setActionError(null)} className="text-rose-700 hover:text-rose-900">
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
+
             <form onSubmit={handleAssignIndividual} className="space-y-4 text-xs">
               <div>
                 <label className="block text-[#006FFF] font-medium mb-1">Select Student *</label>
@@ -1685,6 +1762,18 @@ export const FeesManagement: React.FC = () => {
                 <X className="w-5 h-5" />
               </button>
             </div>
+
+            {actionError && (
+              <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+                  <span>{actionError}</span>
+                </div>
+                <button type="button" onClick={() => setActionError(null)} className="text-rose-700 hover:text-rose-900">
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
 
             <div className="p-3 rounded-2xl bg-[#F8FAFC] border border-[#E2E8F0] text-xs text-[#006FFF]">
               Safe Transactional Operation: Automatically skips students already assigned for the specified term label.

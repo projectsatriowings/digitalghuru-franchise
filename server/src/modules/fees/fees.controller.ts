@@ -36,8 +36,8 @@ export const updateFeeStructureSchema = z.object({
 export const assignFeeSchema = z.object({
   studentId: z.string().uuid(),
   feeStructureId: z.string().uuid(),
-  termLabel: z.string().min(1).max(100).optional(),
-  academicYear: z.string().min(4).max(20).optional(),
+  termLabel: z.string().max(100).optional().nullable().transform((v) => (v && v.trim() ? v.trim() : undefined)),
+  academicYear: z.string().max(20).optional().nullable().transform((v) => (v && v.trim() ? v.trim() : undefined)),
   baseAmount: z.number().positive('Base amount must be greater than zero').optional(),
   discountAmount: z.number().min(0, 'Discount cannot be negative').default(0),
   dueDate: z.string().min(1, 'Due date is required'),
@@ -47,8 +47,8 @@ export const assignFeeSchema = z.object({
 export const batchAssignFeeSchema = z.object({
   batchId: z.string().uuid(),
   feeStructureId: z.string().uuid(),
-  termLabel: z.string().min(1).max(100).optional(),
-  academicYear: z.string().min(4).max(20).optional(),
+  termLabel: z.string().max(100).optional().nullable().transform((v) => (v && v.trim() ? v.trim() : undefined)),
+  academicYear: z.string().max(20).optional().nullable().transform((v) => (v && v.trim() ? v.trim() : undefined)),
   dueDate: z.string().min(1, 'Due date is required'),
   midCourseDueDate: z.string().optional().nullable(),
   defaultDiscount: z.number().min(0).default(0),
@@ -490,7 +490,8 @@ export async function assignFeeToStudent(req: AuthenticatedRequest, res: Respons
 
     const parse = assignFeeSchema.safeParse(req.body);
     if (!parse.success) {
-      return res.status(400).json({ success: false, error: 'Validation failed', details: parse.error.errors });
+      const msg = parse.error.errors[0]?.message || 'Validation failed';
+      return res.status(400).json({ success: false, error: msg, details: parse.error.errors });
     }
 
     const data = parse.data;
@@ -616,7 +617,8 @@ export async function assignFeeToBatch(req: AuthenticatedRequest, res: Response)
 
     const parse = batchAssignFeeSchema.safeParse(req.body);
     if (!parse.success) {
-      return res.status(400).json({ success: false, error: 'Validation failed', details: parse.error.errors });
+      const msg = parse.error.errors[0]?.message || 'Validation failed';
+      return res.status(400).json({ success: false, error: msg, details: parse.error.errors });
     }
 
     const data = parse.data;
