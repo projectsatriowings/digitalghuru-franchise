@@ -2,6 +2,7 @@ import { Router } from 'express';
 import {
   listInstitutes,
   createInstitute,
+  checkInstituteDuplicates,
   getInstituteById,
   updateInstitute,
   updateInstituteStatus,
@@ -15,6 +16,9 @@ const router = Router();
 
 // Dashboard summary (Super Admin gets platform metrics, Academic Admin gets institute-scoped metrics)
 router.get('/dashboard/summary', authenticateToken, requireInstituteContext, getDashboardSummary);
+
+// Institute Duplicate Pre-check (SUPER_ADMIN only)
+router.post('/check-duplicates', authenticateToken, requireRole('SUPER_ADMIN'), checkInstituteDuplicates);
 
 // Institute CRUD
 router.get('/', authenticateToken, requireRole('SUPER_ADMIN'), listInstitutes);
