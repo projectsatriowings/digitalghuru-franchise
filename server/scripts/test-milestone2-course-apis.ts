@@ -386,6 +386,18 @@ async function run() {
     });
     assert(studentCheck?.instituteId === branch.id, '12b. Student physical campus association remains unchanged');
 
+    // Safe test tear-down: archive test course and revoke franchise offering to keep live catalog clean
+    if (courseId) {
+      await prisma.franchiseCourseSelection.updateMany({
+        where: { courseId },
+        data: { isPermitted: false, isEnabled: false }
+      }).catch(() => {});
+      await prisma.globalCourse.update({
+        where: { id: courseId },
+        data: { status: CourseStatus.ARCHIVED }
+      }).catch(() => {});
+    }
+
     console.log('\n================================================================');
     console.log(` TEST SUMMARY: ${passedCount} PASSED, ${failedCount} FAILED`);
     console.log('================================================================\n');

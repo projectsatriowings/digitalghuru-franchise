@@ -1,4 +1,9 @@
 import { lookupByPostalCode, lookupByCity } from '../../utils/locationHelper';
+import {
+  sanitizePhoneInput,
+  getPhoneValidationError,
+  getEmailValidationError,
+} from '../../utils/validation';
 import React, { useEffect, useState, useRef } from 'react';
 import { apiFetch } from '../../services/api';
 import { StaffMember, StaffQualification, StaffExperience, StaffDocument, Batch } from '../../types';
@@ -341,6 +346,42 @@ export const StaffProfileView: React.FC<StaffProfileViewProps> = ({
     try {
       setPersonalSaving(true);
       setPersonalError(null);
+
+      if (personalForm.phone.trim()) {
+        const phoneErr = getPhoneValidationError(personalForm.phone, false);
+        if (phoneErr) {
+          setPersonalError(`Primary Phone: ${phoneErr}`);
+          setPersonalSaving(false);
+          return;
+        }
+      }
+
+      if (personalForm.altPhone.trim()) {
+        const altPhoneErr = getPhoneValidationError(personalForm.altPhone, false);
+        if (altPhoneErr) {
+          setPersonalError(`Alternate Phone: ${altPhoneErr}`);
+          setPersonalSaving(false);
+          return;
+        }
+      }
+
+      if (personalForm.emergencyContactPhone.trim()) {
+        const emPhoneErr = getPhoneValidationError(personalForm.emergencyContactPhone, false);
+        if (emPhoneErr) {
+          setPersonalError(`Emergency Contact Phone: ${emPhoneErr}`);
+          setPersonalSaving(false);
+          return;
+        }
+      }
+
+      if (personalForm.personalEmail.trim()) {
+        const emailErr = getEmailValidationError(personalForm.personalEmail, false);
+        if (emailErr) {
+          setPersonalError(`Personal Email: ${emailErr}`);
+          setPersonalSaving(false);
+          return;
+        }
+      }
 
       const payload = {
         fullName: personalForm.fullName.trim(),
@@ -1210,10 +1251,21 @@ export const StaffProfileView: React.FC<StaffProfileViewProps> = ({
                     <input
                       type="tel"
                       value={personalForm.phone}
-                      onChange={(e) => setPersonalForm({ ...personalForm, phone: e.target.value })}
+                      onChange={(e) =>
+                        setPersonalForm({ ...personalForm, phone: sanitizePhoneInput(e.target.value) })
+                      }
                       placeholder="e.g. +91 9876543210"
-                      className="w-full bg-[#FAF8F5] border border-[#E2E8F0] rounded-xl px-3 py-2 text-xs text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#006FFF]/20"
+                      className={`w-full bg-[#FAF8F5] border rounded-xl px-3 py-2 text-xs text-[#0F172A] focus:outline-none focus:ring-2 transition-colors ${
+                        personalForm.phone.trim() && getPhoneValidationError(personalForm.phone)
+                          ? 'border-rose-400 focus:ring-rose-200 bg-rose-50/30'
+                          : 'border-[#E2E8F0] focus:ring-[#006FFF]/20'
+                      }`}
                     />
+                    {personalForm.phone.trim() && getPhoneValidationError(personalForm.phone) && (
+                      <p className="text-[10px] text-rose-600 mt-1 font-medium">
+                        {getPhoneValidationError(personalForm.phone)}
+                      </p>
+                    )}
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-[#0F172A] mb-1">
@@ -1222,10 +1274,21 @@ export const StaffProfileView: React.FC<StaffProfileViewProps> = ({
                     <input
                       type="tel"
                       value={personalForm.altPhone}
-                      onChange={(e) => setPersonalForm({ ...personalForm, altPhone: e.target.value })}
+                      onChange={(e) =>
+                        setPersonalForm({ ...personalForm, altPhone: sanitizePhoneInput(e.target.value) })
+                      }
                       placeholder="e.g. +91 9822233344"
-                      className="w-full bg-[#FAF8F5] border border-[#E2E8F0] rounded-xl px-3 py-2 text-xs text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#006FFF]/20"
+                      className={`w-full bg-[#FAF8F5] border rounded-xl px-3 py-2 text-xs text-[#0F172A] focus:outline-none focus:ring-2 transition-colors ${
+                        personalForm.altPhone.trim() && getPhoneValidationError(personalForm.altPhone)
+                          ? 'border-rose-400 focus:ring-rose-200 bg-rose-50/30'
+                          : 'border-[#E2E8F0] focus:ring-[#006FFF]/20'
+                      }`}
                     />
+                    {personalForm.altPhone.trim() && getPhoneValidationError(personalForm.altPhone) && (
+                      <p className="text-[10px] text-rose-600 mt-1 font-medium">
+                        {getPhoneValidationError(personalForm.altPhone)}
+                      </p>
+                    )}
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-[#0F172A] mb-1">
@@ -1235,11 +1298,20 @@ export const StaffProfileView: React.FC<StaffProfileViewProps> = ({
                       type="email"
                       value={personalForm.personalEmail}
                       onChange={(e) =>
-                        setPersonalForm({ ...personalForm, personalEmail: e.target.value })
+                        setPersonalForm({ ...personalForm, personalEmail: e.target.value.trim() })
                       }
                       placeholder="e.g. faculty@gmail.com"
-                      className="w-full bg-[#FAF8F5] border border-[#E2E8F0] rounded-xl px-3 py-2 text-xs text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#006FFF]/20"
+                      className={`w-full bg-[#FAF8F5] border rounded-xl px-3 py-2 text-xs text-[#0F172A] focus:outline-none focus:ring-2 transition-colors ${
+                        personalForm.personalEmail.trim() && getEmailValidationError(personalForm.personalEmail)
+                          ? 'border-rose-400 focus:ring-rose-200 bg-rose-50/30'
+                          : 'border-[#E2E8F0] focus:ring-[#006FFF]/20'
+                      }`}
                     />
+                    {personalForm.personalEmail.trim() && getEmailValidationError(personalForm.personalEmail) && (
+                      <p className="text-[10px] text-rose-600 mt-1 font-medium">
+                        {getEmailValidationError(personalForm.personalEmail)}
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1291,12 +1363,23 @@ export const StaffProfileView: React.FC<StaffProfileViewProps> = ({
                       onChange={(e) =>
                         setPersonalForm({
                           ...personalForm,
-                          emergencyContactPhone: e.target.value,
+                          emergencyContactPhone: sanitizePhoneInput(e.target.value),
                         })
                       }
                       placeholder="Emergency contact phone"
-                      className="w-full bg-[#FAF8F5] border border-[#E2E8F0] rounded-xl px-3 py-2 text-xs text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#006FFF]/20"
+                      className={`w-full bg-[#FAF8F5] border rounded-xl px-3 py-2 text-xs text-[#0F172A] focus:outline-none focus:ring-2 transition-colors ${
+                        personalForm.emergencyContactPhone.trim() &&
+                        getPhoneValidationError(personalForm.emergencyContactPhone)
+                          ? 'border-rose-400 focus:ring-rose-200 bg-rose-50/30'
+                          : 'border-[#E2E8F0] focus:ring-[#006FFF]/20'
+                      }`}
                     />
+                    {personalForm.emergencyContactPhone.trim() &&
+                      getPhoneValidationError(personalForm.emergencyContactPhone) && (
+                        <p className="text-[10px] text-rose-600 mt-1 font-medium">
+                          {getPhoneValidationError(personalForm.emergencyContactPhone)}
+                        </p>
+                      )}
                   </div>
                 </div>
               </div>

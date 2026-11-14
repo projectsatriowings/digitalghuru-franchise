@@ -23,6 +23,7 @@ import {
   X,
   RefreshCw,
   Building2,
+  Edit2,
 } from 'lucide-react';
 
 export const FeesManagement: React.FC = () => {
@@ -44,7 +45,14 @@ export const FeesManagement: React.FC = () => {
   // Fee Structures state
   const [feeStructures, setFeeStructures] = useState<any[]>([]);
   const [loadingStructures, setLoadingStructures] = useState<boolean>(false);
-  const [showCreateStructureModal, setShowCreateStructureModal] = useState<boolean>(false);
+  const [editingFeeStructure, setEditingFeeStructure] = useState<any | null>(null);
+  const [editFeeAmount, setEditFeeAmount] = useState<number>(0);
+  const [savingEditFee, setSavingEditFee] = useState<boolean>(false);
+
+  // Assignment Modal Helper State
+  const [selectedStudentBatchId, setSelectedStudentBatchId] = useState<string>('');
+  const [selectedStudentPlanType, setSelectedStudentPlanType] = useState<'FULL_PAYMENT' | 'TWO_INSTALLMENTS'>('TWO_INSTALLMENTS');
+  const [selectedBatchPlanType, setSelectedBatchPlanType] = useState<'FULL_PAYMENT' | 'TWO_INSTALLMENTS'>('TWO_INSTALLMENTS');
 
   // Assignments state
   const [assignments, setAssignments] = useState<any[]>([]);
@@ -78,23 +86,14 @@ export const FeesManagement: React.FC = () => {
   const [students, setStudents] = useState<any[]>([]);
 
   // Form states
-  const [newStructure, setNewStructure] = useState({
-    batchId: '',
-    name: '',
-    description: '',
-    academicYear: '2026-2027',
-    frequency: 'MONTHLY',
-    amount: 0,
-    dueDay: 10,
-  });
-
   const [newAssignment, setNewAssignment] = useState({
     studentId: '',
     feeStructureId: '',
     termLabel: '',
     academicYear: '2026-2027',
     discountAmount: 0,
-    dueDate: new Date(Date.now() + 15 * 86400000).toISOString().split('T')[0],
+    dueDate: new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0],
+    midCourseDueDate: new Date(Date.now() + 45 * 86400000).toISOString().split('T')[0],
   });
 
   const [newBatchAssignment, setNewBatchAssignment] = useState({
@@ -102,7 +101,8 @@ export const FeesManagement: React.FC = () => {
     feeStructureId: '',
     termLabel: '',
     academicYear: '2026-2027',
-    dueDate: new Date(Date.now() + 15 * 86400000).toISOString().split('T')[0],
+    dueDate: new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0],
+    midCourseDueDate: new Date(Date.now() + 45 * 86400000).toISOString().split('T')[0],
     defaultDiscount: 0,
   });
 
@@ -122,6 +122,7 @@ export const FeesManagement: React.FC = () => {
     loadDashboardData();
     loadBatches();
     loadStudents();
+    loadFeeStructures();
   }, [isAdmin, activeInstitute?.id]);
 
   useEffect(() => {
@@ -230,33 +231,45 @@ export const FeesManagement: React.FC = () => {
     }
   };
 
-  const handleCreateStructure = async (e: React.FormEvent) => {
+  const getBatchMilestoneDates = (batchId: string) => {
+    const b = batches.find((x) => x.id === batchId);
+    if (!b?.startDate) {
+      return {
+        preCourseDate: new Date().toISOString().split('T')[0],
+        midCourseDate: new Date(Date.now() + 45 * 86400000).toISOString().split('T')[0],
+      };
+    }
+    const start = new Date(b.startDate);
+    const end = b.endDate ? new Date(b.endDate) : new Date(start.getTime() + 90 * 86400000);
+    const midMs = start.getTime() + Math.max(0, (end.getTime() - start.getTime()) / 2);
+    return {
+      preCourseDate: start.toISOString().split('T')[0],
+      midCourseDate: new Date(midMs).toISOString().split('T')[0],
+    };
+  };
+
+  const handleUpdateFeeAmount = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!editingFeeStructure) return;
     setActionError(null);
+    setSavingEditFee(true);
     try {
-      const res = await apiFetch('/fees/structures', {
-        method: 'POST',
-        body: JSON.stringify(newStructure),
+      const res = await apiFetch(`/fees/structures/${editingFeeStructure.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ amount: editFeeAmount }),
       });
       if (res.success) {
-        setActionSuccess('Fee structure created successfully.');
-        setShowCreateStructureModal(false);
-        setNewStructure({
-          batchId: '',
-          name: '',
-          description: '',
-          academicYear: '2026-2027',
-          frequency: 'MONTHLY',
-          amount: 0,
-          dueDay: 10,
-        });
+        setActionSuccess('Course fee amount updated successfully.');
+        setEditingFeeStructure(null);
         loadFeeStructures();
         loadDashboardData();
       } else {
-        setActionError(res.error || 'Failed to create fee structure');
+        setActionError(res.error || 'Failed to update course fee');
       }
     } catch (err: any) {
-      setActionError(err.message || 'Error creating fee structure');
+      setActionError(err.message || 'Error updating course fee');
+    } finally {
+      setSavingEditFee(false);
     }
   };
 
@@ -264,12 +277,45 @@ export const FeesManagement: React.FC = () => {
     e.preventDefault();
     setActionError(null);
     try {
+      if (!newAssignment.studentId) {
+        setActionError('Please select a student');
+        return;
+      }
+
+      let targetFsId = newAssignment.feeStructureId;
+      if (!targetFsId) {
+        const bId = selectedStudentBatchId || batches[0]?.id;
+        const matchingFs = feeStructures.find(
+          (f) => f.batchId === bId && f.frequency === selectedStudentPlanType
+        ) || feeStructures.find((f) => f.batchId === bId);
+        targetFsId = matchingFs?.id || '';
+      }
+
+      if (!targetFsId) {
+        setActionError('No active fee plan found for the selected batch. Please verify batch selection.');
+        return;
+      }
+
+      const payload: any = {
+        studentId: newAssignment.studentId,
+        feeStructureId: targetFsId,
+        dueDate: newAssignment.dueDate,
+        discountAmount: Number(newAssignment.discountAmount) || 0,
+      };
+      if (newAssignment.midCourseDueDate) payload.midCourseDueDate = newAssignment.midCourseDueDate;
+      if (newAssignment.termLabel && newAssignment.termLabel.trim()) {
+        payload.termLabel = newAssignment.termLabel.trim();
+      }
+      if (newAssignment.academicYear && newAssignment.academicYear.trim()) {
+        payload.academicYear = newAssignment.academicYear.trim();
+      }
+
       const res = await apiFetch('/fees/assignments', {
         method: 'POST',
-        body: JSON.stringify(newAssignment),
+        body: JSON.stringify(payload),
       });
       if (res.success) {
-        setActionSuccess('Fee assigned successfully to student.');
+        setActionSuccess(res.message || 'Fee assigned successfully to student.');
         setShowAssignModal(false);
         setNewAssignment({
           studentId: '',
@@ -277,7 +323,8 @@ export const FeesManagement: React.FC = () => {
           termLabel: '',
           academicYear: '2026-2027',
           discountAmount: 0,
-          dueDate: new Date(Date.now() + 15 * 86400000).toISOString().split('T')[0],
+          dueDate: new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0],
+          midCourseDueDate: new Date(Date.now() + 45 * 86400000).toISOString().split('T')[0],
         });
         loadAssignments();
         loadDashboardData();
@@ -293,20 +340,52 @@ export const FeesManagement: React.FC = () => {
     e.preventDefault();
     setActionError(null);
     try {
+      if (!newBatchAssignment.batchId) {
+        setActionError('Please select a batch');
+        return;
+      }
+
+      let targetFsId = newBatchAssignment.feeStructureId;
+      if (!targetFsId) {
+        const matchingFs = feeStructures.find(
+          (f) => f.batchId === newBatchAssignment.batchId && f.frequency === selectedBatchPlanType
+        ) || feeStructures.find((f) => f.batchId === newBatchAssignment.batchId);
+        targetFsId = matchingFs?.id || '';
+      }
+
+      if (!targetFsId) {
+        setActionError('No active fee plan found for the selected batch.');
+        return;
+      }
+
+      const payload: any = {
+        batchId: newBatchAssignment.batchId,
+        feeStructureId: targetFsId,
+        dueDate: newBatchAssignment.dueDate,
+        defaultDiscount: Number(newBatchAssignment.defaultDiscount) || 0,
+      };
+      if (newBatchAssignment.midCourseDueDate) payload.midCourseDueDate = newBatchAssignment.midCourseDueDate;
+      if (newBatchAssignment.termLabel && newBatchAssignment.termLabel.trim()) {
+        payload.termLabel = newBatchAssignment.termLabel.trim();
+      }
+      if (newBatchAssignment.academicYear && newBatchAssignment.academicYear.trim()) {
+        payload.academicYear = newBatchAssignment.academicYear.trim();
+      }
+
       const res = await apiFetch('/fees/assignments/batch', {
         method: 'POST',
-        body: JSON.stringify(newBatchAssignment),
+        body: JSON.stringify(payload),
       });
       if (res.success) {
-        const { assignedCount, skippedCount } = res.data || {};
-        setActionSuccess(`Batch fee assignment complete: ${assignedCount} assigned, ${skippedCount} skipped.`);
+        setActionSuccess(res.message || 'Batch fee assignment complete.');
         setShowBatchAssignModal(false);
         setNewBatchAssignment({
           batchId: '',
           feeStructureId: '',
           termLabel: '',
           academicYear: '2026-2027',
-          dueDate: new Date(Date.now() + 15 * 86400000).toISOString().split('T')[0],
+          dueDate: new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0],
+          midCourseDueDate: new Date(Date.now() + 45 * 86400000).toISOString().split('T')[0],
           defaultDiscount: 0,
         });
         loadAssignments();
@@ -439,19 +518,22 @@ export const FeesManagement: React.FC = () => {
             <button
               onClick={() => {
                 setActionError(null);
-                setShowCreateStructureModal(true);
-              }}
-              className="px-3 py-2 rounded-xl text-xs font-semibold bg-[#006FFF]/10 hover:bg-[#006FFF] text-[#006FFF] hover:text-white border border-[#E2E8F0] flex items-center gap-1.5 transition-all shadow-sm"
-            >
-              <Plus className="w-4 h-4" /> New Fee Structure
-            </button>
-            <button
-              onClick={() => {
-                setActionError(null);
                 loadFeeStructures();
+                const defaultBatch = batches[0];
+                if (defaultBatch) {
+                  setSelectedStudentBatchId(defaultBatch.id);
+                  const fs = feeStructures.find((f) => f.batchId === defaultBatch.id && f.frequency === selectedStudentPlanType) || feeStructures.find((f) => f.batchId === defaultBatch.id);
+                  const { preCourseDate, midCourseDate } = getBatchMilestoneDates(defaultBatch.id);
+                  setNewAssignment((prev) => ({
+                    ...prev,
+                    feeStructureId: fs?.id || '',
+                    dueDate: preCourseDate,
+                    midCourseDueDate: midCourseDate,
+                  }));
+                }
                 setShowAssignModal(true);
               }}
-              className="px-3 py-2 rounded-xl text-xs font-semibold bg-[#006FFF] hover:bg-[#0058D4] text-white shadow-sm flex items-center gap-1.5 transition-all"
+              className="px-4 py-2.5 rounded-xl text-xs font-bold bg-[#006FFF] hover:bg-[#0058D4] text-white shadow-sm flex items-center gap-1.5 transition-all"
             >
               <Plus className="w-4 h-4" /> Assign Fee to Student
             </button>
@@ -459,9 +541,21 @@ export const FeesManagement: React.FC = () => {
               onClick={() => {
                 setActionError(null);
                 loadFeeStructures();
+                const defaultBatch = batches[0];
+                if (defaultBatch) {
+                  const fs = feeStructures.find((f) => f.batchId === defaultBatch.id && f.frequency === selectedBatchPlanType) || feeStructures.find((f) => f.batchId === defaultBatch.id);
+                  const { preCourseDate, midCourseDate } = getBatchMilestoneDates(defaultBatch.id);
+                  setNewBatchAssignment((prev) => ({
+                    ...prev,
+                    batchId: defaultBatch.id,
+                    feeStructureId: fs?.id || '',
+                    dueDate: preCourseDate,
+                    midCourseDueDate: midCourseDate,
+                  }));
+                }
                 setShowBatchAssignModal(true);
               }}
-              className="px-3 py-2 rounded-xl text-xs font-semibold bg-[#006FFF] hover:bg-[#006FFF] text-white shadow-sm flex items-center gap-1.5 transition-all"
+              className="px-4 py-2.5 rounded-xl text-xs font-bold bg-slate-900 hover:bg-slate-800 text-white shadow-sm flex items-center gap-1.5 transition-all"
             >
               <Layers className="w-4 h-4" /> Assign to Batch
             </button>
@@ -913,46 +1007,95 @@ export const FeesManagement: React.FC = () => {
       {activeTab === 'structures' && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-bold text-[#0F172A] uppercase tracking-wider">Institute Fee Configurations</h3>
+            <div>
+              <h3 className="text-sm font-bold text-[#0F172A] uppercase tracking-wider">Active Course Fee Plans</h3>
+              <p className="text-xs text-[#64748B] mt-0.5">Pre-configured 2 payment options (Full Payment & 2 Installments) automatically synced with institute courses.</p>
+            </div>
+            <button
+              onClick={() => loadFeeStructures()}
+              className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center gap-1.5 transition-all shadow-xs"
+            >
+              <RefreshCw className="w-3.5 h-3.5" /> Refresh Plans
+            </button>
           </div>
 
           {loadingStructures ? (
             <div className="p-12 text-center text-[#94A3B8] text-sm">Loading fee structures...</div>
           ) : feeStructures.length === 0 ? (
             <div className="p-12 text-center rounded-3xl bg-white border border-[#E2E8F0] text-[#94A3B8] text-sm shadow-sm">
-              No fee structures configured. Click "New Fee Structure" above.
+              No active batches found for this campus. Create a batch in Academics to auto-generate course fee plans.
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {feeStructures.map((fs) => (
-                <div key={fs.id} className="p-5 rounded-3xl bg-white border border-[#E2E8F0] shadow-sm space-y-3 hover:shadow-md transition-shadow">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#D7CCC8]/40 text-[#006FFF] border border-[#CBD5E1] uppercase">
-                        {fs.frequency}
-                      </span>
-                      <h4 className="text-base font-bold text-[#0F172A] mt-1.5">{fs.name}</h4>
-                      <p className="text-xs text-[#64748B]">{fs.batch?.name || 'All Batches'} &bull; {fs.academicYear}</p>
+              {feeStructures.map((fs) => {
+                const isInstallments = fs.frequency === 'TWO_INSTALLMENTS';
+                const isFullPayment = fs.frequency === 'FULL_PAYMENT' || fs.frequency === 'ONE_TIME';
+                const halfAmount = Number(fs.amount) / 2;
+
+                return (
+                  <div key={fs.id} className="p-5 rounded-3xl bg-white border border-[#E2E8F0] shadow-sm space-y-3 hover:shadow-md transition-shadow">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        {isInstallments ? (
+                          <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 uppercase inline-flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-indigo-500"></span> 2 Installments (50% + 50%)
+                          </span>
+                        ) : isFullPayment ? (
+                          <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 uppercase inline-flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Full Course Payment (100%)
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200 uppercase">
+                            {fs.frequency}
+                          </span>
+                        )}
+                        <h4 className="text-base font-bold text-[#0F172A] mt-2">{fs.name}</h4>
+                        <p className="text-xs text-[#64748B]">{fs.batch?.name || 'All Batches'} &bull; {fs.academicYear}</p>
+                      </div>
+
+                      <div className="text-right">
+                        <span className="text-lg font-black text-slate-900">{formatCurrency(fs.amount)}</span>
+                        <span className="block text-[10px] font-semibold text-slate-500 uppercase tracking-wide">Total Course Fee</span>
+                      </div>
                     </div>
 
-                    <div className="text-right">
-                      <span className="text-lg font-black text-emerald-800">{formatCurrency(fs.amount)}</span>
-                      {fs.dueDay && (
-                        <span className="block text-[10px] text-[#94A3B8]">Due Day: {fs.dueDay}th</span>
-                      )}
+                    {isInstallments ? (
+                      <div className="p-2.5 rounded-xl bg-indigo-50/60 border border-indigo-100 text-[11px] space-y-1">
+                        <div className="font-semibold text-indigo-900 flex items-center justify-between">
+                          <span>Inst 1 (Initial / Pre-Course):</span>
+                          <span className="font-bold text-slate-900">{formatCurrency(halfAmount)}</span>
+                        </div>
+                        <div className="font-semibold text-indigo-900 flex items-center justify-between">
+                          <span>Inst 2 (Mid-Course ~{fs.midCourseDueDays || 45}d):</span>
+                          <span className="font-bold text-slate-900">{formatCurrency(halfAmount)}</span>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="p-2 rounded-xl bg-emerald-50/60 border border-emerald-100 text-[11px] text-emerald-800 font-medium">
+                        100% full course fee collected prior to batch start.
+                      </div>
+                    )}
+
+                    {fs.description && (
+                      <p className="text-xs text-[#64748B] pt-2 border-t border-[#F1F5F9]">{fs.description}</p>
+                    )}
+
+                    <div className="pt-2 flex items-center justify-between text-[11px] text-[#64748B]">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingFeeStructure(fs);
+                          setEditFeeAmount(Number(fs.amount));
+                        }}
+                        className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-100 hover:bg-[#006FFF] text-slate-700 hover:text-white border border-slate-200 transition-all shadow-xs flex items-center gap-1"
+                      >
+                        <Edit2 className="w-3 h-3" /> Edit Fee (₹)
+                      </button>
+                      <span className="text-emerald-700 font-semibold">{fs.isActive ? 'Active' : 'Archived'}</span>
                     </div>
                   </div>
-
-                  {fs.description && (
-                    <p className="text-xs text-[#64748B] pt-2 border-t border-[#F1F5F9]">{fs.description}</p>
-                  )}
-
-                  <div className="pt-2 flex items-center justify-between text-[11px] text-[#64748B]">
-                    <span>{fs._count?.assignments || 0} active assignments</span>
-                    <span className="text-emerald-800 font-semibold">{fs.isActive ? 'Active' : 'Archived'}</span>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
@@ -1286,127 +1429,58 @@ export const FeesManagement: React.FC = () => {
       )}
 
       {/* ========================================================================= */}
-      {/* MODAL 3: CREATE FEE STRUCTURE */}
+      {/* MODAL 3: UPDATE COURSE FEE AMOUNT */}
       {/* ========================================================================= */}
-      {showCreateStructureModal && (
+      {editingFeeStructure && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white border border-[#E2E8F0] rounded-3xl w-full max-w-lg p-6 space-y-4 shadow-2xl">
+          <div className="bg-white border border-[#E2E8F0] rounded-3xl w-full max-w-md p-6 space-y-4 shadow-2xl">
             <div className="flex items-center justify-between border-b border-[#F1F5F9] pb-3">
               <h3 className="text-lg font-bold text-[#0F172A] flex items-center gap-2">
-                <Plus className="w-5 h-5 text-[#64748B]" /> Create Fee Structure
+                <Edit2 className="w-5 h-5 text-[#006FFF]" /> Update Course Fee
               </h3>
-              <button
-                onClick={() => setShowCreateStructureModal(false)}
-                className="text-[#94A3B8] hover:text-[#0F172A]"
-              >
+              <button onClick={() => setEditingFeeStructure(null)} className="text-[#94A3B8] hover:text-[#0F172A]">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleCreateStructure} className="space-y-4 text-xs">
-              <div>
-                <label className="block text-[#006FFF] font-medium mb-1">Applicable Batch</label>
-                <select
-                  required
-                  value={newStructure.batchId}
-                  onChange={(e) => setNewStructure({ ...newStructure, batchId: e.target.value })}
-                  className="w-full bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl px-3 py-2 text-[#0F172A] focus:ring-2 focus:ring-[#006FFF]/20"
-                >
-                  <option value="">Select Batch...</option>
-                  {batches.map((b) => (
-                    <option key={b.id} value={b.id}>
-                      {b.name} ({b.academicYear})
-                    </option>
-                  ))}
-                </select>
-              </div>
+            <div className="p-3 rounded-2xl bg-blue-50 border border-blue-100 text-xs text-blue-900 space-y-1">
+              <div>Batch: <strong>{editingFeeStructure.batch?.name || 'All Batches'}</strong></div>
+              <div>Plan: <strong>{editingFeeStructure.name}</strong></div>
+            </div>
 
+            <form onSubmit={handleUpdateFeeAmount} className="space-y-4 text-xs">
               <div>
-                <label className="block text-[#006FFF] font-medium mb-1">Fee Structure Name</label>
+                <label className="block text-[#006FFF] font-medium mb-1">Total Course Fee (₹) *</label>
                 <input
-                  type="text"
+                  type="number"
+                  min="1"
+                  step="1"
                   required
-                  placeholder="e.g., Monthly Course Fee - Class 10"
-                  value={newStructure.name}
-                  onChange={(e) => setNewStructure({ ...newStructure, name: e.target.value })}
-                  className="w-full bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl px-3 py-2 text-[#0F172A] focus:ring-2 focus:ring-[#006FFF]/20"
+                  value={editFeeAmount}
+                  onChange={(e) => setEditFeeAmount(parseFloat(e.target.value) || 0)}
+                  className="w-full bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl px-3 py-2 text-[#0F172A] font-bold text-base focus:ring-2 focus:ring-[#006FFF]/20"
                 />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[#006FFF] font-medium mb-1">Frequency</label>
-                  <select
-                    value={newStructure.frequency}
-                    onChange={(e) => setNewStructure({ ...newStructure, frequency: e.target.value })}
-                    className="w-full bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl px-3 py-2 text-[#0F172A] focus:ring-2 focus:ring-[#006FFF]/20"
-                  >
-                    <option value="MONTHLY">Monthly</option>
-                    <option value="TERM_WISE">Term-wise</option>
-                    <option value="ONE_TIME">One-time</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-[#006FFF] font-medium mb-1">Amount (₹)</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="1"
-                    required
-                    value={newStructure.amount}
-                    onChange={(e) => setNewStructure({ ...newStructure, amount: parseFloat(e.target.value) || 0 })}
-                    className="w-full bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl px-3 py-2 text-[#0F172A] font-bold focus:ring-2 focus:ring-[#006FFF]/20"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[#006FFF] font-medium mb-1">Academic Year</label>
-                  <input
-                    type="text"
-                    value={newStructure.academicYear}
-                    onChange={(e) => setNewStructure({ ...newStructure, academicYear: e.target.value })}
-                    className="w-full bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl px-3 py-2 text-[#0F172A] focus:ring-2 focus:ring-[#006FFF]/20"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[#006FFF] font-medium mb-1">Default Due Day of Month</label>
-                  <input
-                    type="number"
-                    min="1"
-                    max="31"
-                    value={newStructure.dueDay}
-                    onChange={(e) => setNewStructure({ ...newStructure, dueDay: parseInt(e.target.value) || 10 })}
-                    className="w-full bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl px-3 py-2 text-[#0F172A] focus:ring-2 focus:ring-[#006FFF]/20"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-[#006FFF] font-medium mb-1">Description (Optional)</label>
-                <textarea
-                  rows={2}
-                  placeholder="Includes lab access, monthly mock exams, etc."
-                  value={newStructure.description}
-                  onChange={(e) => setNewStructure({ ...newStructure, description: e.target.value })}
-                  className="w-full bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl px-3 py-2 text-[#0F172A] focus:ring-2 focus:ring-[#006FFF]/20"
-                />
+                <span className="block text-[11px] text-slate-500 mt-1">
+                  {editingFeeStructure.frequency === 'TWO_INSTALLMENTS'
+                    ? `Each installment will automatically be ₹${Math.round(editFeeAmount / 2).toLocaleString('en-IN')}`
+                    : 'Full 100% upfront course payment'}
+                </span>
               </div>
 
               <div className="pt-2 flex items-center justify-end gap-3 border-t border-[#F1F5F9]">
                 <button
                   type="button"
-                  onClick={() => setShowCreateStructureModal(false)}
+                  onClick={() => setEditingFeeStructure(null)}
                   className="px-4 py-2 rounded-xl text-[#64748B] hover:bg-[#F8FAFC]"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2.5 rounded-xl font-bold bg-[#006FFF] hover:bg-[#0058D4] text-white shadow-sm"
+                  disabled={savingEditFee}
+                  className="px-5 py-2.5 rounded-xl font-bold bg-[#006FFF] hover:bg-[#0058D4] text-white shadow-sm flex items-center gap-1.5"
                 >
-                  Save Fee Structure
+                  {savingEditFee ? 'Updating...' : 'Save Updated Fee'}
                 </button>
               </div>
             </form>
@@ -1429,13 +1503,41 @@ export const FeesManagement: React.FC = () => {
               </button>
             </div>
 
+            {actionError && (
+              <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+                  <span>{actionError}</span>
+                </div>
+                <button type="button" onClick={() => setActionError(null)} className="text-rose-700 hover:text-rose-900">
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
+
             <form onSubmit={handleAssignIndividual} className="space-y-4 text-xs">
               <div>
-                <label className="block text-[#006FFF] font-medium mb-1">Select Student</label>
+                <label className="block text-[#006FFF] font-medium mb-1">Select Student *</label>
                 <select
                   required
                   value={newAssignment.studentId}
-                  onChange={(e) => setNewAssignment({ ...newAssignment, studentId: e.target.value })}
+                  onChange={(e) => {
+                    const sId = e.target.value;
+                    const student = students.find((s) => s.id === sId);
+                    const bId = student?.batchId || selectedStudentBatchId || (batches[0]?.id || '');
+                    setSelectedStudentBatchId(bId);
+                    const matchingFs = feeStructures.find(
+                      (f) => f.batchId === bId && f.frequency === selectedStudentPlanType
+                    ) || feeStructures.find((f) => f.batchId === bId);
+                    const { preCourseDate, midCourseDate } = getBatchMilestoneDates(bId);
+                    setNewAssignment({
+                      ...newAssignment,
+                      studentId: sId,
+                      feeStructureId: matchingFs?.id || '',
+                      dueDate: preCourseDate,
+                      midCourseDueDate: midCourseDate,
+                    });
+                  }}
                   className="w-full bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl px-3 py-2 text-[#0F172A] focus:ring-2 focus:ring-[#006FFF]/20"
                 >
                   <option value="">Select Student...</option>
@@ -1448,57 +1550,183 @@ export const FeesManagement: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-[#006FFF] font-medium mb-1">Fee Structure</label>
+                <label className="block text-[#006FFF] font-medium mb-1">Target Course Batch *</label>
                 <select
                   required
-                  value={newAssignment.feeStructureId}
-                  onChange={(e) => setNewAssignment({ ...newAssignment, feeStructureId: e.target.value })}
+                  value={selectedStudentBatchId}
+                  onChange={(e) => {
+                    const bId = e.target.value;
+                    setSelectedStudentBatchId(bId);
+                    const matchingFs = feeStructures.find(
+                      (f) => f.batchId === bId && f.frequency === selectedStudentPlanType
+                    ) || feeStructures.find((f) => f.batchId === bId);
+                    const { preCourseDate, midCourseDate } = getBatchMilestoneDates(bId);
+                    setNewAssignment({
+                      ...newAssignment,
+                      feeStructureId: matchingFs?.id || '',
+                      dueDate: preCourseDate,
+                      midCourseDueDate: midCourseDate,
+                    });
+                  }}
                   className="w-full bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl px-3 py-2 text-[#0F172A] focus:ring-2 focus:ring-[#006FFF]/20"
                 >
-                  <option value="">Select Fee Structure...</option>
-                  {feeStructures.map((fs) => (
-                    <option key={fs.id} value={fs.id}>
-                      {fs.name} - ₹{fs.amount} ({fs.frequency})
+                  <option value="">Select Batch...</option>
+                  {batches.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.name} ({b.academicYear})
                     </option>
                   ))}
                 </select>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[#006FFF] font-medium mb-1">Term Label</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g., November 2026 or Term 1"
-                    value={newAssignment.termLabel}
-                    onChange={(e) => setNewAssignment({ ...newAssignment, termLabel: e.target.value })}
-                    className="w-full bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl px-3 py-2 text-[#0F172A] focus:ring-2 focus:ring-[#006FFF]/20"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[#006FFF] font-medium mb-1">Concession / Discount (₹)</label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={newAssignment.discountAmount}
-                    onChange={(e) => setNewAssignment({ ...newAssignment, discountAmount: parseFloat(e.target.value) || 0 })}
-                    className="w-full bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl px-3 py-2 text-[#0F172A] focus:ring-2 focus:ring-[#006FFF]/20"
-                  />
+              <div>
+                <label className="block text-[#006FFF] font-medium mb-1.5">Payment Option (Strictly 2 Types)</label>
+                <div className="grid grid-cols-2 gap-3">
+                  <div
+                    onClick={() => {
+                      setSelectedStudentPlanType('FULL_PAYMENT');
+                      const bId = selectedStudentBatchId || batches[0]?.id;
+                      const fs = feeStructures.find(
+                        (f) => f.batchId === bId && (f.frequency === 'FULL_PAYMENT' || f.frequency === 'ONE_TIME')
+                      );
+                      if (fs) setNewAssignment({ ...newAssignment, feeStructureId: fs.id });
+                    }}
+                    className={`p-3 rounded-2xl border-2 cursor-pointer transition-all ${
+                      selectedStudentPlanType === 'FULL_PAYMENT'
+                        ? 'border-[#006FFF] bg-blue-50/50 shadow-sm'
+                        : 'border-slate-200 hover:border-slate-300 bg-white'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-slate-900">1. Full Course Payment</span>
+                      <span className={`w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center ${selectedStudentPlanType === 'FULL_PAYMENT' ? 'border-[#006FFF] bg-[#006FFF]' : 'border-slate-300'}`}>
+                        {selectedStudentPlanType === 'FULL_PAYMENT' && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-slate-500 mt-1">100% upfront before course starts</p>
+                  </div>
+
+                  <div
+                    onClick={() => {
+                      setSelectedStudentPlanType('TWO_INSTALLMENTS');
+                      const bId = selectedStudentBatchId || batches[0]?.id;
+                      const fs = feeStructures.find(
+                        (f) => f.batchId === bId && f.frequency === 'TWO_INSTALLMENTS'
+                      );
+                      if (fs) setNewAssignment({ ...newAssignment, feeStructureId: fs.id });
+                    }}
+                    className={`p-3 rounded-2xl border-2 cursor-pointer transition-all ${
+                      selectedStudentPlanType === 'TWO_INSTALLMENTS'
+                        ? 'border-[#006FFF] bg-blue-50/50 shadow-sm'
+                        : 'border-slate-200 hover:border-slate-300 bg-white'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-slate-900">2. Two Installments</span>
+                      <span className={`w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center ${selectedStudentPlanType === 'TWO_INSTALLMENTS' ? 'border-[#006FFF] bg-[#006FFF]' : 'border-slate-300'}`}>
+                        {selectedStudentPlanType === 'TWO_INSTALLMENTS' && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-slate-500 mt-1">50% upfront + 50% mid-course</p>
+                  </div>
                 </div>
               </div>
 
-              <div>
-                <label className="block text-[#006FFF] font-medium mb-1">Due Date</label>
-                <input
-                  type="date"
-                  required
-                  value={newAssignment.dueDate}
-                  onChange={(e) => setNewAssignment({ ...newAssignment, dueDate: e.target.value })}
-                  className="w-full bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl px-3 py-2 text-[#0F172A] focus:ring-2 focus:ring-[#006FFF]/20"
-                />
-              </div>
+              {(() => {
+                const selectedFs = feeStructures.find((fs) => fs.id === newAssignment.feeStructureId);
+                const isInstallments = selectedFs?.frequency === 'TWO_INSTALLMENTS';
+                const totalBase = selectedFs ? Number(selectedFs.amount) : 0;
+                const discount = Number(newAssignment.discountAmount) || 0;
+                const netTotal = Math.max(0, totalBase - discount);
+                const halfNet = netTotal / 2;
+
+                return (
+                  <>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[#006FFF] font-medium mb-1">Concession / Discount (₹)</label>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={newAssignment.discountAmount || ''}
+                          placeholder="0"
+                          onChange={(e) => setNewAssignment({ ...newAssignment, discountAmount: parseFloat(e.target.value) || 0 })}
+                          className="w-full bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl px-3 py-2 text-[#0F172A] focus:ring-2 focus:ring-[#006FFF]/20"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[#006FFF] font-medium mb-1">Custom Label (Optional)</label>
+                        <input
+                          type="text"
+                          placeholder={isInstallments ? 'Auto: Installment 1 & 2' : 'Auto: Full Course Payment'}
+                          value={newAssignment.termLabel}
+                          onChange={(e) => setNewAssignment({ ...newAssignment, termLabel: e.target.value })}
+                          className="w-full bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl px-3 py-2 text-[#0F172A] focus:ring-2 focus:ring-[#006FFF]/20"
+                        />
+                      </div>
+                    </div>
+
+                    {selectedFs && (
+                      <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
+                        <div className="flex items-center justify-between text-[11px] font-bold text-slate-700">
+                          <span>{isInstallments ? '2-Installment Plan Schedule' : 'Full Payment Schedule'}</span>
+                          <span className="text-emerald-700 font-extrabold">{formatCurrency(netTotal)} Net Payable</span>
+                        </div>
+
+                        {isInstallments ? (
+                          <div className="grid grid-cols-2 gap-2 text-[11px]">
+                            <div className="p-2.5 rounded-xl bg-white border border-slate-200">
+                              <div className="text-[10px] font-bold text-[#006FFF] uppercase">Inst 1 (Initial / Pre-Course)</div>
+                              <div className="text-sm font-extrabold text-slate-900 mt-0.5">{formatCurrency(halfNet)}</div>
+                              <div className="mt-1.5">
+                                <label className="block text-[10px] text-slate-500 font-medium mb-0.5">Due Date</label>
+                                <input
+                                  type="date"
+                                  required
+                                  value={newAssignment.dueDate}
+                                  onChange={(e) => setNewAssignment({ ...newAssignment, dueDate: e.target.value })}
+                                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-[11px]"
+                                />
+                              </div>
+                            </div>
+
+                            <div className="p-2.5 rounded-xl bg-white border border-slate-200">
+                              <div className="text-[10px] font-bold text-amber-600 uppercase">Inst 2 (Mid-Course)</div>
+                              <div className="text-sm font-extrabold text-slate-900 mt-0.5">{formatCurrency(halfNet)}</div>
+                              <div className="mt-1.5">
+                                <label className="block text-[10px] text-slate-500 font-medium mb-0.5">Due Date</label>
+                                <input
+                                  type="date"
+                                  required
+                                  value={newAssignment.midCourseDueDate}
+                                  onChange={(e) => setNewAssignment({ ...newAssignment, midCourseDueDate: e.target.value })}
+                                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-[11px]"
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="p-2.5 rounded-xl bg-white border border-slate-200 text-[11px]">
+                            <div className="text-[10px] font-bold text-emerald-700 uppercase">Full Course Payment (100%)</div>
+                            <div className="text-sm font-extrabold text-slate-900 mt-0.5">{formatCurrency(netTotal)}</div>
+                            <div className="mt-1.5 max-w-xs">
+                              <label className="block text-[10px] text-slate-500 font-medium mb-0.5">Due Date (Before Course Starts)</label>
+                              <input
+                                type="date"
+                                required
+                                value={newAssignment.dueDate}
+                                onChange={(e) => setNewAssignment({ ...newAssignment, dueDate: e.target.value })}
+                                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-[11px]"
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
 
               <div className="pt-2 flex items-center justify-end gap-3 border-t border-[#F1F5F9]">
                 <button
@@ -1535,17 +1763,42 @@ export const FeesManagement: React.FC = () => {
               </button>
             </div>
 
+            {actionError && (
+              <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+                  <span>{actionError}</span>
+                </div>
+                <button type="button" onClick={() => setActionError(null)} className="text-rose-700 hover:text-rose-900">
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
+
             <div className="p-3 rounded-2xl bg-[#F8FAFC] border border-[#E2E8F0] text-xs text-[#006FFF]">
               Safe Transactional Operation: Automatically skips students already assigned for the specified term label.
             </div>
 
             <form onSubmit={handleAssignBatch} className="space-y-4 text-xs">
               <div>
-                <label className="block text-[#006FFF] font-medium mb-1">Target Batch</label>
+                <label className="block text-[#006FFF] font-medium mb-1">Target Batch *</label>
                 <select
                   required
                   value={newBatchAssignment.batchId}
-                  onChange={(e) => setNewBatchAssignment({ ...newBatchAssignment, batchId: e.target.value })}
+                  onChange={(e) => {
+                    const bId = e.target.value;
+                    const { preCourseDate, midCourseDate } = getBatchMilestoneDates(bId);
+                    const matchingFs = feeStructures.find(
+                      (f) => f.batchId === bId && f.frequency === selectedBatchPlanType
+                    ) || feeStructures.find((f) => f.batchId === bId);
+                    setNewBatchAssignment({
+                      ...newBatchAssignment,
+                      batchId: bId,
+                      feeStructureId: matchingFs?.id || '',
+                      dueDate: preCourseDate,
+                      midCourseDueDate: midCourseDate,
+                    });
+                  }}
                   className="w-full bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl px-3 py-2 text-[#0F172A] focus:ring-2 focus:ring-[#006FFF]/20"
                 >
                   <option value="">Select Batch...</option>
@@ -1558,45 +1811,151 @@ export const FeesManagement: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-[#006FFF] font-medium mb-1">Fee Structure</label>
-                <select
-                  required
-                  value={newBatchAssignment.feeStructureId}
-                  onChange={(e) => setNewBatchAssignment({ ...newBatchAssignment, feeStructureId: e.target.value })}
-                  className="w-full bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl px-3 py-2 text-[#0F172A] focus:ring-2 focus:ring-[#006FFF]/20"
-                >
-                  <option value="">Select Fee Structure...</option>
-                  {feeStructures.map((fs) => (
-                    <option key={fs.id} value={fs.id}>
-                      {fs.name} - ₹{fs.amount}
-                    </option>
-                  ))}
-                </select>
+                <label className="block text-[#006FFF] font-medium mb-1.5">Payment Option (Strictly 2 Types)</label>
+                <div className="grid grid-cols-2 gap-3">
+                  <div
+                    onClick={() => {
+                      setSelectedBatchPlanType('FULL_PAYMENT');
+                      const fs = feeStructures.find(
+                        (f) => f.batchId === newBatchAssignment.batchId && (f.frequency === 'FULL_PAYMENT' || f.frequency === 'ONE_TIME')
+                      );
+                      if (fs) setNewBatchAssignment({ ...newBatchAssignment, feeStructureId: fs.id });
+                    }}
+                    className={`p-3 rounded-2xl border-2 cursor-pointer transition-all ${
+                      selectedBatchPlanType === 'FULL_PAYMENT'
+                        ? 'border-[#006FFF] bg-blue-50/50 shadow-sm'
+                        : 'border-slate-200 hover:border-slate-300 bg-white'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-slate-900">1. Full Course Payment</span>
+                      <span className={`w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center ${selectedBatchPlanType === 'FULL_PAYMENT' ? 'border-[#006FFF] bg-[#006FFF]' : 'border-slate-300'}`}>
+                        {selectedBatchPlanType === 'FULL_PAYMENT' && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-slate-500 mt-1">100% upfront before course starts</p>
+                  </div>
+
+                  <div
+                    onClick={() => {
+                      setSelectedBatchPlanType('TWO_INSTALLMENTS');
+                      const fs = feeStructures.find(
+                        (f) => f.batchId === newBatchAssignment.batchId && f.frequency === 'TWO_INSTALLMENTS'
+                      );
+                      if (fs) setNewBatchAssignment({ ...newBatchAssignment, feeStructureId: fs.id });
+                    }}
+                    className={`p-3 rounded-2xl border-2 cursor-pointer transition-all ${
+                      selectedBatchPlanType === 'TWO_INSTALLMENTS'
+                        ? 'border-[#006FFF] bg-blue-50/50 shadow-sm'
+                        : 'border-slate-200 hover:border-slate-300 bg-white'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-slate-900">2. Two Installments</span>
+                      <span className={`w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center ${selectedBatchPlanType === 'TWO_INSTALLMENTS' ? 'border-[#006FFF] bg-[#006FFF]' : 'border-slate-300'}`}>
+                        {selectedBatchPlanType === 'TWO_INSTALLMENTS' && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-slate-500 mt-1">50% upfront + 50% mid-course</p>
+                  </div>
+                </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[#006FFF] font-medium mb-1">Term Label</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g., November 2026"
-                    value={newBatchAssignment.termLabel}
-                    onChange={(e) => setNewBatchAssignment({ ...newBatchAssignment, termLabel: e.target.value })}
-                    className="w-full bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl px-3 py-2 text-[#0F172A] focus:ring-2 focus:ring-[#006FFF]/20"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[#006FFF] font-medium mb-1">Due Date</label>
-                  <input
-                    type="date"
-                    required
-                    value={newBatchAssignment.dueDate}
-                    onChange={(e) => setNewBatchAssignment({ ...newBatchAssignment, dueDate: e.target.value })}
-                    className="w-full bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl px-3 py-2 text-[#0F172A] focus:ring-2 focus:ring-[#006FFF]/20"
-                  />
-                </div>
-              </div>
+              {(() => {
+                const selectedFs = feeStructures.find((fs) => fs.id === newBatchAssignment.feeStructureId);
+                const isInstallments = selectedFs?.frequency === 'TWO_INSTALLMENTS';
+                const totalBase = selectedFs ? Number(selectedFs.amount) : 0;
+                const defaultDiscount = Number(newBatchAssignment.defaultDiscount) || 0;
+                const netTotal = Math.max(0, totalBase - defaultDiscount);
+                const halfNet = netTotal / 2;
+
+                return (
+                  <>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[#006FFF] font-medium mb-1">Default Concession / Student (₹)</label>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          placeholder="0"
+                          value={newBatchAssignment.defaultDiscount || ''}
+                          onChange={(e) => setNewBatchAssignment({ ...newBatchAssignment, defaultDiscount: parseFloat(e.target.value) || 0 })}
+                          className="w-full bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl px-3 py-2 text-[#0F172A] focus:ring-2 focus:ring-[#006FFF]/20"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[#006FFF] font-medium mb-1">Custom Label (Optional)</label>
+                        <input
+                          type="text"
+                          placeholder={isInstallments ? 'Auto: Installment 1 & 2' : 'Auto: Full Course Payment'}
+                          value={newBatchAssignment.termLabel}
+                          onChange={(e) => setNewBatchAssignment({ ...newBatchAssignment, termLabel: e.target.value })}
+                          className="w-full bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl px-3 py-2 text-[#0F172A] focus:ring-2 focus:ring-[#006FFF]/20"
+                        />
+                      </div>
+                    </div>
+
+                    {selectedFs && (
+                      <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
+                        <div className="flex items-center justify-between text-[11px] font-bold text-slate-700">
+                          <span>{isInstallments ? 'Batch 2-Installment Plan Schedule' : 'Batch Full Payment Schedule'}</span>
+                          <span className="text-emerald-700 font-extrabold">{formatCurrency(netTotal)} Net / Student</span>
+                        </div>
+
+                        {isInstallments ? (
+                          <div className="grid grid-cols-2 gap-2 text-[11px]">
+                            <div className="p-2.5 rounded-xl bg-white border border-slate-200">
+                              <div className="text-[10px] font-bold text-[#006FFF] uppercase">Inst 1 (Initial / Pre-Course)</div>
+                              <div className="text-sm font-extrabold text-slate-900 mt-0.5">{formatCurrency(halfNet)}</div>
+                              <div className="mt-1.5">
+                                <label className="block text-[10px] text-slate-500 font-medium mb-0.5">Due Date</label>
+                                <input
+                                  type="date"
+                                  required
+                                  value={newBatchAssignment.dueDate}
+                                  onChange={(e) => setNewBatchAssignment({ ...newBatchAssignment, dueDate: e.target.value })}
+                                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-[11px]"
+                                />
+                              </div>
+                            </div>
+
+                            <div className="p-2.5 rounded-xl bg-white border border-slate-200">
+                              <div className="text-[10px] font-bold text-amber-600 uppercase">Inst 2 (Mid-Course)</div>
+                              <div className="text-sm font-extrabold text-slate-900 mt-0.5">{formatCurrency(halfNet)}</div>
+                              <div className="mt-1.5">
+                                <label className="block text-[10px] text-slate-500 font-medium mb-0.5">Due Date</label>
+                                <input
+                                  type="date"
+                                  required
+                                  value={newBatchAssignment.midCourseDueDate}
+                                  onChange={(e) => setNewBatchAssignment({ ...newBatchAssignment, midCourseDueDate: e.target.value })}
+                                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-[11px]"
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="p-2.5 rounded-xl bg-white border border-slate-200 text-[11px]">
+                            <div className="text-[10px] font-bold text-emerald-700 uppercase">Full Course Payment (100%)</div>
+                            <div className="text-sm font-extrabold text-slate-900 mt-0.5">{formatCurrency(netTotal)}</div>
+                            <div className="mt-1.5 max-w-xs">
+                              <label className="block text-[10px] text-slate-500 font-medium mb-0.5">Due Date (Before Course Starts)</label>
+                              <input
+                                type="date"
+                                required
+                                value={newBatchAssignment.dueDate}
+                                onChange={(e) => setNewBatchAssignment({ ...newBatchAssignment, dueDate: e.target.value })}
+                                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-[11px]"
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
 
               <div className="pt-2 flex items-center justify-end gap-3 border-t border-[#F1F5F9]">
                 <button

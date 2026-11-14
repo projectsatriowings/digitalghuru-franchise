@@ -303,14 +303,7 @@ export const FranchiseOwnerDashboard: React.FC = () => {
           <div className="text-[11px] text-indigo-700 font-medium mt-1">Scheduled Assessments</div>
         </div>
 
-        {/* Metric 9: Learning & Homework */}
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-          <div className="text-xs font-semibold text-slate-500 uppercase">Learning Materials</div>
-          <div className="text-2xl font-black text-slate-900 mt-1">{metrics.materialsCount ?? 0}</div>
-          <div className="text-[11px] text-slate-500 font-medium mt-1">{metrics.homeworkCount ?? 0} Homework Tasks</div>
-        </div>
-
-        {/* Metric 10: Annual Royalty Balance */}
+        {/* Metric 9: Annual Royalty Balance */}
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
           <div className="text-xs font-semibold text-slate-500 uppercase">Franchise Royalty</div>
           <div className="text-2xl font-black text-[#006FFF] mt-1">

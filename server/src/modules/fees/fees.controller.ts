@@ -19,6 +19,7 @@ export const createFeeStructureSchema = z.object({
   frequency: z.nativeEnum(FeeFrequency),
   amount: z.number().positive('Fee amount must be greater than zero'),
   dueDay: z.number().int().min(1).max(31).optional(),
+  midCourseDueDays: z.number().int().min(1).max(365).optional().nullable(),
   isActive: z.boolean().default(true),
 });
 
@@ -28,25 +29,28 @@ export const updateFeeStructureSchema = z.object({
   academicYear: z.string().min(4).max(20).optional(),
   amount: z.number().positive().optional(),
   dueDay: z.number().int().min(1).max(31).optional(),
+  midCourseDueDays: z.number().int().min(1).max(365).optional().nullable(),
   isActive: z.boolean().optional(),
 });
 
 export const assignFeeSchema = z.object({
   studentId: z.string().uuid(),
   feeStructureId: z.string().uuid(),
-  termLabel: z.string().min(1).max(100),
-  academicYear: z.string().min(4).max(20).optional(),
+  termLabel: z.string().max(100).optional().nullable().transform((v) => (v && v.trim() ? v.trim() : undefined)),
+  academicYear: z.string().max(20).optional().nullable().transform((v) => (v && v.trim() ? v.trim() : undefined)),
   baseAmount: z.number().positive('Base amount must be greater than zero').optional(),
   discountAmount: z.number().min(0, 'Discount cannot be negative').default(0),
   dueDate: z.string().min(1, 'Due date is required'),
+  midCourseDueDate: z.string().optional().nullable(),
 });
 
 export const batchAssignFeeSchema = z.object({
   batchId: z.string().uuid(),
   feeStructureId: z.string().uuid(),
-  termLabel: z.string().min(1).max(100),
-  academicYear: z.string().min(4).max(20).optional(),
+  termLabel: z.string().max(100).optional().nullable().transform((v) => (v && v.trim() ? v.trim() : undefined)),
+  academicYear: z.string().max(20).optional().nullable().transform((v) => (v && v.trim() ? v.trim() : undefined)),
   dueDate: z.string().min(1, 'Due date is required'),
+  midCourseDueDate: z.string().optional().nullable(),
   defaultDiscount: z.number().min(0).default(0),
 });
 
@@ -169,6 +173,7 @@ export async function createFeeStructure(req: AuthenticatedRequest, res: Respons
         frequency: data.frequency,
         amount: new Prisma.Decimal(data.amount.toFixed(2)),
         dueDay: data.dueDay || null,
+        midCourseDueDays: data.midCourseDueDays !== undefined ? data.midCourseDueDays : null,
         isActive: data.isActive,
       },
       include: {
@@ -197,10 +202,90 @@ export async function createFeeStructure(req: AuthenticatedRequest, res: Respons
   }
 }
 
+export async function autoSyncInstituteFeeStructures(instituteId: string) {
+  try {
+    const institute = await prisma.institute.findUnique({
+      where: { id: instituteId },
+      include: {
+        franchise: {
+          include: {
+            courseSelections: {
+              where: { isEnabled: true },
+              include: { course: true },
+            },
+          },
+        },
+        batches: {
+          where: { isActive: true },
+          include: { feeStructures: true },
+        },
+      },
+    });
+
+    if (!institute || !institute.batches || institute.batches.length === 0) return;
+
+    let standardCourseFee = 30000;
+    const enabledCourse = institute.franchise?.courseSelections?.[0];
+    if (enabledCourse) {
+      const local = enabledCourse.localFeeOverride ? Number(enabledCourse.localFeeOverride) : null;
+      const global = enabledCourse.course?.price ? Number(enabledCourse.course.price) : null;
+      if (local && local > 0) standardCourseFee = local;
+      else if (global && global > 0) standardCourseFee = global;
+    }
+
+    const courseTitle = enabledCourse?.course?.title || 'Course';
+
+    for (const batch of institute.batches) {
+      const hasFull = batch.feeStructures.some(
+        (fs) => fs.frequency === FeeFrequency.FULL_PAYMENT
+      );
+      const hasInstallments = batch.feeStructures.some(
+        (fs) => fs.frequency === FeeFrequency.TWO_INSTALLMENTS
+      );
+
+      if (!hasFull) {
+        await prisma.feeStructure.create({
+          data: {
+            institute: { connect: { id: instituteId } },
+            batch: { connect: { id: batch.id } },
+            name: `${batch.name} - Full Course Payment (100%)`,
+            academicYear: batch.academicYear,
+            frequency: FeeFrequency.FULL_PAYMENT,
+            amount: standardCourseFee,
+            description: `100% upfront course fee for ${courseTitle}`,
+            isActive: true,
+          },
+        });
+      }
+
+      if (!hasInstallments) {
+        await prisma.feeStructure.create({
+          data: {
+            institute: { connect: { id: instituteId } },
+            batch: { connect: { id: batch.id } },
+            name: `${batch.name} - 2 Installments Plan (50% + 50%)`,
+            academicYear: batch.academicYear,
+            frequency: FeeFrequency.TWO_INSTALLMENTS,
+            amount: standardCourseFee,
+            midCourseDueDays: 45,
+            description: `2 installments: 50% upfront before course starts and 50% mid-course for ${courseTitle}`,
+            isActive: true,
+          },
+        });
+      }
+    }
+  } catch (err) {
+    console.error('[AutoSync Fee Structures Error]', err);
+  }
+}
+
 export async function listFeeStructures(req: AuthenticatedRequest, res: Response) {
   try {
     const instituteId = req.instituteId;
     if (!instituteId) return res.status(400).json({ success: false, error: 'Institute context required' });
+
+    // Automatically ensure standard 2-type fee structures exist for all active batches
+    await autoSyncInstituteFeeStructures(instituteId);
 
     const { batchId, academicYear, isActive } = req.query;
 
@@ -279,6 +364,7 @@ export async function updateFeeStructure(req: AuthenticatedRequest, res: Respons
         ...(data.academicYear ? { academicYear: data.academicYear } : {}),
         ...(data.amount ? { amount: new Prisma.Decimal(data.amount.toFixed(2)) } : {}),
         ...(data.dueDay !== undefined ? { dueDay: data.dueDay } : {}),
+        ...(data.midCourseDueDays !== undefined ? { midCourseDueDays: data.midCourseDueDays } : {}),
         ...(data.isActive !== undefined ? { isActive: data.isActive } : {}),
       },
     });
@@ -309,6 +395,94 @@ export async function updateFeeStructure(req: AuthenticatedRequest, res: Respons
 // MODULE B: STUDENT FEE ASSIGNMENT
 // ============================================================================
 
+export function calculateCourseFeeMilestones(
+  feeStructure: { amount: Prisma.Decimal; frequency: FeeFrequency; midCourseDueDays?: number | null },
+  batch?: { startDate?: Date | null; endDate?: Date | null } | null,
+  options?: {
+    customBaseAmount?: number;
+    customDiscountAmount?: number;
+    customDueDate?: string;
+    customMidCourseDueDate?: string | null;
+    customTermLabel?: string;
+  }
+) {
+  const totalBase = options?.customBaseAmount !== undefined
+    ? new Prisma.Decimal(options.customBaseAmount.toFixed(2))
+    : feeStructure.amount;
+
+  const totalDiscount = new Prisma.Decimal((options?.customDiscountAmount || 0).toFixed(2));
+  if (totalDiscount.greaterThan(totalBase)) {
+    throw new Error('Discount amount cannot exceed base fee amount');
+  }
+
+  const preCourseDueDate = options?.customDueDate
+    ? new Date(options.customDueDate)
+    : (batch?.startDate ? new Date(batch.startDate) : new Date());
+
+  if (isNaN(preCourseDueDate.getTime())) {
+    throw new Error('Invalid initial due date');
+  }
+
+  // 1. Two Installments (50% Upfront + 50% Mid-Course)
+  if (feeStructure.frequency === FeeFrequency.TWO_INSTALLMENTS) {
+    const halfBase = new Prisma.Decimal((Number(totalBase) / 2).toFixed(2));
+    const remBase = totalBase.minus(halfBase);
+
+    const halfDiscount = new Prisma.Decimal((Number(totalDiscount) / 2).toFixed(2));
+    const remDiscount = totalDiscount.minus(halfDiscount);
+
+    let midCourseDueDate: Date;
+    if (options?.customMidCourseDueDate) {
+      midCourseDueDate = new Date(options.customMidCourseDueDate);
+    } else if (batch?.startDate && batch?.endDate) {
+      const startMs = new Date(batch.startDate).getTime();
+      const endMs = new Date(batch.endDate).getTime();
+      const midMs = startMs + Math.max(0, (endMs - startMs) / 2);
+      midCourseDueDate = new Date(midMs);
+    } else if (feeStructure.midCourseDueDays) {
+      midCourseDueDate = new Date(preCourseDueDate.getTime() + feeStructure.midCourseDueDays * 86400000);
+    } else {
+      midCourseDueDate = new Date(preCourseDueDate.getTime() + 45 * 86400000); // 45 days default
+    }
+
+    if (isNaN(midCourseDueDate.getTime())) {
+      midCourseDueDate = new Date(preCourseDueDate.getTime() + 45 * 86400000);
+    }
+
+    const basePrefix = options?.customTermLabel?.trim();
+    return [
+      {
+        termLabel: basePrefix ? `${basePrefix} - Inst 1` : 'Installment 1 of 2 (Initial / Pre-Course)',
+        baseAmount: halfBase,
+        discountAmount: halfDiscount,
+        finalAmount: halfBase.minus(halfDiscount),
+        dueDate: preCourseDueDate,
+      },
+      {
+        termLabel: basePrefix ? `${basePrefix} - Inst 2` : 'Installment 2 of 2 (Mid-Course)',
+        baseAmount: remBase,
+        discountAmount: remDiscount,
+        finalAmount: remBase.minus(remDiscount),
+        dueDate: midCourseDueDate,
+      },
+    ];
+  }
+
+  // 2. Full Course Payment or legacy frequency
+  const termLabel = options?.customTermLabel?.trim() ||
+    (feeStructure.frequency === FeeFrequency.FULL_PAYMENT ? 'Full Course Payment' : 'Full Course Fee');
+
+  return [
+    {
+      termLabel,
+      baseAmount: totalBase,
+      discountAmount: totalDiscount,
+      finalAmount: totalBase.minus(totalDiscount),
+      dueDate: preCourseDueDate,
+    },
+  ];
+}
+
 export async function assignFeeToStudent(req: AuthenticatedRequest, res: Response) {
   try {
     const instituteId = req.instituteId;
@@ -316,7 +490,8 @@ export async function assignFeeToStudent(req: AuthenticatedRequest, res: Respons
 
     const parse = assignFeeSchema.safeParse(req.body);
     if (!parse.success) {
-      return res.status(400).json({ success: false, error: 'Validation failed', details: parse.error.errors });
+      const msg = parse.error.errors[0]?.message || 'Validation failed';
+      return res.status(400).json({ success: false, error: msg, details: parse.error.errors });
     }
 
     const data = parse.data;
@@ -329,82 +504,109 @@ export async function assignFeeToStudent(req: AuthenticatedRequest, res: Respons
       return res.status(404).json({ success: false, error: 'Student not found in this institute' });
     }
 
-    // Verify feeStructure belongs to institute
+    // Verify feeStructure belongs to institute and load batch info
     const feeStructure = await prisma.feeStructure.findFirst({
       where: { id: data.feeStructureId, instituteId },
+      include: { batch: true },
     });
     if (!feeStructure) {
       return res.status(404).json({ success: false, error: 'Fee structure not found in this institute' });
     }
 
-    // Check duplicate
-    const existing = await prisma.studentFeeAssignment.findUnique({
-      where: {
-        studentId_feeStructureId_termLabel: {
-          studentId: data.studentId,
-          feeStructureId: data.feeStructureId,
-          termLabel: data.termLabel.trim(),
-        },
-      },
+    const milestones = calculateCourseFeeMilestones(feeStructure, feeStructure.batch, {
+      customBaseAmount: data.baseAmount,
+      customDiscountAmount: data.discountAmount,
+      customDueDate: data.dueDate,
+      customMidCourseDueDate: data.midCourseDueDate,
+      customTermLabel: data.termLabel,
     });
-    if (existing) {
+
+    // Check if any milestone already exists for this student
+    const existingChecks = await Promise.all(
+      milestones.map((ms) =>
+        prisma.studentFeeAssignment.findUnique({
+          where: {
+            studentId_feeStructureId_termLabel: {
+              studentId: data.studentId,
+              feeStructureId: data.feeStructureId,
+              termLabel: ms.termLabel,
+            },
+          },
+        })
+      )
+    );
+
+    const alreadyAssigned = existingChecks.filter(Boolean);
+    if (alreadyAssigned.length === milestones.length) {
       return res.status(409).json({
         success: false,
-        error: `Fee already assigned to this student for '${data.termLabel.trim()}'`,
+        error: `Fee already fully assigned to this student for '${milestones.map((m) => m.termLabel).join(', ')}'`,
       });
     }
 
-    const baseAmountDecimal = data.baseAmount !== undefined
-      ? new Prisma.Decimal(data.baseAmount.toFixed(2))
-      : feeStructure.amount;
+    const assignments = await prisma.$transaction(async (tx) => {
+      const created: any[] = [];
+      for (const ms of milestones) {
+        const exists = await tx.studentFeeAssignment.findUnique({
+          where: {
+            studentId_feeStructureId_termLabel: {
+              studentId: data.studentId,
+              feeStructureId: data.feeStructureId,
+              termLabel: ms.termLabel,
+            },
+          },
+        });
+        if (exists) {
+          created.push(exists);
+          continue;
+        }
 
-    const discountDecimal = new Prisma.Decimal(data.discountAmount.toFixed(2));
-    if (discountDecimal.greaterThan(baseAmountDecimal)) {
-      return res.status(400).json({ success: false, error: 'Discount amount cannot exceed base fee amount' });
-    }
+        const assignment = await tx.studentFeeAssignment.create({
+          data: {
+            studentId: data.studentId,
+            feeStructureId: data.feeStructureId,
+            termLabel: ms.termLabel,
+            academicYear: data.academicYear || feeStructure.academicYear,
+            baseAmount: ms.baseAmount,
+            discountAmount: ms.discountAmount,
+            finalAmount: ms.finalAmount,
+            dueDate: ms.dueDate,
+            status: PaymentStatus.PENDING,
+          },
+          include: {
+            student: { select: { id: true, firstName: true, lastName: true, admissionNumber: true } },
+            feeStructure: { select: { id: true, name: true, frequency: true } },
+          },
+        });
 
-    const finalAmountDecimal = baseAmountDecimal.minus(discountDecimal);
-    const dueDate = new Date(data.dueDate);
-    if (isNaN(dueDate.getTime())) {
-      return res.status(400).json({ success: false, error: 'Invalid due date' });
-    }
+        await tx.auditLog.create({
+          data: {
+            instituteId,
+            userId: req.user?.userId || null,
+            action: 'FEE_ASSIGNED',
+            entityType: 'StudentFeeAssignment',
+            entityId: assignment.id,
+            newValues: assignment as any,
+          },
+        });
 
-    const assignment = await prisma.studentFeeAssignment.create({
-      data: {
-        studentId: data.studentId,
-        feeStructureId: data.feeStructureId,
-        termLabel: data.termLabel.trim(),
-        academicYear: data.academicYear || feeStructure.academicYear,
-        baseAmount: baseAmountDecimal,
-        discountAmount: discountDecimal,
-        finalAmount: finalAmountDecimal,
-        dueDate,
-        status: PaymentStatus.PENDING,
-      },
-      include: {
-        student: { select: { id: true, firstName: true, lastName: true, admissionNumber: true } },
-        feeStructure: { select: { id: true, name: true, frequency: true } },
-      },
-    });
-
-    await prisma.auditLog.create({
-      data: {
-        instituteId,
-        userId: req.user?.userId || null,
-        action: 'FEE_ASSIGNED',
-        entityType: 'StudentFeeAssignment',
-        entityId: assignment.id,
-        newValues: assignment as any,
-      },
+        created.push(assignment);
+      }
+      return created;
     });
 
     return res.status(201).json({
       success: true,
-      message: 'Fee assigned to student successfully',
-      data: { assignment },
+      message: assignments.length > 1
+        ? 'Course fee assigned in 2 installments successfully'
+        : 'Course fee assigned to student successfully',
+      data: {
+        assignment: assignments[0],
+        assignments,
+      },
     });
   } catch (err: any) {
-    return res.status(500).json({ success: false, error: 'Failed to assign fee to student' });
+    return res.status(500).json({ success: false, error: err.message || 'Failed to assign fee to student' });
   }
 }
 
@@ -415,7 +617,8 @@ export async function assignFeeToBatch(req: AuthenticatedRequest, res: Response)
 
     const parse = batchAssignFeeSchema.safeParse(req.body);
     if (!parse.success) {
-      return res.status(400).json({ success: false, error: 'Validation failed', details: parse.error.errors });
+      const msg = parse.error.errors[0]?.message || 'Validation failed';
+      return res.status(400).json({ success: false, error: msg, details: parse.error.errors });
     }
 
     const data = parse.data;
@@ -442,14 +645,12 @@ export async function assignFeeToBatch(req: AuthenticatedRequest, res: Response)
       return res.status(404).json({ success: false, error: 'Fee structure not found' });
     }
 
-    const dueDate = new Date(data.dueDate);
-    if (isNaN(dueDate.getTime())) {
-      return res.status(400).json({ success: false, error: 'Invalid due date' });
-    }
-
-    const baseAmount = feeStructure.amount;
-    const discountAmount = new Prisma.Decimal(data.defaultDiscount.toFixed(2));
-    const finalAmount = baseAmount.minus(discountAmount);
+    const milestones = calculateCourseFeeMilestones(feeStructure, batch, {
+      customDiscountAmount: data.defaultDiscount,
+      customDueDate: data.dueDate,
+      customMidCourseDueDate: data.midCourseDueDate,
+      customTermLabel: data.termLabel,
+    });
 
     let assignedCount = 0;
     let skippedCount = 0;
@@ -458,38 +659,45 @@ export async function assignFeeToBatch(req: AuthenticatedRequest, res: Response)
     // Process students transactionally
     await prisma.$transaction(async (tx) => {
       for (const enrollment of batch.enrollments) {
-        // Check if already assigned
-        const exists = await tx.studentFeeAssignment.findUnique({
-          where: {
-            studentId_feeStructureId_termLabel: {
+        let studentGotCreated = false;
+        for (const ms of milestones) {
+          const exists = await tx.studentFeeAssignment.findUnique({
+            where: {
+              studentId_feeStructureId_termLabel: {
+                studentId: enrollment.studentId,
+                feeStructureId: data.feeStructureId,
+                termLabel: ms.termLabel,
+              },
+            },
+          });
+
+          if (exists) {
+            continue;
+          }
+
+          const newAssignment = await tx.studentFeeAssignment.create({
+            data: {
               studentId: enrollment.studentId,
               feeStructureId: data.feeStructureId,
-              termLabel: data.termLabel.trim(),
+              termLabel: ms.termLabel,
+              academicYear: data.academicYear || feeStructure.academicYear || batch.academicYear,
+              baseAmount: ms.baseAmount,
+              discountAmount: ms.discountAmount,
+              finalAmount: ms.finalAmount,
+              dueDate: ms.dueDate,
+              status: PaymentStatus.PENDING,
             },
-          },
-        });
+          });
 
-        if (exists) {
-          skippedCount++;
-          continue;
+          assignmentsCreated.push(newAssignment);
+          studentGotCreated = true;
         }
 
-        const newAssignment = await tx.studentFeeAssignment.create({
-          data: {
-            studentId: enrollment.studentId,
-            feeStructureId: data.feeStructureId,
-            termLabel: data.termLabel.trim(),
-            academicYear: data.academicYear || feeStructure.academicYear || batch.academicYear,
-            baseAmount,
-            discountAmount,
-            finalAmount,
-            dueDate,
-            status: PaymentStatus.PENDING,
-          },
-        });
-
-        assignmentsCreated.push(newAssignment);
-        assignedCount++;
+        if (studentGotCreated) {
+          assignedCount++;
+        } else {
+          skippedCount++;
+        }
       }
 
       await tx.auditLog.create({
@@ -501,7 +709,7 @@ export async function assignFeeToBatch(req: AuthenticatedRequest, res: Response)
           entityId: data.batchId,
           newValues: {
             feeStructureId: data.feeStructureId,
-            termLabel: data.termLabel,
+            milestones: milestones.map((m) => m.termLabel),
             assignedCount,
             skippedCount,
           },
@@ -516,10 +724,11 @@ export async function assignFeeToBatch(req: AuthenticatedRequest, res: Response)
         assignedCount,
         skippedCount,
         totalStudentsInBatch: batch.enrollments.length,
+        totalSchedulesCreated: assignmentsCreated.length,
       },
     });
   } catch (err: any) {
-    return res.status(500).json({ success: false, error: 'Failed to assign fee to batch' });
+    return res.status(500).json({ success: false, error: err.message || 'Failed to assign fee to batch' });
   }
 }
 

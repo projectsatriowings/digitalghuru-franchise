@@ -60,16 +60,16 @@ const isTabAllowedForRole = (tab: string, role?: string): boolean => {
     case 'SUPER_ADMIN':
       return ['super_admin_dashboard', 'franchise_management', 'course_management', 'staff', 'students', 'academics', 'exams', 'fees'].includes(tab);
     case 'FRANCHISE_OWNER':
-      return ['franchise_owner_dashboard', 'franchise_courses', 'franchise_branches', 'franchise_royalties', 'franchise_agreements', 'academic_dashboard', 'students', 'staff', 'staff_attendance', 'academics', 'exams', 'fees', 'materials', 'homework', 'attendance', 'messaging', 'progress_reviews'].includes(tab) || tab.startsWith('franchise_');
+      return ['franchise_owner_dashboard', 'franchise_courses', 'franchise_branches', 'franchise_royalties', 'franchise_agreements', 'academic_dashboard', 'students', 'staff', 'staff_attendance', 'academics', 'exams', 'fees', 'attendance', 'messaging', 'progress_reviews'].includes(tab) || tab.startsWith('franchise_');
     case 'BRANCH_ADMIN':
     case 'ACADEMIC_ADMIN':
       return ['academic_dashboard', 'franchise_courses', 'staff', 'staff_attendance', 'students', 'academics', 'exams', 'question_generator', 'progress_reviews', 'messaging', 'fees'].includes(tab);
     case 'STAFF':
-      return ['my_attendance', 'attendance', 'academic_dashboard', 'students', 'materials', 'homework', 'exams', 'progress_reviews', 'messaging'].includes(tab);
+      return ['my_attendance', 'attendance', 'academic_dashboard', 'students', 'exams', 'progress_reviews', 'messaging'].includes(tab);
     case 'PARENT':
       return tab === 'parent_portal' || tab.startsWith('parent_') || tab === 'progress_reviews';
     case 'STUDENT':
-      return ['student_portal', 'materials', 'homework', 'exams', 'progress_reviews'].includes(tab) || tab.startsWith('student_');
+      return ['student_portal', 'exams', 'progress_reviews'].includes(tab) || tab.startsWith('student_');
     default:
       return false;
   }

@@ -9,6 +9,11 @@ import { ConfirmationModal } from '../components/ConfirmationModal';
 import { StudentAvatar } from '../components/StudentAvatar';
 import { StudentDetailsModal } from '../components/StudentDetailsModal';
 import {
+  sanitizePhoneInput,
+  getPhoneValidationError,
+  getEmailValidationError,
+} from '../utils/validation';
+import {
   GraduationCap,
   Plus,
   Search,
@@ -603,6 +608,42 @@ Please keep this login and password safe. Use your registered mobile number and 
       const cleanParentPhone = editFormData.parentPhone.trim() || null;
       const cleanParentName = editFormData.parentFullName.trim() || null;
 
+      if (cleanStudentPhone) {
+        const err = getPhoneValidationError(cleanStudentPhone, false);
+        if (err) {
+          setEditError(`Student Phone: ${err}`);
+          setEditLoading(false);
+          return;
+        }
+      }
+
+      if (cleanStudentEmail) {
+        const err = getEmailValidationError(cleanStudentEmail, false);
+        if (err) {
+          setEditError(`Student Email: ${err}`);
+          setEditLoading(false);
+          return;
+        }
+      }
+
+      if (cleanParentPhone) {
+        const err = getPhoneValidationError(cleanParentPhone, false);
+        if (err) {
+          setEditError(`Parent Phone: ${err}`);
+          setEditLoading(false);
+          return;
+        }
+      }
+
+      if (cleanParentEmail) {
+        const err = getEmailValidationError(cleanParentEmail, false);
+        if (err) {
+          setEditError(`Parent Email: ${err}`);
+          setEditLoading(false);
+          return;
+        }
+      }
+
       const payload = {
         firstName: editFormData.firstName.trim(),
         lastName: editFormData.lastName.trim(),
@@ -730,7 +771,10 @@ Please keep this login and password safe. Use your registered mobile number and 
       if (fr?.id) {
         const fcRes = await apiFetch(`/courses/franchise/${fr.id}`);
         const allCourses = fcRes?.data || [];
-        setEnabledGlobalCourses(allCourses.filter((c: any) => c.isSelected));
+        const uniqueCourses = Array.from(
+          new Map(allCourses.filter((c: any) => c.isSelected).map((c: any) => [c.id, c])).values()
+        );
+        setEnabledGlobalCourses(uniqueCourses);
       } else {
         setEnabledGlobalCourses([]);
       }
@@ -959,6 +1003,20 @@ Please keep this login and password safe. Use your registered mobile number and 
       setAdmitError('Student first name and last name are required.');
       return;
     }
+    if (formData.studentPhone.trim()) {
+      const err = getPhoneValidationError(formData.studentPhone, false);
+      if (err) {
+        setAdmitError(`Student Phone: ${err}`);
+        return;
+      }
+    }
+    if (formData.studentEmail.trim()) {
+      const err = getEmailValidationError(formData.studentEmail, false);
+      if (err) {
+        setAdmitError(`Student Email: ${err}`);
+        return;
+      }
+    }
     setAdmitError(null);
     setAdmitStep(2);
   };
@@ -986,6 +1044,18 @@ Please keep this login and password safe. Use your registered mobile number and 
       setAdmitError('Parent/Guardian phone number is required.');
       return;
     }
+    const parentPhoneErr = getPhoneValidationError(formData.parentPhone, true);
+    if (parentPhoneErr) {
+      setAdmitError(`Parent Phone: ${parentPhoneErr}`);
+      return;
+    }
+    if (formData.parentEmail.trim()) {
+      const parentEmailErr = getEmailValidationError(formData.parentEmail, false);
+      if (parentEmailErr) {
+        setAdmitError(`Parent Email: ${parentEmailErr}`);
+        return;
+      }
+    }
     setAdmitError(null);
     setAdmitStep(4);
   };
@@ -1006,6 +1076,32 @@ Please keep this login and password safe. Use your registered mobile number and 
     if (!formData.parentPhone.trim()) {
       setAdmitError('Parent/Guardian phone number is required.');
       return;
+    }
+    const parentPhoneErr = getPhoneValidationError(formData.parentPhone, true);
+    if (parentPhoneErr) {
+      setAdmitError(`Parent Phone: ${parentPhoneErr}`);
+      return;
+    }
+    if (formData.studentPhone.trim()) {
+      const err = getPhoneValidationError(formData.studentPhone, false);
+      if (err) {
+        setAdmitError(`Student Phone: ${err}`);
+        return;
+      }
+    }
+    if (formData.studentEmail.trim()) {
+      const err = getEmailValidationError(formData.studentEmail, false);
+      if (err) {
+        setAdmitError(`Student Email: ${err}`);
+        return;
+      }
+    }
+    if (formData.parentEmail.trim()) {
+      const err = getEmailValidationError(formData.parentEmail, false);
+      if (err) {
+        setAdmitError(`Parent Email: ${err}`);
+        return;
+      }
     }
 
     setAdmitLoading(true);
@@ -2007,7 +2103,7 @@ Please keep this login and password safe. Use your registered mobile number and 
                       <option value="">-- Skip Global Course Enrollment (or enroll later) --</option>
                       {enabledGlobalCourses.map((c: any) => (
                         <option key={c.id} value={c.id}>
-                          {c.title} {c.code ? `(${c.code})` : ''}
+                          {c.title}{c.duration ? ` (${c.duration})` : ''}{c.format ? ` • ${c.format}` : ''}
                         </option>
                       ))}
                     </select>
@@ -2201,14 +2297,26 @@ Please keep this login and password safe. Use your registered mobile number and 
                           type="tel"
                           required
                           value={formData.parentPhone}
-                          onChange={(e) => setFormData({ ...formData, parentPhone: e.target.value })}
-                          placeholder="e.g. 9876543210"
-                          className="w-full bg-[#FAF8F5] border border-[#E2E8F0] rounded-xl pl-9 pr-3.5 py-2.5 text-xs text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#006FFF]/20"
+                          onChange={(e) =>
+                            setFormData({ ...formData, parentPhone: sanitizePhoneInput(e.target.value) })
+                          }
+                          placeholder="e.g. 9876543210 or +91 9876543210"
+                          className={`w-full bg-[#FAF8F5] border rounded-xl pl-9 pr-3.5 py-2.5 text-xs text-[#0F172A] focus:outline-none focus:ring-2 transition-colors ${
+                            formData.parentPhone.trim() && getPhoneValidationError(formData.parentPhone, true)
+                              ? 'border-rose-400 focus:ring-rose-200 bg-rose-50/30'
+                              : 'border-[#E2E8F0] focus:ring-[#006FFF]/20'
+                          }`}
                         />
                       </div>
-                      <p className="text-[10px] text-[#94A3B8] mt-0.5 italic">
-                        If parent already exists for a sibling, they are linked automatically.
-                      </p>
+                      {formData.parentPhone.trim() && getPhoneValidationError(formData.parentPhone, true) ? (
+                        <p className="text-[11px] text-rose-600 mt-1 font-medium">
+                          {getPhoneValidationError(formData.parentPhone, true)}
+                        </p>
+                      ) : (
+                        <p className="text-[10px] text-[#94A3B8] mt-0.5 italic">
+                          If parent already exists for a sibling, they are linked automatically.
+                        </p>
+                      )}
                     </div>
                     <div>
                       <label className="block text-xs font-semibold text-[#006FFF] mb-1">
@@ -2219,11 +2327,22 @@ Please keep this login and password safe. Use your registered mobile number and 
                         <input
                           type="email"
                           value={formData.parentEmail}
-                          onChange={(e) => setFormData({ ...formData, parentEmail: e.target.value })}
+                          onChange={(e) =>
+                            setFormData({ ...formData, parentEmail: e.target.value.trim() })
+                          }
                           placeholder="e.g. parent@example.com"
-                          className="w-full bg-[#FAF8F5] border border-[#E2E8F0] rounded-xl pl-9 pr-3.5 py-2.5 text-xs text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#006FFF]/20"
+                          className={`w-full bg-[#FAF8F5] border rounded-xl pl-9 pr-3.5 py-2.5 text-xs text-[#0F172A] focus:outline-none focus:ring-2 transition-colors ${
+                            formData.parentEmail.trim() && getEmailValidationError(formData.parentEmail)
+                              ? 'border-rose-400 focus:ring-rose-200 bg-rose-50/30'
+                              : 'border-[#E2E8F0] focus:ring-[#006FFF]/20'
+                          }`}
                         />
                       </div>
+                      {formData.parentEmail.trim() && getEmailValidationError(formData.parentEmail) && (
+                        <p className="text-[11px] text-rose-600 mt-1 font-medium">
+                          {getEmailValidationError(formData.parentEmail)}
+                        </p>
+                      )}
                     </div>
                   </div>
 
@@ -3810,10 +3929,24 @@ Please keep credentials safe. Passwords must be changed upon first login.`;
                     <input
                       type="tel"
                       value={editFormData.studentPhone}
-                      onChange={(e) => setEditFormData({ ...editFormData, studentPhone: e.target.value })}
+                      onChange={(e) =>
+                        setEditFormData({
+                          ...editFormData,
+                          studentPhone: sanitizePhoneInput(e.target.value),
+                        })
+                      }
                       placeholder="e.g. +91 9876543210"
-                      className="w-full px-3 py-2 rounded-xl bg-white border border-[#E2E8F0] text-[#0F172A] text-xs focus:ring-1 focus:ring-[#006FFF]/20 focus:border-[#006FFF]"
+                      className={`w-full px-3 py-2 rounded-xl bg-white border text-[#0F172A] text-xs focus:ring-1 transition-colors ${
+                        editFormData.studentPhone.trim() && getPhoneValidationError(editFormData.studentPhone)
+                          ? 'border-rose-400 focus:ring-rose-200 bg-rose-50/30'
+                          : 'border-[#E2E8F0] focus:ring-[#006FFF]/20 focus:border-[#006FFF]'
+                      }`}
                     />
+                    {editFormData.studentPhone.trim() && getPhoneValidationError(editFormData.studentPhone) && (
+                      <p className="text-[10px] text-rose-600 mt-1 font-medium">
+                        {getPhoneValidationError(editFormData.studentPhone)}
+                      </p>
+                    )}
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-[#006FFF] mb-1">
@@ -3822,10 +3955,21 @@ Please keep credentials safe. Passwords must be changed upon first login.`;
                     <input
                       type="email"
                       value={editFormData.studentEmail}
-                      onChange={(e) => setEditFormData({ ...editFormData, studentEmail: e.target.value })}
+                      onChange={(e) =>
+                        setEditFormData({ ...editFormData, studentEmail: e.target.value.trim() })
+                      }
                       placeholder="student@example.com"
-                      className="w-full px-3 py-2 rounded-xl bg-white border border-[#E2E8F0] text-[#0F172A] text-xs focus:ring-1 focus:ring-[#006FFF]/20 focus:border-[#006FFF]"
+                      className={`w-full px-3 py-2 rounded-xl bg-white border text-[#0F172A] text-xs focus:ring-1 transition-colors ${
+                        editFormData.studentEmail.trim() && getEmailValidationError(editFormData.studentEmail)
+                          ? 'border-rose-400 focus:ring-rose-200 bg-rose-50/30'
+                          : 'border-[#E2E8F0] focus:ring-[#006FFF]/20 focus:border-[#006FFF]'
+                      }`}
                     />
+                    {editFormData.studentEmail.trim() && getEmailValidationError(editFormData.studentEmail) && (
+                      <p className="text-[10px] text-rose-600 mt-1 font-medium">
+                        {getEmailValidationError(editFormData.studentEmail)}
+                      </p>
+                    )}
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-[#006FFF] mb-1">
@@ -4015,10 +4159,24 @@ Please keep credentials safe. Passwords must be changed upon first login.`;
                     <input
                       type="tel"
                       value={editFormData.parentPhone}
-                      onChange={(e) => setEditFormData({ ...editFormData, parentPhone: e.target.value })}
+                      onChange={(e) =>
+                        setEditFormData({
+                          ...editFormData,
+                          parentPhone: sanitizePhoneInput(e.target.value),
+                        })
+                      }
                       placeholder="e.g. +91 9876543210"
-                      className="w-full px-3 py-2 rounded-xl bg-white border border-[#E2E8F0] text-[#0F172A] text-xs focus:ring-1 focus:ring-[#006FFF]/20 focus:border-[#006FFF]"
+                      className={`w-full px-3 py-2 rounded-xl bg-white border text-[#0F172A] text-xs focus:ring-1 transition-colors ${
+                        editFormData.parentPhone.trim() && getPhoneValidationError(editFormData.parentPhone)
+                          ? 'border-rose-400 focus:ring-rose-200 bg-rose-50/30'
+                          : 'border-[#E2E8F0] focus:ring-[#006FFF]/20 focus:border-[#006FFF]'
+                      }`}
                     />
+                    {editFormData.parentPhone.trim() && getPhoneValidationError(editFormData.parentPhone) && (
+                      <p className="text-[10px] text-rose-600 mt-1 font-medium">
+                        {getPhoneValidationError(editFormData.parentPhone)}
+                      </p>
+                    )}
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-[#006FFF] mb-1">
@@ -4027,10 +4185,21 @@ Please keep credentials safe. Passwords must be changed upon first login.`;
                     <input
                       type="email"
                       value={editFormData.parentEmail}
-                      onChange={(e) => setEditFormData({ ...editFormData, parentEmail: e.target.value })}
+                      onChange={(e) =>
+                        setEditFormData({ ...editFormData, parentEmail: e.target.value.trim() })
+                      }
                       placeholder="parent@example.com"
-                      className="w-full px-3 py-2 rounded-xl bg-white border border-[#E2E8F0] text-[#0F172A] text-xs focus:ring-1 focus:ring-[#006FFF]/20 focus:border-[#006FFF]"
+                      className={`w-full px-3 py-2 rounded-xl bg-white border text-[#0F172A] text-xs focus:ring-1 transition-colors ${
+                        editFormData.parentEmail.trim() && getEmailValidationError(editFormData.parentEmail)
+                          ? 'border-rose-400 focus:ring-rose-200 bg-rose-50/30'
+                          : 'border-[#E2E8F0] focus:ring-[#006FFF]/20 focus:border-[#006FFF]'
+                      }`}
                     />
+                    {editFormData.parentEmail.trim() && getEmailValidationError(editFormData.parentEmail) && (
+                      <p className="text-[10px] text-rose-600 mt-1 font-medium">
+                        {getEmailValidationError(editFormData.parentEmail)}
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>

@@ -156,18 +156,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <CreditCard className="w-4 h-4" /> Branch Course Fees
             </button>
             <button
-              onClick={() => onSelectTab('materials')}
-              className={navItemClass('materials')}
-            >
-              <BookOpen className="w-4 h-4" /> Learning Materials
-            </button>
-            <button
-              onClick={() => onSelectTab('homework')}
-              className={navItemClass('homework')}
-            >
-              <FileText className="w-4 h-4" /> Homework & Tasks
-            </button>
-            <button
               onClick={() => onSelectTab('messaging')}
               className={navItemClass('messaging')}
             >
@@ -290,20 +278,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </button>
 
             <button
-              onClick={() => onSelectTab('materials')}
-              className={navItemClass('materials')}
-            >
-              <BookOpen className="w-4 h-4" /> Learning Materials
-            </button>
-
-            <button
-              onClick={() => onSelectTab('homework')}
-              className={navItemClass('homework')}
-            >
-              <FileText className="w-4 h-4" /> Homework & Tasks
-            </button>
-
-            <button
               onClick={() => onSelectTab('exams')}
               className={navItemClass('exams')}
             >
@@ -416,20 +390,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
               className={navItemClass('student_courses')}
             >
               <Laptop className="w-4 h-4" /> My Courses & Player
-            </button>
-
-            <button
-              onClick={() => onSelectTab('materials')}
-              className={navItemClass('materials')}
-            >
-              <BookOpen className="w-4 h-4" /> Learning Materials
-            </button>
-
-            <button
-              onClick={() => onSelectTab('homework')}
-              className={navItemClass('homework')}
-            >
-              <FileText className="w-4 h-4" /> Homework Assignments
             </button>
 
             <button
