@@ -17,9 +17,28 @@ export async function verifyFranchiseAccess(
   const franchise = await prisma.franchise.findUnique({
     where: { id: franchiseId },
     include: {
-      branches: true,
+      branches: {
+        include: {
+          _count: {
+            select: { students: true },
+          },
+        },
+      },
       agreements: { orderBy: { createdAt: 'desc' } },
-      ownerUser: { select: { id: true, email: true, fullName: true, phone: true } },
+      ownerUser: {
+        select: {
+          id: true,
+          email: true,
+          fullName: true,
+          phone: true,
+          role: true,
+          isActive: true,
+          mustChangePassword: true,
+          lastLoginAt: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      },
     },
   });
 
@@ -333,8 +352,14 @@ export async function generateAnnualInstallments(params: {
 const createFranchiseSchema = z.object({
   name: z.string().min(2, 'Franchise/business name is required'),
   ownerName: z.string().min(2, "Owner's full name is required"),
-  email: z.string().email('Valid email is required'),
-  phone: z.string().min(7, 'Primary mobile number is required'),
+  email: z.preprocess(
+    (val) => (typeof val === 'string' ? val.trim() : val),
+    z.string().email('Valid email is required')
+  ),
+  phone: z.preprocess(
+    (val) => (typeof val === 'string' ? val.trim() : val),
+    z.string().min(7, 'Primary mobile number is required')
+  ),
   password: z.string().min(8, 'Password must be at least 8 characters').optional(),
   address: z.string().optional().default('Main Campus Address'),
   city: z.string().optional().default('Chennai'),
@@ -402,8 +427,14 @@ const createFranchiseSchema = z.object({
 });
 
 export const checkFranchiseDuplicatesSchema = z.object({
-  email: z.string().email('Invalid email address').optional().nullable().or(z.literal('')),
-  phone: z.string().optional().nullable().or(z.literal('')),
+  email: z.preprocess(
+    (val) => (typeof val === 'string' ? val.trim() : val),
+    z.string().email('Invalid email address').optional().nullable().or(z.literal(''))
+  ),
+  phone: z.preprocess(
+    (val) => (typeof val === 'string' ? val.trim() : val),
+    z.string().optional().nullable().or(z.literal(''))
+  ),
   code: z.string().optional().nullable().or(z.literal('')),
   name: z.string().optional().nullable().or(z.literal('')),
 });
@@ -413,6 +444,10 @@ export const checkFranchiseDuplicatesSchema = z.object({
  */
 export async function checkFranchiseDuplicates(req: AuthenticatedRequest, res: Response) {
   try {
+    if (req.user?.role !== 'SUPER_ADMIN') {
+      return res.status(403).json({ success: false, error: 'Forbidden: Only Super Admin can check duplicates' });
+    }
+
     const parse = checkFranchiseDuplicatesSchema.safeParse(req.body);
     if (!parse.success) {
       return res.status(400).json({ success: false, error: parse.error.errors[0]?.message || 'Invalid parameters' });
@@ -420,9 +455,10 @@ export async function checkFranchiseDuplicates(req: AuthenticatedRequest, res: R
 
     const { email, phone, code, name } = parse.data;
 
-    let emailConflict: { isDuplicate: boolean; model?: string; message?: string } = { isDuplicate: false };
-    if (email && email.trim()) {
-      const normEmail = email.trim().toLowerCase();
+    let emailConflict: { isDuplicate: boolean; model?: string; message?: string; canReuseAsOwner?: boolean } = { isDuplicate: false };
+    const normEmail = email && email.trim() ? email.trim().toLowerCase() : '';
+
+    if (normEmail) {
       const franchiseMatch = await prisma.franchise.findFirst({
         where: { email: { equals: normEmail, mode: 'insensitive' } },
         select: { id: true, code: true, name: true },
@@ -431,18 +467,20 @@ export async function checkFranchiseDuplicates(req: AuthenticatedRequest, res: R
         emailConflict = {
           isDuplicate: true,
           model: 'Franchise',
-          message: `A franchise with email '${normEmail}' already exists (${franchiseMatch.name} [${franchiseMatch.code}])`,
+          message: `A franchise with email '${normEmail}' already exists (${franchiseMatch.name} [${franchiseMatch.code}]).`,
+          canReuseAsOwner: false,
         };
       } else {
         const userMatch = await prisma.user.findFirst({
           where: { email: { equals: normEmail, mode: 'insensitive' } },
-          select: { id: true, fullName: true, role: true },
+          select: { id: true, email: true, role: true },
         });
         if (userMatch) {
           emailConflict = {
             isDuplicate: true,
             model: 'User',
-            message: `A user account with email '${normEmail}' already exists (${userMatch.fullName}, Role: ${userMatch.role}).`,
+            message: `An existing user account was found with email '${normEmail}'. This account will be designated as the Franchise Owner.`,
+            canReuseAsOwner: true,
           };
         }
       }
@@ -453,14 +491,17 @@ export async function checkFranchiseDuplicates(req: AuthenticatedRequest, res: R
       const cleanPhone = phone.trim();
       const userPhoneMatch = await prisma.user.findFirst({
         where: { phone: cleanPhone },
-        select: { id: true, fullName: true, role: true },
+        select: { id: true, email: true, role: true },
       });
       if (userPhoneMatch) {
-        phoneConflict = {
-          isDuplicate: true,
-          model: 'User',
-          message: `A user account with phone '${cleanPhone}' already exists (${userPhoneMatch.fullName}, Role: ${userPhoneMatch.role})`,
-        };
+        const isSameUser = normEmail && userPhoneMatch.email?.toLowerCase() === normEmail;
+        if (!isSameUser) {
+          phoneConflict = {
+            isDuplicate: true,
+            model: 'User',
+            message: `A user account with phone '${cleanPhone}' already exists. Please provide a unique phone number.`,
+          };
+        }
       }
     }
 
@@ -474,9 +515,27 @@ export async function checkFranchiseDuplicates(req: AuthenticatedRequest, res: R
       if (codeMatch) {
         codeConflict = {
           isDuplicate: true,
-          message: `A franchise with code '${cleanCode}' already exists (${codeMatch.name})`,
+          message: `A franchise with code '${cleanCode}' already exists (${codeMatch.name}).`,
         };
       }
+    }
+
+    const hasBlockingConflict = Boolean(
+      (emailConflict.isDuplicate && emailConflict.model === 'Franchise') ||
+      codeConflict.isDuplicate ||
+      phoneConflict.isDuplicate
+    );
+
+    if (req.query.strict === 'true' && hasBlockingConflict) {
+      return res.status(409).json({
+        success: false,
+        error: emailConflict.model === 'Franchise' ? emailConflict.message : (codeConflict.message || phoneConflict.message || 'Duplicate detected'),
+        data: {
+          email: emailConflict,
+          phone: phoneConflict,
+          code: codeConflict,
+        },
+      });
     }
 
     return res.status(200).json({
@@ -517,7 +576,10 @@ export async function createFranchise(req: AuthenticatedRequest, res: Response) 
       where: { email: { equals: normalizedEmail, mode: 'insensitive' } },
     });
     if (existingFranchise) {
-      return res.status(409).json({ success: false, error: `A franchise with email '${normalizedEmail}' already exists` });
+      return res.status(409).json({
+        success: false,
+        error: `Franchise contact email is already registered to ${existingFranchise.name} (${existingFranchise.code}). Please provide a unique email address.`,
+      });
     }
 
     // Check if manually supplied franchise code already exists
@@ -526,7 +588,10 @@ export async function createFranchise(req: AuthenticatedRequest, res: Response) 
         where: { code: data.code.trim().toUpperCase() },
       });
       if (existingCode) {
-        return res.status(409).json({ success: false, error: `A franchise with code '${data.code.trim().toUpperCase()}' already exists` });
+        return res.status(409).json({
+          success: false,
+          error: `Franchise code '${data.code.trim().toUpperCase()}' already exists. Please provide a unique franchise code.`,
+        });
       }
     }
 
@@ -541,7 +606,7 @@ export async function createFranchise(req: AuthenticatedRequest, res: Response) 
     if (existingUserPhone && (!existingUserEmail || existingUserPhone.id !== existingUserEmail.id)) {
       return res.status(409).json({
         success: false,
-        error: `A user account with phone number '${cleanPhone}' already exists. Please provide a unique phone number.`,
+        error: `Phone number '${cleanPhone}' already belongs to another franchise or user account. Please provide a unique phone number.`,
       });
     }
 
@@ -829,19 +894,21 @@ export async function createFranchise(req: AuthenticatedRequest, res: Response) 
       if (target.toLowerCase().includes('email') || target.includes('email_normalized')) {
         return res.status(409).json({
           success: false,
-          error: `A ${model ? model.toLowerCase() : 'record'} with email '${req.body?.email || ''}' already exists. Please provide a unique email address.`,
+          error: model === 'User'
+            ? `Owner email '${req.body?.email || ''}' already belongs to an existing account.`
+            : `Franchise contact email is already registered. Please provide a unique email address.`,
         });
       }
       if (target.toLowerCase().includes('phone')) {
         return res.status(409).json({
           success: false,
-          error: `A ${model ? model.toLowerCase() : 'record'} with phone number '${req.body?.phone || ''}' already exists. Please provide a unique phone number.`,
+          error: `Phone number already belongs to another franchise or user account. Please provide a unique phone number.`,
         });
       }
       if (target.toLowerCase().includes('code')) {
         return res.status(409).json({
           success: false,
-          error: `A franchise or institute with code '${req.body?.code || ''}' already exists. Please provide a unique code.`,
+          error: `Franchise code already exists. Please choose a unique code.`,
         });
       }
 
@@ -933,6 +1000,35 @@ export async function getFranchiseById(req: AuthenticatedRequest, res: Response)
         success: false,
         error: 'Forbidden: You do not have permission to access this franchise',
       });
+    }
+
+    // Self-healing: if ownerUser was not loaded because ownerUserId was null or unlinked
+    if (!franchise.ownerUser && franchise.email) {
+      const normEmail = franchise.email.trim().toLowerCase();
+      const matchedUser = await prisma.user.findFirst({
+        where: { email: { equals: normEmail, mode: 'insensitive' } },
+        select: {
+          id: true,
+          email: true,
+          fullName: true,
+          phone: true,
+          role: true,
+          isActive: true,
+          mustChangePassword: true,
+          lastLoginAt: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      });
+      if (matchedUser) {
+        if (!franchise.ownerUserId) {
+          await prisma.franchise.update({
+            where: { id: franchise.id },
+            data: { ownerUserId: matchedUser.id },
+          });
+        }
+        franchise.ownerUser = matchedUser;
+      }
     }
 
     // Compute aggregate metrics for this franchise
@@ -1166,23 +1262,104 @@ export async function resetFranchiseOwnerPassword(req: AuthenticatedRequest, res
     }
 
     const { id } = req.params;
-    const franchise = await prisma.franchise.findUnique({
+    let franchise = await prisma.franchise.findUnique({
       where: { id },
-      include: { ownerUser: true },
+      include: {
+        ownerUser: {
+          select: {
+            id: true,
+            email: true,
+            fullName: true,
+            phone: true,
+            role: true,
+            isActive: true,
+            mustChangePassword: true,
+            lastLoginAt: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        },
+      },
     });
 
-    if (!franchise || !franchise.ownerUser) {
-      return res.status(404).json({ success: false, error: 'Franchise or owner user not found' });
+    if (!franchise) {
+      return res.status(404).json({ success: false, error: 'Franchise not found' });
+    }
+
+    let ownerUser = franchise.ownerUser;
+
+    // Self-healing: if ownerUser relation is missing, attempt to find user by email or create owner account
+    if (!ownerUser) {
+      const normEmail = franchise.email?.trim().toLowerCase();
+      if (normEmail) {
+        const found = await prisma.user.findFirst({
+          where: { email: { equals: normEmail, mode: 'insensitive' } },
+        });
+        if (found) {
+          ownerUser = {
+            id: found.id,
+            email: found.email,
+            fullName: found.fullName,
+            phone: found.phone,
+            role: found.role,
+            isActive: found.isActive,
+            mustChangePassword: found.mustChangePassword,
+            lastLoginAt: found.lastLoginAt,
+            createdAt: found.createdAt,
+            updatedAt: found.updatedAt,
+          };
+          await prisma.franchise.update({
+            where: { id: franchise.id },
+            data: { ownerUserId: found.id },
+          });
+        } else {
+          // Provision missing owner user account
+          const initialPwd = `DG#Reset_${crypto.randomBytes(3).toString('hex')}!`;
+          const initialHash = await hashPassword(initialPwd);
+          const created = await prisma.user.create({
+            data: {
+              email: normEmail,
+              phone: franchise.phone || `+9199999${Math.floor(10000 + Math.random() * 90000)}`,
+              fullName: franchise.ownerName || franchise.name,
+              passwordHash: initialHash,
+              role: 'FRANCHISE_OWNER',
+              isActive: franchise.status === 'ACTIVE',
+              mustChangePassword: true,
+            },
+          });
+          ownerUser = {
+            id: created.id,
+            email: created.email,
+            fullName: created.fullName,
+            phone: created.phone,
+            role: created.role,
+            isActive: created.isActive,
+            mustChangePassword: created.mustChangePassword,
+            lastLoginAt: created.lastLoginAt,
+            createdAt: created.createdAt,
+            updatedAt: created.updatedAt,
+          };
+          await prisma.franchise.update({
+            where: { id: franchise.id },
+            data: { ownerUserId: created.id },
+          });
+        }
+      }
+    }
+
+    if (!ownerUser) {
+      return res.status(404).json({ success: false, error: 'Franchise owner user account could not be found or provisioned' });
     }
 
     const temporaryPassword = `DG#Reset_${crypto.randomBytes(3).toString('hex')}!`;
     const passwordHash = await hashPassword(temporaryPassword);
 
     await prisma.user.update({
-      where: { id: franchise.ownerUser.id },
+      where: { id: ownerUser.id },
       data: {
         passwordHash,
         mustChangePassword: true,
+        updatedAt: new Date(),
       },
     });
 
@@ -1190,7 +1367,7 @@ export async function resetFranchiseOwnerPassword(req: AuthenticatedRequest, res
       success: true,
       message: 'Owner password reset successfully',
       data: {
-        email: franchise.ownerUser.email,
+        email: ownerUser.email,
         temporaryPassword,
         mustChangePassword: true,
       },
