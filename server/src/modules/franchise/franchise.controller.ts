@@ -882,6 +882,7 @@ export async function createFranchise(req: AuthenticatedRequest, res: Response) 
           email: normalizedEmail,
           temporaryPassword: initialPassword,
           role: 'FRANCHISE_OWNER',
+          mustChangePassword: true,
         },
       },
     });

@@ -147,7 +147,6 @@ async function setup() {
       city: 'Chennai',
       state: 'Tamil Nadu',
       postalCode: '600032',
-      country: 'India',
       status: 'ACTIVE',
       ownerUserId: testOwner.id,
     },
@@ -166,7 +165,6 @@ async function setup() {
       city: 'Chennai',
       state: 'Tamil Nadu',
       postalCode: '600032',
-      country: 'India',
       status: 'ACTIVE',
       franchiseId: testFranchise.id,
     },
@@ -184,7 +182,7 @@ async function setup() {
       endDate: new Date('2028-12-31'),
       status: 'ACTIVE',
       agreementType: 'NEW_CENTRE_JOINT_INVESTMENT',
-      royaltyCalculationMethod: 'PERCENTAGE_REVENUE',
+      calculationMethod: 'PERCENTAGE_REVENUE',
       annualRoyaltyAmount: 240000,
       digitalGuruRevenuePercentage: 50,
       partnerRevenuePercentage: 50,
@@ -309,7 +307,7 @@ async function runTests() {
     // Test 6: Confirm the new temporary password works for owner login
     // -------------------------------------------------------------
     const newLoginRes = await apiPost('/auth/login', {
-      email: ownerEmail,
+      identifier: ownerEmail,
       password: tempPassword,
     }, '');
     assert(
@@ -325,7 +323,7 @@ async function runTests() {
     // Test 7: Confirm the old password no longer works
     // -------------------------------------------------------------
     const oldLoginRes = await apiPost('/auth/login', {
-      email: ownerEmail,
+      identifier: ownerEmail,
       password: 'InitialOwnerPass#2026', // Old password
     }, '');
     assert(
