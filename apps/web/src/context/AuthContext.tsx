@@ -39,20 +39,37 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [token, setToken] = useState<string | null>(localStorage.getItem('tuition_token'));
-    const [assignedBranches, setAssignedBranches] = useState<AssignedBranch[]>([]);
-    const [activeInstitute, setActiveInstituteState] = useState<{ id: string; name: string; code: string; city?: string | null } | null>(() => {
+  const [token, setToken] = useState<string | null>(() => localStorage.getItem('tuition_token'));
+  const [user, setUser] = useState<User | null>(() => {
+    try {
+      const savedToken = localStorage.getItem('tuition_token');
+      const savedUser = localStorage.getItem('tuition_user');
+      return savedToken && savedUser ? JSON.parse(savedUser) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [assignedBranches, setAssignedBranches] = useState<AssignedBranch[]>([]);
+  const [activeInstitute, setActiveInstituteState] = useState<{ id: string; name: string; code: string; city?: string | null } | null>(() => {
+    try {
       const saved = localStorage.getItem('tuition_active_institute');
       return saved ? JSON.parse(saved) : null;
-    });
-    const [loading, setLoading] = useState<boolean>(true);
+    } catch {
+      return null;
+    }
+  });
+  // Only block UI with splash screen if we have a token but no cached user profile yet
+  const [loading, setLoading] = useState<boolean>(() => {
+    const savedToken = localStorage.getItem('tuition_token');
+    const savedUser = localStorage.getItem('tuition_user');
+    return Boolean(savedToken && !savedUser);
+  });
 
     const fetchBranches = useCallback(async (role?: string) => {
       if (!token) return;
       try {
         if (role === 'FRANCHISE_OWNER' || role === 'SUPER_ADMIN') {
-          const res = await apiFetch('/franchises/my-branches', { skipCache: true });
+          const res = await apiFetch('/franchises/my-branches');
           if (res.success && Array.isArray(res.data?.branches)) {
             setAssignedBranches(res.data.branches);
 
@@ -84,6 +101,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             if (res.data?.user) {
                 const fetchedUser = res.data.user;
                 setUser(fetchedUser);
+                try {
+                  localStorage.setItem('tuition_user', JSON.stringify(fetchedUser));
+                } catch {
+                  // ignore storage quota errors
+                }
 
                 if (fetchedUser.role === 'FRANCHISE_OWNER' || fetchedUser.role === 'SUPER_ADMIN') {
                   fetchBranches(fetchedUser.role);
@@ -116,6 +138,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setToken(newToken);
       setUser(newUser);
       localStorage.setItem('tuition_token', newToken);
+      try {
+        localStorage.setItem('tuition_user', JSON.stringify(newUser));
+      } catch {
+        // ignore storage quota errors
+      }
 
         if (newUser.role === 'FRANCHISE_OWNER') {
           const defaultInst = institute || ALL_BRANCHES_SELECTION;
@@ -136,6 +163,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setAssignedBranches([]);
         setActiveInstituteState(null);
         localStorage.removeItem('tuition_token');
+        localStorage.removeItem('tuition_user');
         localStorage.removeItem('tuition_active_institute');
         localStorage.removeItem('tuition_active_institute_id');
         invalidateApiCache();

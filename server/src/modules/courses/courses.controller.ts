@@ -685,6 +685,16 @@ export async function setFranchiseCoursePermission(req: Request, res: Response) 
   }
 }
 
+export async function getCourseFranchiseMatrix(req: Request, res: Response) {
+  try {
+    const { id } = req.params;
+    const matrix = await CoursesService.getCourseFranchiseMatrix(id);
+    res.json({ success: true, data: matrix });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message || 'Failed to load franchise permission matrix' });
+  }
+}
+
 export async function bulkSetFranchisePermissions(req: Request, res: Response) {
   try {
     const { id } = req.params;

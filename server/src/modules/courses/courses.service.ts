@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import { Prisma, CourseStatus, LearningMode, EnrollmentStatus } from '@prisma/client';
 import { prisma } from '../../prisma.js';
+import { serverCache } from '../../utils/cache.js';
 
 const XP_LEVEL_THRESHOLDS = [0, 50, 150, 350, 600, 1000, 1500, 2200, 3000, 4000, 5500];
 
@@ -30,7 +31,11 @@ export class CoursesService {
   // 1. CATEGORIES
   // -------------------------------------------------------------
   static async listCategories() {
-    return prisma.courseCategory.findMany({
+    const cacheKey = 'courses:categories';
+    const cached = serverCache.get<any[]>(cacheKey);
+    if (cached) return cached;
+
+    const categories = await prisma.courseCategory.findMany({
       orderBy: { sortOrder: 'asc' },
       include: {
         _count: {
@@ -38,6 +43,8 @@ export class CoursesService {
         }
       }
     });
+    serverCache.set(cacheKey, categories, 30000);
+    return categories;
   }
 
   static async createCategory(data: { name: string; slug: string; description?: string | null; icon?: string | null; sortOrder?: number }) {
@@ -92,6 +99,10 @@ export class CoursesService {
       ];
     }
 
+    const cacheKey = `courses:list:${params.status || ''}:${params.categoryId || ''}:${params.search || ''}:${page}:${limit}`;
+    const cached = serverCache.get<any>(cacheKey);
+    if (cached) return cached;
+
     const [total, courses] = await Promise.all([
       prisma.globalCourse.count({ where }),
       prisma.globalCourse.findMany({
@@ -99,18 +110,48 @@ export class CoursesService {
         skip,
         take: limit,
         orderBy: { createdAt: 'desc' },
-        include: {
-          category: true,
+        select: {
+          id: true,
+          title: true,
+          slug: true,
+          subTitle: true,
+          description: true,
+          categoryId: true,
+          format: true,
+          duration: true,
+          price: true,
+          status: true,
+          thumbnailUrl: true,
+          bannerUrl: true,
+          brochureUrl: true,
+          level: true,
+          prerequisites: true,
+          activeCurriculumVersionId: true,
+          createdAt: true,
+          updatedAt: true,
+          category: {
+            select: {
+              id: true,
+              name: true,
+              slug: true,
+              icon: true,
+            }
+          },
           activeCurriculumVersion: {
-            include: {
+            select: {
+              id: true,
+              version: true,
+              title: true,
+              isPublished: true,
+              isLocked: true,
               modules: {
                 orderBy: { position: 'asc' },
-                include: {
-                  chapters: {
-                    orderBy: { position: 'asc' },
-                    include: {
-                      attachments: { orderBy: { createdAt: 'asc' } }
-                    }
+                select: {
+                  id: true,
+                  title: true,
+                  position: true,
+                  _count: {
+                    select: { chapters: true }
                   }
                 }
               }
@@ -134,15 +175,63 @@ export class CoursesService {
       const selections = course.franchiseSelections || [];
       const permittedFranchisesCount = selections.filter((s: any) => s.isPermitted).length;
       const enabledFranchisesCount = selections.filter((s: any) => s.isPermitted && s.isEnabled).length;
+      const modules = course.activeCurriculumVersion?.modules || [];
+      const modulesCount = modules.length;
+      const lessonsCount = modules.reduce((sum: number, m: any) => sum + (m._count?.chapters || 0), 0);
       const { franchiseSelections, ...rest } = course;
       return {
         ...rest,
+        modulesCount,
+        lessonsCount,
         permittedFranchisesCount,
         enabledFranchisesCount,
       };
     });
 
-    return { total, page, limit, totalPages: Math.ceil(total / limit), data: enrichedCourses };
+    const result = { total, page, limit, totalPages: Math.ceil(total / limit), data: enrichedCourses };
+    serverCache.set(cacheKey, result, 20000);
+    return result;
+  }
+
+  /**
+   * Single-query franchise permission matrix for a course (eliminates N+1 HTTP calls)
+   */
+  static async getCourseFranchiseMatrix(courseId: string) {
+    const [franchises, selections] = await Promise.all([
+      prisma.franchise.findMany({
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          code: true,
+          name: true,
+          city: true,
+          state: true,
+          status: true,
+          ownerName: true,
+          _count: { select: { branches: true } },
+        },
+      }),
+      prisma.franchiseCourseSelection.findMany({
+        where: { courseId },
+        select: {
+          franchiseId: true,
+          isPermitted: true,
+          isEnabled: true,
+          localFeeOverride: true,
+        },
+      }),
+    ]);
+
+    const selMap = new Map(selections.map((s) => [s.franchiseId, s]));
+    return franchises.map((fr) => {
+      const sel = selMap.get(fr.id);
+      return {
+        ...fr,
+        isPermitted: Boolean(sel?.isPermitted),
+        isEnabled: Boolean(sel?.isPermitted && sel?.isEnabled),
+        customPrice: sel?.localFeeOverride !== null && sel?.localFeeOverride !== undefined ? Number(sel.localFeeOverride) : null,
+      };
+    });
   }
 
   static async getCourseByIdOrSlug(idOrSlug: string): Promise<any> {

@@ -4,6 +4,7 @@ import { z } from 'zod';
 import crypto from 'crypto';
 import { AuthenticatedRequest } from '../../middleware/auth.js';
 import { hashPassword } from '../../utils/security.js';
+import { serverCache } from '../../utils/cache.js';
 
 // Validation Schemas
 export const createInstituteSchema = z.object({
@@ -230,6 +231,11 @@ export async function listInstitutes(req: AuthenticatedRequest, res: Response) {
     const status = req.query.status as any;
 
     const skip = (page - 1) * limit;
+    const cacheKey = `institutes:list:${page}:${limit}:${status || ''}:${search}`;
+    const cached = serverCache.get<any>(cacheKey);
+    if (cached) {
+      return res.json(cached);
+    }
 
     const where: any = {};
     if (status && ['ACTIVE', 'SUSPENDED', 'PENDING_SETUP'].includes(status)) {
@@ -270,7 +276,7 @@ export async function listInstitutes(req: AuthenticatedRequest, res: Response) {
       }),
     ]);
 
-    return res.json({
+    const responsePayload = {
       success: true,
       data: {
         institutes,
@@ -281,7 +287,9 @@ export async function listInstitutes(req: AuthenticatedRequest, res: Response) {
           totalPages: Math.ceil(total / limit),
         },
       },
-    });
+    };
+    serverCache.set(cacheKey, responsePayload, 15000);
+    return res.json(responsePayload);
   } catch (err: any) {
     return res.status(500).json({ success: false, error: 'Failed to list institutes' });
   }
@@ -903,15 +911,35 @@ export async function updateInstituteStatus(req: AuthenticatedRequest, res: Resp
 export async function getDashboardSummary(req: AuthenticatedRequest, res: Response) {
   try {
     if (req.user?.role === 'SUPER_ADMIN') {
-      const [totalInstitutes, activeInstitutes, suspendedInstitutes, totalUsers, totalStudents] = await Promise.all([
+      const cacheKey = 'institutes:dashboard:super-admin';
+      const cached = serverCache.get<any>(cacheKey);
+      if (cached) {
+        return res.json(cached);
+      }
+
+      const [
+        totalInstitutes,
+        activeInstitutes,
+        suspendedInstitutes,
+        totalUsers,
+        totalStudents,
+        totalFranchises,
+        activeFranchises,
+        totalCourses,
+        publishedCourses,
+      ] = await Promise.all([
         prisma.institute.count(),
         prisma.institute.count({ where: { status: 'ACTIVE' } }),
         prisma.institute.count({ where: { status: 'SUSPENDED' } }),
         prisma.user.count(),
         prisma.student.count(),
+        prisma.franchise.count(),
+        prisma.franchise.count({ where: { status: 'ACTIVE' } }),
+        prisma.globalCourse.count(),
+        prisma.globalCourse.count({ where: { status: 'PUBLISHED' } }),
       ]);
 
-      return res.json({
+      const responsePayload = {
         success: true,
         data: {
           role: 'SUPER_ADMIN',
@@ -920,8 +948,14 @@ export async function getDashboardSummary(req: AuthenticatedRequest, res: Respon
           suspendedInstitutes,
           totalUsers,
           totalStudents,
+          totalFranchises,
+          activeFranchises,
+          totalCourses,
+          publishedCourses,
         },
-      });
+      };
+      serverCache.set(cacheKey, responsePayload, 15000);
+      return res.json(responsePayload);
     }
 
     // Academic Admin or Staff: Institute-scoped metrics

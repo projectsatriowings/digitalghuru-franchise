@@ -15,18 +15,24 @@ async function seedSuperAdmin() {
     process.exit(1);
   }
 
-  const existing = await prisma.user.findFirst({
-    where: {
-      OR: [{ email }, { role: 'SUPER_ADMIN' }],
-    },
+  const existing = await prisma.user.findUnique({
+    where: { email },
   });
 
+  const passwordHash = await hashPassword(password);
+
   if (existing) {
-    console.log(`[Info] Super Admin already exists: ${existing.email} (ID: ${existing.id})`);
+    await prisma.user.update({
+      where: { id: existing.id },
+      data: {
+        passwordHash,
+        isActive: true,
+        mustChangePassword: false,
+      },
+    });
+    console.log(`[Success] Super Admin updated: ${existing.email} (ID: ${existing.id})`);
     return;
   }
-
-  const passwordHash = await hashPassword(password);
 
   const superAdmin = await prisma.user.create({
     data: {
@@ -35,7 +41,7 @@ async function seedSuperAdmin() {
       passwordHash,
       role: 'SUPER_ADMIN',
       isActive: true,
-      mustChangePassword: true, // Forces password change on initial login for security
+      mustChangePassword: false,
     },
   });
 

@@ -33,6 +33,7 @@ import {
   Check,
   Loader2,
   Eye,
+  EyeOff,
   Copy,
   GraduationCap,
   UserX,
@@ -99,6 +100,12 @@ export const FranchiseManagement: React.FC = () => {
   const [showResetPasswordModal, setShowResetPasswordModal] = useState(false);
   const [selectedFranchiseForReset, setSelectedFranchiseForReset] = useState<any>(null);
   const [resetResult, setResetResult] = useState<any>(null);
+  const [resetPassMode, setResetPassMode] = useState<'AUTO' | 'MANUAL'>('AUTO');
+  const [customOwnerPassword, setCustomOwnerPassword] = useState('');
+  const [showCustomOwnerPassword, setShowCustomOwnerPassword] = useState(false);
+  const [resettingPassword, setResettingPassword] = useState(false);
+  const [installmentsLoaded, setInstallmentsLoaded] = useState(false);
+  const [monthlyLoaded, setMonthlyLoaded] = useState(false);
 
   // Franchise Details Drawer State
   const [selectedFranchiseId, setSelectedFranchiseId] = useState<string | null>(null);
@@ -317,16 +324,26 @@ export const FranchiseManagement: React.FC = () => {
     annualRoyaltyAmount: 200000,
   });
 
-  // Load Data
-  const loadData = async () => {
+  // Load Data (Optimized: initial load fetches only primary dashboard + franchise directory)
+  const loadInstallments = async () => {
+    try {
+      const instRes = await apiFetch('/franchises/all/installments').catch(() => ({ success: false, data: { installments: [] } }));
+      if (instRes.success && Array.isArray(instRes.data?.installments)) {
+        setInstallments(instRes.data.installments);
+        setInstallmentsLoaded(true);
+      }
+    } catch {
+      // non-blocking
+    }
+  };
+
+  const loadData = async (forceRefresh = false) => {
     try {
       setLoading(true);
-      const [dashRes, listRes, instRes, unassignedRes, monthlyRes] = await Promise.all([
-        apiFetch('/franchises/dashboard/super-admin'),
-        apiFetch('/franchises'),
-        apiFetch('/franchises/all/installments').catch(() => ({ success: false, data: { installments: [] } })),
-        apiFetch('/franchises/unassigned-branches').catch(() => ({ success: false, data: { branches: [] } })),
-        apiFetch('/franchises/all/royalties').catch(() => ({ success: false, data: { royaltyRecords: [] } })),
+      const opts = forceRefresh ? { skipCache: true } : {};
+      const [dashRes, listRes] = await Promise.all([
+        apiFetch('/franchises/dashboard/super-admin', opts),
+        apiFetch('/franchises', opts),
       ]);
 
       if (dashRes.success) {
@@ -338,16 +355,12 @@ export const FranchiseManagement: React.FC = () => {
         setFranchises(fetchedFranchises);
       }
 
-      if (instRes.success && Array.isArray(instRes.data?.installments)) {
-        setInstallments(instRes.data.installments);
+      // Refresh secondary tabs only if already loaded or currently active
+      if (activeTab === 'installments' || installmentsLoaded) {
+        loadInstallments();
       }
-
-      if (unassignedRes.success && Array.isArray(unassignedRes.data?.branches)) {
-        setUnassignedBranches(unassignedRes.data.branches);
-      }
-
-      if (monthlyRes.success && Array.isArray(monthlyRes.data?.royaltyRecords)) {
-        setMonthlyRecords(monthlyRes.data.royaltyRecords);
+      if (activeTab === 'monthly_settlements' || monthlyLoaded) {
+        loadMonthlyRecords();
       }
     } catch (err: any) {
       showToast(err.message || 'Failed to load franchise data', 'error');
@@ -362,6 +375,7 @@ export const FranchiseManagement: React.FC = () => {
       const res = await apiFetch('/franchises/all/royalties');
       if (res.success && res.data?.royaltyRecords) {
         setMonthlyRecords(res.data.royaltyRecords);
+        setMonthlyLoaded(true);
       }
     } catch (err: any) {
       // Non-blocking
@@ -405,8 +419,23 @@ export const FranchiseManagement: React.FC = () => {
 
   useEffect(() => {
     loadData();
-    loadAgreementTemplates();
   }, []);
+
+  // Lazy-load secondary tab data only when user clicks those tabs
+  useEffect(() => {
+    if (activeTab === 'installments' && !installmentsLoaded) {
+      loadInstallments();
+    } else if (activeTab === 'monthly_settlements' && !monthlyLoaded) {
+      loadMonthlyRecords();
+    }
+  }, [activeTab, installmentsLoaded, monthlyLoaded]);
+
+  // Lazy-load agreement templates only when Create or Revise modal opens
+  useEffect(() => {
+    if ((showCreateModal || showReviseModal) && agreementTemplates.length === 0) {
+      loadAgreementTemplates();
+    }
+  }, [showCreateModal, showReviseModal, agreementTemplates.length]);
 
   // Filter Franchises
   const filteredFranchises = franchises.filter(
@@ -745,6 +774,8 @@ export const FranchiseManagement: React.FC = () => {
   // EDIT FRANCHISE & LINKED CAMPUSES HANDLERS
   // ----------------------------------------------------
   const openEditFranchiseModal = async (fr: Franchise) => {
+    // Close current details drawer so the Edit modal is front and center
+    handleCloseDetails();
     setSelectedFranchiseForEdit(fr);
     setEditForm({
       name: fr.name || '',
@@ -961,8 +992,13 @@ export const FranchiseManagement: React.FC = () => {
   };
 
   const handleResetPassword = async (franchise: any) => {
+    // Close current details drawer cleanly before showing the Change Password page
+    handleCloseDetails();
     setSelectedFranchiseForReset(franchise);
     setResetResult(null);
+    setResetPassMode('AUTO');
+    setCustomOwnerPassword('');
+    setShowCustomOwnerPassword(false);
     setShowResetPasswordModal(true);
   };
 
@@ -970,25 +1006,33 @@ export const FranchiseManagement: React.FC = () => {
     setShowResetPasswordModal(false);
     setSelectedFranchiseForReset(null);
     setResetResult(null);
+    setCustomOwnerPassword('');
+    setShowCustomOwnerPassword(false);
   };
 
   const executeResetPassword = async () => {
     if (!selectedFranchiseForReset) return;
+    if (resetPassMode === 'MANUAL' && customOwnerPassword.trim().length < 8) {
+      showToast('Custom password must be at least 8 characters long.', 'error');
+      return;
+    }
     try {
+      setResettingPassword(true);
+      const bodyPayload = resetPassMode === 'MANUAL' ? { password: customOwnerPassword.trim() } : {};
       const res = await apiFetch(`/franchises/${selectedFranchiseForReset.id}/owner/reset-password`, {
         method: 'POST',
+        body: JSON.stringify(bodyPayload),
       });
       if (res.success && res.data) {
         setResetResult(res.data);
-        showToast('Password reset successfully. Please securely share the credentials with the owner.', 'success');
-        if (selectedFranchiseId === selectedFranchiseForReset.id) {
-          fetchFranchiseDetails(selectedFranchiseForReset.id);
-        }
+        showToast('Password updated successfully. Share the new credentials with the owner.', 'success');
       } else {
-        showToast(res.error || 'Failed to reset password', 'error');
+        showToast(res.error || 'Failed to change password', 'error');
       }
     } catch (err: any) {
-      showToast(err.message || 'Failed to reset password', 'error');
+      showToast(err.message || 'Failed to change password', 'error');
+    } finally {
+      setResettingPassword(false);
     }
   };
 
@@ -1021,6 +1065,8 @@ export const FranchiseManagement: React.FC = () => {
   };
 
   const openAddBranchModal = async (fr: Franchise) => {
+    // Close current details drawer before opening Add Branch modal
+    handleCloseDetails();
     setSelectedFranchiseForBranch(fr);
     setBranchModalMode('existing');
     setSelectedExistingBranchId('');
@@ -1252,11 +1298,11 @@ export const FranchiseManagement: React.FC = () => {
 
         <div className="flex flex-wrap items-center gap-3 relative z-10">
           <button
-            onClick={() => loadData()}
-            className="p-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl transition-all border border-slate-700"
+            onClick={() => loadData(true)}
+            className="px-3.5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl transition-all border border-slate-700 inline-flex items-center gap-2 text-sm font-semibold"
             title="Refresh Data"
           >
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> Refresh
           </button>
           <button
             onClick={() => {
@@ -1270,9 +1316,9 @@ export const FranchiseManagement: React.FC = () => {
               setCreateModalTab('profile');
               setShowCreateModal(true);
             }}
-            className="flex items-center gap-2 px-5 py-2.5 bg-[#FEDC32] hover:bg-[#FEDC32]/90 text-slate-900 font-bold rounded-xl shadow-lg transition-all"
+            className="flex items-center gap-2 px-5 py-2.5 bg-[#FEDC32] hover:bg-[#FEDC32]/90 text-slate-900 font-bold rounded-xl shadow-lg transition-all text-sm"
           >
-            <Plus className="w-4 h-4" /> Register Franchisee Admin
+            <Plus className="w-4 h-4" /> Add Franchise
           </button>
         </div>
       </div>
@@ -1388,7 +1434,7 @@ export const FranchiseManagement: React.FC = () => {
       )}
 
       {/* Tabs Bar */}
-      <div className="flex border-b border-slate-200 bg-white px-4 rounded-t-xl gap-6">
+      <div className="flex flex-wrap border-b border-slate-200 bg-white px-4 rounded-t-xl gap-6">
         <button
           onClick={() => setActiveTab('franchises')}
           className={`py-3.5 px-2 text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${activeTab === 'franchises'
@@ -1396,7 +1442,7 @@ export const FranchiseManagement: React.FC = () => {
             : 'border-transparent text-slate-600 hover:text-slate-900'
             }`}
         >
-          <Building2 className="w-4 h-4" /> Franchises & Owners ({franchises.length})
+          <Building2 className="w-4 h-4" /> Franchises ({franchises.length})
         </button>
 
         <button
@@ -1406,7 +1452,7 @@ export const FranchiseManagement: React.FC = () => {
             : 'border-transparent text-slate-600 hover:text-slate-900'
             }`}
         >
-          <DollarSign className="w-4 h-4" /> 2-Installment Royalty Schedule ({installments.length})
+          <DollarSign className="w-4 h-4" /> Royalty Installments{installmentsLoaded ? ` (${installments.length})` : ''}
         </button>
 
         <button
@@ -1416,7 +1462,7 @@ export const FranchiseManagement: React.FC = () => {
             : 'border-transparent text-slate-600 hover:text-slate-900'
             }`}
         >
-          <FileText className="w-4 h-4" /> Agreements & Renewals
+          <FileText className="w-4 h-4" /> Agreements
         </button>
 
         <button
@@ -1426,7 +1472,7 @@ export const FranchiseManagement: React.FC = () => {
             : 'border-transparent text-slate-600 hover:text-slate-900'
             }`}
         >
-          <Layers className="w-4 h-4" /> Monthly Royalty Settlements ({monthlyRecords.length})
+          <Layers className="w-4 h-4" /> Monthly Royalty{monthlyLoaded ? ` (${monthlyRecords.length})` : ''}
         </button>
       </div>
 
@@ -1528,10 +1574,10 @@ export const FranchiseManagement: React.FC = () => {
                               e.stopPropagation();
                               handleOpenDetails(fr.id);
                             }}
-                            className="px-2.5 py-1 text-xs font-semibold bg-white hover:bg-blue-50 text-[#006FFF] rounded-md transition-all inline-flex items-center gap-1 border border-blue-200 shadow-xs"
+                            className="px-3 py-1.5 text-xs font-semibold bg-white hover:bg-blue-50 text-[#006FFF] rounded-lg transition-all inline-flex items-center gap-1.5 border border-blue-200 shadow-xs"
                             title="View full franchise details and owner credentials"
                           >
-                            <Eye className="w-3.5 h-3.5" /> View Details
+                            <Eye className="w-3.5 h-3.5" /> View
                           </button>
                           <button
                             type="button"
@@ -1539,10 +1585,10 @@ export const FranchiseManagement: React.FC = () => {
                               e.stopPropagation();
                               openEditFranchiseModal(fr);
                             }}
-                            className="px-2.5 py-1 text-xs font-semibold bg-blue-50 hover:bg-blue-100 text-[#006FFF] rounded-md transition-all inline-flex items-center gap-1 border border-blue-200"
-                            title="Edit franchise details and manage linked institutes"
+                            className="px-3 py-1.5 text-xs font-semibold bg-blue-50 hover:bg-blue-100 text-[#006FFF] rounded-lg transition-all inline-flex items-center gap-1.5 border border-blue-200"
+                            title="Edit franchise details and linked branches"
                           >
-                            <Edit3 className="w-3 h-3" /> Edit
+                            <Edit3 className="w-3.5 h-3.5" /> Edit
                           </button>
                           <button
                             type="button"
@@ -1550,10 +1596,10 @@ export const FranchiseManagement: React.FC = () => {
                               e.stopPropagation();
                               openAddBranchModal(fr);
                             }}
-                            className="px-2.5 py-1 text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-md transition-all"
-                            title="Assign existing branch or create new campus"
+                            className="px-3 py-1.5 text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg transition-all"
+                            title="Assign existing branch or create new branch"
                           >
-                            + Campus
+                            + Branch
                           </button>
                           <button
                             type="button"
@@ -1561,10 +1607,10 @@ export const FranchiseManagement: React.FC = () => {
                               e.stopPropagation();
                               handleResetPassword(fr);
                             }}
-                            className="px-2.5 py-1 text-xs font-semibold bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-md transition-all inline-flex items-center gap-1"
-                            title="Reset Franchise Owner Password"
+                            className="px-3 py-1.5 text-xs font-semibold bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg transition-all inline-flex items-center gap-1.5"
+                            title="Change Franchise Owner Password"
                           >
-                            <Key className="w-3 h-3" /> Password
+                            <Key className="w-3.5 h-3.5" /> Change Password
                           </button>
                           <button
                             type="button"
@@ -1572,7 +1618,7 @@ export const FranchiseManagement: React.FC = () => {
                               e.stopPropagation();
                               handleStatusToggle(fr.id, fr.status);
                             }}
-                            className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-all ${fr.status === 'ACTIVE'
+                            className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${fr.status === 'ACTIVE'
                               ? 'bg-rose-50 hover:bg-rose-100 text-rose-700'
                               : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700'
                               }`}
@@ -1592,15 +1638,15 @@ export const FranchiseManagement: React.FC = () => {
                                 <div className="flex items-center gap-2">
                                   <button
                                     onClick={() => openEditFranchiseModal(fr)}
-                                    className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-[#006FFF] text-xs font-bold rounded-lg border border-blue-200 inline-flex items-center gap-1 shadow-xs"
+                                    className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-[#006FFF] text-xs font-bold rounded-lg border border-blue-200 inline-flex items-center gap-1.5 shadow-xs"
                                   >
-                                    <Edit3 className="w-3 h-3" /> Manage in Edit
+                                    <Edit3 className="w-3.5 h-3.5" /> Edit Branches
                                   </button>
                                   <button
                                     onClick={() => openAddBranchModal(fr)}
-                                    className="px-3 py-1 bg-[#006FFF] hover:bg-[#0055CC] text-white text-xs font-bold rounded-lg shadow-sm"
+                                    className="px-3.5 py-1.5 bg-[#006FFF] hover:bg-[#0055CC] text-white text-xs font-bold rounded-lg shadow-sm"
                                   >
-                                    + Assign / Add Branch
+                                    + Add Branch
                                   </button>
                                 </div>
                               </div>
@@ -1628,10 +1674,10 @@ export const FranchiseManagement: React.FC = () => {
                                         <span className="text-[10px] text-slate-500">Status: {b.status || 'ACTIVE'}</span>
                                         <button
                                           onClick={() => handleDetachBranch(fr.id, b.id, b.name)}
-                                          className="text-[11px] font-semibold text-rose-600 hover:text-rose-800 hover:underline"
-                                          title="Detach branch from franchise (preserves all records)"
+                                          className="text-xs font-semibold text-rose-600 hover:text-rose-800 hover:underline"
+                                          title="Remove branch from franchise (preserves all records)"
                                         >
-                                          Detach
+                                          Remove Branch
                                         </button>
                                       </div>
                                     </div>
@@ -1846,7 +1892,7 @@ export const FranchiseManagement: React.FC = () => {
                       }}
                       className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow transition-all flex items-center gap-1.5"
                     >
-                      <RefreshCw className="w-3.5 h-3.5" /> Renew Agreement (Next Year)
+                      <RefreshCw className="w-4 h-4" /> Renew Agreement
                     </button>
                   )}
                 </div>
@@ -1949,10 +1995,10 @@ export const FranchiseManagement: React.FC = () => {
                                 });
                                 setShowReviseModal(true);
                               }}
-                              className="px-2.5 py-1 text-[#006FFF] hover:text-blue-800 font-semibold bg-white border border-blue-200 rounded text-xs"
-                              title="Create revision version N+1 linked via parent agreement"
+                              className="px-3 py-1.5 text-[#006FFF] hover:text-blue-800 font-semibold bg-white border border-blue-200 rounded-lg text-xs"
+                              title="Create a revised version of this agreement"
                             >
-                              Revise (v{(agr.version || 1) + 1})
+                              Revise Terms
                             </button>
                           )}
 
@@ -1966,9 +2012,9 @@ export const FranchiseManagement: React.FC = () => {
                               });
                               setShowAmendModal(true);
                             }}
-                            className="px-2.5 py-1 text-slate-600 hover:text-slate-900 font-semibold bg-white border border-slate-200 rounded"
+                            className="px-3 py-1.5 text-slate-700 hover:text-slate-900 font-semibold bg-white border border-slate-200 rounded-lg text-xs"
                           >
-                            Amend
+                            Add Note
                           </button>
                         </div>
                       </div>
@@ -2011,7 +2057,7 @@ export const FranchiseManagement: React.FC = () => {
                 }}
                 className="px-3.5 py-1.5 text-xs font-bold bg-[#FEDC32] hover:bg-[#FEDC32]/90 text-slate-900 rounded-lg shadow transition flex items-center gap-1.5"
               >
-                <Plus className="w-4 h-4" /> Calculate Monthly Royalty
+                <Plus className="w-4 h-4" /> Calculate Royalty
               </button>
             </div>
           </div>
@@ -3833,110 +3879,175 @@ export const FranchiseManagement: React.FC = () => {
       )}
 
       {/* ============================================================= */}
-      {/* MODAL 6: RESET OWNER PASSWORD (SUPER ADMIN ONLY)              */}
+      {/* MODAL 6: CHANGE OWNER PASSWORD (SUPER ADMIN ONLY)             */}
       {/* ============================================================= */}
       {showResetPasswordModal && selectedFranchiseForReset && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-start justify-center p-4 sm:p-6 overflow-y-auto min-h-screen">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl my-6 sm:my-8 border border-slate-200 animate-in fade-in duration-200">
-            <div className="flex justify-between items-center border-b pb-3 mb-4">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-blue-50 text-[#006FFF] flex items-center justify-center">
-                  <Key className="w-4 h-4" />
+        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-[70] flex items-center justify-center p-4 sm:p-6 overflow-y-auto min-h-screen">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-7 shadow-2xl my-6 border border-slate-200 animate-in fade-in duration-150">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-4 mb-5">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-blue-50 text-[#006FFF] flex items-center justify-center">
+                  <Key className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-slate-900">Reset Owner Password</h3>
-                  <p className="text-[11px] text-slate-500">Permanent Credential Generation</p>
+                  <h3 className="text-lg font-bold text-slate-900">Change Owner Password</h3>
+                  <p className="text-xs text-slate-500">
+                    {selectedFranchiseForReset.name} &bull; {selectedFranchiseForReset.email}
+                  </p>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={handleCloseResetPasswordModal}
-                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100 transition"
+                className="text-slate-400 hover:text-slate-700 p-1.5 rounded-xl hover:bg-slate-100 transition"
+                aria-label="Close"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             {!resetResult ? (
-              <div className="space-y-4">
-                <p className="text-sm text-slate-600">
-                  Generate a new permanent password for{' '}
-                  <strong className="text-slate-900">{selectedFranchiseForReset.ownerName}</strong> ({selectedFranchiseForReset.email})?
+              <div className="space-y-5">
+                <p className="text-sm text-slate-700">
+                  Update the login password for{' '}
+                  <strong className="text-slate-900">{selectedFranchiseForReset.ownerName}</strong>.
                 </p>
-                <div className="bg-amber-50 border border-amber-200 p-3 rounded-xl text-xs text-amber-800 space-y-1">
-                  <div className="font-semibold flex items-center gap-1.5">
-                    <AlertTriangle className="w-3.5 h-3.5 shrink-0 text-amber-600" />
+
+                <div className="space-y-2">
+                  <label className="block text-sm font-semibold text-slate-800">Choose Password Method</label>
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <button
+                      type="button"
+                      onClick={() => setResetPassMode('AUTO')}
+                      className={`py-2.5 px-3 rounded-xl border text-sm font-semibold transition cursor-pointer ${
+                        resetPassMode === 'AUTO'
+                          ? 'bg-[#006FFF] text-white border-[#006FFF] shadow-sm'
+                          : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                      }`}
+                    >
+                      Auto-Generate
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setResetPassMode('MANUAL')}
+                      className={`py-2.5 px-3 rounded-xl border text-sm font-semibold transition cursor-pointer ${
+                        resetPassMode === 'MANUAL'
+                          ? 'bg-[#006FFF] text-white border-[#006FFF] shadow-sm'
+                          : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                      }`}
+                    >
+                      Type New Password
+                    </button>
+                  </div>
+                </div>
+
+                {resetPassMode === 'MANUAL' ? (
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-800 mb-1.5">
+                      New Password (minimum 8 characters)
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showCustomOwnerPassword ? 'text' : 'password'}
+                        value={customOwnerPassword}
+                        onChange={(e) => setCustomOwnerPassword(e.target.value)}
+                        placeholder="Enter a strong new password..."
+                        minLength={8}
+                        className="w-full px-3.5 py-2.5 pr-11 border border-slate-300 rounded-xl text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#006FFF]/30 focus:border-[#006FFF]"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowCustomOwnerPassword((v) => !v)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 p-1"
+                        title={showCustomOwnerPassword ? 'Hide password' : 'Show password'}
+                      >
+                        {showCustomOwnerPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="bg-blue-50/70 border border-blue-200 p-3.5 rounded-xl text-sm text-slate-700">
+                    A strong 16-character password will be generated automatically and shown on the next screen so you can copy it.
+                  </div>
+                )}
+
+                <div className="bg-amber-50 border border-amber-200 p-3.5 rounded-xl text-xs text-amber-900 space-y-1">
+                  <div className="font-bold flex items-center gap-1.5">
+                    <AlertTriangle className="w-4 h-4 shrink-0 text-amber-600" />
                     Security Notice
                   </div>
                   <div>
-                    The owner's previous password will be invalidated immediately. The owner will be able to log in directly using the newly generated permanent password without forced password change.
+                    The previous password stops working immediately. The owner can sign in right away with the new password.
                   </div>
                 </div>
-                <div className="flex justify-end gap-2.5 pt-3 border-t border-slate-100">
+
+                <div className="flex justify-end gap-2.5 pt-4 border-t border-slate-100">
                   <button
                     type="button"
                     onClick={handleCloseResetPasswordModal}
-                    className="px-4 py-2 border border-slate-200 text-slate-600 hover:bg-slate-50 rounded-xl text-xs font-semibold transition"
+                    className="px-4 py-2.5 border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-xl text-sm font-semibold transition"
                   >
                     Cancel
                   </button>
                   <button
                     type="button"
+                    disabled={resettingPassword || (resetPassMode === 'MANUAL' && customOwnerPassword.trim().length < 8)}
                     onClick={executeResetPassword}
-                    className="px-5 py-2 bg-[#006FFF] hover:bg-[#0058D4] text-white font-bold rounded-xl text-xs shadow-xs transition cursor-pointer"
+                    className="px-5 py-2.5 bg-[#006FFF] hover:bg-[#0058D4] disabled:opacity-50 text-white font-bold rounded-xl text-sm shadow-sm transition cursor-pointer inline-flex items-center gap-2"
                   >
-                    Generate New Permanent Password
+                    {resettingPassword && <Loader2 className="w-4 h-4 animate-spin" />}
+                    {resetPassMode === 'MANUAL' ? 'Save New Password' : 'Generate Password'}
                   </button>
                 </div>
               </div>
             ) : (
               <div className="space-y-4">
-                <div className="bg-emerald-50 border border-emerald-200 p-4 rounded-xl text-xs space-y-2.5">
-                  <div className="font-bold text-emerald-800 text-sm flex items-center gap-1.5">
-                    <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
-                    Permanent Password Generated!
+                <div className="bg-emerald-50 border border-emerald-200 p-4 rounded-2xl text-sm space-y-2.5">
+                  <div className="font-bold text-emerald-800 text-base flex items-center gap-2">
+                    <CheckCircle className="w-5 h-5 text-emerald-600 shrink-0" />
+                    Password Updated Successfully!
                   </div>
                   <div className="text-slate-700 flex justify-between items-center">
-                    <span className="text-slate-500">Owner Name:</span>
+                    <span className="text-slate-500">Owner:</span>
                     <span className="font-semibold text-slate-900">{selectedFranchiseForReset?.ownerName || resetResult.fullName}</span>
                   </div>
                   <div className="text-slate-700 flex justify-between items-center">
                     <span className="text-slate-500">Login Email:</span>
                     <span className="font-mono font-semibold text-slate-900">{resetResult.email}</span>
                   </div>
-                  <div className="bg-white p-3 rounded-xl border border-emerald-200">
-                    <span className="text-[11px] text-slate-500 block mb-1">New Permanent Password:</span>
-                    <div className="font-mono font-bold text-emerald-950 text-base text-center tracking-wider selection:bg-emerald-100 select-all">
+                  <div className="bg-white p-3.5 rounded-xl border border-emerald-200">
+                    <span className="text-xs text-slate-500 block mb-1">New Password:</span>
+                    <div className="font-mono font-bold text-emerald-950 text-lg text-center tracking-wider selection:bg-emerald-100 select-all">
                       {resetResult.permanentPassword || resetResult.password || resetResult.temporaryPassword}
                     </div>
                   </div>
-                  <div className="text-[11px] text-slate-600 leading-relaxed">
-                    Please securely convey this permanent password to the Franchise Owner. It is now active for direct sign-in.
+                  <div className="text-xs text-slate-600 leading-relaxed">
+                    Share this password securely with the Franchise Owner. It is ready for immediate login.
                   </div>
                 </div>
 
-                <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100">
-                  <div className="flex items-center gap-1.5">
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-slate-100">
+                  <div className="flex items-center gap-2">
                     <button
                       type="button"
                       onClick={() => {
                         navigator.clipboard.writeText(resetResult.email);
-                        showToast('Email copied to clipboard!', 'success');
+                        showToast('Email copied!', 'success');
                       }}
-                      className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold transition flex items-center gap-1 cursor-pointer"
+                      className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer"
                     >
-                      <Copy className="w-3 h-3" /> Copy Email
+                      <Copy className="w-3.5 h-3.5" /> Copy Email
                     </button>
                     <button
                       type="button"
                       onClick={() => {
                         const pwd = resetResult.permanentPassword || resetResult.password || resetResult.temporaryPassword;
                         navigator.clipboard.writeText(pwd);
-                        showToast('Password copied to clipboard!', 'success');
+                        showToast('Password copied!', 'success');
                       }}
-                      className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold transition flex items-center gap-1 cursor-pointer"
+                      className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer"
                     >
-                      <Copy className="w-3 h-3" /> Copy Password
+                      <Copy className="w-3.5 h-3.5" /> Copy Password
                     </button>
                   </div>
                   <button
@@ -3949,21 +4060,21 @@ export const FranchiseManagement: React.FC = () => {
                         `Owner: ${selectedFranchiseForReset?.ownerName || resetResult.fullName}`,
                         `Portal URL: ${window.location.origin}/login`,
                         `Login Email: ${resetResult.email}`,
-                        `Permanent Password: ${pwd}`,
+                        `Password: ${pwd}`,
                       ].join('\n');
                       navigator.clipboard.writeText(creds);
-                      showToast('All credentials copied to clipboard!', 'success');
+                      showToast('All login details copied!', 'success');
                     }}
-                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-xs cursor-pointer"
+                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-bold transition flex items-center gap-1.5 shadow-xs cursor-pointer"
                   >
-                    <Copy className="w-3.5 h-3.5" /> Copy All Credentials
+                    <Copy className="w-4 h-4" /> Copy All
                   </button>
                   <button
                     type="button"
                     onClick={handleCloseResetPasswordModal}
-                    className="px-5 py-2 bg-[#006FFF] hover:bg-[#0058D4] text-white font-bold rounded-xl text-xs shadow-xs transition"
+                    className="px-5 py-2 bg-[#006FFF] hover:bg-[#0058D4] text-white font-bold rounded-xl text-sm shadow-xs transition cursor-pointer"
                   >
-                    Done & Close
+                    Done
                   </button>
                 </div>
               </div>
@@ -3976,7 +4087,7 @@ export const FranchiseManagement: React.FC = () => {
       {/* MODAL 7: ASSIGN / ADD BRANCH CAMPUS (SUPER ADMIN ONLY)        */}
       {/* ============================================================= */}
       {showAddBranchModal && selectedFranchiseForBranch && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-start justify-center p-4 sm:p-6 overflow-y-auto min-h-screen">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[60] flex items-start justify-center p-4 sm:p-6 overflow-y-auto min-h-screen">
           <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl my-6 sm:my-8 border border-slate-200">
             <div className="flex justify-between items-center border-b pb-3 mb-4">
               <div>
@@ -4552,7 +4663,7 @@ export const FranchiseManagement: React.FC = () => {
       {/* MODAL 9: EDIT FRANCHISE & MANAGE LINKED INSTITUTES            */}
       {/* ============================================================= */}
       {showEditFranchiseModal && selectedFranchiseForEdit && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-start justify-center p-3 sm:p-6 overflow-y-auto min-h-screen">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[60] flex items-start justify-center p-3 sm:p-6 overflow-y-auto min-h-screen">
           <div className="bg-white rounded-2xl max-w-2xl w-full shadow-2xl my-6 sm:my-8 border border-slate-200 overflow-hidden flex flex-col">
             {/* Modal Header */}
             <div className="px-6 py-4 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800">
@@ -5028,10 +5139,10 @@ export const FranchiseManagement: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => handleResetPassword(detailData.franchise)}
-                        className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg bg-[#006FFF] hover:bg-[#0058D4] text-white transition shadow-sm cursor-pointer"
-                        title="Generate permanent password and share with owner"
+                        className="inline-flex items-center gap-1.5 text-sm font-semibold px-3.5 py-2 rounded-xl bg-[#006FFF] hover:bg-[#0058D4] text-white transition shadow-sm cursor-pointer"
+                        title="Change password for franchise owner"
                       >
-                        <Key className="w-3.5 h-3.5" /> Reset / Generate Permanent Password
+                        <Key className="w-4 h-4" /> Change Password
                       </button>
                     </div>
 
@@ -5369,17 +5480,17 @@ export const FranchiseManagement: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => handleResetPassword(detailData.franchise)}
-                    className="px-3.5 py-2 text-xs font-semibold text-[#006FFF] hover:bg-blue-50 rounded-xl transition border border-blue-200 cursor-pointer"
+                    className="px-4 py-2 text-sm font-semibold text-[#006FFF] hover:bg-blue-50 rounded-xl transition border border-blue-200 cursor-pointer inline-flex items-center gap-1.5"
                   >
-                    <Key className="w-3.5 h-3.5 inline mr-1" /> Reset / Generate Permanent Password
+                    <Key className="w-4 h-4" /> Change Password
                   </button>
                 )}
                 <button
                   type="button"
                   onClick={handleCloseDetails}
-                  className="px-5 py-2 text-xs font-semibold text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-xl transition shadow-xs cursor-pointer"
+                  className="px-5 py-2 text-sm font-semibold text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-xl transition shadow-xs cursor-pointer"
                 >
-                  Close Drawer
+                  Close
                 </button>
               </div>
             </div>

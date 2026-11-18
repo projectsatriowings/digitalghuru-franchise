@@ -166,9 +166,13 @@ export async function apiFetch<T = any>(endpoint: string, options: ApiFetchOptio
       throw customErr;
     }
 
-    // Cache successful GET results
+    // Cache successful GET results (auto-invalidated on any POST/PUT/PATCH/DELETE)
     if (isCacheable) {
-      const ttl = options.cacheTtlMs ?? (endpoint.includes('/batches') || endpoint.includes('/dashboard') ? 20000 : 8000);
+      const ttl = options.cacheTtlMs ?? (
+        endpoint.includes('/batches') || endpoint.includes('/dashboard') || endpoint.includes('/courses') || endpoint.includes('/franchises')
+          ? 30000
+          : 15000
+      );
       apiCache.set(cacheKey, { data, expiry: Date.now() + ttl });
     }
 

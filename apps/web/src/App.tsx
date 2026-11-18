@@ -7,15 +7,18 @@ import { Login } from './pages/Login';
 import { BrandFooter } from './components/BrandFooter';
 import { PageSkeleton } from './components/PageSkeleton';
 import { ToastProvider } from './context/ToastContext';
-import { motion, AnimatePresence } from 'framer-motion';
-import { pageTransitionVariants } from './utils/animations';
 
-// Route-level code splitting via React.lazy
-const FranchiseManagement = lazy(() => import('./pages/FranchiseManagement').then((m) => ({ default: m.FranchiseManagement })));
-const CourseManagement = lazy(() => import('./pages/CourseManagement').then((m) => ({ default: m.CourseManagement })));
-const FranchiseCourses = lazy(() => import('./pages/FranchiseCourses').then((m) => ({ default: m.FranchiseCourses })));
+// Route-level code splitting via React.lazy (with prefetch helpers for instant tab switches)
+const loadFranchiseManagement = () => import('./pages/FranchiseManagement');
+const loadCourseManagement = () => import('./pages/CourseManagement');
+const loadFranchiseCourses = () => import('./pages/FranchiseCourses');
+const loadSuperAdminDashboard = () => import('./pages/SuperAdminDashboard');
+
+const FranchiseManagement = lazy(() => loadFranchiseManagement().then((m) => ({ default: m.FranchiseManagement })));
+const CourseManagement = lazy(() => loadCourseManagement().then((m) => ({ default: m.CourseManagement })));
+const FranchiseCourses = lazy(() => loadFranchiseCourses().then((m) => ({ default: m.FranchiseCourses })));
 const FranchiseOwnerDashboard = lazy(() => import('./pages/FranchiseOwnerDashboard').then((m) => ({ default: m.FranchiseOwnerDashboard })));
-const SuperAdminDashboard = lazy(() => import('./pages/SuperAdminDashboard').then((m) => ({ default: m.SuperAdminDashboard })));
+const SuperAdminDashboard = lazy(() => loadSuperAdminDashboard().then((m) => ({ default: m.SuperAdminDashboard })));
 const AcademicAdminDashboard = lazy(() => import('./pages/AcademicAdminDashboard').then((m) => ({ default: m.AcademicAdminDashboard })));
 const StaffManagement = lazy(() => import('./pages/StaffManagement').then((m) => ({ default: m.StaffManagement })));
 const StaffAttendanceAdmin = lazy(() => import('./pages/StaffAttendanceAdmin').then((m) => ({ default: m.StaffAttendanceAdmin })));
@@ -134,6 +137,30 @@ const AppContent: React.FC = () => {
     };
   }, [user]);
 
+  // Background-prefetch primary modules during idle time for instant tab switches
+  useEffect(() => {
+    if (!user) return;
+    const prefetch = () => {
+      if (user.role === 'SUPER_ADMIN') {
+        loadSuperAdminDashboard();
+        loadFranchiseManagement();
+        loadCourseManagement();
+      } else if (user.role === 'FRANCHISE_OWNER' || user.role === 'ACADEMIC_ADMIN' || user.role === 'BRANCH_ADMIN') {
+        loadFranchiseCourses();
+      }
+    };
+    const id = typeof (window as any).requestIdleCallback === 'function'
+      ? (window as any).requestIdleCallback(prefetch, { timeout: 1500 })
+      : window.setTimeout(prefetch, 600);
+    return () => {
+      if (typeof (window as any).cancelIdleCallback === 'function') {
+        (window as any).cancelIdleCallback(id);
+      } else {
+        window.clearTimeout(id);
+      }
+    };
+  }, [user]);
+
   useEffect(() => {
     if (user && !isTabAllowedForRole(currentTab, user.role)) {
       const defaultTab = getDefaultTabForRole(user.role);
@@ -186,18 +213,16 @@ const AppContent: React.FC = () => {
         />
 
         <main className="flex-1 overflow-y-auto flex flex-col justify-between bg-[#F8FAFC]">
-          <div className="p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto flex-1">
+          <div className="p-4 sm:p-6 lg:p-8 max-w-[1440px] w-full mx-auto flex-1">
             <Suspense fallback={<PageSkeleton />}>
-              <AnimatePresence mode="wait">
-                <motion.div
-                  key={currentTab}
-                  variants={pageTransitionVariants}
-                  initial="initial"
-                  animate="animate"
-                  exit="exit"
-                >
+              <div key={currentTab} className="animate-in fade-in duration-150">
                   {currentTab === 'super_admin_dashboard' && user.role === 'SUPER_ADMIN' && (
-                    <SuperAdminDashboard />
+                    <SuperAdminDashboard
+                      onNavigateTab={(tab) => {
+                        setCurrentTab(tab);
+                        window.history.pushState({}, '', `/${tab}`);
+                      }}
+                    />
                   )}
 
                   {currentTab === 'franchise_management' && user.role === 'SUPER_ADMIN' && (
@@ -262,8 +287,7 @@ const AppContent: React.FC = () => {
 
                   {currentTab === 'messaging' && (user.role === 'ACADEMIC_ADMIN' || user.role === 'BRANCH_ADMIN' || user.role === 'STAFF' || user.role === 'FRANCHISE_OWNER') && <MessagingInbox />}
                   {currentTab === 'fees' && (user.role === 'ACADEMIC_ADMIN' || user.role === 'BRANCH_ADMIN' || user.role === 'SUPER_ADMIN' || user.role === 'FRANCHISE_OWNER') && <FeesManagement />}
-                </motion.div>
-              </AnimatePresence>
+              </div>
             </Suspense>
           </div>
           {user.role !== 'SUPER_ADMIN' && <BrandFooter />}

@@ -295,18 +295,18 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileSidebar }) => {
 
         <NotificationBell />
 
-        <div className="hidden md:flex items-center gap-2 text-xs text-slate-600">
-          <UserIcon className="w-3.5 h-3.5 text-slate-400" />
+        <div className="hidden md:flex items-center gap-2 text-sm text-slate-600">
+          <UserIcon className="w-4 h-4 text-slate-400" />
           <span className="font-semibold text-slate-900">{user?.fullName}</span>
         </div>
 
         <button
           onClick={logout}
-          className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 hover:text-rose-600 px-3 py-1.5 rounded-lg hover:bg-slate-100 border border-slate-200 transition-colors"
+          className="flex items-center gap-2 text-sm font-semibold text-slate-700 hover:text-rose-600 px-3.5 py-2 rounded-lg hover:bg-rose-50 border border-slate-200 transition-colors"
           title="Sign out"
         >
           <LogOut className="w-4 h-4 text-rose-600" />
-          <span className="hidden sm:inline">Logout</span>
+          <span className="hidden sm:inline">Sign Out</span>
         </button>
       </div>
     </header>

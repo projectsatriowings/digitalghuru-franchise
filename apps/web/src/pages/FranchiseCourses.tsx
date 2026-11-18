@@ -67,10 +67,11 @@ export const FranchiseCourses: React.FC = () => {
 
   useBodyScrollLock(Boolean(showEnrollModal || transferEnrollment));
 
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (forceRefresh = false) => {
     setLoading(true);
     try {
-      const ctxRes = await apiFetch('/courses/my-franchise-context', { skipCache: true });
+      const opts = forceRefresh ? { skipCache: true } : {};
+      const ctxRes = await apiFetch('/courses/my-franchise-context', opts);
       const ctx = ctxRes.data || {};
       setFranchise(ctx.franchise || null);
       setBranches(ctx.branches || []);
@@ -80,10 +81,8 @@ export const FranchiseCourses: React.FC = () => {
         const instFilter =
           activeInstitute && activeInstitute.id !== 'ALL' ? `&instituteId=${activeInstitute.id}` : '';
         const [coursesRes, enrollmentsRes] = await Promise.all([
-          apiFetch(`/courses/franchise/${ctx.franchise.id}`, { skipCache: true }),
-          apiFetch(`/courses/franchise/${ctx.franchise.id}/enrollments?${instFilter.replace(/^&/, '')}`, {
-            skipCache: true,
-          }),
+          apiFetch(`/courses/franchise/${ctx.franchise.id}`, opts),
+          apiFetch(`/courses/franchise/${ctx.franchise.id}/enrollments?${instFilter.replace(/^&/, '')}`, opts),
         ]);
 
         const fetchedCourses = coursesRes.data || [];
@@ -262,26 +261,26 @@ export const FranchiseCourses: React.FC = () => {
             <Sparkles className="w-3.5 h-3.5" /> {franchise ? `${franchise.name} (${franchise.code})` : 'Franchise LMS Hub'}
           </div>
           <h1 className="text-2xl lg:text-3xl font-extrabold text-slate-900 font-display tracking-tight">
-            Courses & LMS Enrollments
+            Course Management
           </h1>
           <p className="text-sm text-slate-500 mt-1">
-            Enable global Digital Guru courses for your centres, enroll Online or Offline batch students, and manage mode transfers.
+            Turn on courses for your branches, set local fees, and enroll Online or Offline students.
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5">
           <button
             type="button"
-            onClick={loadData}
-            className="px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-700 text-xs font-bold hover:bg-slate-50 flex items-center gap-2"
+            onClick={() => loadData(true)}
+            className="px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-700 text-sm font-semibold hover:bg-slate-50 flex items-center gap-2"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} /> Refresh
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> Refresh
           </button>
           <button
             type="button"
             disabled={enabledCourses.length === 0}
             onClick={() => openEnrollModal()}
-            className="px-5 py-2.5 rounded-xl bg-[#006FFF] hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-bold flex items-center gap-2 shadow-md shadow-[#006FFF]/25"
+            className="px-5 py-2.5 rounded-xl bg-[#006FFF] hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-bold flex items-center gap-2 shadow-md shadow-[#006FFF]/25"
           >
             <UserPlus className="w-4 h-4" /> Enroll Student
           </button>
@@ -321,24 +320,24 @@ export const FranchiseCourses: React.FC = () => {
         <button
           type="button"
           onClick={() => setActiveTab('offerings')}
-          className={`px-4 py-2.5 rounded-t-xl text-xs font-bold transition-all ${
+          className={`px-4 py-2.5 rounded-t-xl text-sm font-bold transition-all ${
             activeTab === 'offerings'
               ? 'bg-[#006FFF] text-white shadow-sm'
               : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
           }`}
         >
-          Permitted Global Courses ({courses.length})
+          Available Courses ({courses.length})
         </button>
         <button
           type="button"
           onClick={() => setActiveTab('enrollments')}
-          className={`px-4 py-2.5 rounded-t-xl text-xs font-bold transition-all ${
+          className={`px-4 py-2.5 rounded-t-xl text-sm font-bold transition-all ${
             activeTab === 'enrollments'
               ? 'bg-[#006FFF] text-white shadow-sm'
               : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
           }`}
         >
-          Student Enrollments & Transfers ({enrollments.length})
+          Student Enrollments ({enrollments.length})
         </button>
       </div>
 
@@ -451,10 +450,10 @@ export const FranchiseCourses: React.FC = () => {
                           <Loader2 className="w-3.5 h-3.5 animate-spin" />
                         ) : course.isSelected ? (
                           <>
-                            <Check className="w-3.5 h-3.5" /> Enabled
+                            <Check className="w-3.5 h-3.5" /> Active
                           </>
                         ) : (
-                          'Enable Course'
+                          'Turn On Course'
                         )}
                       </button>
                     </div>

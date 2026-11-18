@@ -33,6 +33,7 @@ import { authenticateToken } from './middleware/auth.js';
 import { NotificationService } from './modules/notifications/notification.service.js';
 import { demoModeMiddleware } from './middleware/demo-mode.middleware.js';
 import { apiRateLimiter } from './middleware/rate-limiter.js';
+import { serverCache } from './utils/cache.js';
 
 const app = express();
 
@@ -103,6 +104,18 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 // Demo Mode Middleware (active when no DATABASE_URL configured)
 app.use(demoModeMiddleware);
 app.use('/api', apiRateLimiter);
+
+// Auto-invalidate short-TTL read cache on any data-mutating API request
+app.use('/api', (req: Request, res: Response, next: NextFunction) => {
+  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method) && !req.path.startsWith('/auth/login')) {
+    res.on('finish', () => {
+      if (res.statusCode < 400) {
+        serverCache.invalidate();
+      }
+    });
+  }
+  next();
+});
 
 // Mount Routes
 app.use('/api/auth', authRoutes);

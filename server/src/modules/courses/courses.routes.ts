@@ -18,6 +18,7 @@ import {
   listFranchiseCourses,
   listFranchiseEnrollments,
   setFranchiseCoursePermission,
+  getCourseFranchiseMatrix,
   bulkSetFranchisePermissions,
   toggleFranchiseCourseSelection,
   enrollStudentInCourse,
@@ -157,6 +158,7 @@ router.get(
 // -------------------------------------------------------------
 router.patch('/chapters/:chapterId', authenticateToken, requireRole('SUPER_ADMIN'), updateDraftChapter);
 router.put('/:id/versions/:versionId/curriculum', authenticateToken, requireRole('SUPER_ADMIN'), replaceDraftCurriculum);
+router.get('/:id/franchise-matrix', authenticateToken, requireRole('SUPER_ADMIN'), getCourseFranchiseMatrix);
 router.post('/:id/franchise-permissions', authenticateToken, requireRole('SUPER_ADMIN'), bulkSetFranchisePermissions);
 router.get('/', authenticateToken, listGlobalCourses);
 router.post('/', authenticateToken, requireRole('SUPER_ADMIN'), createGlobalCourse);

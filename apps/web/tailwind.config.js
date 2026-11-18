@@ -47,10 +47,20 @@ export default {
         ivory: '#FFFFFF',
       },
       fontFamily: {
-        display: ['Outfit', 'sans-serif'],
-        heading: ['Outfit', 'sans-serif'],
-        body: ['Inter', 'sans-serif'],
-        sans: ['Inter', 'sans-serif'],
+        display: ['"Plus Jakarta Sans"', 'Inter', 'system-ui', 'sans-serif'],
+        heading: ['"Plus Jakarta Sans"', 'Inter', 'system-ui', 'sans-serif'],
+        body: ['"Plus Jakarta Sans"', 'Inter', 'system-ui', 'sans-serif'],
+        sans: ['"Plus Jakarta Sans"', 'Inter', 'system-ui', 'sans-serif'],
+        mono: ['"JetBrains Mono"', 'ui-monospace', 'SFMono-Regular', 'monospace'],
+      },
+      fontSize: {
+        xs: ['0.84rem', { lineHeight: '1.3rem' }],      // ~13.5px (readable software captions/badges)
+        sm: ['0.9375rem', { lineHeight: '1.45rem' }],   // 15px (comfortable software body/table/buttons)
+        base: ['1rem', { lineHeight: '1.55rem' }],      // 16px (standard input/prose size)
+        lg: ['1.15rem', { lineHeight: '1.75rem' }],     // ~18.5px (section headings)
+        xl: ['1.35rem', { lineHeight: '1.85rem' }],     // ~21.5px (card titles/subheaders)
+        '2xl': ['1.65rem', { lineHeight: '2.1rem' }],   // ~26.5px (page titles)
+        '3xl': ['2rem', { lineHeight: '2.45rem' }],     // 32px (hero/KPI numbers)
       },
     },
   },
