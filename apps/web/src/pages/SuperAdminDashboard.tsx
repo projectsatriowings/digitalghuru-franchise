@@ -52,7 +52,11 @@ interface InstituteDetailData {
   adminAccount: AcademicAdminAccount | null;
 }
 
-export const SuperAdminDashboard: React.FC = () => {
+interface SuperAdminDashboardProps {
+  onNavigateTab?: (tab: string) => void;
+}
+
+export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onNavigateTab }) => {
   const [metrics, setMetrics] = useState<any>(null);
   const [institutes, setInstitutes] = useState<Institute[]>([]);
   const [availableFranchises, setAvailableFranchises] = useState<FranchiseOption[]>([]);
@@ -60,7 +64,13 @@ export const SuperAdminDashboard: React.FC = () => {
   const [franchiseOptionsError, setFranchiseOptionsError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search), 300);
+    return () => clearTimeout(timer);
+  }, [search]);
 
   // Global notification banner
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
@@ -247,7 +257,6 @@ export const SuperAdminDashboard: React.FC = () => {
   // 2. INSTITUTE DETAILS DRAWER STATE
   // ----------------------------------------------------
   const [selectedInstituteId, setSelectedInstituteId] = useState<string | null>(null);
-  useBodyScrollLock(showCreateModal || !!selectedInstituteId || !!createdInstitute);
   const [detailData, setDetailData] = useState<InstituteDetailData | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
@@ -256,6 +265,7 @@ export const SuperAdminDashboard: React.FC = () => {
   // 3. EDIT ADMIN ACCOUNT MODAL STATE
   // ----------------------------------------------------
   const [showEditAdminModal, setShowEditAdminModal] = useState(false);
+  const [editAdminTarget, setEditAdminTarget] = useState<{ instituteId: string; instituteName: string } | null>(null);
   const [editAdminLoading, setEditAdminLoading] = useState(false);
   const [editAdminError, setEditAdminError] = useState<string | null>(null);
   const [editAdminForm, setEditAdminForm] = useState({
@@ -269,6 +279,12 @@ export const SuperAdminDashboard: React.FC = () => {
   // 4. RESET PASSWORD MODAL STATE
   // ----------------------------------------------------
   const [showResetPasswordModal, setShowResetPasswordModal] = useState(false);
+  const [resetPasswordTarget, setResetPasswordTarget] = useState<{
+    instituteId: string;
+    instituteName: string;
+    adminEmail: string;
+    adminName: string;
+  } | null>(null);
   const [resetPassMode, setResetPassMode] = useState<'AUTO' | 'MANUAL'>('AUTO');
   const [customPassword, setCustomPassword] = useState('');
   const [showCustomPassword, setShowCustomPassword] = useState(false);
@@ -288,17 +304,34 @@ export const SuperAdminDashboard: React.FC = () => {
   const [statusActionTarget, setStatusActionTarget] = useState<Institute | null>(null);
   const [statusUpdating, setStatusUpdating] = useState(false);
 
+  useBodyScrollLock(
+    showCreateModal ||
+    !!selectedInstituteId ||
+    !!createdInstitute ||
+    showEditAdminModal ||
+    showResetPasswordModal ||
+    !!oneTimePasswordData ||
+    !!statusActionTarget
+  );
+
   // ----------------------------------------------------
-  // DATA FETCHING
+  // DATA FETCHING (Optimized: separate metrics & debounced list)
   // ----------------------------------------------------
-  const fetchData = async () => {
+  const fetchMetrics = async () => {
+    try {
+      const metricsRes = await apiFetch('/institutes/dashboard/summary');
+      if (metricsRes.success) {
+        setMetrics(metricsRes.data);
+      }
+    } catch {
+      // non-blocking
+    }
+  };
+
+  const fetchInstitutesList = async (searchQuery = debouncedSearch, statusVal = statusFilter) => {
     try {
       setLoading(true);
-      const [metricsRes, institutesRes] = await Promise.all([
-        apiFetch('/institutes/dashboard/summary'),
-        apiFetch(`/institutes?search=${encodeURIComponent(search)}&status=${statusFilter}`),
-      ]);
-      setMetrics(metricsRes.data);
+      const institutesRes = await apiFetch(`/institutes?search=${encodeURIComponent(searchQuery)}&status=${statusVal}`);
       setInstitutes(institutesRes.data?.institutes || []);
     } catch (err: any) {
       console.error('Failed to load institutes', err);
@@ -308,9 +341,17 @@ export const SuperAdminDashboard: React.FC = () => {
     }
   };
 
+  const fetchData = async () => {
+    await Promise.all([fetchMetrics(), fetchInstitutesList()]);
+  };
+
   useEffect(() => {
-    fetchData();
-  }, [search, statusFilter]);
+    fetchMetrics();
+  }, []);
+
+  useEffect(() => {
+    fetchInstitutesList(debouncedSearch, statusFilter);
+  }, [debouncedSearch, statusFilter]);
 
   // Fetch full details for the drawer
   const fetchInstituteDetails = async (id: string) => {
@@ -516,10 +557,14 @@ export const SuperAdminDashboard: React.FC = () => {
   };
 
   // ----------------------------------------------------
-  // HANDLE EDIT ADMIN ACCOUNT
+  // HANDLE EDIT ADMIN ACCOUNT (closes details drawer cleanly first)
   // ----------------------------------------------------
   const handleOpenEditAdminModal = () => {
-    if (!detailData?.adminAccount) return;
+    if (!detailData?.adminAccount || !selectedInstituteId) return;
+    setEditAdminTarget({
+      instituteId: selectedInstituteId,
+      instituteName: detailData.institute.name,
+    });
     setEditAdminForm({
       fullName: detailData.adminAccount.fullName || '',
       email: detailData.adminAccount.email || '',
@@ -527,36 +572,28 @@ export const SuperAdminDashboard: React.FC = () => {
       isActive: detailData.adminAccount.isActive ?? true,
     });
     setEditAdminError(null);
+    // Close current details grid before showing Edit Admin page
+    handleCloseDetails();
     setShowEditAdminModal(true);
   };
 
   const handleEditAdminSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedInstituteId) return;
+    if (!editAdminTarget?.instituteId) return;
 
     setEditAdminError(null);
     setEditAdminLoading(true);
 
     try {
-      const res = await apiFetch(`/institutes/${selectedInstituteId}/admin-account`, {
+      const res = await apiFetch(`/institutes/${editAdminTarget.instituteId}/admin-account`, {
         method: 'PATCH',
         body: JSON.stringify(editAdminForm),
       });
 
       if (res.success && res.data?.adminAccount) {
         setShowEditAdminModal(false);
-        showNotification('success', 'Academic Admin account updated successfully');
-
-        // Update local state in drawer
-        if (detailData) {
-          setDetailData({
-            ...detailData,
-            adminAccount: {
-              ...detailData.adminAccount,
-              ...res.data.adminAccount,
-            },
-          });
-        }
+        setEditAdminTarget(null);
+        showNotification('success', 'Admin account updated successfully');
         fetchData();
       } else {
         setEditAdminError(res.error || 'Failed to update admin account');
@@ -569,18 +606,27 @@ export const SuperAdminDashboard: React.FC = () => {
   };
 
   // ----------------------------------------------------
-  // HANDLE RESET ADMIN PASSWORD
+  // HANDLE CHANGE / RESET ADMIN PASSWORD (closes details drawer cleanly first)
   // ----------------------------------------------------
   const handleOpenResetPasswordModal = () => {
+    if (!detailData?.adminAccount || !selectedInstituteId) return;
+    setResetPasswordTarget({
+      instituteId: selectedInstituteId,
+      instituteName: detailData.institute.name,
+      adminEmail: detailData.adminAccount.email || 'Admin',
+      adminName: detailData.adminAccount.fullName || 'Institute Admin',
+    });
     setResetPassMode('AUTO');
     setCustomPassword('');
     setResetError(null);
+    // Close current details grid before showing Change Password page
+    handleCloseDetails();
     setShowResetPasswordModal(true);
   };
 
   const handleResetPasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedInstituteId || !detailData?.adminAccount) return;
+    if (!resetPasswordTarget?.instituteId) return;
 
     if (resetPassMode === 'MANUAL') {
       if (!customPassword || customPassword.length < 8) {
@@ -595,7 +641,7 @@ export const SuperAdminDashboard: React.FC = () => {
     try {
       const payload = resetPassMode === 'MANUAL' ? { password: customPassword } : {};
 
-      const res = await apiFetch(`/institutes/${selectedInstituteId}/admin-account/reset-password`, {
+      const res = await apiFetch(`/institutes/${resetPasswordTarget.instituteId}/admin-account/reset-password`, {
         method: 'POST',
         body: JSON.stringify(payload),
       });
@@ -603,18 +649,16 @@ export const SuperAdminDashboard: React.FC = () => {
       if (res.success && res.data?.temporaryPassword) {
         setShowResetPasswordModal(false);
         setOneTimePasswordData({
-          adminEmail: detailData.adminAccount.email || 'Admin',
+          adminEmail: resetPasswordTarget.adminEmail,
           temporaryPassword: res.data.temporaryPassword,
         });
-        showNotification('success', 'Password reset successfully. Please share the temporary password.');
-
-        // Refresh admin details in drawer
-        fetchInstituteDetails(selectedInstituteId);
+        setResetPasswordTarget(null);
+        showNotification('success', 'Password changed successfully. Please share the new password with the admin.');
       } else {
-        setResetError(res.error || 'Failed to reset password');
+        setResetError(res.error || 'Failed to change password');
       }
     } catch (err: any) {
-      setResetError(err.message || 'Failed to reset password');
+      setResetError(err.message || 'Failed to change password');
     } finally {
       setResetLoading(false);
     }
@@ -650,18 +694,82 @@ export const SuperAdminDashboard: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-extrabold text-[#0F172A] tracking-tight">Platform Administration</h1>
+          <h1 className="text-2xl font-extrabold text-[#0F172A] tracking-tight">Super Admin Dashboard</h1>
           <p className="text-sm text-[#64748B] mt-1">
-            Global multi-tenant institute management, security compliance & onboarding
+            Manage franchises, courses, and campus branches from one central control panel
           </p>
         </div>
-        <button
-          onClick={handleOpenCreateModal}
-          className="inline-flex items-center gap-2 bg-[#006FFF] hover:bg-[#0058D4] text-white text-sm font-semibold px-4 py-2.5 rounded-xl shadow-md shadow-[#006FFF]/20 transition-all self-start active:scale-95"
-        >
-          <Plus className="w-4 h-4" /> Add New Institute
-        </button>
+        <div className="flex flex-wrap items-center gap-2.5 self-start">
+          {onNavigateTab && (
+            <button
+              type="button"
+              onClick={() => onNavigateTab('course_management')}
+              className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold px-4 py-2.5 rounded-xl shadow-sm transition-all active:scale-95"
+            >
+              <BookOpen className="w-4 h-4" /> Course Management
+            </button>
+          )}
+          <button
+            onClick={handleOpenCreateModal}
+            className="inline-flex items-center gap-2 bg-[#006FFF] hover:bg-[#0058D4] text-white text-sm font-semibold px-4 py-2.5 rounded-xl shadow-md shadow-[#006FFF]/20 transition-all active:scale-95"
+          >
+            <Plus className="w-4 h-4" /> Add Institute
+          </button>
+        </div>
       </div>
+
+      {/* Quick Module Shortcuts for Super Admin */}
+      {onNavigateTab && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <button
+            type="button"
+            onClick={() => onNavigateTab('franchise_management')}
+            className="p-5 rounded-2xl bg-gradient-to-r from-[#0F172A] to-[#1E293B] text-white text-left flex items-center justify-between gap-4 shadow-md hover:shadow-lg transition-all group"
+          >
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-[#FEDC32]/20 border border-[#FEDC32]/30 flex items-center justify-center text-[#FEDC32] shrink-0">
+                <Building2 className="w-6 h-6" />
+              </div>
+              <div>
+                <div className="text-lg font-bold flex items-center gap-2">
+                  Franchise Management
+                  {metrics?.totalFranchises !== undefined && (
+                    <span className="text-xs px-2.5 py-0.5 rounded-full bg-white/15 text-[#FEDC32] font-bold">
+                      {metrics.totalFranchises} Total · {metrics.activeFranchises} Active
+                    </span>
+                  )}
+                </div>
+                <p className="text-sm text-slate-300 mt-0.5">Add franchises, track royalties, agreements & branch access</p>
+              </div>
+            </div>
+            <ArrowRight className="w-5 h-5 text-slate-300 group-hover:text-[#FEDC32] group-hover:translate-x-1 transition-all shrink-0" />
+          </button>
+
+          <button
+            type="button"
+            onClick={() => onNavigateTab('course_management')}
+            className="p-5 rounded-2xl bg-gradient-to-r from-emerald-700 to-teal-700 text-white text-left flex items-center justify-between gap-4 shadow-md hover:shadow-lg transition-all group"
+          >
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-white/15 border border-white/25 flex items-center justify-center text-white shrink-0">
+                <BookOpen className="w-6 h-6" />
+              </div>
+              <div>
+                <div className="text-lg font-bold flex items-center gap-2">
+                  Course Management
+                  {metrics?.totalCourses !== undefined && (
+                    <span className="text-xs px-2.5 py-0.5 rounded-full bg-white/20 text-white font-bold">
+                      {metrics.totalCourses} Courses · {metrics.publishedCourses} Live
+                    </span>
+                  )}
+                </div>
+                <p className="text-sm text-emerald-100 mt-0.5">Create courses, manage modules, lessons, videos & franchise permissions</p>
+              </div>
+            </div>
+            <ArrowRight className="w-5 h-5 text-emerald-100 group-hover:translate-x-1 transition-all shrink-0" />
+          </button>
+        </div>
+      )}
 
       {/* Metrics Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -833,9 +941,9 @@ export const SuperAdminDashboard: React.FC = () => {
                             e.stopPropagation();
                             handleOpenDetails(inst.id);
                           }}
-                          className="inline-flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg border border-[#E2E8F0] text-[#006FFF] hover:bg-[#F8FAFC] transition"
+                          className="inline-flex items-center gap-1.5 text-sm font-semibold px-3 py-1.5 rounded-lg border border-[#E2E8F0] text-[#006FFF] hover:bg-[#F8FAFC] transition"
                         >
-                          <Eye className="w-3.5 h-3.5" /> View Details
+                          <Eye className="w-4 h-4" /> View
                         </button>
 
                         {/* Suspend or Activate Action */}
@@ -1587,16 +1695,16 @@ export const SuperAdminDashboard: React.FC = () => {
                         <button
                           onClick={handleOpenEditAdminModal}
                           disabled={!detailData.adminAccount}
-                          className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-lg border border-[#E2E8F0] text-[#006FFF] hover:bg-[#F8FAFC] transition disabled:opacity-50"
+                          className="inline-flex items-center gap-1.5 text-sm font-semibold px-3 py-1.5 rounded-lg border border-[#E2E8F0] text-[#006FFF] hover:bg-[#F8FAFC] transition disabled:opacity-50"
                         >
-                          <Edit3 className="w-3.5 h-3.5" /> Edit Details
+                          <Edit3 className="w-4 h-4" /> Edit Admin
                         </button>
                         <button
                           onClick={handleOpenResetPasswordModal}
                           disabled={!detailData.adminAccount}
-                          className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-lg bg-[#006FFF] hover:bg-[#0058D4] text-white transition disabled:opacity-50 shadow-sm"
+                          className="inline-flex items-center gap-1.5 text-sm font-semibold px-3 py-1.5 rounded-lg bg-[#006FFF] hover:bg-[#0058D4] text-white transition disabled:opacity-50 shadow-sm"
                         >
-                          <KeyRound className="w-3.5 h-3.5" /> Reset Password
+                          <KeyRound className="w-4 h-4" /> Change Password
                         </button>
                       </div>
                     </div>
@@ -1678,9 +1786,9 @@ export const SuperAdminDashboard: React.FC = () => {
               <button
                 type="button"
                 onClick={handleCloseDetails}
-                className="px-5 py-2 text-xs font-semibold text-[#006FFF] hover:text-[#0F172A] bg-white border border-[#E2E8F0] hover:bg-[#F8FAFC] rounded-xl transition shadow-sm"
+                className="px-5 py-2.5 text-sm font-semibold text-slate-700 hover:text-slate-900 bg-white border border-[#E2E8F0] hover:bg-[#F8FAFC] rounded-xl transition shadow-sm"
               >
-                Close Drawer
+                Close
               </button>
             </div>
           </div>
@@ -1691,7 +1799,7 @@ export const SuperAdminDashboard: React.FC = () => {
           4. EDIT ADMIN ACCOUNT DETAILS MODAL
          ==================================================== */}
       {showEditAdminModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-sm animate-in fade-in duration-150">
           <div className="bg-white border border-[#E2E8F0] rounded-3xl w-full max-w-lg p-6 shadow-2xl text-[#0F172A]">
             <div className="flex items-center justify-between pb-4 border-b border-[#F1F5F9]">
               <div className="flex items-center gap-2.5">
@@ -1799,24 +1907,29 @@ export const SuperAdminDashboard: React.FC = () => {
       )}
 
       {/* ====================================================
-          5. RESET PASSWORD MODAL
+          5. CHANGE / RESET PASSWORD PAGE MODAL
          ==================================================== */}
-      {showResetPasswordModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white border border-[#E2E8F0] rounded-3xl w-full max-w-md p-6 shadow-2xl text-[#0F172A]">
+      {showResetPasswordModal && resetPasswordTarget && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="bg-white border border-[#E2E8F0] rounded-3xl w-full max-w-lg p-6 sm:p-7 shadow-2xl text-[#0F172A]">
             <div className="flex items-center justify-between pb-4 border-b border-[#F1F5F9]">
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-800">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-800">
                   <KeyRound className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-[#0F172A]">Reset Admin Password</h3>
-                  <p className="text-xs text-[#64748B]">Issue a temporary password for this administrator</p>
+                  <h3 className="text-lg font-bold text-[#0F172A]">Change Admin Password</h3>
+                  <p className="text-xs text-[#64748B]">
+                    {resetPasswordTarget.instituteName} &bull; {resetPasswordTarget.adminEmail}
+                  </p>
                 </div>
               </div>
               <button
-                onClick={() => setShowResetPasswordModal(false)}
-                className="text-[#94A3B8] hover:text-[#0F172A] p-1 rounded-lg"
+                onClick={() => {
+                  setShowResetPasswordModal(false);
+                  setResetPasswordTarget(null);
+                }}
+                className="text-[#94A3B8] hover:text-[#0F172A] p-1.5 rounded-lg hover:bg-slate-100"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -1896,22 +2009,25 @@ export const SuperAdminDashboard: React.FC = () => {
               <div className="pt-3 flex justify-end gap-3 border-t border-[#F1F5F9]">
                 <button
                   type="button"
-                  onClick={() => setShowResetPasswordModal(false)}
-                  className="px-4 py-2 text-xs font-semibold text-[#64748B] hover:text-[#0F172A]"
+                  onClick={() => {
+                    setShowResetPasswordModal(false);
+                    setResetPasswordTarget(null);
+                  }}
+                  className="px-4 py-2.5 text-sm font-semibold text-[#64748B] hover:text-[#0F172A] rounded-xl border border-slate-200"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={resetLoading}
-                  className="bg-[#006FFF] hover:bg-[#0058D4] text-white text-xs font-semibold px-4 py-2 rounded-xl shadow-md shadow-[#006FFF]/20 transition disabled:opacity-50 flex items-center gap-2"
+                  className="bg-[#006FFF] hover:bg-[#0058D4] text-white text-sm font-semibold px-5 py-2.5 rounded-xl shadow-md shadow-[#006FFF]/20 transition disabled:opacity-50 flex items-center gap-2"
                 >
                   {resetLoading ? (
                     <>
-                      <RefreshCw className="w-3.5 h-3.5 animate-spin" /> Resetting...
+                      <RefreshCw className="w-4 h-4 animate-spin" /> Updating...
                     </>
                   ) : (
-                    'Confirm Password Reset'
+                    'Update Password'
                   )}
                 </button>
               </div>

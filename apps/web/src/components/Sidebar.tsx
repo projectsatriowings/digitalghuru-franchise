@@ -44,7 +44,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   };
 
   const navItemClass = (tab: string) => `
-    flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold transition-all duration-150 cursor-pointer w-full text-left
+    flex items-center gap-3 px-3.5 py-3 rounded-xl text-sm font-semibold transition-all duration-150 cursor-pointer w-full text-left
     ${currentTab === tab
       ? 'bg-[#006FFF] text-white shadow-md shadow-[#006FFF]/30 font-bold'
       : 'text-slate-300 hover:text-white hover:bg-slate-800/80'
@@ -53,23 +53,23 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const sidebarContent = (isDrawer: boolean) => (
     <aside
-      className={`w-64 border-r border-slate-800 bg-[#0F172A] h-full p-4 flex flex-col justify-between shrink-0 overflow-y-auto select-none ${
+      className={`w-72 border-r border-slate-800 bg-[#0F172A] h-full p-4 flex flex-col justify-between shrink-0 overflow-y-auto select-none ${
         isDrawer ? 'shadow-2xl' : ''
       }`}
     >
-      <div className="space-y-1">
+      <div className="space-y-1.5">
         <div className="flex items-center justify-between px-3 py-2">
-          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 font-display">
-            Navigation Menu
+          <span className="text-xs font-bold uppercase tracking-wider text-slate-400 font-display">
+            Main Menu
           </span>
           {isDrawer && onCloseMobile && (
             <button
               type="button"
               onClick={onCloseMobile}
-              className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+              className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
               aria-label="Close navigation menu"
             >
-              <X className="w-4 h-4" />
+              <X className="w-5 h-5" />
             </button>
           )}
         </div>
@@ -78,22 +78,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {role === 'SUPER_ADMIN' && (
           <>
             <button
-              onClick={() => onSelectTab('super_admin_dashboard')}
+              onClick={() => handleSelect('super_admin_dashboard')}
               className={navItemClass('super_admin_dashboard')}
             >
-              <LayoutDashboard className="w-4 h-4" /> Platform Overview
+              <LayoutDashboard className="w-5 h-5 shrink-0" /> Dashboard
             </button>
             <button
-              onClick={() => onSelectTab('franchise_management')}
+              onClick={() => handleSelect('franchise_management')}
               className={navItemClass('franchise_management')}
             >
-              <Building2 className="w-4 h-4 text-[#FEDC32]" /> Franchise Management
+              <Building2 className="w-5 h-5 shrink-0 text-[#FEDC32]" /> Franchise Management
             </button>
             <button
-              onClick={() => onSelectTab('course_management')}
+              onClick={() => handleSelect('course_management')}
               className={navItemClass('course_management')}
             >
-              <BookOpen className="w-4 h-4 text-emerald-400" /> Global Course Catalogue
+              <BookOpen className="w-5 h-5 shrink-0 text-emerald-400" /> Course Management
             </button>
           </>
         )}
@@ -102,64 +102,64 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {role === 'FRANCHISE_OWNER' && (
           <>
             <button
-              onClick={() => onSelectTab('franchise_owner_dashboard')}
+              onClick={() => handleSelect('franchise_owner_dashboard')}
               className={navItemClass('franchise_owner_dashboard')}
             >
-              <LayoutDashboard className="w-4 h-4 text-[#FEDC32]" /> Franchisee Dashboard
+              <LayoutDashboard className="w-5 h-5 shrink-0 text-[#FEDC32]" /> Dashboard
             </button>
             <button
-              onClick={() => onSelectTab('franchise_courses')}
+              onClick={() => handleSelect('franchise_courses')}
               className={navItemClass('franchise_courses')}
             >
-              <GraduationCap className="w-4 h-4 text-emerald-400" /> Courses & LMS Enrollments
+              <BookOpen className="w-5 h-5 shrink-0 text-emerald-400" /> Course Management
             </button>
             <button
-              onClick={() => onSelectTab('academics')}
+              onClick={() => handleSelect('academics')}
               className={navItemClass('academics')}
             >
-              <Layers className="w-4 h-4" /> Batches & Subjects
+              <Layers className="w-5 h-5 shrink-0" /> Batches & Subjects
             </button>
             <button
-              onClick={() => onSelectTab('staff')}
+              onClick={() => handleSelect('staff')}
               className={navItemClass('staff')}
             >
-              <Users className="w-4 h-4" /> Staff Management
+              <Users className="w-5 h-5 shrink-0" /> Staff Management
             </button>
             <button
-              onClick={() => onSelectTab('staff_attendance')}
+              onClick={() => handleSelect('staff_attendance')}
               className={navItemClass('staff_attendance')}
             >
-              <Calendar className="w-4 h-4" /> Staff GPS Attendance
+              <Calendar className="w-5 h-5 shrink-0" /> Staff Attendance
             </button>
             <button
-              onClick={() => onSelectTab('students')}
+              onClick={() => handleSelect('students')}
               className={navItemClass('students')}
             >
-              <GraduationCap className="w-4 h-4" /> Student Admissions
+              <GraduationCap className="w-5 h-5 shrink-0" /> Students
             </button>
             <button
-              onClick={() => onSelectTab('attendance')}
+              onClick={() => handleSelect('attendance')}
               className={navItemClass('attendance')}
             >
-              <Calendar className="w-4 h-4" /> Class Attendance
+              <Calendar className="w-5 h-5 shrink-0" /> Class Attendance
             </button>
             <button
-              onClick={() => onSelectTab('exams')}
+              onClick={() => handleSelect('exams')}
               className={navItemClass('exams')}
             >
-              <Award className="w-4 h-4" /> Exams & Marks
+              <Award className="w-5 h-5 shrink-0" /> Exams & Marks
             </button>
             <button
-              onClick={() => onSelectTab('fees')}
+              onClick={() => handleSelect('fees')}
               className={navItemClass('fees')}
             >
-              <CreditCard className="w-4 h-4" /> Branch Course Fees
+              <CreditCard className="w-5 h-5 shrink-0" /> Course Fees
             </button>
             <button
-              onClick={() => onSelectTab('messaging')}
+              onClick={() => handleSelect('messaging')}
               className={navItemClass('messaging')}
             >
-              <MessageSquare className="w-4 h-4" /> Parent Messages
+              <MessageSquare className="w-5 h-5 shrink-0" /> Messages
             </button>
           </>
         )}
@@ -168,80 +168,80 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {(role === 'ACADEMIC_ADMIN' || role === 'BRANCH_ADMIN') && (
           <>
             <button
-              onClick={() => onSelectTab('academic_dashboard')}
+              onClick={() => handleSelect('academic_dashboard')}
               className={navItemClass('academic_dashboard')}
             >
-              <LayoutDashboard className="w-4 h-4" /> Dashboard
+              <LayoutDashboard className="w-5 h-5 shrink-0" /> Dashboard
             </button>
 
             <button
-              onClick={() => onSelectTab('franchise_courses')}
+              onClick={() => handleSelect('franchise_courses')}
               className={navItemClass('franchise_courses')}
             >
-              <BookOpen className="w-4 h-4 text-emerald-400" /> Courses & Enrollments
+              <BookOpen className="w-5 h-5 shrink-0 text-emerald-400" /> Course Management
             </button>
 
             <button
-              onClick={() => onSelectTab('staff')}
+              onClick={() => handleSelect('staff')}
               className={navItemClass('staff')}
             >
-              <Users className="w-4 h-4" /> Staff Management
+              <Users className="w-5 h-5 shrink-0" /> Staff Management
             </button>
 
             <button
-              onClick={() => onSelectTab('staff_attendance')}
+              onClick={() => handleSelect('staff_attendance')}
               className={navItemClass('staff_attendance')}
             >
-              <Calendar className="w-4 h-4" /> Staff Attendance
+              <Calendar className="w-5 h-5 shrink-0" /> Staff Attendance
             </button>
 
             <button
-              onClick={() => onSelectTab('students')}
+              onClick={() => handleSelect('students')}
               className={navItemClass('students')}
             >
-              <GraduationCap className="w-4 h-4" /> Student Admissions
+              <GraduationCap className="w-5 h-5 shrink-0" /> Students
             </button>
 
             <button
-              onClick={() => onSelectTab('academics')}
+              onClick={() => handleSelect('academics')}
               className={navItemClass('academics')}
             >
-              <Layers className="w-4 h-4" /> Batches & Subjects
+              <Layers className="w-5 h-5 shrink-0" /> Batches & Subjects
             </button>
 
             <button
-              onClick={() => onSelectTab('exams')}
+              onClick={() => handleSelect('exams')}
               className={navItemClass('exams')}
             >
-              <Award className="w-4 h-4" /> Exams & Grading
+              <Award className="w-5 h-5 shrink-0" /> Exams & Marks
             </button>
 
             <button
-              onClick={() => onSelectTab('question_generator')}
+              onClick={() => handleSelect('question_generator')}
               className={navItemClass('question_generator')}
             >
-              <FileQuestion className="w-4 h-4 text-amber-300" /> AI Question Generator
+              <FileQuestion className="w-5 h-5 shrink-0 text-amber-300" /> Question Papers
             </button>
 
             <button
-              onClick={() => onSelectTab('progress_reviews')}
+              onClick={() => handleSelect('progress_reviews')}
               className={navItemClass('progress_reviews')}
             >
-              <Sparkles className="w-4 h-4" /> Progress & Reviews
+              <Sparkles className="w-5 h-5 shrink-0" /> Progress Reviews
             </button>
 
             <button
-              onClick={() => onSelectTab('messaging')}
+              onClick={() => handleSelect('messaging')}
               className={navItemClass('messaging')}
             >
-              <MessageSquare className="w-4 h-4" /> Parent Messages
+              <MessageSquare className="w-5 h-5 shrink-0" /> Messages
             </button>
 
             <button
-              onClick={() => onSelectTab('fees')}
+              onClick={() => handleSelect('fees')}
               className={navItemClass('fees')}
             >
-              <CreditCard className="w-4 h-4" /> Fees & Finances
+              <CreditCard className="w-5 h-5 shrink-0" /> Fees & Payments
             </button>
           </>
         )}

@@ -5,6 +5,7 @@ import { AuthenticatedRequest } from '../../middleware/auth.js';
 import { hashPassword, generatePermanentPassword } from '../../utils/security.js';
 import { Prisma } from '@prisma/client';
 import crypto from 'crypto';
+import { serverCache } from '../../utils/cache.js';
 
 // ============================================================================
 // HELPER: TENANT ISOLATION CHECK
@@ -937,6 +938,12 @@ export async function listFranchises(req: AuthenticatedRequest, res: Response) {
     }
 
     const { status, search } = req.query;
+    const cacheKey = `franchises:list:${userRole}:${userRole === 'FRANCHISE_OWNER' ? userId : 'all'}:${status || ''}:${search || ''}`;
+    const cached = serverCache.get<any>(cacheKey);
+    if (cached) {
+      return res.json(cached);
+    }
+
     if (status && typeof status === 'string') {
       where.status = status;
     }
@@ -966,14 +973,19 @@ export async function listFranchises(req: AuthenticatedRequest, res: Response) {
           where: { status: 'ACTIVE' },
           take: 1,
           orderBy: { endDate: 'desc' },
-          include: {
-            installments: {
-              orderBy: { installmentNumber: 'asc' },
-            },
-          },
         },
         installments: {
           orderBy: { dueDate: 'asc' },
+          select: {
+            id: true,
+            installmentNumber: true,
+            periodLabel: true,
+            dueDate: true,
+            amount: true,
+            paidAmount: true,
+            outstandingBalance: true,
+            status: true,
+          },
         },
         _count: {
           select: { branches: true },
@@ -982,13 +994,15 @@ export async function listFranchises(req: AuthenticatedRequest, res: Response) {
       orderBy: { createdAt: 'desc' },
     });
 
-    return res.json({
+    const responsePayload = {
       success: true,
       data: {
         franchises,
         total: franchises.length,
       },
-    });
+    };
+    serverCache.set(cacheKey, responsePayload, 15000);
+    return res.json(responsePayload);
   } catch (err: any) {
     console.error('[List Franchises Error]', err);
     return res.status(500).json({ success: false, error: 'Failed to retrieve franchises' });
@@ -1356,7 +1370,11 @@ export async function resetFranchiseOwnerPassword(req: AuthenticatedRequest, res
       return res.status(404).json({ success: false, error: 'Franchise owner user account could not be found or provisioned' });
     }
 
-    const permanentPassword = generatePermanentPassword(16);
+    const customPwd = typeof req.body?.password === 'string' ? req.body.password.trim() : '';
+    if (customPwd && customPwd.length < 8) {
+      return res.status(400).json({ success: false, error: 'Custom password must be at least 8 characters long' });
+    }
+    const permanentPassword = customPwd || generatePermanentPassword(16);
     const passwordHash = await hashPassword(permanentPassword);
 
     await prisma.user.update({
@@ -3853,6 +3871,12 @@ export async function recordRoyaltyPayment(req: AuthenticatedRequest, res: Respo
 
 export async function getSuperAdminFranchiseDashboard(req: AuthenticatedRequest, res: Response) {
   try {
+    const cacheKey = 'franchises:dashboard:super-admin';
+    const cached = serverCache.get<any>(cacheKey);
+    if (cached) {
+      return res.json(cached);
+    }
+
     const fetchDashboard = async () => {
       const [
         totalFranchises,
@@ -3864,7 +3888,7 @@ export async function getSuperAdminFranchiseDashboard(req: AuthenticatedRequest,
         recentPayments,
         activeAgreements,
         allInstallments,
-      ] = await prisma.$transaction([
+      ] = await Promise.all([
         prisma.franchise.count(),
         prisma.franchise.count({ where: { status: 'ACTIVE' } }),
         prisma.franchise.count({ where: { status: 'SUSPENDED' } }),
@@ -3892,7 +3916,15 @@ export async function getSuperAdminFranchiseDashboard(req: AuthenticatedRequest,
           take: 10,
         }),
         prisma.franchiseRoyaltyInstallment.findMany({
-          include: {
+          select: {
+            id: true,
+            installmentNumber: true,
+            periodLabel: true,
+            dueDate: true,
+            amount: true,
+            paidAmount: true,
+            outstandingBalance: true,
+            status: true,
             franchise: { select: { name: true, code: true } },
             agreement: { select: { agreementNumber: true, title: true } },
           },
@@ -3948,10 +3980,12 @@ export async function getSuperAdminFranchiseDashboard(req: AuthenticatedRequest,
       data = await fetchDashboard();
     }
 
-    return res.json({
+    const responsePayload = {
       success: true,
       data,
-    });
+    };
+    serverCache.set(cacheKey, responsePayload, 15000);
+    return res.json(responsePayload);
   } catch (err: any) {
     console.error('[Super Admin Franchise Dashboard Error]', err);
     return res.status(500).json({ success: false, error: 'Failed to load Super Admin Franchise Dashboard' });

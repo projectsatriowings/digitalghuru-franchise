@@ -33,6 +33,10 @@ import {
   PauseCircle,
   Paperclip,
   Wrench,
+  LayoutGrid,
+  List,
+  ChevronDown,
+  ChevronRight,
 } from 'lucide-react';
 import { apiFetch } from '../services/api';
 import { useToast } from '../context/ToastContext';
@@ -61,6 +65,8 @@ export const CourseManagement: React.FC = () => {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [categoryFilter, setCategoryFilter] = useState<string>('ALL');
+  const [displayLayout, setDisplayLayout] = useState<'grid' | 'table'>('grid');
+  const [expandedPreviewModules, setExpandedPreviewModules] = useState<Record<number, boolean>>({ 0: true });
 
   // Mode: catalogue | wizard
   const [viewMode, setViewMode] = useState<'catalogue' | 'wizard'>('catalogue');
@@ -91,12 +97,13 @@ export const CourseManagement: React.FC = () => {
 
   useBodyScrollLock(Boolean(showCategoriesModal || curriculumCourse || previewCourse || franchiseCourse));
 
-  const fetchCatalogue = useCallback(async () => {
+  const fetchCatalogue = useCallback(async (forceRefresh = false) => {
     setLoading(true);
     try {
+      const opts = forceRefresh ? { skipCache: true } : {};
       const [coursesRes, catsRes] = await Promise.all([
-        apiFetch('/courses?limit=100', { skipCache: true }),
-        apiFetch('/courses/categories', { skipCache: true }),
+        apiFetch('/courses?limit=100', opts),
+        apiFetch('/courses/categories', opts),
       ]);
       setCourses(coursesRes.data || []);
       setCategories(catsRes.data || []);
@@ -329,41 +336,29 @@ export const CourseManagement: React.FC = () => {
   };
 
   // -----------------------------------------------------------
-  // FRANCHISE GOVERNANCE & OFFERINGS MATRIX FOR A COURSE
+  // FRANCHISE GOVERNANCE & OFFERINGS MATRIX FOR A COURSE (Single-Query Optimized)
   // -----------------------------------------------------------
   const loadFranchiseMatrix = async (courseId: string) => {
     setLoadingFranchises(true);
     try {
-      const fRes = await apiFetch('/franchises', { skipCache: true });
-      const franchises = fRes.data?.franchises || fRes.franchises || [];
-      setFranchisesList(franchises);
+      const matrixRes = await apiFetch(`/courses/${courseId}/franchise-matrix`, { skipCache: true });
+      const rows = Array.isArray(matrixRes.data) ? matrixRes.data : [];
+      setFranchisesList(rows);
 
       const selectionsMap: Record<
         string,
         { isPermitted: boolean; isEnabled: boolean; customPrice: string }
       > = {};
-      await Promise.all(
-        franchises.map(async (fr: any) => {
-          try {
-            const fcRes = await apiFetch(
-              `/courses/franchise/${fr.id}?includeUnpermitted=true`,
-              { skipCache: true }
-            );
-            const matched = (fcRes.data || []).find((c: any) => c.id === courseId);
-            selectionsMap[fr.id] = {
-              isPermitted: Boolean(matched?.isPermitted),
-              isEnabled: Boolean(matched?.isSelected),
-              customPrice:
-                matched?.franchiseCustomPrice !== null &&
-                matched?.franchiseCustomPrice !== undefined
-                  ? String(matched.franchiseCustomPrice)
-                  : '',
-            };
-          } catch {
-            selectionsMap[fr.id] = { isPermitted: false, isEnabled: false, customPrice: '' };
-          }
-        })
-      );
+      rows.forEach((fr: any) => {
+        selectionsMap[fr.id] = {
+          isPermitted: Boolean(fr.isPermitted),
+          isEnabled: Boolean(fr.isEnabled),
+          customPrice:
+            fr.customPrice !== null && fr.customPrice !== undefined
+              ? String(fr.customPrice)
+              : '',
+        };
+      });
       setFranchiseSelections(selectionsMap);
     } catch (err: any) {
       toast.error(err.message || 'Failed to load franchises');
@@ -506,15 +501,15 @@ export const CourseManagement: React.FC = () => {
             </p>
           </div>
           {isCurriculumLocked && editingCourse && (
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2.5">
               <button
                 type="button"
                 disabled={creatingDraftVersion}
                 onClick={() => handleCreateDraftFromWizard(editingCourse.id)}
-                className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white text-xs font-bold flex items-center gap-2 shadow-sm"
+                className="px-4 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white text-sm font-bold flex items-center gap-2 shadow-sm"
               >
-                {creatingDraftVersion ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
-                Create Draft Version to Unlock Syllabus
+                {creatingDraftVersion ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                Unlock Syllabus for Editing
               </button>
               <button
                 type="button"
@@ -522,9 +517,9 @@ export const CourseManagement: React.FC = () => {
                   setViewMode('catalogue');
                   openCurriculumDrawer(editingCourse.id);
                 }}
-                className="px-4 py-2 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs font-bold flex items-center gap-2 hover:bg-amber-100"
+                className="px-4 py-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-sm font-bold flex items-center gap-2 hover:bg-amber-100"
               >
-                <Lock className="w-3.5 h-3.5" /> Manage Versions
+                <Lock className="w-4 h-4" /> Course Versions
               </button>
             </div>
           )}
@@ -551,6 +546,14 @@ export const CourseManagement: React.FC = () => {
   const totalCount = courses.length;
   const publishedCount = courses.filter((c) => c.status === 'PUBLISHED').length;
   const draftCount = courses.filter((c) => c.status === 'DRAFT').length;
+  const totalModules = courses.reduce((sum, c) => sum + (c.modulesCount ?? c.activeCurriculumVersion?.modules?.length ?? 0), 0);
+  const totalLessons = courses.reduce(
+    (sum, c) =>
+      sum +
+      (c.lessonsCount ??
+        (c.activeCurriculumVersion?.modules || []).reduce((mSum: number, m: any) => mSum + (m._count?.chapters ?? m.chapters?.length ?? 0), 0)),
+    0
+  );
   const totalEnrollments = courses.reduce((sum, c) => sum + (c._count?.enrollments || 0), 0);
 
   return (
@@ -559,71 +562,77 @@ export const CourseManagement: React.FC = () => {
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div>
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 border border-blue-200 text-[#006FFF] text-xs font-bold mb-2">
-            <Sparkles className="w-3.5 h-3.5" /> Global Master Catalogue
+            <Sparkles className="w-3.5 h-3.5" /> Master Course Library
           </div>
           <h1 className="text-2xl lg:text-3xl font-extrabold text-slate-900 font-display tracking-tight">
-            Global Course Management
+            Course Management
           </h1>
-          <p className="text-sm text-slate-500 mt-1">
-            Author master Digital Guru courses, lock versioned curricula, and govern franchise availability.
+          <p className="text-sm text-slate-600 mt-1">
+            Create and manage courses, modules, lessons, videos, and control which franchises can offer each course.
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5">
           <button
             type="button"
-            onClick={fetchCatalogue}
-            className="px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-700 text-xs font-bold hover:bg-slate-50 flex items-center gap-2"
+            onClick={() => fetchCatalogue(true)}
+            className="px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-700 text-sm font-semibold hover:bg-slate-50 flex items-center gap-2"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} /> Refresh
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> Refresh
           </button>
           <button
             type="button"
             onClick={() => setShowCategoriesModal(true)}
-            className="px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-800 text-xs font-bold hover:bg-slate-50 flex items-center gap-2 shadow-sm"
+            className="px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-800 text-sm font-semibold hover:bg-slate-50 flex items-center gap-2 shadow-sm"
           >
             <Tag className="w-4 h-4 text-indigo-600" /> Categories ({categories.length})
           </button>
           <button
             type="button"
             onClick={handleStartCreate}
-            className="px-5 py-2.5 rounded-xl bg-[#006FFF] hover:bg-blue-700 text-white text-xs font-bold flex items-center gap-2 shadow-md shadow-[#006FFF]/25"
+            className="px-5 py-2.5 rounded-xl bg-[#006FFF] hover:bg-blue-700 text-white text-sm font-bold flex items-center gap-2 shadow-md shadow-[#006FFF]/25"
           >
-            <Plus className="w-4 h-4" /> Create Global Course
+            <Plus className="w-4 h-4" /> Add New Course
           </button>
         </div>
       </div>
 
       {/* KPI Strip */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
-          <div className="text-xs font-semibold text-slate-500">Total Master Courses</div>
-          <div className="text-2xl font-extrabold text-slate-900 mt-1">{totalCount}</div>
+          <div className="text-xs font-semibold text-slate-500">Total Courses</div>
+          <div className="text-2xl font-extrabold text-slate-900 mt-1 tabular-nums">{totalCount}</div>
         </div>
         <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
-          <div className="text-xs font-semibold text-slate-500">Published & Active</div>
-          <div className="text-2xl font-extrabold text-emerald-600 mt-1">{publishedCount}</div>
+          <div className="text-xs font-semibold text-slate-500">Published (Live)</div>
+          <div className="text-2xl font-extrabold text-emerald-600 mt-1 tabular-nums">{publishedCount}</div>
         </div>
         <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
-          <div className="text-xs font-semibold text-slate-500">In Draft</div>
-          <div className="text-2xl font-extrabold text-amber-600 mt-1">{draftCount}</div>
+          <div className="text-xs font-semibold text-slate-500">Drafts</div>
+          <div className="text-2xl font-extrabold text-amber-600 mt-1 tabular-nums">{draftCount}</div>
         </div>
         <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
-          <div className="text-xs font-semibold text-slate-500">Global Enrollments</div>
-          <div className="text-2xl font-extrabold text-[#006FFF] mt-1">{totalEnrollments}</div>
+          <div className="text-xs font-semibold text-slate-500">Modules &amp; Lessons</div>
+          <div className="text-2xl font-extrabold text-indigo-600 mt-1 tabular-nums">
+            {totalModules} <span className="text-sm font-semibold text-slate-500">/ {totalLessons}</span>
+          </div>
+        </div>
+        <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm col-span-2 lg:col-span-1">
+          <div className="text-xs font-semibold text-slate-500">Student Enrollments</div>
+          <div className="text-2xl font-extrabold text-[#006FFF] mt-1 tabular-nums">{totalEnrollments}</div>
         </div>
       </div>
 
-      {/* Filters Bar */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between">
+      {/* Filters Bar + Grid/Table Switcher */}
+      <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm flex flex-col lg:flex-row gap-3 items-stretch lg:items-center justify-between">
         <div className="relative flex-1 max-w-md">
           <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by course title or slug..."
-            className="w-full pl-10 pr-4 py-2 rounded-xl border border-slate-200 text-sm focus:border-[#006FFF] outline-none"
+            placeholder="Search courses by name or keyword..."
+            className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:border-[#006FFF] outline-none"
           />
         </div>
 
@@ -631,7 +640,7 @@ export const CourseManagement: React.FC = () => {
           <select
             value={categoryFilter}
             onChange={(e) => setCategoryFilter(e.target.value)}
-            className="px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 bg-white outline-none"
+            className="px-3.5 py-2 rounded-xl border border-slate-200 text-sm font-semibold text-slate-700 bg-white outline-none"
           >
             <option value="ALL">All Categories</option>
             {categories.map((cat) => (
@@ -657,6 +666,28 @@ export const CourseManagement: React.FC = () => {
               </button>
             ))}
           </div>
+
+          {/* Software Layout Toggle: Cards vs Table */}
+          <div className="flex bg-slate-100 p-1 rounded-xl" title="Switch view layout">
+            <button
+              type="button"
+              onClick={() => setDisplayLayout('grid')}
+              className={`px-2.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 transition-all ${
+                displayLayout === 'grid' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <LayoutGrid className="w-4 h-4" /> Cards
+            </button>
+            <button
+              type="button"
+              onClick={() => setDisplayLayout('table')}
+              className={`px-2.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 transition-all ${
+                displayLayout === 'table' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <List className="w-4 h-4" /> Table
+            </button>
+          </div>
         </div>
       </div>
 
@@ -664,32 +695,143 @@ export const CourseManagement: React.FC = () => {
       {loading || wizardLoading || loadingCurriculum || loadingPreview ? (
         <div className="bg-white rounded-2xl border border-slate-200 p-16 text-center">
           <Loader2 className="w-8 h-8 animate-spin text-[#006FFF] mx-auto mb-3" />
-          <div className="text-sm font-semibold text-slate-600">Loading course data...</div>
+          <div className="text-sm font-semibold text-slate-600">Loading courses...</div>
         </div>
       ) : filteredCourses.length === 0 ? (
         <div className="bg-white rounded-2xl border border-slate-200 p-16 text-center">
           <BookOpen className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-          <h3 className="text-base font-bold text-slate-900">No global courses found</h3>
+          <h3 className="text-lg font-bold text-slate-900">No courses found</h3>
           <p className="text-sm text-slate-500 mt-1 mb-5">
             {courses.length === 0
-              ? 'Get started by authoring your first Digital Guru course with the 10-step wizard.'
+              ? 'Get started by adding your first Digital Guru course.'
               : 'Try adjusting your search or filter criteria.'}
           </p>
           {courses.length === 0 && (
             <button
               type="button"
               onClick={handleStartCreate}
-              className="px-5 py-2.5 rounded-xl bg-[#006FFF] text-white text-xs font-bold inline-flex items-center gap-2"
+              className="px-5 py-2.5 rounded-xl bg-[#006FFF] text-white text-sm font-bold inline-flex items-center gap-2"
             >
-              <Plus className="w-4 h-4" /> Launch Course Wizard
+              <Plus className="w-4 h-4" /> Add New Course
             </button>
           )}
+        </div>
+      ) : displayLayout === 'table' ? (
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm text-slate-700">
+              <thead className="bg-slate-50 text-xs font-bold text-slate-600 uppercase border-b border-slate-200">
+                <tr>
+                  <th className="px-5 py-3.5">Course</th>
+                  <th className="px-4 py-3.5">Category</th>
+                  <th className="px-4 py-3.5">Curriculum</th>
+                  <th className="px-4 py-3.5">Fee</th>
+                  <th className="px-4 py-3.5">Franchises</th>
+                  <th className="px-4 py-3.5">Status</th>
+                  <th className="px-5 py-3.5 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {filteredCourses.map((course) => {
+                  const modulesCount = course.modulesCount ?? course.activeCurriculumVersion?.modules?.length ?? 0;
+                  const lessonsCount =
+                    course.lessonsCount ??
+                    (course.activeCurriculumVersion?.modules || []).reduce(
+                      (sum: number, m: any) => sum + (m._count?.chapters ?? m.chapters?.length ?? 0),
+                      0
+                    );
+                  const statusBadge =
+                    course.status === 'PUBLISHED'
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                      : course.status === 'DRAFT'
+                      ? 'bg-amber-50 text-amber-700 border-amber-200'
+                      : 'bg-slate-100 text-slate-600 border-slate-200';
+                  return (
+                    <tr key={course.id} className="hover:bg-blue-50/30 transition-colors">
+                      <td className="px-5 py-4">
+                        <div className="font-bold text-slate-900">{course.title}</div>
+                        <div className="text-xs text-slate-500 mt-0.5">
+                          {course.duration || 'Flexible'} &bull; {course.level || 'All Levels'}
+                        </div>
+                      </td>
+                      <td className="px-4 py-4">
+                        {course.category ? (
+                          <span className="px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-700 text-xs font-semibold">
+                            {course.category.name}
+                          </span>
+                        ) : (
+                          <span className="text-slate-400">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-4 whitespace-nowrap">
+                        <div className="font-semibold text-slate-900">{modulesCount} Modules</div>
+                        <div className="text-xs text-slate-500">{lessonsCount} Lessons</div>
+                      </td>
+                      <td className="px-4 py-4 font-bold text-slate-900 whitespace-nowrap">
+                        {Number(course.price) > 0 ? `₹${Number(course.price).toLocaleString('en-IN')}` : 'Custom Fee'}
+                      </td>
+                      <td className="px-4 py-4 whitespace-nowrap text-xs">
+                        <div className="font-semibold text-slate-800">
+                          {course.permittedFranchisesCount ?? 0} Allowed
+                        </div>
+                        <div className="text-slate-500">
+                          {course._count?.enrollments || 0} Students
+                        </div>
+                      </td>
+                      <td className="px-4 py-4">
+                        <span className={`px-2.5 py-1 rounded-full text-xs font-bold border ${statusBadge}`}>
+                          {course.status === 'PUBLISHED' ? 'Live' : course.status === 'DRAFT' ? 'Draft' : 'Archived'}
+                        </span>
+                      </td>
+                      <td className="px-5 py-4 text-right whitespace-nowrap">
+                        <div className="inline-flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => openPreviewModal(course.id)}
+                            className="px-3 py-1.5 rounded-lg bg-white border border-slate-200 hover:border-slate-400 text-xs font-semibold text-slate-700"
+                          >
+                            View
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleStartEdit(course.id)}
+                            className="px-3 py-1.5 rounded-lg bg-white border border-blue-200 hover:bg-blue-50 text-xs font-semibold text-[#006FFF]"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => openCurriculumDrawer(course.id)}
+                            className="px-3 py-1.5 rounded-lg bg-white border border-indigo-200 hover:bg-indigo-50 text-xs font-semibold text-indigo-700"
+                          >
+                            Lessons
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => openFranchiseEnablement(course)}
+                            className="px-3 py-1.5 rounded-lg bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 text-xs font-semibold text-emerald-800"
+                          >
+                            Franchises
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
           {filteredCourses.map((course) => {
-            const modules = course.activeCurriculumVersion?.modules || [];
-            const lessonsCount = modules.reduce((sum: number, m: any) => sum + (m.chapters?.length || 0), 0);
+            const modulesCount = course.modulesCount ?? course.activeCurriculumVersion?.modules?.length ?? 0;
+            const lessonsCount =
+              course.lessonsCount ??
+              (course.activeCurriculumVersion?.modules || []).reduce(
+                (sum: number, m: any) => sum + (m._count?.chapters ?? m.chapters?.length ?? 0),
+                0
+              );
             const statusBadge =
               course.status === 'PUBLISHED'
                 ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
@@ -716,17 +858,17 @@ export const CourseManagement: React.FC = () => {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-2">
                       <div>
-                        <div className="flex items-center gap-2 flex-wrap mb-1">
-                          <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold border ${statusBadge}`}>
-                            {course.status}
+                        <div className="flex items-center gap-2 flex-wrap mb-1.5">
+                          <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold border ${statusBadge}`}>
+                            {course.status === 'PUBLISHED' ? 'Live' : course.status === 'DRAFT' ? 'Draft' : 'Archived'}
                           </span>
                           {course.category && (
-                            <span className="px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 text-[11px] font-semibold">
+                            <span className="px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 text-xs font-semibold">
                               {course.category.name}
                             </span>
                           )}
                           {course.activeCurriculumVersion && (
-                            <span className="text-[11px] font-mono text-slate-500">
+                            <span className="text-xs font-mono text-slate-500">
                               v{course.activeCurriculumVersion.version}
                             </span>
                           )}
@@ -738,63 +880,63 @@ export const CourseManagement: React.FC = () => {
                       </div>
 
                       <div className="text-right shrink-0">
-                        <div className="text-sm font-extrabold text-slate-900">
+                        <div className="text-base font-extrabold text-slate-900 tabular-nums">
                           {Number(course.price) > 0 ? `₹${Number(course.price).toLocaleString('en-IN')}` : 'Custom Fee'}
                         </div>
                         {course.duration && (
-                          <div className="text-[11px] text-slate-500">{course.duration}</div>
+                          <div className="text-xs text-slate-500">{course.duration}</div>
                         )}
                       </div>
                     </div>
 
-                    <p className="text-xs text-slate-600 line-clamp-2 mt-2">
+                    <p className="text-sm text-slate-600 line-clamp-2 mt-2">
                       {course.subTitle || course.description || 'No description provided.'}
                     </p>
 
-                    <div className="flex flex-wrap items-center gap-4 mt-3 text-[11px] font-semibold text-slate-600">
-                      <span className="flex items-center gap-1">
-                        <Layers className="w-3.5 h-3.5 text-[#006FFF]" /> {modules.length} Modules · {lessonsCount} Lessons
+                    <div className="flex flex-wrap items-center gap-4 mt-3 text-xs font-semibold text-slate-600">
+                      <span className="flex items-center gap-1.5">
+                        <Layers className="w-4 h-4 text-[#006FFF]" /> {modulesCount} Modules · {lessonsCount} Lessons
                       </span>
-                      <span className="flex items-center gap-1">
-                        <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" /> Permitted: {course.permittedFranchisesCount ?? 0} · Enabled: {course.enabledFranchisesCount ?? course._count?.franchiseSelections ?? 0}
+                      <span className="flex items-center gap-1.5">
+                        <ShieldCheck className="w-4 h-4 text-emerald-600" /> {course.permittedFranchisesCount ?? 0} Franchises Allowed
                       </span>
-                      <span className="flex items-center gap-1">
-                        <Users className="w-3.5 h-3.5 text-indigo-600" /> {course._count?.enrollments || 0} Enrollments
+                      <span className="flex items-center gap-1.5">
+                        <Users className="w-4 h-4 text-indigo-600" /> {course._count?.enrollments || 0} Students
                       </span>
                     </div>
                   </div>
                 </div>
 
                 {/* Actions Footer */}
-                <div className="px-5 py-3 bg-slate-50 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex flex-wrap items-center gap-1.5">
+                <div className="px-5 py-3.5 bg-slate-50 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <button
                       type="button"
                       onClick={() => handleStartEdit(course.id)}
-                      className="px-2.5 py-1.5 rounded-lg bg-white border border-slate-200 hover:border-[#006FFF] text-xs font-bold text-slate-700 flex items-center gap-1.5"
+                      className="px-3 py-1.5 rounded-lg bg-white border border-slate-200 hover:border-[#006FFF] text-xs font-bold text-slate-800 flex items-center gap-1.5"
                     >
-                      <Edit3 className="w-3.5 h-3.5 text-[#006FFF]" /> Edit Wizard
+                      <Edit3 className="w-3.5 h-3.5 text-[#006FFF]" /> Edit Course
                     </button>
                     <button
                       type="button"
                       onClick={() => openCurriculumDrawer(course.id)}
-                      className="px-2.5 py-1.5 rounded-lg bg-white border border-slate-200 hover:border-indigo-400 text-xs font-bold text-slate-700 flex items-center gap-1.5"
+                      className="px-3 py-1.5 rounded-lg bg-white border border-slate-200 hover:border-indigo-400 text-xs font-bold text-slate-800 flex items-center gap-1.5"
                     >
-                      <PlayCircle className="w-3.5 h-3.5 text-indigo-600" /> Videos & Versions
+                      <PlayCircle className="w-3.5 h-3.5 text-indigo-600" /> Lessons &amp; Media
                     </button>
                     <button
                       type="button"
                       onClick={() => openPreviewModal(course.id)}
-                      className="px-2.5 py-1.5 rounded-lg bg-white border border-slate-200 hover:border-slate-400 text-xs font-bold text-slate-700 flex items-center gap-1.5"
+                      className="px-3 py-1.5 rounded-lg bg-white border border-slate-200 hover:border-slate-400 text-xs font-bold text-slate-800 flex items-center gap-1.5"
                     >
-                      <Eye className="w-3.5 h-3.5 text-slate-600" /> Preview
+                      <Eye className="w-3.5 h-3.5 text-slate-600" /> View Details
                     </button>
                     <button
                       type="button"
                       onClick={() => openFranchiseEnablement(course)}
-                      className="px-2.5 py-1.5 rounded-lg bg-white border border-slate-200 hover:border-emerald-400 text-xs font-bold text-slate-700 flex items-center gap-1.5"
+                      className="px-3 py-1.5 rounded-lg bg-white border border-slate-200 hover:border-emerald-400 text-xs font-bold text-slate-800 flex items-center gap-1.5"
                     >
-                      <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" /> Franchise Permissions
+                      <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" /> Assign Franchises
                     </button>
                   </div>
 
@@ -803,7 +945,7 @@ export const CourseManagement: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => handleStatusAction(course, 'PUBLISHED')}
-                        className="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1"
+                        className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1"
                       >
                         <CheckCircle2 className="w-3.5 h-3.5" /> Publish
                       </button>
@@ -812,10 +954,10 @@ export const CourseManagement: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => handleStatusAction(course, 'DRAFT')}
-                        title="Unpublish course back to Draft (hidden from new franchise selections)"
-                        className="px-2.5 py-1.5 rounded-lg bg-white border border-amber-200 hover:bg-amber-50 text-amber-800 text-xs font-bold flex items-center gap-1"
+                        title="Move course back to Draft"
+                        className="px-3 py-1.5 rounded-lg bg-white border border-amber-200 hover:bg-amber-50 text-amber-800 text-xs font-bold flex items-center gap-1"
                       >
-                        <PauseCircle className="w-3.5 h-3.5" /> Unpublish
+                        <PauseCircle className="w-3.5 h-3.5" /> Move to Draft
                       </button>
                     )}
                     {course.status !== 'ARCHIVED' && (
@@ -823,7 +965,7 @@ export const CourseManagement: React.FC = () => {
                         type="button"
                         onClick={() => handleStatusAction(course, 'ARCHIVED')}
                         title="Archive course (preserves student history)"
-                        className="px-2.5 py-1.5 rounded-lg bg-white border border-slate-200 hover:bg-amber-50 hover:text-amber-700 text-xs font-bold text-slate-600 flex items-center gap-1"
+                        className="px-3 py-1.5 rounded-lg bg-white border border-slate-200 hover:bg-amber-50 hover:text-amber-700 text-xs font-bold text-slate-600 flex items-center gap-1"
                       >
                         <Archive className="w-3.5 h-3.5" /> Archive
                       </button>
@@ -832,9 +974,9 @@ export const CourseManagement: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => handleStatusAction(course, 'DRAFT')}
-                        className="px-2.5 py-1.5 rounded-lg bg-white border border-slate-200 hover:bg-blue-50 text-xs font-bold text-slate-700"
+                        className="px-3 py-1.5 rounded-lg bg-white border border-slate-200 hover:bg-blue-50 text-xs font-bold text-slate-700"
                       >
-                        Restore Draft
+                        Restore
                       </button>
                     )}
                     {(course._count?.enrollments || 0) === 0 && (
@@ -1064,19 +1206,19 @@ export const CourseManagement: React.FC = () => {
                     type="button"
                     disabled={bulkPermitting || loadingFranchises}
                     onClick={() => handleBulkFranchisePermission(true)}
-                    className="px-3.5 py-2 rounded-xl bg-[#006FFF] hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-bold flex items-center gap-1.5"
+                    className="px-4 py-2 rounded-xl bg-[#006FFF] hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-bold flex items-center gap-1.5"
                   >
                     {bulkPermitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ShieldCheck className="w-3.5 h-3.5" />}
-                    Permit All Active Franchises
+                    Allow All Franchises
                   </button>
                   <button
                     type="button"
                     disabled={bulkPermitting || loadingFranchises}
                     onClick={() => handleBulkFranchisePermission(false)}
-                    className="px-3.5 py-2 rounded-xl border border-rose-200 bg-rose-50 hover:bg-rose-100 disabled:opacity-50 text-rose-700 text-xs font-bold flex items-center gap-1.5"
+                    className="px-4 py-2 rounded-xl border border-rose-200 bg-rose-50 hover:bg-rose-100 disabled:opacity-50 text-rose-700 text-xs font-bold flex items-center gap-1.5"
                   >
                     <ShieldOff className="w-3.5 h-3.5" />
-                    Revoke All
+                    Remove All
                   </button>
                 </div>
               </div>
@@ -1147,11 +1289,11 @@ export const CourseManagement: React.FC = () => {
                                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
                               ) : state.isPermitted ? (
                                 <>
-                                  <ShieldOff className="w-3.5 h-3.5" /> Revoke HQ Permission
+                                  <ShieldOff className="w-3.5 h-3.5" /> Remove Access
                                 </>
                               ) : (
                                 <>
-                                  <ShieldCheck className="w-3.5 h-3.5" /> Permit Franchise
+                                  <ShieldCheck className="w-3.5 h-3.5" /> Allow Franchise
                                 </>
                               )}
                             </button>
@@ -1192,10 +1334,10 @@ export const CourseManagement: React.FC = () => {
                                 >
                                   {state.isEnabled ? (
                                     <>
-                                      <Check className="w-3.5 h-3.5" /> Enabled
+                                      <Check className="w-3.5 h-3.5" /> Active
                                     </>
                                   ) : (
-                                    'Enable Offering'
+                                    'Turn On'
                                   )}
                                 </button>
                               </>
@@ -1487,50 +1629,123 @@ export const CourseManagement: React.FC = () => {
               {/* Step 8: Modules, Lessons, Videos & Attachments */}
               {Array.isArray(previewCourse.modules) && previewCourse.modules.length > 0 && (
                 <div>
-                  <h3 className="text-base font-extrabold text-slate-900 mb-3">Curriculum Syllabus</h3>
+                  <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                    <h3 className="text-base font-extrabold text-slate-900">
+                      Curriculum Syllabus ({previewCourse.modules.length} Modules &middot;{' '}
+                      {previewCourse.modules.reduce((s: number, m: any) => s + (m.chapters || m.lessons || []).length, 0)} Lessons)
+                    </h3>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const allOpen: Record<number, boolean> = {};
+                          previewCourse.modules.forEach((_: any, idx: number) => {
+                            allOpen[idx] = true;
+                          });
+                          setExpandedPreviewModules(allOpen);
+                        }}
+                        className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-xs font-semibold text-slate-700"
+                      >
+                        Expand All
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setExpandedPreviewModules({})}
+                        className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-xs font-semibold text-slate-700"
+                      >
+                        Collapse All
+                      </button>
+                    </div>
+                  </div>
                   <div className="space-y-2.5">
-                    {previewCourse.modules.map((mod: any, mIdx: number) => (
-                      <div key={mod.id || mIdx} className="rounded-2xl border border-slate-200 overflow-hidden">
-                        <div className="bg-slate-50 px-4 py-3 font-bold text-sm text-slate-900 flex justify-between">
-                          <span>{mod.title}</span>
-                          <span className="text-xs text-slate-500">{(mod.chapters || mod.lessons || []).length} lessons</span>
-                        </div>
-                        <div className="divide-y divide-slate-100">
-                          {(mod.chapters || mod.lessons || []).map((ch: any, cIdx: number) => (
-                            <div key={ch.id || cIdx} className="px-4 py-3 text-xs text-slate-700 space-y-1">
-                              <div className="flex items-center justify-between gap-2">
-                                <span className="flex items-center gap-2 font-semibold text-slate-800">
-                                  <PlayCircle className="w-3.5 h-3.5 text-[#006FFF]" /> {ch.title}
-                                  {ch.isFree && (
-                                    <span className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 text-[10px] font-bold">
-                                      Free Preview
+                    {previewCourse.modules.map((mod: any, mIdx: number) => {
+                      const isExpanded = Boolean(expandedPreviewModules[mIdx]);
+                      const modLessons = mod.chapters || mod.lessons || [];
+                      return (
+                        <div key={mod.id || mIdx} className="rounded-2xl border border-slate-200 overflow-hidden">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setExpandedPreviewModules((prev) => ({
+                                ...prev,
+                                [mIdx]: !prev[mIdx],
+                              }))
+                            }
+                            className="w-full bg-slate-50 hover:bg-slate-100 px-4 py-3 font-bold text-sm text-slate-900 flex items-center justify-between text-left transition-colors"
+                          >
+                            <span className="flex items-center gap-2">
+                              {isExpanded ? (
+                                <ChevronDown className="w-4 h-4 text-[#006FFF]" />
+                              ) : (
+                                <ChevronRight className="w-4 h-4 text-slate-500" />
+                              )}
+                              {mod.title}
+                            </span>
+                            <span className="text-xs text-slate-500 font-semibold">{modLessons.length} lessons</span>
+                          </button>
+                          {isExpanded && (
+                            <div className="divide-y divide-slate-100 bg-white">
+                              {modLessons.map((ch: any, cIdx: number) => (
+                                <div key={ch.id || cIdx} className="px-4 py-3 text-sm text-slate-700 space-y-1.5">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span className="flex items-center gap-2 font-semibold text-slate-800">
+                                      <PlayCircle className="w-4 h-4 text-[#006FFF] shrink-0" /> {ch.title}
+                                      {ch.isFree && (
+                                        <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 text-xs font-bold">
+                                          Free Preview
+                                        </span>
+                                      )}
                                     </span>
-                                  )}
-                                </span>
-                                <span className="text-slate-400 font-mono shrink-0">{ch.duration || '10:00'}</span>
-                              </div>
-                              {ch.description && <p className="text-slate-500 pl-5">{ch.description}</p>}
-                              <div className="flex flex-wrap items-center gap-3 pl-5 text-[11px]">
-                                {ch.videoUrl && (
-                                  <span className="text-[#006FFF] font-medium truncate max-w-xs">{ch.videoUrl}</span>
-                                )}
-                                {ch.pdfUrl && (
-                                  <span className="text-emerald-700 font-medium flex items-center gap-1">
-                                    <FileText className="w-3 h-3" /> PDF Resource
-                                  </span>
-                                )}
-                                {Array.isArray(ch.attachments) && ch.attachments.length > 0 && (
-                                  <span className="text-indigo-700 font-semibold flex items-center gap-1">
-                                    <Paperclip className="w-3 h-3" />
-                                    {ch.attachments.map((a: any) => `${a.title} (${a.fileType})`).join(', ')}
-                                  </span>
-                                )}
-                              </div>
+                                    <span className="text-slate-500 font-mono text-xs shrink-0">{ch.duration || '10:00'}</span>
+                                  </div>
+                                  {ch.description && <p className="text-xs text-slate-500 pl-6">{ch.description}</p>}
+                                  <div className="flex flex-wrap items-center gap-3 pl-6 text-xs">
+                                    {ch.videoUrl ? (
+                                      <a
+                                        href={ch.videoUrl}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="text-[#006FFF] hover:underline font-semibold inline-flex items-center gap-1"
+                                      >
+                                        <ExternalLink className="w-3.5 h-3.5" /> Open Video
+                                      </a>
+                                    ) : (
+                                      <span className="text-slate-400 italic">No video attached</span>
+                                    )}
+                                    {ch.pdfUrl && (
+                                      <a
+                                        href={ch.pdfUrl}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="text-emerald-700 hover:underline font-semibold inline-flex items-center gap-1"
+                                      >
+                                        <FileText className="w-3.5 h-3.5" /> Open PDF
+                                      </a>
+                                    )}
+                                    {Array.isArray(ch.attachments) && ch.attachments.length > 0 && (
+                                      <span className="inline-flex flex-wrap items-center gap-2">
+                                        {ch.attachments.map((a: any, aIdx: number) => (
+                                          <a
+                                            key={a.id || aIdx}
+                                            href={a.fileUrl}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            className="text-indigo-700 hover:underline font-semibold inline-flex items-center gap-1"
+                                          >
+                                            <Paperclip className="w-3.5 h-3.5" />
+                                            {a.title} ({a.fileType})
+                                          </a>
+                                        ))}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
                             </div>
-                          ))}
+                          )}
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               )}
