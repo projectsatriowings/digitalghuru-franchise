@@ -14,6 +14,7 @@ node_modules/
 # Production build outputs
 dist/
 !packages/shared/dist/
+!server/dist/
 build/
 .next/
 out/

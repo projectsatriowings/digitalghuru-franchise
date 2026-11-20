@@ -117,31 +117,38 @@ app.use('/api', (req: Request, res: Response, next: NextFunction) => {
   next();
 });
 
-// Mount Routes
-app.use('/api/auth', authRoutes);
-app.use('/api/institutes', institutesRoutes);
-app.use('/api/staff', staffRoutes);
-app.use('/api/students', studentsRoutes);
-app.use('/api/parents', parentsRoutes);
-app.use('/api/academics', academicsRoutes);
-app.use('/api/attendance', attendanceRoutes);
-app.use('/api/notifications', notificationsRoutes);
-app.use('/api/materials', materialsRoutes);
-app.use('/api/homework', homeworkRoutes);
-app.use('/api/quizzes', quizRoutes);
-app.use('/api/exams', examsRoutes);
-app.use('/api/progress', progressRoutes);
-app.use('/api/reviews', reviewsRoutes);
-app.use('/api/messaging', messagingRoutes);
-app.use('/api/fees', feesRoutes);
-app.use('/api/question-generator', questionGeneratorRoutes);
-app.use('/api/feedback', feedbackRoutes);
-app.use('/api/staff-attendance', staffAttendanceRoutes);
-app.use('/api/franchises', franchiseRoutes);
-app.use('/api/courses', coursesRoutes);
+// Mount Routes (mounted on both /api/* and root /* to support all proxy/rewrite configurations)
+const apiRoutesMap: [string, any][] = [
+  ['/auth', authRoutes],
+  ['/institutes', institutesRoutes],
+  ['/staff', staffRoutes],
+  ['/students', studentsRoutes],
+  ['/parents', parentsRoutes],
+  ['/academics', academicsRoutes],
+  ['/attendance', attendanceRoutes],
+  ['/notifications', notificationsRoutes],
+  ['/materials', materialsRoutes],
+  ['/homework', homeworkRoutes],
+  ['/quizzes', quizRoutes],
+  ['/exams', examsRoutes],
+  ['/progress', progressRoutes],
+  ['/reviews', reviewsRoutes],
+  ['/messaging', messagingRoutes],
+  ['/fees', feesRoutes],
+  ['/question-generator', questionGeneratorRoutes],
+  ['/feedback', feedbackRoutes],
+  ['/staff-attendance', staffAttendanceRoutes],
+  ['/franchises', franchiseRoutes],
+  ['/courses', coursesRoutes],
+];
+
+for (const [routePath, router] of apiRoutesMap) {
+  app.use(`/api${routePath}`, router);
+  app.use(routePath, router);
+}
 
 // Legacy course media route (/uploads/courses/:folder/:filename)
-app.get('/uploads/courses/:folder/:filename', (req: Request, res: Response) => {
+app.get(['/api/uploads/courses/:folder/:filename', '/uploads/courses/:folder/:filename'], (req: Request, res: Response) => {
   const { folder } = req.params;
   if (isPublicCourseFolder(folder)) {
     return streamPublicMedia(req, res);
@@ -149,8 +156,8 @@ app.get('/uploads/courses/:folder/:filename', (req: Request, res: Response) => {
   return authenticateToken(req as any, res, () => streamProtectedMedia(req, res));
 });
 
-// Root info endpoint & health check redirects
-app.get('/', (_req: Request, res: Response) => {
+// Root info endpoint
+app.get(['/', '/api'], (_req: Request, res: Response) => {
   res.json({
     service: 'digital-guru-franchise-api',
     status: 'running',
@@ -160,12 +167,8 @@ app.get('/', (_req: Request, res: Response) => {
   });
 });
 
-app.get('/health', (_req: Request, res: Response) => {
-  res.redirect(307, '/api/health');
-});
-
-// Health check endpoint
-app.get('/api/health', async (_req: Request, res: Response) => {
+// Health check endpoint (serves both /api/health and /health)
+const healthCheckHandler = async (_req: Request, res: Response) => {
   let dbHealth: { connected: boolean; latencyMs?: number; error?: string } = {
     connected: false,
     latencyMs: undefined,
@@ -198,7 +201,9 @@ app.get('/api/health', async (_req: Request, res: Response) => {
       operational: true,
     },
   });
-});
+};
+
+app.get(['/api/health', '/health'], healthCheckHandler);
 
 // Centralized 404 handler
 app.use((_req: Request, res: Response) => {
@@ -226,28 +231,24 @@ app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
 });
 
 // Start server if run directly (standalone Node.js / Docker process / long-running service container)
-const isVercelServerless = Boolean(process.env.AWS_LAMBDA_FUNCTION_NAME || (process.env.VERCEL && !process.env.PORT));
+const isVercelRuntime = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
 const isMain = Boolean(
   process.argv[1] &&
   (process.argv[1].endsWith('index.ts') || process.argv[1].endsWith('index.js'))
 );
 
-if (!isVercelServerless && (isMain || (process.env.PORT && !process.env.AWS_LAMBDA_FUNCTION_NAME))) {
+if (!isVercelRuntime && (isMain || process.env.PORT)) {
   validateProductionConfig();
   printStorageDiagnostics();
   const server = app.listen(config.port, config.host, () => {
     console.log(`[Digital Guru Franchise API Server] listening on http://${config.host}:${config.port}`);
     console.log(`[Digital Guru Franchise API Server] Health check available at http://${config.host}:${config.port}/api/health`);
-    if (!process.env.VERCEL) {
-      NotificationService.startWorker(15000);
-    }
+    NotificationService.startWorker(15000);
   });
 
   const handleShutdown = () => {
     console.log('[Digital Guru Franchise API Server] Gracefully shutting down...');
-    if (!process.env.VERCEL) {
-      NotificationService.stopWorker();
-    }
+    NotificationService.stopWorker();
     server.close(() => {
       console.log('[Digital Guru Franchise API Server] Closed remaining connections.');
       process.exit(0);

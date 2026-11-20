@@ -1,0 +1,20 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const materials_controller_js_1 = require("./materials.controller.js");
+const auth_js_1 = require("../../middleware/auth.js");
+const storage_js_1 = require("../../utils/storage.js");
+const router = (0, express_1.Router)();
+router.use(auth_js_1.authenticateToken);
+router.use(auth_js_1.requireInstituteContext);
+// Material routes
+router.get('/', materials_controller_js_1.listMaterials);
+router.post('/', (0, auth_js_1.requireRole)('SUPER_ADMIN', 'ACADEMIC_ADMIN', 'STAFF'), storage_js_1.fileUpload.single('file'), materials_controller_js_1.createMaterial);
+router.get('/:id', materials_controller_js_1.getMaterialById);
+router.patch('/:id', (0, auth_js_1.requireRole)('SUPER_ADMIN', 'ACADEMIC_ADMIN', 'STAFF'), materials_controller_js_1.updateMaterial);
+router.delete('/:id', (0, auth_js_1.requireRole)('SUPER_ADMIN', 'ACADEMIC_ADMIN', 'STAFF'), materials_controller_js_1.deleteMaterial);
+router.get('/:id/download', materials_controller_js_1.downloadMaterial);
+router.post('/:id/track', materials_controller_js_1.trackMaterialInteraction);
+router.post('/:id/interactions', materials_controller_js_1.trackMaterialInteraction);
+router.get('/:id/interactions', materials_controller_js_1.getMaterialInteractions);
+exports.default = router;

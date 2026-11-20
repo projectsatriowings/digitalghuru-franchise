@@ -1,0 +1,16 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const homework_controller_js_1 = require("./homework.controller.js");
+const auth_js_1 = require("../../middleware/auth.js");
+const storage_js_1 = require("../../utils/storage.js");
+const router = (0, express_1.Router)();
+router.use(auth_js_1.authenticateToken);
+router.use(auth_js_1.requireInstituteContext);
+router.get('/', homework_controller_js_1.listHomework);
+router.post('/', (0, auth_js_1.requireRole)('SUPER_ADMIN', 'ACADEMIC_ADMIN', 'STAFF'), storage_js_1.fileUpload.single('file'), homework_controller_js_1.createHomework);
+router.post('/:id/submissions', (0, auth_js_1.requireRole)('STUDENT'), storage_js_1.fileUpload.single('file'), homework_controller_js_1.submitHomework);
+router.get('/:id/submissions', (0, auth_js_1.requireRole)('SUPER_ADMIN', 'ACADEMIC_ADMIN', 'STAFF'), homework_controller_js_1.getSubmissions);
+router.patch('/submissions/:submissionId/grade', (0, auth_js_1.requireRole)('SUPER_ADMIN', 'ACADEMIC_ADMIN', 'STAFF'), homework_controller_js_1.gradeSubmission);
+router.get('/submissions/:submissionId/download', homework_controller_js_1.downloadSubmission);
+exports.default = router;
