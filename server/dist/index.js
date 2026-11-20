@@ -39,6 +39,8 @@ const demo_mode_middleware_js_1 = require("./middleware/demo-mode.middleware.js"
 const rate_limiter_js_1 = require("./middleware/rate-limiter.js");
 const cache_js_1 = require("./utils/cache.js");
 const app = (0, express_1.default)();
+// Trust reverse proxy (Vercel Edge, AWS CloudFront, Docker) for secure IP and protocol detection
+app.set('trust proxy', 1);
 // Security & Performance Middlewares
 app.use((0, helmet_1.default)());
 app.use((0, compression_1.default)({

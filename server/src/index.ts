@@ -37,6 +37,9 @@ import { serverCache } from './utils/cache.js';
 
 const app = express();
 
+// Trust reverse proxy (Vercel Edge, AWS CloudFront, Docker) for secure IP and protocol detection
+app.set('trust proxy', 1);
+
 // Security & Performance Middlewares
 app.use(helmet());
 app.use(
