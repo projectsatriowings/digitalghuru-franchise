@@ -5,7 +5,8 @@
       "root": "apps/web"
     },
     "server": {
-      "root": "server"
+      "root": "server",
+      "entrypoint": "src/index.ts"
     }
   },
   "rewrites": [
