@@ -14,14 +14,14 @@
     "build:web": "npm run build --workspace=@tuition/web",
     "build": "npm run build --workspaces --if-present",
     "vercel-build": "npm run build",
-    "postinstall": "npm run build --prefix packages/shared && npx prisma generate --schema=server/prisma/schema.prisma",
+    "postinstall": "npm run build --prefix packages/shared && npx prisma@5 generate --schema=server/prisma/schema.prisma",
     "test": "npm run test --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present"
   },
   "devDependencies": {
     "@types/react": "~18.2.79",
     "@types/react-dom": "~18.2.25",
-    "prisma": "^5.19.1",
+    "prisma": "^5.22.0",
     "typescript": "^5.5.4"
   },
   "dependencies": {

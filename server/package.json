@@ -5,12 +5,12 @@
   "main": "dist/index.js",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "npm run build --prefix ../packages/shared && npx prisma generate && tsc",
+    "build": "npm run build --prefix ../packages/shared && npx prisma@5 generate && tsc",
     "start": "node dist/index.js",
     "db:inspect": "tsx scripts/inspect-db.ts",
-    "prisma:generate": "npx prisma generate",
-    "prisma:migrate": "npx prisma migrate dev",
-    "prisma:deploy": "npx prisma migrate deploy",
+    "prisma:generate": "npx prisma@5 generate",
+    "prisma:migrate": "npx prisma@5 migrate dev",
+    "prisma:deploy": "npx prisma@5 migrate deploy",
     "worker:sms": "tsx src/modules/notifications/sms.worker.ts"
   },
   "dependencies": {
