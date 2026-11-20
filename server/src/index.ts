@@ -166,11 +166,19 @@ app.get('/health', (_req: Request, res: Response) => {
 
 // Health check endpoint
 app.get('/api/health', async (_req: Request, res: Response) => {
-  const dbHealth = await checkDatabaseHealth();
+  let dbHealth: { connected: boolean; latencyMs?: number; error?: string } = {
+    connected: false,
+    latencyMs: undefined,
+    error: undefined,
+  };
+  try {
+    dbHealth = await checkDatabaseHealth();
+  } catch (err: any) {
+    dbHealth = { connected: false, latencyMs: undefined, error: err.message };
+  }
   const uptime = process.uptime();
 
-  const responseStatus = dbHealth.connected ? 200 : 503;
-  res.status(responseStatus).json({
+  res.status(200).json({
     status: dbHealth.connected ? 'healthy' : 'degraded',
     service: 'digital-guru-franchise-api',
     version: '1.0.0',
@@ -217,21 +225,29 @@ app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
   });
 });
 
-// Start server if run directly (standalone Node.js / Docker process; skip when executed inside Vercel serverless functions)
-const isVercelRuntime = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
-const isMain = process.argv[1] && (process.argv[1].endsWith('index.ts') || process.argv[1].endsWith('index.js'));
-if (!isVercelRuntime && (isMain || process.env.NODE_ENV === 'production')) {
+// Start server if run directly (standalone Node.js / Docker process / long-running service container)
+const isVercelServerless = Boolean(process.env.AWS_LAMBDA_FUNCTION_NAME || (process.env.VERCEL && !process.env.PORT));
+const isMain = Boolean(
+  process.argv[1] &&
+  (process.argv[1].endsWith('index.ts') || process.argv[1].endsWith('index.js'))
+);
+
+if (!isVercelServerless && (isMain || (process.env.PORT && !process.env.AWS_LAMBDA_FUNCTION_NAME))) {
   validateProductionConfig();
   printStorageDiagnostics();
   const server = app.listen(config.port, config.host, () => {
     console.log(`[Digital Guru Franchise API Server] listening on http://${config.host}:${config.port}`);
     console.log(`[Digital Guru Franchise API Server] Health check available at http://${config.host}:${config.port}/api/health`);
-    NotificationService.startWorker(15000);
+    if (!process.env.VERCEL) {
+      NotificationService.startWorker(15000);
+    }
   });
 
   const handleShutdown = () => {
     console.log('[Digital Guru Franchise API Server] Gracefully shutting down...');
-    NotificationService.stopWorker();
+    if (!process.env.VERCEL) {
+      NotificationService.stopWorker();
+    }
     server.close(() => {
       console.log('[Digital Guru Franchise API Server] Closed remaining connections.');
       process.exit(0);

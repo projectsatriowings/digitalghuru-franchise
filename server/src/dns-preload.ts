@@ -1,31 +1,37 @@
 import dns from 'node:dns';
 
-// If local network DNS refuses cloud hostnames, fallback to Google & Cloudflare DNS
-try {
-  dns.setServers(['8.8.8.8', '1.1.1.1']);
-} catch (e) {
-  // Ignore if not permitted
+// In cloud serverless (Vercel, AWS Lambda), always rely on the platform's native DNS resolver
+const isServerless = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
+
+if (!isServerless) {
+  // If local network DNS refuses cloud hostnames, fallback to Google & Cloudflare DNS
+  try {
+    dns.setServers(['8.8.8.8', '1.1.1.1']);
+  } catch (e) {
+    // Ignore if not permitted
+  }
+
+  const origLookup = dns.lookup;
+  (dns as any).lookup = function (hostname: any, options: any, callback: any) {
+    if (typeof options === 'function') {
+      callback = options;
+      options = {};
+    }
+
+    if (typeof hostname === 'string' && hostname.includes('neon.tech')) {
+      dns.resolve4(hostname, (err, addresses) => {
+        if (err || !addresses || addresses.length === 0) {
+          return origLookup(hostname, options, callback);
+        }
+        const addr = addresses[0];
+        if (options && options.all) {
+          return callback(null, [{ address: addr, family: 4 }]);
+        }
+        return callback(null, addr, 4);
+      });
+    } else {
+      origLookup(hostname, options, callback);
+    }
+  };
 }
 
-const origLookup = dns.lookup;
-(dns as any).lookup = function (hostname: any, options: any, callback: any) {
-  if (typeof options === 'function') {
-    callback = options;
-    options = {};
-  }
-
-  if (typeof hostname === 'string' && hostname.includes('neon.tech')) {
-    dns.resolve4(hostname, (err, addresses) => {
-      if (err || !addresses || addresses.length === 0) {
-        return origLookup(hostname, options, callback);
-      }
-      const addr = addresses[0];
-      if (options && options.all) {
-        return callback(null, [{ address: addr, family: 4 }]);
-      }
-      return callback(null, addr, 4);
-    });
-  } else {
-    origLookup(hostname, options, callback);
-  }
-};

@@ -14,7 +14,11 @@ const NEON_PORT = 5432;
  */
 export function ensureDatabaseBridge(): void {
   dotenv.config({ path: path.resolve(__dirname, '../.env') });
-  if (process.env.DISABLE_DB_BRIDGE === 'true') {
+  if (
+    process.env.DISABLE_DB_BRIDGE === 'true' ||
+    process.env.VERCEL ||
+    process.env.AWS_LAMBDA_FUNCTION_NAME
+  ) {
     return;
   }
 

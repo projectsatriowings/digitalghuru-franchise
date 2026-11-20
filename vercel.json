@@ -6,10 +6,16 @@
     },
     "server": {
       "root": "server",
-      "entrypoint": "src/index.ts"
+      "entrypoint": "index.js"
     }
   },
   "rewrites": [
+    {
+      "source": "/api",
+      "destination": {
+        "service": "server"
+      }
+    },
     {
       "source": "/api/(.*)",
       "destination": {
