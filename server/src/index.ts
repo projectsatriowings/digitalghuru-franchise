@@ -242,5 +242,10 @@ if (!isVercelRuntime && (isMain || process.env.NODE_ENV === 'production')) {
   process.on('SIGTERM', handleShutdown);
 }
 
+(app as any).default = app;
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = app;
+  (module.exports as any).default = app;
+}
 export default app;
 
