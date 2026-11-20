@@ -1,0 +1,16 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const progress_controller_js_1 = require("./progress.controller.js");
+const auth_js_1 = require("../../middleware/auth.js");
+const router = (0, express_1.Router)();
+router.use(auth_js_1.authenticateToken);
+router.use(auth_js_1.requireInstituteContext);
+router.get('/', (0, auth_js_1.requireRole)('SUPER_ADMIN', 'ACADEMIC_ADMIN', 'STAFF', 'PARENT', 'STUDENT'), progress_controller_js_1.listProgressFeedback);
+router.get('/metrics-preview', (0, auth_js_1.requireRole)('SUPER_ADMIN', 'ACADEMIC_ADMIN', 'STAFF'), progress_controller_js_1.getMetricsPreview);
+router.post('/', (0, auth_js_1.requireRole)('SUPER_ADMIN', 'ACADEMIC_ADMIN', 'STAFF'), progress_controller_js_1.createFeedback);
+router.get('/students/:studentId', (0, auth_js_1.requireRole)('SUPER_ADMIN', 'ACADEMIC_ADMIN', 'STAFF', 'PARENT', 'STUDENT'), progress_controller_js_1.getStudentFeedback);
+router.patch('/:id', (0, auth_js_1.requireRole)('SUPER_ADMIN', 'ACADEMIC_ADMIN', 'STAFF'), progress_controller_js_1.updateFeedback);
+router.patch('/:id/publish', (0, auth_js_1.requireRole)('SUPER_ADMIN', 'ACADEMIC_ADMIN', 'STAFF'), progress_controller_js_1.publishFeedback);
+router.delete('/:id', (0, auth_js_1.requireRole)('SUPER_ADMIN', 'ACADEMIC_ADMIN', 'STAFF'), progress_controller_js_1.deleteFeedback);
+exports.default = router;

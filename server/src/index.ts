@@ -1,4 +1,4 @@
-import './dns-preload.cjs';
+import './dns-preload.js';
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -117,31 +117,38 @@ app.use('/api', (req: Request, res: Response, next: NextFunction) => {
   next();
 });
 
-// Mount Routes
-app.use('/api/auth', authRoutes);
-app.use('/api/institutes', institutesRoutes);
-app.use('/api/staff', staffRoutes);
-app.use('/api/students', studentsRoutes);
-app.use('/api/parents', parentsRoutes);
-app.use('/api/academics', academicsRoutes);
-app.use('/api/attendance', attendanceRoutes);
-app.use('/api/notifications', notificationsRoutes);
-app.use('/api/materials', materialsRoutes);
-app.use('/api/homework', homeworkRoutes);
-app.use('/api/quizzes', quizRoutes);
-app.use('/api/exams', examsRoutes);
-app.use('/api/progress', progressRoutes);
-app.use('/api/reviews', reviewsRoutes);
-app.use('/api/messaging', messagingRoutes);
-app.use('/api/fees', feesRoutes);
-app.use('/api/question-generator', questionGeneratorRoutes);
-app.use('/api/feedback', feedbackRoutes);
-app.use('/api/staff-attendance', staffAttendanceRoutes);
-app.use('/api/franchises', franchiseRoutes);
-app.use('/api/courses', coursesRoutes);
+// Mount Routes (mounted on both /api/* and root /* to support all proxy/rewrite configurations)
+const apiRoutesMap: [string, any][] = [
+  ['/auth', authRoutes],
+  ['/institutes', institutesRoutes],
+  ['/staff', staffRoutes],
+  ['/students', studentsRoutes],
+  ['/parents', parentsRoutes],
+  ['/academics', academicsRoutes],
+  ['/attendance', attendanceRoutes],
+  ['/notifications', notificationsRoutes],
+  ['/materials', materialsRoutes],
+  ['/homework', homeworkRoutes],
+  ['/quizzes', quizRoutes],
+  ['/exams', examsRoutes],
+  ['/progress', progressRoutes],
+  ['/reviews', reviewsRoutes],
+  ['/messaging', messagingRoutes],
+  ['/fees', feesRoutes],
+  ['/question-generator', questionGeneratorRoutes],
+  ['/feedback', feedbackRoutes],
+  ['/staff-attendance', staffAttendanceRoutes],
+  ['/franchises', franchiseRoutes],
+  ['/courses', coursesRoutes],
+];
+
+for (const [routePath, router] of apiRoutesMap) {
+  app.use(`/api${routePath}`, router);
+  app.use(routePath, router);
+}
 
 // Legacy course media route (/uploads/courses/:folder/:filename)
-app.get('/uploads/courses/:folder/:filename', (req: Request, res: Response) => {
+app.get(['/api/uploads/courses/:folder/:filename', '/uploads/courses/:folder/:filename'], (req: Request, res: Response) => {
   const { folder } = req.params;
   if (isPublicCourseFolder(folder)) {
     return streamPublicMedia(req, res);
@@ -149,8 +156,8 @@ app.get('/uploads/courses/:folder/:filename', (req: Request, res: Response) => {
   return authenticateToken(req as any, res, () => streamProtectedMedia(req, res));
 });
 
-// Root info endpoint & health check redirects
-app.get('/', (_req: Request, res: Response) => {
+// Root info endpoint
+app.get(['/', '/api'], (_req: Request, res: Response) => {
   res.json({
     service: 'digital-guru-franchise-api',
     status: 'running',
@@ -160,17 +167,21 @@ app.get('/', (_req: Request, res: Response) => {
   });
 });
 
-app.get('/health', (_req: Request, res: Response) => {
-  res.redirect(307, '/api/health');
-});
-
-// Health check endpoint
-app.get('/api/health', async (_req: Request, res: Response) => {
-  const dbHealth = await checkDatabaseHealth();
+// Health check endpoint (serves both /api/health and /health)
+const healthCheckHandler = async (_req: Request, res: Response) => {
+  let dbHealth: { connected: boolean; latencyMs?: number; error?: string } = {
+    connected: false,
+    latencyMs: undefined,
+    error: undefined,
+  };
+  try {
+    dbHealth = await checkDatabaseHealth();
+  } catch (err: any) {
+    dbHealth = { connected: false, latencyMs: undefined, error: err.message };
+  }
   const uptime = process.uptime();
 
-  const responseStatus = dbHealth.connected ? 200 : 503;
-  res.status(responseStatus).json({
+  res.status(200).json({
     status: dbHealth.connected ? 'healthy' : 'degraded',
     service: 'digital-guru-franchise-api',
     version: '1.0.0',
@@ -190,7 +201,9 @@ app.get('/api/health', async (_req: Request, res: Response) => {
       operational: true,
     },
   });
-});
+};
+
+app.get(['/api/health', '/health'], healthCheckHandler);
 
 // Centralized 404 handler
 app.use((_req: Request, res: Response) => {
@@ -217,9 +230,21 @@ app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
   });
 });
 
-// Start server if run directly
-const isMain = process.argv[1] && process.argv[1].endsWith('index.ts');
-if (isMain || process.env.NODE_ENV === 'production') {
+// Start standalone server only when executed directly from CLI (e.g. `node server/dist/index.js` or `tsx server/src/index.ts`)
+// Never start when loaded as a module in serverless functions (Vercel, AWS Lambda, tests, or wrappers)
+const isDirectExecution = Boolean(
+  process.argv[1] &&
+  (
+    process.argv[1].endsWith('server/src/index.ts') ||
+    process.argv[1].endsWith('server\\src\\index.ts') ||
+    process.argv[1].endsWith('server/dist/index.js') ||
+    process.argv[1].endsWith('server\\dist\\index.js')
+  ) &&
+  !process.env.VERCEL &&
+  !process.env.AWS_LAMBDA_FUNCTION_NAME
+);
+
+if (isDirectExecution) {
   validateProductionConfig();
   printStorageDiagnostics();
   const server = app.listen(config.port, config.host, () => {
@@ -241,5 +266,10 @@ if (isMain || process.env.NODE_ENV === 'production') {
   process.on('SIGTERM', handleShutdown);
 }
 
+(app as any).default = app;
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = app;
+  (module.exports as any).default = app;
+}
 export default app;
 

@@ -1,0 +1,13 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const reviews_controller_js_1 = require("./reviews.controller.js");
+const auth_js_1 = require("../../middleware/auth.js");
+const router = (0, express_1.Router)();
+router.use(auth_js_1.authenticateToken);
+router.use(auth_js_1.requireInstituteContext);
+router.post('/', (0, auth_js_1.requireRole)('PARENT'), reviews_controller_js_1.createReview);
+router.get('/', (0, auth_js_1.requireRole)('SUPER_ADMIN', 'ACADEMIC_ADMIN', 'STAFF', 'PARENT', 'STUDENT'), reviews_controller_js_1.listReviews);
+router.patch('/:id/reply', (0, auth_js_1.requireRole)('SUPER_ADMIN', 'ACADEMIC_ADMIN', 'STAFF'), reviews_controller_js_1.replyToReview);
+router.patch('/:id/status', (0, auth_js_1.requireRole)('SUPER_ADMIN', 'ACADEMIC_ADMIN', 'STAFF'), reviews_controller_js_1.updateReviewStatus);
+exports.default = router;

@@ -151,7 +151,11 @@ export async function apiFetch<T = any>(endpoint: string, options: ApiFetchOptio
     } catch {
       if (response.status >= 500) {
         console.error(`[apiFetch] HTTP ${response.status} 500 Server Error for ${endpoint}`);
-        throw new Error('Digital Guru Franchise Backend is not responding (port 5000 unreachable). Run `npm run dev:server` in terminal.');
+        const isLocalDev = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+        const msg = isLocalDev
+          ? 'Digital Guru Franchise Backend is not responding (port 5000 unreachable). Run `npm run dev:server` in terminal.'
+          : 'Digital Guru Franchise Backend service is initializing or unreachable. Please retry in a moment.';
+        throw new Error(msg);
       }
       console.error(`[apiFetch] Failed to parse JSON response for ${endpoint} (HTTP ${response.status})`);
       throw new Error(`Server returned unexpected response (HTTP ${response.status})`);
