@@ -230,14 +230,21 @@ app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
   });
 });
 
-// Start server if run directly (standalone Node.js / Docker process / long-running service container)
-const isVercelRuntime = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
-const isMain = Boolean(
+// Start standalone server only when executed directly from CLI (e.g. `node server/dist/index.js` or `tsx server/src/index.ts`)
+// Never start when loaded as a module in serverless functions (Vercel, AWS Lambda, tests, or wrappers)
+const isDirectExecution = Boolean(
   process.argv[1] &&
-  (process.argv[1].endsWith('index.ts') || process.argv[1].endsWith('index.js'))
+  (
+    process.argv[1].endsWith('server/src/index.ts') ||
+    process.argv[1].endsWith('server\\src\\index.ts') ||
+    process.argv[1].endsWith('server/dist/index.js') ||
+    process.argv[1].endsWith('server\\dist\\index.js')
+  ) &&
+  !process.env.VERCEL &&
+  !process.env.AWS_LAMBDA_FUNCTION_NAME
 );
 
-if (!isVercelRuntime && (isMain || process.env.PORT)) {
+if (isDirectExecution) {
   validateProductionConfig();
   printStorageDiagnostics();
   const server = app.listen(config.port, config.host, () => {
