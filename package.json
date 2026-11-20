@@ -13,6 +13,7 @@
     "build:server": "npm run build --workspace=server",
     "build:web": "npm run build --workspace=@tuition/web",
     "build": "npm run build --workspaces --if-present",
+    "vercel-build": "npm run build",
     "test": "npm run test --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present"
   },

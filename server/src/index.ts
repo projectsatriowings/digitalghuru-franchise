@@ -1,4 +1,4 @@
-import './dns-preload.cjs';
+import './dns-preload.js';
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -217,9 +217,10 @@ app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
   });
 });
 
-// Start server if run directly
-const isMain = process.argv[1] && process.argv[1].endsWith('index.ts');
-if (isMain || process.env.NODE_ENV === 'production') {
+// Start server if run directly (standalone Node.js / Docker process; skip when executed inside Vercel serverless functions)
+const isVercelRuntime = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
+const isMain = process.argv[1] && (process.argv[1].endsWith('index.ts') || process.argv[1].endsWith('index.js'));
+if (!isVercelRuntime && (isMain || process.env.NODE_ENV === 'production')) {
   validateProductionConfig();
   printStorageDiagnostics();
   const server = app.listen(config.port, config.host, () => {
