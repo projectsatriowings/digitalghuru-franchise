@@ -21,16 +21,23 @@ import {
   X,
   Loader2,
   Printer,
+  CreditCard,
 } from 'lucide-react';
 import { CoursePlayer } from '../components/CoursePlayer';
 import { useToast } from '../context/ToastContext';
+import { StudentFeesView } from './student/StudentFeesView';
 
 interface StudentPortalProps {
-  initialSection?: 'overview' | 'courses';
+  initialSection?: 'overview' | 'courses' | 'fees';
 }
 
 export const StudentPortal: React.FC<StudentPortalProps> = ({ initialSection = 'overview' }) => {
   const toast = useToast();
+  const [section, setSection] = useState<'overview' | 'courses' | 'fees'>(initialSection);
+
+  useEffect(() => {
+    setSection(initialSection);
+  }, [initialSection]);
 
   const formatKolkataDateTime = (dateString?: string | null) => {
     if (!dateString) return 'Not available';
@@ -288,10 +295,52 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({ initialSection = '
         </div>
       </div>
 
+      {/* Section Navigation Switcher */}
+      <div className="flex items-center gap-2 border-b border-slate-200 bg-white px-4 rounded-2xl shadow-sm">
+        <button
+          type="button"
+          onClick={() => setSection('overview')}
+          className={`py-3.5 px-3 font-bold text-xs border-b-2 transition-all flex items-center gap-2 cursor-pointer ${
+            section === 'overview'
+              ? 'border-[#006FFF] text-[#006FFF]'
+              : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <GraduationCap className="w-4 h-4" /> Overview & Academics
+        </button>
+        <button
+          type="button"
+          onClick={() => setSection('courses')}
+          className={`py-3.5 px-3 font-bold text-xs border-b-2 transition-all flex items-center gap-2 cursor-pointer ${
+            section === 'courses'
+              ? 'border-[#006FFF] text-[#006FFF]'
+              : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <Laptop className="w-4 h-4" /> LMS Courses & Certificates
+        </button>
+        <button
+          type="button"
+          onClick={() => setSection('fees')}
+          className={`py-3.5 px-3 font-bold text-xs border-b-2 transition-all flex items-center gap-2 cursor-pointer ${
+            section === 'fees'
+              ? 'border-[#006FFF] text-[#006FFF]'
+              : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <CreditCard className="w-4 h-4" /> Fee Invoices & Payments
+        </button>
+      </div>
+
+      {/* RENDER FEE VIEW */}
+      {section === 'fees' && <StudentFeesView />}
+
       {/* ================================================================= */}
       {/* MY ENROLLED GLOBAL COURSES (ONLINE & OFFLINE LMS)                 */}
       {/* ================================================================= */}
-      <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-4">
+      {section !== 'fees' && (
+        <>
+          <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div>
             <h2 className="text-lg font-extrabold text-slate-900 flex items-center gap-2">
@@ -805,6 +854,8 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({ initialSection = '
           </div>
         </>
       )}
+    </>
+  )}
 
       {/* ================================================================= */}
       {/* OFFICIAL SIGNED CERTIFICATE MODAL                                 */}

@@ -1,0 +1,211 @@
+import { Request, Response } from 'express';
+import { prisma } from '../../prisma.js';
+import { razorpayService } from './razorpay.service.js';
+import { revenueEngineService } from './revenue-engine.service.js';
+import { settlementTransferService } from '../settlements/settlement-transfer.service.js';
+import { PaymentMethod, PaymentStatus, Prisma } from '@prisma/client';
+
+export async function handleRazorpayWebhook(req: Request, res: Response) {
+  try {
+    const signature = req.headers['x-razorpay-signature'] as string;
+    const rawBody = (req as any).rawBody || JSON.stringify(req.body);
+
+    // 1. Strict Webhook Signature Verification (Security Rule K)
+    const isValid = razorpayService.verifyWebhookSignature(rawBody, signature);
+    if (!isValid) {
+      console.error('[Razorpay Webhook Rejected] Invalid signature');
+      return res.status(400).json({ success: false, error: 'Invalid webhook signature' });
+    }
+
+    const event = req.body?.event;
+    const payload = req.body?.payload;
+
+    console.log(`[Razorpay Webhook Verified] Event: ${event}`);
+
+    // =========================================================================
+    // EVENT: payment.captured
+    // =========================================================================
+    if (event === 'payment.captured') {
+      const paymentEntity = payload?.payment?.entity;
+      if (!paymentEntity) {
+        return res.json({ status: 'ignored_missing_entity' });
+      }
+
+      const gatewayPaymentId = paymentEntity.id;
+      const gatewayOrderId = paymentEntity.order_id;
+      const amountPaise = paymentEntity.amount;
+      const amountRupees = amountPaise / 100;
+      const notes = paymentEntity.notes || {};
+      const { studentId, feeAssignmentId, instituteId } = notes;
+
+      // Check anti-replay: has this payment already been recorded?
+      const existingPayment = await prisma.payment.findFirst({
+        where: {
+          OR: [
+            { gatewayPaymentId },
+            { transactionReference: gatewayPaymentId },
+            { idempotencyKey: `online_${gatewayOrderId}_${gatewayPaymentId}` },
+          ],
+        },
+      });
+
+      if (existingPayment) {
+        console.log(`[Webhook] Payment ${gatewayPaymentId} already recorded, skipping.`);
+        return res.json({ status: 'already_processed' });
+      }
+
+      // Find pending order
+      let onlineOrder = gatewayOrderId
+        ? await prisma.onlinePaymentOrder.findUnique({
+            where: { orderId: gatewayOrderId },
+            include: { feeAssignment: true },
+          })
+        : null;
+
+      const resolvedStudentId = studentId || onlineOrder?.studentId;
+      const resolvedAssignmentId = feeAssignmentId || onlineOrder?.feeAssignmentId;
+      const resolvedInstituteId = instituteId || onlineOrder?.instituteId;
+
+      if (!resolvedStudentId || !resolvedAssignmentId || !resolvedInstituteId) {
+        console.warn('[Webhook] Incomplete metadata in captured payment', paymentEntity.id);
+        return res.json({ status: 'metadata_incomplete' });
+      }
+
+      // Resolve Franchise and Snapshot applicable revenue percentage (Rules 8 & 9)
+      const institute = await prisma.institute.findUnique({
+        where: { id: resolvedInstituteId },
+        include: { franchise: true },
+      });
+
+      const franchiseId = institute?.franchiseId || null;
+      let franchisePercentage = 50.00;
+      if (institute?.franchise?.revenueSharePercentage !== null && institute?.franchise?.revenueSharePercentage !== undefined) {
+        franchisePercentage = Number(institute.franchise.revenueSharePercentage);
+      }
+
+      // Calculate shares with integer paise arithmetic
+      const shares = revenueEngineService.calculateShares(amountRupees, franchisePercentage);
+      const receiptNumber = `REC-ONL-${new Date().getFullYear()}-${Date.now().toString().slice(-6)}`;
+
+      // Atomic payment credit and assignment update
+      await prisma.$transaction(async (tx) => {
+        // 1. Create authoritative Payment record
+        const payment = await tx.payment.create({
+          data: {
+            instituteId: resolvedInstituteId,
+            studentId: resolvedStudentId,
+            feeAssignmentId: resolvedAssignmentId,
+            franchiseId,
+            receiptNumber,
+            amountPaid: new Prisma.Decimal(amountRupees),
+            method: PaymentMethod.ONLINE,
+            transactionReference: gatewayPaymentId,
+            gatewayPaymentId,
+            gatewayOrderId,
+            idempotencyKey: `online_${gatewayOrderId}_${gatewayPaymentId}`,
+            status: 'SUCCESS',
+            recordedById: (await tx.user.findFirst({ where: { role: 'SUPER_ADMIN' } }))?.id || 'system-gateway',
+            remarks: `Captured via Razorpay Webhook (${event})`,
+            franchisePercentage: new Prisma.Decimal(shares.franchisePercentage),
+            digitalGuruPercentage: new Prisma.Decimal(shares.digitalGuruPercentage),
+            franchiseShareAmount: new Prisma.Decimal(shares.franchiseShareAmount),
+            digitalGuruShareAmount: new Prisma.Decimal(shares.digitalGuruShareAmount),
+            feeDeduction: new Prisma.Decimal(shares.feeDeduction),
+            netEligibleAmount: new Prisma.Decimal(shares.netEligibleAmount),
+          },
+        });
+
+        // 2. Update OnlinePaymentOrder if exists
+        if (onlineOrder) {
+          await tx.onlinePaymentOrder.update({
+            where: { id: onlineOrder.id },
+            data: {
+              status: 'VERIFIED',
+              gatewayPaymentId,
+              receiptNumber,
+              paymentId: payment.id,
+            },
+          });
+        }
+
+        // 3. Recalculate StudentFeeAssignment status
+        const allPayments = await tx.payment.findMany({
+          where: { feeAssignmentId: resolvedAssignmentId, status: 'SUCCESS' },
+        });
+        const totalPaid = allPayments.reduce((acc, p) => acc.plus(p.amountPaid), new Prisma.Decimal(0));
+        const assignment = await tx.studentFeeAssignment.findUnique({ where: { id: resolvedAssignmentId } });
+        const finalAmount = assignment ? assignment.finalAmount : new Prisma.Decimal(0);
+
+        const newStatus = totalPaid.greaterThanOrEqualTo(finalAmount)
+          ? PaymentStatus.PAID
+          : totalPaid.greaterThan(0)
+          ? PaymentStatus.PARTIALLY_PAID
+          : PaymentStatus.PENDING;
+
+        await tx.studentFeeAssignment.update({
+          where: { id: resolvedAssignmentId },
+          data: { status: newStatus },
+        });
+
+        // 4. InApp Notification
+        const student = await tx.student.findUnique({
+          where: { id: resolvedStudentId },
+          select: { userId: true },
+        });
+        if (student?.userId) {
+          await tx.inAppNotification.create({
+            data: {
+              instituteId: resolvedInstituteId,
+              userId: student.userId,
+              studentId: resolvedStudentId,
+              type: 'FEE_PAID',
+              title: 'Fee Payment Successful',
+              message: `Your payment of ₹${amountRupees} has been captured (Receipt: ${receiptNumber}).`,
+            },
+          });
+        }
+      });
+
+      console.log(`[Webhook] Payment ${gatewayPaymentId} credited successfully (Receipt: ${receiptNumber})`);
+      return res.json({ status: 'captured_processed' });
+    }
+
+    // =========================================================================
+    // EVENT: payment.failed
+    // =========================================================================
+    if (event === 'payment.failed') {
+      const paymentEntity = payload?.payment?.entity;
+      const gatewayOrderId = paymentEntity?.order_id;
+      if (gatewayOrderId) {
+        await prisma.onlinePaymentOrder.updateMany({
+          where: { orderId: gatewayOrderId, status: 'PENDING' },
+          data: {
+            status: 'FAILED',
+            gatewayPaymentId: paymentEntity.id,
+            metadata: {
+              error_code: paymentEntity.error_code,
+              error_description: paymentEntity.error_description,
+            },
+          },
+        });
+      }
+      return res.json({ status: 'failed_recorded' });
+    }
+
+    // =========================================================================
+    // EVENTS: transfer.processed, transfer.failed, transfer.reversed (Section G)
+    // =========================================================================
+    if (['transfer.processed', 'transfer.failed', 'transfer.reversed'].includes(event)) {
+      const transferEntity = payload?.transfer?.entity;
+      if (transferEntity) {
+        await settlementTransferService.reconcileTransferWebhook(event, transferEntity);
+      }
+      return res.json({ status: 'transfer_webhook_reconciled' });
+    }
+
+    return res.json({ status: 'event_acknowledged' });
+  } catch (err: any) {
+    console.error('[Razorpay Webhook Error]', err);
+    return res.status(500).json({ success: false, error: 'Internal webhook error' });
+  }
+}

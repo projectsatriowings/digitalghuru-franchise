@@ -29,6 +29,9 @@ import {
   getFranchiseOwnerDashboard,
   getMyAssignedBranches,
   getUnassignedBranches,
+  updateRevenueShare,
+  updateBeneficiaryAccount,
+  getFranchiseRevenueDashboard,
 } from './franchise.controller.js';
 import { authenticateToken, requireRole } from '../../middleware/auth.js';
 
@@ -55,6 +58,9 @@ router.get('/', requireRole('SUPER_ADMIN', 'FRANCHISE_OWNER'), listFranchises);
 router.get('/:id', requireRole('SUPER_ADMIN', 'FRANCHISE_OWNER'), getFranchiseById);
 router.patch('/:id', requireRole('SUPER_ADMIN', 'FRANCHISE_OWNER'), updateFranchise);
 router.patch('/:id/status', requireRole('SUPER_ADMIN'), updateFranchiseStatus);
+router.patch('/:id/revenue-share', requireRole('SUPER_ADMIN'), updateRevenueShare);
+router.put('/:id/beneficiary-account', requireRole('SUPER_ADMIN', 'FRANCHISE_OWNER'), updateBeneficiaryAccount);
+router.get('/:id/revenue-dashboard', requireRole('SUPER_ADMIN', 'FRANCHISE_OWNER'), getFranchiseRevenueDashboard);
 router.post('/:id/owner/reset-password', requireRole('SUPER_ADMIN'), resetFranchiseOwnerPassword);
 
 // -------------------------------------------------------------

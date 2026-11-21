@@ -27,8 +27,10 @@ import {
   ChevronRight,
   ArrowRight,
   GraduationCap,
+  CreditCard,
 } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
+import { FranchiseRevenueSection } from './franchise/FranchiseRevenueSection';
 
 export const FranchiseOwnerDashboard: React.FC = () => {
   const { user, activeInstitute, isConsolidatedMode, setActiveInstitute } = useAuth();
@@ -37,7 +39,7 @@ export const FranchiseOwnerDashboard: React.FC = () => {
   const [data, setData] = useState<any>(null);
 
   // Active view tab inside franchisee portal
-  const [activeTab, setActiveTab] = useState<'overview' | 'branches' | 'installments' | 'monthly_statements' | 'agreement'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'branches' | 'installments' | 'monthly_statements' | 'agreement' | 'revenue_settlements'>('overview');
 
   // Receipt modal
   const [showReceiptModal, setShowReceiptModal] = useState(false);
@@ -339,6 +341,16 @@ export const FranchiseOwnerDashboard: React.FC = () => {
             }`}
         >
           <Building2 className="w-4 h-4" /> Assigned Campuses ({branches.length})
+        </button>
+
+        <button
+          onClick={() => setActiveTab('revenue_settlements')}
+          className={`py-3.5 px-2 text-sm font-bold border-b-2 whitespace-nowrap transition-all flex items-center gap-2 cursor-pointer ${activeTab === 'revenue_settlements'
+            ? 'border-[#006FFF] text-[#006FFF]'
+            : 'border-transparent text-slate-600 hover:text-slate-900'
+            }`}
+        >
+          <CreditCard className="w-4 h-4 text-emerald-600" /> Revenue & Settlements
         </button>
 
         {(activeAgreement?.settlementFrequency === 'MONTHLY' || royaltyRecords.length > 0) && (
@@ -764,6 +776,11 @@ export const FranchiseOwnerDashboard: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* TAB: CENTRALIZED REVENUE & MONTHLY SETTLEMENTS (SECTION H) */}
+      {activeTab === 'revenue_settlements' && (
+        <FranchiseRevenueSection franchiseId={franchise.id} />
       )}
 
       {/* TAB: MONTHLY ROYALTY STATEMENTS */}

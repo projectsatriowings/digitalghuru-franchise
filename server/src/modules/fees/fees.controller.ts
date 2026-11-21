@@ -6,6 +6,8 @@ import { z } from 'zod';
 import { AuthenticatedRequest } from '../../middleware/auth.js';
 import { isStudentAuthorized } from '../students/student-authorization.service.js';
 import { InAppNotificationService } from '../notifications/inapp-notification.service.js';
+import { razorpayService } from '../payments/razorpay.service.js';
+import { revenueEngineService } from '../payments/revenue-engine.service.js';
 
 // ============================================================================
 // VALIDATION SCHEMAS
@@ -1033,6 +1035,14 @@ export async function recordPayment(req: AuthenticatedRequest, res: Response) {
 
     const data = parse.data;
 
+    // Business Rule A.2: Franchise owners and branch administrators cannot manually collect or confirm online payments
+    if (data.method === PaymentMethod.ONLINE) {
+      return res.status(400).json({
+        success: false,
+        error: 'Online payments cannot be manually confirmed or collected by administrators; students must pay through the centralized Razorpay gateway.',
+      });
+    }
+
     // Check idempotency if key is provided
     if (data.idempotencyKey) {
       const existingPayment = await prisma.payment.findUnique({
@@ -1097,12 +1107,24 @@ export async function recordPayment(req: AuthenticatedRequest, res: Response) {
 
       const receiptNumber = generateReceiptNumber();
 
+      // Resolve Franchise and Snapshot applicable revenue sharing percentage (Rules 3-9)
+      const institute = await tx.institute.findUnique({
+        where: { id: instituteId },
+        include: { franchise: true },
+      });
+      const franchiseId = institute?.franchiseId || null;
+      const franchisePercentage = institute?.franchise?.revenueSharePercentage !== null && institute?.franchise?.revenueSharePercentage !== undefined
+        ? Number(institute.franchise.revenueSharePercentage)
+        : 50.00;
+      const shares = revenueEngineService.calculateShares(Number(paymentAmountDecimal), franchisePercentage);
+
       // Create Payment
       const payment = await tx.payment.create({
         data: {
           instituteId,
           studentId: assignment.studentId,
           feeAssignmentId: assignment.id,
+          franchiseId,
           receiptNumber,
           amountPaid: paymentAmountDecimal,
           method: data.method,
@@ -1111,6 +1133,13 @@ export async function recordPayment(req: AuthenticatedRequest, res: Response) {
           status: 'SUCCESS',
           recordedById: req.user!.userId,
           remarks: data.remarks?.trim() || null,
+          franchisePercentage: new Prisma.Decimal(shares.franchisePercentage),
+          digitalGuruPercentage: new Prisma.Decimal(shares.digitalGuruPercentage),
+          franchiseShareAmount: new Prisma.Decimal(shares.franchiseShareAmount),
+          digitalGuruShareAmount: new Prisma.Decimal(shares.digitalGuruShareAmount),
+          netEligibleAmount: new Prisma.Decimal(shares.netEligibleAmount),
+          feeDeduction: new Prisma.Decimal(shares.feeDeduction),
+          transferStatus: 'PENDING',
         },
       });
 
@@ -2052,45 +2081,19 @@ export async function createOnlinePaymentOrder(req: AuthenticatedRequest, res: R
       });
     }
 
-    const razorpayKeyId = process.env.RAZORPAY_KEY_ID;
-    const razorpayKeySecret = process.env.RAZORPAY_KEY_SECRET;
-
-    let gatewayOrderId = '';
+    const receipt = `rcpt_${Date.now().toString().slice(-8)}`;
+    const orderResult = await razorpayService.createOrder({
+      amountInPaise: Math.round(amount * 100),
+      currency: 'INR',
+      receipt,
+      notes: {
+        studentId,
+        feeAssignmentId,
+        instituteId,
+      },
+    });
+    const gatewayOrderId = orderResult.id;
     const currency = 'INR';
-
-    if (razorpayKeyId && razorpayKeySecret) {
-      // Call real Razorpay API
-      const authHeader = 'Basic ' + Buffer.from(`${razorpayKeyId}:${razorpayKeySecret}`).toString('base64');
-      const orderRes = await fetch('https://api.razorpay.com/v1/orders', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: authHeader,
-        },
-        body: JSON.stringify({
-          amount: Math.round(amount * 100), // in paise
-          currency,
-          receipt: `rcpt_${Date.now().toString().slice(-8)}`,
-          notes: {
-            studentId,
-            feeAssignmentId,
-            instituteId,
-          },
-        }),
-      });
-
-      if (!orderRes.ok) {
-        const errorData = await orderRes.json().catch(() => ({}));
-        console.error('[Razorpay Order Creation Failed]', errorData);
-        return res.status(502).json({ success: false, error: 'Failed to create payment order with gateway' });
-      }
-
-      const orderData = (await orderRes.json()) as any;
-      gatewayOrderId = orderData.id;
-    } else {
-      // Development simulated order with cryptographic seed
-      gatewayOrderId = `order_sim_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
-    }
 
     // Record pending order
     const paymentOrder = await prisma.onlinePaymentOrder.create({
@@ -2117,13 +2120,13 @@ export async function createOnlinePaymentOrder(req: AuthenticatedRequest, res: R
         orderId: gatewayOrderId,
         amount,
         currency,
-        keyId: razorpayKeyId || 'rzp_test_simulated',
+        keyId: razorpayService.getKeyId(),
         studentId,
         feeAssignmentId,
         studentName: `${assignment.student.firstName} ${assignment.student.lastName}`,
         feeName: assignment.feeStructure.name,
         termLabel: assignment.termLabel,
-        isSimulated: !razorpayKeyId,
+        isSimulated: orderResult.isSimulated,
       },
     });
   } catch (err: any) {
@@ -2182,26 +2185,14 @@ export async function verifyOnlinePayment(req: AuthenticatedRequest, res: Respon
       return res.status(400).json({ success: false, error: `Invalid order state: ${order.status}` });
     }
 
-    // Verify cryptographic signature if secret is configured
-    const razorpayKeySecret = process.env.RAZORPAY_KEY_SECRET;
-    if (razorpayKeySecret && !orderId.startsWith('order_sim_')) {
-      const generatedSignature = crypto
-        .createHmac('sha256', razorpayKeySecret)
-        .update(`${orderId}|${paymentId}`)
-        .digest('hex');
-
-      const isSignatureValid = crypto.timingSafeEqual(
-        Buffer.from(generatedSignature, 'utf8'),
-        Buffer.from(signature, 'utf8')
-      );
-
-      if (!isSignatureValid) {
-        await prisma.onlinePaymentOrder.update({
-          where: { id: order.id },
-          data: { status: 'FAILED', gatewayPaymentId: paymentId, gatewaySignature: signature },
-        });
-        return res.status(400).json({ success: false, error: 'Invalid payment signature verification failed' });
-      }
+    // Verify cryptographic signature (Rule C)
+    const isSignatureValid = razorpayService.verifySignature(orderId, paymentId, signature);
+    if (!isSignatureValid) {
+      await prisma.onlinePaymentOrder.update({
+        where: { id: order.id },
+        data: { status: 'FAILED', gatewayPaymentId: paymentId, gatewaySignature: signature },
+      });
+      return res.status(400).json({ success: false, error: 'Invalid payment signature verification failed' });
     }
 
     // Atomic credit transaction
@@ -2214,24 +2205,49 @@ export async function verifyOnlinePayment(req: AuthenticatedRequest, res: Respon
         throw new Error('ORDER_ALREADY_VERIFIED');
       }
 
-      // 2. Create official Payment record
+      // 2. Resolve Franchise and Snapshot applicable revenue sharing percentage (Rules 3-9)
+      const institute = await tx.institute.findUnique({
+        where: { id: instituteId },
+        include: { franchise: true },
+      });
+
+      const franchiseId = institute?.franchiseId || null;
+      const franchisePercentage = institute?.franchise?.revenueSharePercentage !== null && institute?.franchise?.revenueSharePercentage !== undefined
+        ? Number(institute.franchise.revenueSharePercentage)
+        : 50.00;
+
+      // Calculate shares using integer paise
+      const shares = revenueEngineService.calculateShares(Number(order.amount), franchisePercentage);
+
+      // 3. Create official Payment record with immutable percentage snapshots
       const payment = await tx.payment.create({
         data: {
           instituteId,
           studentId: order.studentId,
           feeAssignmentId: order.feeAssignmentId,
+          franchiseId,
           receiptNumber,
           amountPaid: order.amount,
           method: PaymentMethod.ONLINE,
           transactionReference: paymentId,
+          gatewayPaymentId: paymentId,
+          gatewayOrderId: orderId,
+          gatewaySignature: signature,
           idempotencyKey: `online_${orderId}_${paymentId}`,
           status: 'SUCCESS',
           recordedById: req.user!.userId,
           remarks: `Online Payment Gateway verified (Order: ${orderId})`,
+          franchisePercentage: new Prisma.Decimal(shares.franchisePercentage),
+          digitalGuruPercentage: new Prisma.Decimal(shares.digitalGuruPercentage),
+          franchiseShareAmount: new Prisma.Decimal(shares.franchiseShareAmount),
+          digitalGuruShareAmount: new Prisma.Decimal(shares.digitalGuruShareAmount),
+          feeDeduction: new Prisma.Decimal(shares.feeDeduction),
+          netEligibleAmount: new Prisma.Decimal(shares.netEligibleAmount),
+          transferStatus: 'PENDING',
         },
       });
 
-      // 3. Recalculate and update fee assignment status
+      // 4. Recalculate and update fee assignment status
       const existingPayments = await tx.payment.findMany({
         where: { feeAssignmentId: order.feeAssignmentId, status: 'SUCCESS' },
       });
@@ -2340,4 +2356,72 @@ export async function handlePaymentWebhook(req: AuthenticatedRequest, res: Respo
     return res.status(500).json({ success: false, error: 'Webhook processing error' });
   }
 }
+
+/**
+ * Logged-in Student fee view (Section J)
+ */
+export async function getStudentMyFees(req: AuthenticatedRequest, res: Response) {
+  try {
+    const userId = req.user!.userId;
+    const student = await prisma.student.findUnique({
+      where: { userId },
+      include: {
+        institute: { select: { id: true, name: true, code: true } },
+        feeAssignments: {
+          include: {
+            feeStructure: true,
+            payments: {
+              where: { status: 'SUCCESS' },
+              include: { adjustments: { where: { adjustmentType: 'REFUND' } } },
+              orderBy: { paidAt: 'desc' },
+            },
+            adjustments: true,
+          },
+          orderBy: { dueDate: 'asc' },
+        },
+      },
+    });
+
+    if (!student) {
+      return res.status(404).json({ success: false, error: 'Student profile not found for this account' });
+    }
+
+    // Calculate financials for each assignment
+    const assignmentsWithFinancials = student.feeAssignments.map((assignment) => {
+      const fin = calculateAssignmentFinancials(assignment);
+      return {
+        ...assignment,
+        ...fin,
+      };
+    });
+
+    const totalFees = assignmentsWithFinancials.reduce((acc, a) => acc + a.finalAmount, 0);
+    const totalPaid = assignmentsWithFinancials.reduce((acc, a) => acc + a.netPaid, 0);
+    const totalPending = assignmentsWithFinancials.reduce((acc, a) => acc + a.remainingBalance, 0);
+
+    return res.json({
+      success: true,
+      data: {
+        student: {
+          id: student.id,
+          firstName: student.firstName,
+          lastName: student.lastName,
+          admissionNumber: student.admissionNumber,
+          branchName: student.institute?.name || 'Main Campus',
+          instituteId: student.instituteId,
+        },
+        summary: {
+          totalFees: Number(totalFees.toFixed(2)),
+          totalPaid: Number(totalPaid.toFixed(2)),
+          totalPending: Number(totalPending.toFixed(2)),
+        },
+        assignments: assignmentsWithFinancials,
+      },
+    });
+  } catch (err: any) {
+    console.error('[Get Student My Fees Error]', err);
+    return res.status(500).json({ success: false, error: 'Failed to retrieve fee records' });
+  }
+}
+
 

@@ -95,6 +95,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
             >
               <BookOpen className="w-5 h-5 shrink-0 text-emerald-400" /> Course Management
             </button>
+            <button
+              onClick={() => handleSelect('monthly_settlements')}
+              className={navItemClass('monthly_settlements')}
+            >
+              <CreditCard className="w-5 h-5 shrink-0 text-[#FEDC32]" /> Monthly Settlements
+            </button>
           </>
         )}
 
@@ -390,6 +396,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
               className={navItemClass('student_courses')}
             >
               <Laptop className="w-4 h-4" /> My Courses & Player
+            </button>
+
+            <button
+              onClick={() => onSelectTab('student_fees')}
+              className={navItemClass('student_fees')}
+            >
+              <CreditCard className="w-4 h-4 text-emerald-400" /> Fee Invoices & Payments
             </button>
 
             <button
