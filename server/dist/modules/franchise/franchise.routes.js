@@ -23,6 +23,9 @@ router.get('/', (0, auth_js_1.requireRole)('SUPER_ADMIN', 'FRANCHISE_OWNER'), fr
 router.get('/:id', (0, auth_js_1.requireRole)('SUPER_ADMIN', 'FRANCHISE_OWNER'), franchise_controller_js_1.getFranchiseById);
 router.patch('/:id', (0, auth_js_1.requireRole)('SUPER_ADMIN', 'FRANCHISE_OWNER'), franchise_controller_js_1.updateFranchise);
 router.patch('/:id/status', (0, auth_js_1.requireRole)('SUPER_ADMIN'), franchise_controller_js_1.updateFranchiseStatus);
+router.patch('/:id/revenue-share', (0, auth_js_1.requireRole)('SUPER_ADMIN'), franchise_controller_js_1.updateRevenueShare);
+router.put('/:id/beneficiary-account', (0, auth_js_1.requireRole)('SUPER_ADMIN', 'FRANCHISE_OWNER'), franchise_controller_js_1.updateBeneficiaryAccount);
+router.get('/:id/revenue-dashboard', (0, auth_js_1.requireRole)('SUPER_ADMIN', 'FRANCHISE_OWNER'), franchise_controller_js_1.getFranchiseRevenueDashboard);
 router.post('/:id/owner/reset-password', (0, auth_js_1.requireRole)('SUPER_ADMIN'), franchise_controller_js_1.resetFranchiseOwnerPassword);
 // -------------------------------------------------------------
 // BRANCH MANAGEMENT (Strictly SUPER_ADMIN only)

@@ -1247,7 +1247,6 @@ export const FeesManagement: React.FC = () => {
                   <option value="UPI">UPI (PhonePe / GPay / Paytm)</option>
                   <option value="BANK_TRANSFER">Bank Transfer (NEFT / IMPS / RTGS)</option>
                   <option value="CHEQUE">Cheque / Demand Draft</option>
-                  <option value="ONLINE">Online Portal</option>
                 </select>
               </div>
 

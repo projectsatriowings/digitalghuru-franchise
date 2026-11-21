@@ -30,12 +30,17 @@ function ensureDatabaseBridge() {
     if (!bridgeServer) {
         try {
             bridgeServer = net_1.default.createServer((clientSocket) => {
+                clientSocket.setKeepAlive(true, 10000);
+                clientSocket.setNoDelay(true);
                 const remoteSocket = net_1.default.connect(NEON_PORT, NEON_RESOLVED_IP);
+                remoteSocket.setKeepAlive(true, 10000);
+                remoteSocket.setNoDelay(true);
                 clientSocket.pipe(remoteSocket).pipe(clientSocket);
                 remoteSocket.on('error', () => clientSocket.destroy());
                 clientSocket.on('error', () => remoteSocket.destroy());
+                remoteSocket.on('close', () => clientSocket.destroy());
+                clientSocket.on('close', () => remoteSocket.destroy());
             });
-            bridgeServer.unref();
             bridgeServer.listen(BRIDGE_PORT, '127.0.0.1', () => {
                 // Bridge listening quietly
             });

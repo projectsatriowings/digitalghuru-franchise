@@ -43,6 +43,7 @@ router.get('/reports/outstanding', (0, auth_js_1.requireRole)('SUPER_ADMIN', 'AC
 // ============================================================================
 // MODULE G: ONLINE PAYMENT WORKFLOW (RAZORPAY)
 // ============================================================================
+router.get('/student/my-fees', (0, auth_js_1.requireRole)('STUDENT', 'SUPER_ADMIN'), fees_controller_js_1.getStudentMyFees);
 router.post('/online/create-order', (0, auth_js_1.requireRole)('PARENT', 'STUDENT', 'ACADEMIC_ADMIN', 'SUPER_ADMIN'), fees_controller_js_1.createOnlinePaymentOrder);
 router.post('/online/verify-payment', (0, auth_js_1.requireRole)('PARENT', 'STUDENT', 'ACADEMIC_ADMIN', 'SUPER_ADMIN'), fees_controller_js_1.verifyOnlinePayment);
 router.post('/online/webhook', fees_controller_js_1.handlePaymentWebhook);

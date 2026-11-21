@@ -19,6 +19,7 @@ const CourseManagement = lazy(() => loadCourseManagement().then((m) => ({ defaul
 const FranchiseCourses = lazy(() => loadFranchiseCourses().then((m) => ({ default: m.FranchiseCourses })));
 const FranchiseOwnerDashboard = lazy(() => import('./pages/FranchiseOwnerDashboard').then((m) => ({ default: m.FranchiseOwnerDashboard })));
 const SuperAdminDashboard = lazy(() => loadSuperAdminDashboard().then((m) => ({ default: m.SuperAdminDashboard })));
+const MonthlySettlements = lazy(() => import('./pages/MonthlySettlements').then((m) => ({ default: m.MonthlySettlements })));
 const AcademicAdminDashboard = lazy(() => import('./pages/AcademicAdminDashboard').then((m) => ({ default: m.AcademicAdminDashboard })));
 const StaffManagement = lazy(() => import('./pages/StaffManagement').then((m) => ({ default: m.StaffManagement })));
 const StaffAttendanceAdmin = lazy(() => import('./pages/StaffAttendanceAdmin').then((m) => ({ default: m.StaffAttendanceAdmin })));
@@ -61,9 +62,9 @@ const isTabAllowedForRole = (tab: string, role?: string): boolean => {
   if (!role) return false;
   switch (role) {
     case 'SUPER_ADMIN':
-      return ['super_admin_dashboard', 'franchise_management', 'course_management', 'staff', 'students', 'academics', 'exams', 'fees'].includes(tab);
+      return ['super_admin_dashboard', 'franchise_management', 'course_management', 'monthly_settlements', 'staff', 'students', 'academics', 'exams', 'fees'].includes(tab);
     case 'FRANCHISE_OWNER':
-      return ['franchise_owner_dashboard', 'franchise_courses', 'franchise_branches', 'franchise_royalties', 'franchise_agreements', 'academic_dashboard', 'students', 'staff', 'staff_attendance', 'academics', 'exams', 'fees', 'attendance', 'messaging', 'progress_reviews'].includes(tab) || tab.startsWith('franchise_');
+      return ['franchise_owner_dashboard', 'franchise_courses', 'franchise_branches', 'franchise_royalties', 'franchise_agreements', 'monthly_settlements', 'academic_dashboard', 'students', 'staff', 'staff_attendance', 'academics', 'exams', 'fees', 'attendance', 'messaging', 'progress_reviews'].includes(tab) || tab.startsWith('franchise_');
     case 'BRANCH_ADMIN':
     case 'ACADEMIC_ADMIN':
       return ['academic_dashboard', 'franchise_courses', 'staff', 'staff_attendance', 'students', 'academics', 'exams', 'question_generator', 'progress_reviews', 'messaging', 'fees'].includes(tab);
@@ -233,6 +234,10 @@ const AppContent: React.FC = () => {
                     <CourseManagement />
                   )}
 
+                  {currentTab === 'monthly_settlements' && (user.role === 'SUPER_ADMIN' || user.role === 'FRANCHISE_OWNER') && (
+                    <MonthlySettlements />
+                  )}
+
                   {currentTab === 'franchise_courses' && (user.role === 'FRANCHISE_OWNER' || user.role === 'ACADEMIC_ADMIN' || user.role === 'BRANCH_ADMIN' || user.role === 'SUPER_ADMIN') && (
                     <FranchiseCourses />
                   )}
@@ -271,8 +276,8 @@ const AppContent: React.FC = () => {
                     />
                   )}
 
-                  {(currentTab === 'student_portal' || currentTab === 'student_courses') && user.role === 'STUDENT' && (
-                    <StudentPortal initialSection={currentTab === 'student_courses' ? 'courses' : 'overview'} />
+                  {(currentTab === 'student_portal' || currentTab === 'student_courses' || currentTab === 'student_fees') && user.role === 'STUDENT' && (
+                    <StudentPortal initialSection={currentTab === 'student_courses' ? 'courses' : currentTab === 'student_fees' ? 'fees' : 'overview'} />
                   )}
 
                   {currentTab === 'materials' && (user.role === 'STAFF' || user.role === 'STUDENT' || user.role === 'FRANCHISE_OWNER') && <MaterialsManagement />}

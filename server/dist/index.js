@@ -31,6 +31,8 @@ const feedback_routes_js_1 = __importDefault(require("./modules/feedback/feedbac
 const staff_attendance_routes_js_1 = __importDefault(require("./modules/staff-attendance/staff-attendance.routes.js"));
 const franchise_routes_js_1 = __importDefault(require("./modules/franchise/franchise.routes.js"));
 const courses_routes_js_1 = __importDefault(require("./modules/courses/courses.routes.js"));
+const settlement_routes_js_1 = __importDefault(require("./modules/settlements/settlement.routes.js"));
+const webhook_controller_js_1 = require("./modules/payments/webhook.controller.js");
 const storage_js_1 = require("./utils/storage.js");
 const courses_controller_js_1 = require("./modules/courses/courses.controller.js");
 const auth_js_1 = require("./middleware/auth.js");
@@ -70,7 +72,12 @@ app.use((0, cors_1.default)({
     },
     credentials: true,
 }));
-app.use(express_1.default.json({ limit: '10mb' }));
+app.use(express_1.default.json({
+    limit: '10mb',
+    verify: (req, _res, buf) => {
+        req.rawBody = buf;
+    },
+}));
 app.use(express_1.default.urlencoded({ extended: true, limit: '10mb' }));
 // Skip high-frequency background polling from cluttering server logs
 const SILENT_POLL_PATHS = new Set([
@@ -109,6 +116,8 @@ app.use('/api', (req, res, next) => {
     }
     next();
 });
+// Public Verified Razorpay Webhook Endpoint (Bypasses user token auth, verified via HMAC signature)
+app.post(['/api/webhooks/razorpay', '/webhooks/razorpay', '/api/fees/online/webhook', '/fees/online/webhook'], webhook_controller_js_1.handleRazorpayWebhook);
 // Mount Routes (mounted on both /api/* and root /* to support all proxy/rewrite configurations)
 const apiRoutesMap = [
     ['/auth', auth_routes_js_1.default],
@@ -132,6 +141,7 @@ const apiRoutesMap = [
     ['/staff-attendance', staff_attendance_routes_js_1.default],
     ['/franchises', franchise_routes_js_1.default],
     ['/courses', courses_routes_js_1.default],
+    ['/settlements', settlement_routes_js_1.default],
 ];
 for (const [routePath, router] of apiRoutesMap) {
     app.use(`/api${routePath}`, router);

@@ -26,6 +26,7 @@ import {
   createOnlinePaymentOrder,
   verifyOnlinePayment,
   handlePaymentWebhook,
+  getStudentMyFees,
 } from './fees.controller.js';
 
 const router = Router();
@@ -147,6 +148,11 @@ router.get(
 // ============================================================================
 // MODULE G: ONLINE PAYMENT WORKFLOW (RAZORPAY)
 // ============================================================================
+router.get(
+  '/student/my-fees',
+  requireRole('STUDENT', 'SUPER_ADMIN'),
+  getStudentMyFees
+);
 router.post(
   '/online/create-order',
   requireRole('PARENT', 'STUDENT', 'ACADEMIC_ADMIN', 'SUPER_ADMIN'),

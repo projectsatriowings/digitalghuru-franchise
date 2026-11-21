@@ -27,6 +27,8 @@ import feedbackRoutes from './modules/feedback/feedback.routes.js';
 import staffAttendanceRoutes from './modules/staff-attendance/staff-attendance.routes.js';
 import franchiseRoutes from './modules/franchise/franchise.routes.js';
 import coursesRoutes from './modules/courses/courses.routes.js';
+import settlementRoutes from './modules/settlements/settlement.routes.js';
+import { handleRazorpayWebhook } from './modules/payments/webhook.controller.js';
 import { isPublicCourseFolder, printStorageDiagnostics } from './utils/storage.js';
 import { streamPublicMedia, streamProtectedMedia } from './modules/courses/courses.controller.js';
 import { authenticateToken } from './middleware/auth.js';
@@ -73,7 +75,14 @@ app.use(
   })
 );
 
-app.use(express.json({ limit: '10mb' }));
+app.use(
+  express.json({
+    limit: '10mb',
+    verify: (req: Request, _res: Response, buf: Buffer) => {
+      (req as any).rawBody = buf;
+    },
+  })
+);
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Skip high-frequency background polling from cluttering server logs
@@ -117,6 +126,12 @@ app.use('/api', (req: Request, res: Response, next: NextFunction) => {
   next();
 });
 
+// Public Verified Razorpay Webhook Endpoint (Bypasses user token auth, verified via HMAC signature)
+app.post(
+  ['/api/webhooks/razorpay', '/webhooks/razorpay', '/api/fees/online/webhook', '/fees/online/webhook'],
+  handleRazorpayWebhook
+);
+
 // Mount Routes (mounted on both /api/* and root /* to support all proxy/rewrite configurations)
 const apiRoutesMap: [string, any][] = [
   ['/auth', authRoutes],
@@ -140,6 +155,7 @@ const apiRoutesMap: [string, any][] = [
   ['/staff-attendance', staffAttendanceRoutes],
   ['/franchises', franchiseRoutes],
   ['/courses', coursesRoutes],
+  ['/settlements', settlementRoutes],
 ];
 
 for (const [routePath, router] of apiRoutesMap) {

@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.checkFranchiseDuplicatesSchema = void 0;
+exports.updateBeneficiaryAccountSchema = exports.updateRevenueShareSchema = exports.checkFranchiseDuplicatesSchema = void 0;
 exports.verifyFranchiseAccess = verifyFranchiseAccess;
 exports.computeInstallmentLiveStatus = computeInstallmentLiveStatus;
 exports.computeSafeDueDates = computeSafeDueDates;
@@ -34,6 +34,9 @@ exports.listRoyaltyRecords = listRoyaltyRecords;
 exports.recordRoyaltyPayment = recordRoyaltyPayment;
 exports.getSuperAdminFranchiseDashboard = getSuperAdminFranchiseDashboard;
 exports.getFranchiseOwnerDashboard = getFranchiseOwnerDashboard;
+exports.updateRevenueShare = updateRevenueShare;
+exports.updateBeneficiaryAccount = updateBeneficiaryAccount;
+exports.getFranchiseRevenueDashboard = getFranchiseRevenueDashboard;
 const prisma_js_1 = require("../../prisma.js");
 const zod_1 = require("zod");
 const security_js_1 = require("../../utils/security.js");
@@ -3898,5 +3901,227 @@ async function getFranchiseOwnerDashboard(req, res) {
     catch (err) {
         console.error('[Franchise Owner Dashboard Error]', err);
         return res.status(500).json({ success: false, error: 'Failed to load Franchisee Admin Dashboard' });
+    }
+}
+// ============================================================================
+// CENTRALIZED REVENUE SHARING & BENEFICIARY MANAGEMENT (RULES 3-9, SECTION G)
+// ============================================================================
+exports.updateRevenueShareSchema = zod_1.z.object({
+    revenueSharePercentage: zod_1.z.number().min(0).max(100, 'Franchise revenue percentage must be between 0% and 100%'),
+});
+exports.updateBeneficiaryAccountSchema = zod_1.z.object({
+    razorpayAccountId: zod_1.z.string().optional().nullable(),
+    beneficiaryName: zod_1.z.string().min(2, 'Beneficiary name is required'),
+    beneficiaryBankName: zod_1.z.string().min(2, 'Bank name is required'),
+    beneficiaryAccountNumber: zod_1.z.string().min(6, 'Valid bank account number required'),
+    beneficiaryIfsc: zod_1.z.string().regex(/^[A-Z]{4}0[A-Z0-9]{6}$/, 'Valid 11-character Indian IFSC code required (e.g. HDFC0001234)'),
+    beneficiaryStatus: zod_1.z.enum(['PENDING', 'VERIFIED', 'REJECTED']).optional(),
+});
+/**
+ * Super Admin updates franchise revenue sharing percentage (Rules 3, 5, 6, 7)
+ */
+async function updateRevenueShare(req, res) {
+    try {
+        const { id } = req.params;
+        const parse = exports.updateRevenueShareSchema.safeParse(req.body);
+        if (!parse.success) {
+            return res.status(400).json({ success: false, error: 'Validation failed', details: parse.error.errors });
+        }
+        const { revenueSharePercentage } = parse.data;
+        const digitalGuruRevenuePercentage = Number((100 - revenueSharePercentage).toFixed(2));
+        const franchise = await prisma_js_1.prisma.franchise.findUnique({ where: { id } });
+        if (!franchise) {
+            return res.status(404).json({ success: false, error: 'Franchise not found' });
+        }
+        const updated = await prisma_js_1.prisma.$transaction(async (tx) => {
+            const record = await tx.franchise.update({
+                where: { id },
+                data: {
+                    revenueSharePercentage: new client_1.Prisma.Decimal(revenueSharePercentage),
+                    digitalGuruRevenuePercentage: new client_1.Prisma.Decimal(digitalGuruRevenuePercentage),
+                },
+            });
+            await tx.auditLog.create({
+                data: {
+                    userId: req.user.userId,
+                    action: 'FRANCHISE_REVENUE_PERCENTAGE_UPDATED',
+                    entityType: 'Franchise',
+                    entityId: id,
+                    oldValues: {
+                        revenueSharePercentage: Number(franchise.revenueSharePercentage),
+                        digitalGuruRevenuePercentage: Number(franchise.digitalGuruRevenuePercentage),
+                    },
+                    newValues: {
+                        revenueSharePercentage,
+                        digitalGuruRevenuePercentage,
+                    },
+                },
+            });
+            return record;
+        });
+        cache_js_1.serverCache.invalidate();
+        return res.json({
+            success: true,
+            message: `Franchise revenue percentage updated to ${revenueSharePercentage}% (DigitalGhuru: ${digitalGuruRevenuePercentage}%)`,
+            data: {
+                id: updated.id,
+                revenueSharePercentage: Number(updated.revenueSharePercentage),
+                digitalGuruRevenuePercentage: Number(updated.digitalGuruRevenuePercentage),
+            },
+        });
+    }
+    catch (err) {
+        console.error('[Update Revenue Share Error]', err);
+        return res.status(500).json({ success: false, error: 'Failed to update revenue sharing percentage' });
+    }
+}
+/**
+ * Update franchise beneficiary account details (Section G)
+ */
+async function updateBeneficiaryAccount(req, res) {
+    try {
+        const { id } = req.params;
+        const userRole = req.user.role;
+        const userId = req.user.userId;
+        const access = await verifyFranchiseAccess(userId, userRole, id);
+        if (!access.authorized) {
+            return res.status(403).json({ success: false, error: 'Forbidden: You cannot modify this franchise' });
+        }
+        const parse = exports.updateBeneficiaryAccountSchema.safeParse(req.body);
+        if (!parse.success) {
+            return res.status(400).json({ success: false, error: 'Validation failed', details: parse.error.errors });
+        }
+        const data = parse.data;
+        // Only Super Admin can mark a beneficiary VERIFIED
+        let targetStatus = data.beneficiaryStatus || 'PENDING';
+        if (userRole !== 'SUPER_ADMIN') {
+            targetStatus = 'PENDING';
+        }
+        const updated = await prisma_js_1.prisma.$transaction(async (tx) => {
+            const record = await tx.franchise.update({
+                where: { id },
+                data: {
+                    razorpayAccountId: data.razorpayAccountId || undefined,
+                    beneficiaryName: data.beneficiaryName,
+                    beneficiaryBankName: data.beneficiaryBankName,
+                    beneficiaryAccountNumber: data.beneficiaryAccountNumber,
+                    beneficiaryIfsc: data.beneficiaryIfsc.toUpperCase(),
+                    beneficiaryStatus: targetStatus,
+                },
+            });
+            await tx.auditLog.create({
+                data: {
+                    userId: req.user.userId,
+                    action: 'FRANCHISE_BENEFICIARY_ACCOUNT_UPDATED',
+                    entityType: 'Franchise',
+                    entityId: id,
+                    newValues: {
+                        beneficiaryName: data.beneficiaryName,
+                        bankName: data.beneficiaryBankName,
+                        ifsc: data.beneficiaryIfsc.toUpperCase(),
+                        razorpayAccountId: data.razorpayAccountId,
+                        status: targetStatus,
+                    },
+                },
+            });
+            return record;
+        });
+        cache_js_1.serverCache.invalidate();
+        return res.json({
+            success: true,
+            message: 'Beneficiary account details saved successfully',
+            data: {
+                id: updated.id,
+                beneficiaryName: updated.beneficiaryName,
+                beneficiaryBankName: updated.beneficiaryBankName,
+                beneficiaryAccountNumber: `****${updated.beneficiaryAccountNumber?.slice(-4)}`,
+                beneficiaryIfsc: updated.beneficiaryIfsc,
+                razorpayAccountId: updated.razorpayAccountId,
+                beneficiaryStatus: updated.beneficiaryStatus,
+            },
+        });
+    }
+    catch (err) {
+        console.error('[Update Beneficiary Error]', err);
+        return res.status(500).json({ success: false, error: 'Failed to update beneficiary account' });
+    }
+}
+/**
+ * Franchise Owner Revenue & Settlement Overview (Section H)
+ */
+async function getFranchiseRevenueDashboard(req, res) {
+    try {
+        const { id } = req.params;
+        const userRole = req.user.role;
+        const userId = req.user.userId;
+        const access = await verifyFranchiseAccess(userId, userRole, id);
+        if (!access.authorized) {
+            return res.status(403).json({ success: false, error: 'Forbidden: Access to franchise financial records denied' });
+        }
+        const franchise = access.franchise;
+        // Current month in Asia/Kolkata
+        const now = new Date();
+        const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+        // Get all settlements for this franchise
+        const settlements = await prisma_js_1.prisma.franchiseSettlement.findMany({
+            where: { franchiseId: id },
+            orderBy: { settlementMonth: 'desc' },
+            include: {
+                approvedBy: { select: { fullName: true } },
+                _count: { select: { payments: true, transfers: true } },
+            },
+        });
+        // Compute live metrics
+        let totalPaidToFranchise = 0;
+        let pendingApprovalAmount = 0;
+        let approvedPendingTransferAmount = 0;
+        let totalEligibleAllTime = 0;
+        for (const s of settlements) {
+            const payable = Number(s.franchisePayableAmount);
+            totalEligibleAllTime += Number(s.totalEligibleCollections);
+            if (s.status === 'COMPLETED') {
+                totalPaidToFranchise += payable;
+            }
+            else if (s.status === 'PENDING_APPROVAL') {
+                pendingApprovalAmount += payable;
+            }
+            else if (s.status === 'APPROVED') {
+                approvedPendingTransferAmount += payable;
+            }
+        }
+        return res.json({
+            success: true,
+            data: {
+                franchise: {
+                    id: franchise.id,
+                    code: franchise.code,
+                    name: franchise.name,
+                    revenueSharePercentage: Number(franchise.revenueSharePercentage || 50),
+                    digitalGuruRevenuePercentage: Number(franchise.digitalGuruRevenuePercentage || 50),
+                    razorpayAccountId: franchise.razorpayAccountId,
+                    beneficiaryName: franchise.beneficiaryName,
+                    beneficiaryBankName: franchise.beneficiaryBankName,
+                    beneficiaryAccountNumber: franchise.beneficiaryAccountNumber ? `****${franchise.beneficiaryAccountNumber.slice(-4)}` : null,
+                    beneficiaryIfsc: franchise.beneficiaryIfsc,
+                    beneficiaryStatus: franchise.beneficiaryStatus,
+                    branchesCount: franchise.branches?.length || 0,
+                },
+                currentMonth: currentMonthStr,
+                metrics: {
+                    totalEligibleAllTime: Number(totalEligibleAllTime.toFixed(2)),
+                    totalPaidToFranchise: Number(totalPaidToFranchise.toFixed(2)),
+                    pendingApprovalAmount: Number(pendingApprovalAmount.toFixed(2)),
+                    approvedPendingTransferAmount: Number(approvedPendingTransferAmount.toFixed(2)),
+                    completedSettlementsCount: settlements.filter((s) => s.status === 'COMPLETED').length,
+                    pendingSettlementsCount: settlements.filter((s) => s.status === 'PENDING_APPROVAL').length,
+                },
+                settlements,
+                branches: franchise.branches,
+            },
+        });
+    }
+    catch (err) {
+        console.error('[Franchise Revenue Dashboard Error]', err);
+        return res.status(500).json({ success: false, error: 'Failed to load revenue dashboard' });
     }
 }
