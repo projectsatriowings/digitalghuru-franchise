@@ -7,6 +7,9 @@ import { AuthenticatedRequest } from '../../middleware/auth.js';
 import { hashPassword, generateSecureRandomToken } from '../../utils/security.js';
 import { generateNextEmployeeCode } from './staff-code.service.js';
 import { resolveAbsolutePath, getRelativeStorageKey } from '../../utils/storage.js';
+import { getAuthorizedStaffAssignments } from '../students/student-authorization.service.js';
+import { resolveStructuredTimetable } from '../students/timetable-resolver.js';
+import { getInstituteLocalDate } from '../attendance/attendance.controller.js';
 
 
 function safeParseDate(dateVal?: string | null): Date | null {
@@ -1495,3 +1498,491 @@ export async function deleteStaffDocument(req: AuthenticatedRequest, res: Respon
     return res.status(500).json({ success: false, error: 'Failed to delete document' });
   }
 }
+
+/**
+ * Get authenticated staff member's profile
+ * GET /api/staff/my/profile
+ */
+export async function getMyStaffProfile(req: AuthenticatedRequest, res: Response) {
+  try {
+    const instituteId = req.instituteId;
+    const userId = req.user?.userId || (req.user as any)?.id;
+    if (!instituteId || !userId) {
+      return res.status(400).json({ success: false, error: 'Institute and user context required' });
+    }
+
+    const staff = await prisma.staffProfile.findFirst({
+      where: {
+        userId,
+        instituteId,
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            fullName: true,
+            email: true,
+            phone: true,
+            role: true,
+            isActive: true,
+            lastLoginAt: true,
+            createdAt: true,
+          },
+        },
+        institute: {
+          select: {
+            id: true,
+            name: true,
+            code: true,
+            phone: true,
+            email: true,
+            address: true,
+          },
+        },
+        assignments: {
+          include: {
+            batch: {
+              select: {
+                id: true,
+                name: true,
+                code: true,
+                academicYear: true,
+                schedule: true,
+              },
+            },
+          },
+        },
+        batchSubjects: {
+          include: {
+            batch: { select: { id: true, name: true, code: true } },
+            subject: { select: { id: true, name: true, code: true } },
+          },
+        },
+        qualifications: {
+          orderBy: { yearOfPassing: 'desc' },
+        },
+        experiences: {
+          orderBy: { startYear: 'desc' },
+        },
+      },
+    });
+
+    if (!staff) {
+      return res.status(404).json({ success: false, error: 'Staff profile not found' });
+    }
+
+    const assignedBatches = staff.assignments.map((a) => a.batch);
+    const assignedSubjects = staff.batchSubjects.map((bs) => ({
+      batchId: bs.batchId,
+      batchName: bs.batch.name,
+      subjectId: bs.subjectId,
+      subjectName: bs.subject.name,
+      subjectCode: bs.subject.code,
+    }));
+
+    return res.json({
+      success: true,
+      data: {
+        profile: {
+          ...staff,
+          assignedBatches,
+          assignedSubjects,
+        },
+      },
+    });
+  } catch (err: any) {
+    console.error('[getMyStaffProfile Error]', err);
+    return res.status(500).json({ success: false, error: 'Failed to retrieve staff profile' });
+  }
+}
+
+/**
+ * Get aggregated mobile dashboard data for authenticated teacher
+ * GET /api/staff/my/dashboard
+ */
+export async function getMyStaffDashboard(req: AuthenticatedRequest, res: Response) {
+  try {
+    const instituteId = req.instituteId;
+    const userId = req.user?.userId || (req.user as any)?.id;
+    if (!instituteId || !userId) {
+      return res.status(400).json({ success: false, error: 'Institute and user context required' });
+    }
+
+    const assignments = await getAuthorizedStaffAssignments(req, prisma);
+    const authorizedBatchIds = assignments.authorizedBatchIds;
+
+    const staffProfile = await prisma.staffProfile.findFirst({
+      where: { userId, instituteId },
+      include: {
+        user: { select: { id: true, fullName: true, email: true, phone: true } },
+        institute: { select: { id: true, name: true, code: true } },
+        batchSubjects: {
+          include: {
+            batch: { select: { id: true, name: true, code: true, schedule: true } },
+            subject: { select: { id: true, name: true, code: true } },
+          },
+        },
+        assignments: {
+          include: {
+            batch: {
+              select: {
+                id: true,
+                name: true,
+                code: true,
+                schedule: true,
+                _count: { select: { enrollments: { where: { isActive: true } } } },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!staffProfile) {
+      return res.status(404).json({ success: false, error: 'Staff profile not found' });
+    }
+
+    // Unique active students enrolled in teacher's batches
+    const studentCount = await prisma.student.count({
+      where: {
+        instituteId,
+        status: 'ACTIVE',
+        enrollments: {
+          some: {
+            batchId: { in: authorizedBatchIds },
+            isActive: true,
+          },
+        },
+      },
+    });
+
+    // Pending homework submissions needing evaluation
+    const pendingHomeworkCount = await prisma.homeworkSubmission.count({
+      where: {
+        material: {
+          instituteId,
+          batchId: { in: authorizedBatchIds },
+        },
+        gradedAt: null,
+      },
+    });
+
+    // Today's attendance summary in teacher's batches
+    const serverNow = new Date();
+    const eventDate = getInstituteLocalDate(serverNow);
+
+    const todayCheckIns = await prisma.attendanceEvent.findMany({
+      where: {
+        instituteId,
+        batchId: { in: authorizedBatchIds },
+        eventDate,
+        eventType: 'CHECK_IN',
+      },
+      select: { studentId: true, isLate: true },
+    });
+
+    const uniquePresentStudents = new Set(todayCheckIns.map((e) => e.studentId)).size;
+    const lateStudentsCount = todayCheckIns.filter((e) => e.isLate).length;
+    const attendancePercentage = studentCount > 0 ? Math.round((uniquePresentStudents / studentCount) * 100) : 0;
+
+    // Today's scheduled periods for this staff
+    const allBatches = await prisma.batch.findMany({
+      where: {
+        id: { in: authorizedBatchIds },
+        instituteId,
+        isActive: true,
+      },
+      include: {
+        batchSubjects: {
+          include: {
+            subject: true,
+            staffProfile: { include: { user: true } },
+          },
+        },
+      },
+    });
+
+    const todayClasses: any[] = [];
+    for (const b of allBatches) {
+      const timetable = resolveStructuredTimetable(b, serverNow);
+      for (const slot of timetable.todaySlots) {
+        const isThisStaff =
+          slot.teacherName?.toLowerCase() === staffProfile.user.fullName.toLowerCase() ||
+          slot.staffProfileId === staffProfile.id ||
+          !slot.teacherName;
+        if (isThisStaff) {
+          todayClasses.push({
+            ...slot,
+            batchId: b.id,
+            batchName: b.name,
+          });
+        }
+      }
+    }
+
+    todayClasses.sort((a, b) => (a.startTime || '').localeCompare(b.startTime || ''));
+
+    // Recent notifications
+    const recentNotifications = await prisma.inAppNotification.findMany({
+      where: {
+        userId,
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 5,
+    });
+
+    return res.json({
+      success: true,
+      data: {
+        teacher: {
+          id: staffProfile.id,
+          fullName: staffProfile.user.fullName,
+          email: staffProfile.user.email,
+          phone: staffProfile.user.phone,
+          employeeCode: staffProfile.employeeCode,
+          designation: staffProfile.designation,
+          avatarUrl: staffProfile.avatarUrl,
+        },
+        institute: {
+          id: staffProfile.institute.id,
+          name: staffProfile.institute.name,
+          code: staffProfile.institute.code,
+        },
+        metrics: {
+          totalBatches: authorizedBatchIds.length,
+          totalSubjects: staffProfile.batchSubjects.length,
+          totalStudents: studentCount,
+          pendingHomeworkEvaluations: pendingHomeworkCount,
+          todayClassesCount: todayClasses.length,
+          todayAttendance: {
+            presentCount: uniquePresentStudents,
+            lateCount: lateStudentsCount,
+            totalEnrolled: studentCount,
+            percentage: attendancePercentage,
+          },
+        },
+        todayClasses,
+        recentNotifications,
+      },
+    });
+  } catch (err: any) {
+    console.error('[getMyStaffDashboard Error]', err);
+    return res.status(500).json({ success: false, error: 'Failed to retrieve staff dashboard' });
+  }
+}
+
+/**
+ * Get weekly structured timetable for authenticated teacher
+ * GET /api/staff/my/timetable
+ */
+export async function getMyStaffTimetable(req: AuthenticatedRequest, res: Response) {
+  try {
+    const instituteId = req.instituteId;
+    const userId = req.user?.userId || (req.user as any)?.id;
+    if (!instituteId || !userId) {
+      return res.status(400).json({ success: false, error: 'Institute and user context required' });
+    }
+
+    const assignments = await getAuthorizedStaffAssignments(req, prisma);
+    const authorizedBatchIds = assignments.authorizedBatchIds;
+
+    const staffProfile = await prisma.staffProfile.findFirst({
+      where: { userId, instituteId },
+      include: { user: true },
+    });
+
+    if (!staffProfile) {
+      return res.status(404).json({ success: false, error: 'Staff profile not found' });
+    }
+
+    const batches = await prisma.batch.findMany({
+      where: {
+        id: { in: authorizedBatchIds },
+        instituteId,
+        isActive: true,
+      },
+      include: {
+        batchSubjects: {
+          include: {
+            subject: true,
+            staffProfile: { include: { user: true } },
+          },
+        },
+      },
+    });
+
+    const daysSchedule: Record<string, any[]> = {
+      MONDAY: [],
+      TUESDAY: [],
+      WEDNESDAY: [],
+      THURSDAY: [],
+      FRIDAY: [],
+      SATURDAY: [],
+      SUNDAY: [],
+    };
+
+    const serverNow = new Date();
+    for (const b of batches) {
+      const timetable = resolveStructuredTimetable(b, serverNow);
+      for (const day of timetable.days) {
+        for (const slot of day.slots) {
+          const isThisStaff =
+            slot.teacherName?.toLowerCase() === staffProfile.user.fullName.toLowerCase() ||
+            slot.staffProfileId === staffProfile.id ||
+            !slot.teacherName;
+          if (isThisStaff) {
+            daysSchedule[day.day].push({
+              ...slot,
+              batchId: b.id,
+              batchName: b.name,
+            });
+          }
+        }
+      }
+    }
+
+    for (const day of Object.keys(daysSchedule)) {
+      daysSchedule[day].sort((a, b) => (a.startTime || '').localeCompare(b.startTime || ''));
+    }
+
+    return res.json({
+      success: true,
+      data: {
+        schedule: daysSchedule,
+        totalBatches: batches.length,
+      },
+    });
+  } catch (err: any) {
+    console.error('[getMyStaffTimetable Error]', err);
+    return res.status(500).json({ success: false, error: 'Failed to retrieve staff timetable' });
+  }
+}
+
+/**
+ * Get students list under the teacher's authorized scope
+ * GET /api/staff/my/students
+ */
+export async function getMyStaffStudents(req: AuthenticatedRequest, res: Response) {
+  try {
+    const instituteId = req.instituteId;
+    if (!instituteId) return res.status(400).json({ success: false, error: 'Institute context required' });
+
+    const assignments = await getAuthorizedStaffAssignments(req, prisma);
+    const authorizedBatchIds = assignments.authorizedBatchIds;
+    const batchIdFilter = req.query.batchId as string | undefined;
+    const search = ((req.query.search as string) || '').trim().toLowerCase();
+
+    const targetBatchIds = batchIdFilter
+      ? authorizedBatchIds.filter((id) => id === batchIdFilter)
+      : authorizedBatchIds;
+
+    if (batchIdFilter && targetBatchIds.length === 0) {
+      return res.status(403).json({ success: false, error: 'Forbidden: You are not authorized for this batch' });
+    }
+
+    const serverNow = new Date();
+    const eventDate = getInstituteLocalDate(serverNow);
+
+    const students = await prisma.student.findMany({
+      where: {
+        instituteId,
+        status: 'ACTIVE',
+        enrollments: {
+          some: {
+            batchId: { in: targetBatchIds },
+            isActive: true,
+          },
+        },
+        ...(search
+          ? {
+              OR: [
+                { firstName: { contains: search, mode: 'insensitive' } },
+                { lastName: { contains: search, mode: 'insensitive' } },
+                { admissionNumber: { contains: search, mode: 'insensitive' } },
+              ],
+            }
+          : {}),
+      },
+      include: {
+        enrollments: {
+          where: { isActive: true, batchId: { in: targetBatchIds } },
+          include: {
+            batch: { select: { id: true, name: true, code: true } },
+            subject: { select: { id: true, name: true, code: true } },
+          },
+        },
+        attendanceEvents: {
+          where: {
+            instituteId,
+            eventDate,
+            batchId: { in: targetBatchIds },
+          },
+          orderBy: { sessionNumber: 'desc' },
+          select: {
+            id: true,
+            eventType: true,
+            eventTime: true,
+            sessionNumber: true,
+            method: true,
+            isLate: true,
+          },
+        },
+      },
+      orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
+    });
+
+    const timeFormatter = new Intl.DateTimeFormat('en-IN', {
+      timeZone: 'Asia/Kolkata',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+    });
+
+    const mapped = students.map((s) => {
+      const latestCheckIn = s.attendanceEvents.find((e) => e.eventType === 'CHECK_IN');
+      const latestCheckOut = s.attendanceEvents.find((e) => e.eventType === 'CHECK_OUT');
+
+      const isCheckedIn = !!(
+        latestCheckIn &&
+        (!latestCheckOut || latestCheckOut.sessionNumber < latestCheckIn.sessionNumber)
+      );
+      const isCheckedOut = !!(
+        latestCheckIn &&
+        latestCheckOut &&
+        latestCheckOut.sessionNumber >= latestCheckIn.sessionNumber
+      );
+
+      const checkInTimeFormatted = latestCheckIn ? timeFormatter.format(latestCheckIn.eventTime) : null;
+      const primaryEnrollment = s.enrollments[0];
+
+      return {
+        id: s.id,
+        firstName: s.firstName,
+        lastName: s.lastName,
+        fullName: `${s.firstName} ${s.lastName}`.trim(),
+        admissionNumber: s.admissionNumber,
+        photoUrl: s.photoUrl,
+        phone: s.phone,
+        status: s.status,
+        batchId: primaryEnrollment?.batchId,
+        batchName: primaryEnrollment?.batch?.name || 'Unassigned',
+        subjectName: primaryEnrollment?.subject?.name || null,
+        todayStatus: isCheckedIn ? 'PRESENT' : isCheckedOut ? 'DEPARTED' : 'NOT_MARKED',
+        isLate: latestCheckIn?.isLate || false,
+        checkInTimeFormatted,
+      };
+    });
+
+    return res.json({
+      success: true,
+      data: {
+        students: mapped,
+        total: mapped.length,
+      },
+    });
+  } catch (err: any) {
+    console.error('[getMyStaffStudents Error]', err);
+    return res.status(500).json({ success: false, error: 'Failed to retrieve staff students' });
+  }
+}
+

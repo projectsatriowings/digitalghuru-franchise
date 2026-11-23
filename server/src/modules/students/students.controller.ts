@@ -14,6 +14,7 @@ import {
   deriveBatchCode,
   getAdmissionYear,
 } from './admission-number.service.js';
+import { resolveStructuredTimetable } from './timetable-resolver.js';
 
 export function formatStudentResponse<T extends { id: string; photoUrl?: string | null; notes?: string | null; updatedAt?: Date | string }>(student: T): T & { credentialsOnRecord?: { studentPassword: string | null; parentPassword: string | null } } {
   if (!student) return student;
@@ -1186,6 +1187,381 @@ export async function getMyStudentProfile(req: AuthenticatedRequest, res: Respon
     });
   } catch (err: any) {
     return res.status(500).json({ success: false, error: 'Failed to fetch student profile' });
+  }
+}
+
+/**
+ * GET /api/students/my/dashboard
+ * High-performance mobile aggregator endpoint for authenticated student.
+ */
+export async function getMyStudentDashboard(req: AuthenticatedRequest, res: Response) {
+  try {
+    if (!req.user || req.user.role !== 'STUDENT') {
+      return res.status(403).json({ success: false, error: 'Only student accounts can access this dashboard' });
+    }
+
+    const student = await prisma.student.findFirst({
+      where: { userId: req.user.userId },
+      include: {
+        institute: {
+          select: { id: true, name: true, code: true, address: true, phone: true },
+        },
+        enrollments: {
+          where: { isActive: true },
+          include: {
+            batch: {
+              include: {
+                batchSubjects: {
+                  where: { isActive: true },
+                  include: {
+                    subject: true,
+                    staffProfile: {
+                      include: {
+                        user: { select: { id: true, fullName: true, email: true } },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            subject: true,
+          },
+        },
+      },
+    });
+
+    if (!student) {
+      return res.status(404).json({ success: false, error: 'Student record not found for this account' });
+    }
+
+    const primaryEnrollment = student.enrollments[0] || null;
+    const activeBatch = primaryEnrollment?.batch || null;
+    const enrolledBatchIds = Array.from(new Set(student.enrollments.map((e) => e.batchId).filter(Boolean)));
+
+    // Concurrent single-pass queries for attendance, homework, materials, exams, and notifications
+    const [
+      allAttendanceEvents,
+      homeworkList,
+      submissions,
+      recentMaterials,
+      recentMarks,
+      unreadNotifCount,
+      recentNotifs,
+    ] = await Promise.all([
+      // 1. Attendance events for this student
+      prisma.attendanceEvent.findMany({
+        where: { studentId: student.id },
+        orderBy: [{ eventDate: 'desc' }, { eventTime: 'desc' }],
+        take: 50,
+        select: {
+          id: true,
+          eventType: true,
+          isLate: true,
+          eventDate: true,
+          eventTime: true,
+          remarks: true,
+          method: true,
+        },
+      }),
+      // 2. Active homework assignments for enrolled batches
+      enrolledBatchIds.length > 0
+        ? prisma.learningMaterial.findMany({
+            where: {
+              type: 'HOMEWORK',
+              batchId: { in: enrolledBatchIds },
+              isPublished: true,
+            },
+            orderBy: { dueDate: 'asc' },
+            take: 10,
+            include: {
+              subject: { select: { id: true, name: true, code: true } },
+            },
+          })
+        : Promise.resolve([]),
+      // 3. Submissions by this student
+      prisma.homeworkSubmission.findMany({
+        where: { studentId: student.id },
+        select: {
+          materialId: true,
+          status: true,
+          submittedAt: true,
+          grade: true,
+          feedback: true,
+        },
+      }),
+      // 4. Recent learning materials (non-homework)
+      enrolledBatchIds.length > 0
+        ? prisma.learningMaterial.findMany({
+            where: {
+              type: { not: 'HOMEWORK' },
+              batchId: { in: enrolledBatchIds },
+              isPublished: true,
+            },
+            orderBy: { createdAt: 'desc' },
+            take: 5,
+            include: {
+              subject: { select: { id: true, name: true, code: true } },
+            },
+          })
+        : Promise.resolve([]),
+      // 5. Recent exam marks
+      prisma.examMark.findMany({
+        where: { studentId: student.id },
+        orderBy: { exam: { examDate: 'desc' } },
+        take: 5,
+        include: {
+          exam: {
+            select: {
+              id: true,
+              title: true,
+              examDate: true,
+              totalMarks: true,
+              passingMarks: true,
+              subject: { select: { id: true, name: true, code: true } },
+            },
+          },
+        },
+      }),
+      // 6. Unread notifications count
+      prisma.notification.count({
+        where: { userId: req.user.userId, isRead: false },
+      }),
+      // 7. Recent notifications (last 5)
+      prisma.notification.findMany({
+        where: { userId: req.user.userId },
+        orderBy: { createdAt: 'desc' },
+        take: 5,
+      }),
+    ]);
+
+    // Calculate attendance totals from check-ins
+    const checkIns = allAttendanceEvents.filter((e) => e.eventType === 'CHECK_IN');
+    const presentCount = checkIns.length;
+    const lateCount = checkIns.filter((e) => e.isLate).length;
+    const absentCount = 0;
+    const totalAttendanceDays = presentCount;
+    const attendancePercentage = totalAttendanceDays > 0 ? 100 : 0;
+    const recentAttendance = allAttendanceEvents.slice(0, 5);
+
+    // Map homework submission states
+    const submissionMap = new Map<string, any>();
+    for (const sub of submissions) {
+      submissionMap.set(sub.materialId, sub);
+    }
+
+    let pendingHomeworkCount = 0;
+    let submittedHomeworkCount = 0;
+
+    const mappedUpcomingHomework = homeworkList.map((hw) => {
+      const sub = submissionMap.get(hw.id);
+      const isSubmitted = !!sub;
+      if (isSubmitted) {
+        submittedHomeworkCount++;
+      } else {
+        pendingHomeworkCount++;
+      }
+      return {
+        id: hw.id,
+        title: hw.title,
+        description: hw.description,
+        subject: hw.subject?.name || 'General',
+        dueDate: hw.dueDate,
+        isSubmitted,
+        submissionStatus: sub?.status || 'PENDING',
+        grade: sub?.grade ?? null,
+        feedback: sub?.feedback ?? null,
+      };
+    });
+
+    // Resolve today's timetable
+    const timetable = resolveStructuredTimetable(activeBatch);
+
+    return res.json({
+      success: true,
+      data: {
+        student: {
+          id: student.id,
+          admissionNumber: student.admissionNumber,
+          firstName: student.firstName,
+          lastName: student.lastName,
+          fullName: `${student.firstName} ${student.lastName}`.trim(),
+          photoUrl: formatStudentResponse(student).photoUrl,
+          status: student.status,
+        },
+        institute: student.institute,
+        batch: activeBatch
+          ? {
+              id: activeBatch.id,
+              name: activeBatch.name,
+              academicYear: activeBatch.academicYear,
+              rawSchedule: activeBatch.schedule,
+            }
+          : null,
+        todayClasses: timetable.todaySlots,
+        attendanceOverview: {
+          totalDays: totalAttendanceDays,
+          presentCount,
+          absentCount,
+          lateCount,
+          percentage: attendancePercentage,
+          recentEvents: recentAttendance,
+        },
+        homeworkOverview: {
+          totalCount: homeworkList.length,
+          pendingCount: pendingHomeworkCount,
+          submittedCount: submittedHomeworkCount,
+          upcoming: mappedUpcomingHomework.slice(0, 5),
+        },
+        recentMaterials: recentMaterials.map((m) => ({
+          id: m.id,
+          title: m.title,
+          description: m.description,
+          type: m.type,
+          fileSize: m.fileSize,
+          mimeType: m.mimeType,
+          subject: m.subject?.name || 'General',
+          createdAt: m.createdAt,
+        })),
+        academicProgress: {
+          recentMarks: recentMarks.map((rm) => ({
+            id: rm.id,
+            examTitle: rm.exam.title,
+            subjectName: rm.exam.subject?.name || 'Exam',
+            examDate: rm.exam.examDate,
+            marksObtained: Number(rm.marksObtained),
+            totalMarks: Number(rm.exam.totalMarks),
+            passingMarks: Number(rm.exam.passingMarks),
+            isAbsent: rm.isAbsent,
+            remarks: rm.remarks,
+          })),
+        },
+        notificationsOverview: {
+          unreadCount: unreadNotifCount,
+          recent: recentNotifs,
+        },
+      },
+    });
+  } catch (err: any) {
+    console.error('[Student Dashboard Error]', err);
+    return res.status(500).json({ success: false, error: 'Failed to aggregate student dashboard data' });
+  }
+}
+
+/**
+ * GET /api/students/my/timetable
+ * Structured day-by-day timetable for authenticated student.
+ */
+export async function getMyStudentTimetable(req: AuthenticatedRequest, res: Response) {
+  try {
+    if (!req.user || req.user.role !== 'STUDENT') {
+      return res.status(403).json({ success: false, error: 'Only student accounts can access this timetable' });
+    }
+
+    const student = await prisma.student.findFirst({
+      where: { userId: req.user.userId },
+      include: {
+        enrollments: {
+          where: { isActive: true },
+          include: {
+            batch: {
+              include: {
+                batchSubjects: {
+                  where: { isActive: true },
+                  include: {
+                    subject: true,
+                    staffProfile: {
+                      include: {
+                        user: { select: { id: true, fullName: true, email: true } },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!student) {
+      return res.status(404).json({ success: false, error: 'Student record not found for this account' });
+    }
+
+    const activeBatch = student.enrollments[0]?.batch || null;
+    const timetable = resolveStructuredTimetable(activeBatch);
+
+    return res.json({
+      success: true,
+      data: {
+        timetable,
+      },
+    });
+  } catch (err: any) {
+    console.error('[Student Timetable Error]', err);
+    return res.status(500).json({ success: false, error: 'Failed to retrieve structured student timetable' });
+  }
+}
+
+/**
+ * GET /api/students/my/attendance-history
+ * Complete date-wise attendance events and statistics for authenticated student.
+ */
+export async function getMyStudentAttendanceHistory(req: AuthenticatedRequest, res: Response) {
+  try {
+    if (!req.user || req.user.role !== 'STUDENT') {
+      return res.status(403).json({ success: false, error: 'Only student accounts can access attendance history' });
+    }
+
+    const student = await prisma.student.findFirst({
+      where: { userId: req.user.userId },
+    });
+
+    if (!student) {
+      return res.status(404).json({ success: false, error: 'Student record not found for this account' });
+    }
+
+    const events = await prisma.attendanceEvent.findMany({
+      where: { studentId: student.id },
+      orderBy: [{ eventDate: 'desc' }, { eventTime: 'desc' }],
+      take: 100,
+      select: {
+        id: true,
+        eventType: true,
+        eventDate: true,
+        eventTime: true,
+        sessionNumber: true,
+        method: true,
+        isLate: true,
+        remarks: true,
+        batch: {
+          select: { id: true, name: true },
+        },
+      },
+    });
+
+    const checkIns = events.filter((e) => e.eventType === 'CHECK_IN');
+    const presentDays = checkIns.length;
+    const lateDays = checkIns.filter((e) => e.isLate).length;
+    const absentDays = 0;
+    const totalDays = presentDays;
+    const percentage = totalDays > 0 ? 100 : 0;
+
+    return res.json({
+      success: true,
+      data: {
+        stats: {
+          totalDays,
+          presentDays,
+          absentDays,
+          lateDays,
+          percentage,
+        },
+        events,
+      },
+    });
+  } catch (err: any) {
+    console.error('[Student Attendance History Error]', err);
+    return res.status(500).json({ success: false, error: 'Failed to fetch attendance history' });
   }
 }
 

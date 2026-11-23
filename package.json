@@ -5,22 +5,26 @@
   "workspaces": [
     "server",
     "apps/web",
+    "apps/mobile",
     "packages/*"
   ],
   "scripts": {
     "dev:server": "npm run dev --workspace=server",
     "dev:web": "npm run dev --workspace=@tuition/web",
+    "dev:mobile": "npm run start --workspace=@tuition/mobile",
     "build:server": "npm run build --workspace=server",
     "build:web": "npm run build --workspace=@tuition/web",
+    "build:mobile": "npm run build --workspace=@tuition/mobile --if-present",
     "build": "npm run build --workspaces --if-present",
     "vercel-build": "npm run build",
-    "postinstall": "npm run build --prefix packages/shared && npx prisma@5 generate --schema=server/prisma/schema.prisma",
+    "postinstall": "patch-package && npm run build --prefix packages/shared && npx prisma@5 generate --schema=server/prisma/schema.prisma",
     "test": "npm run test --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present"
   },
   "devDependencies": {
     "@types/react": "~18.2.79",
     "@types/react-dom": "~18.2.25",
+    "patch-package": "^8.0.1",
     "prisma": "^5.22.0",
     "typescript": "^5.5.4"
   },
@@ -28,4 +32,3 @@
     "leaflet": "^1.9.4"
   }
 }
-

@@ -20,6 +20,10 @@ import {
   uploadStaffDocument,
   downloadStaffDocument,
   deleteStaffDocument,
+  getMyStaffProfile,
+  getMyStaffDashboard,
+  getMyStaffTimetable,
+  getMyStaffStudents,
 } from './staff.controller.js';
 import { authenticateToken, requireRole, requireInstituteContext } from '../../middleware/auth.js';
 import { photoUpload, fileUpload } from '../../utils/storage.js';
@@ -38,6 +42,13 @@ router.use(requireInstituteContext);
 router.get('/', requireRole('SUPER_ADMIN', 'ACADEMIC_ADMIN'), listStaff);
 router.get('/next-code', requireRole('SUPER_ADMIN', 'ACADEMIC_ADMIN'), getNextEmployeeCodeHandler);
 router.post('/', requireRole('SUPER_ADMIN', 'ACADEMIC_ADMIN'), createStaff);
+
+// Teacher Mobile Portal Endpoints
+router.get('/my/profile', requireRole('SUPER_ADMIN', 'ACADEMIC_ADMIN', 'STAFF'), getMyStaffProfile);
+router.get('/my/dashboard', requireRole('SUPER_ADMIN', 'ACADEMIC_ADMIN', 'STAFF'), getMyStaffDashboard);
+router.get('/my/timetable', requireRole('SUPER_ADMIN', 'ACADEMIC_ADMIN', 'STAFF'), getMyStaffTimetable);
+router.get('/my/students', requireRole('SUPER_ADMIN', 'ACADEMIC_ADMIN', 'STAFF'), getMyStaffStudents);
+
 router.get('/:id', requireRole('SUPER_ADMIN', 'ACADEMIC_ADMIN', 'STAFF'), getStaffById);
 router.patch('/:id', requireRole('SUPER_ADMIN', 'ACADEMIC_ADMIN'), updateStaff);
 router.patch('/:id/status', requireRole('SUPER_ADMIN', 'ACADEMIC_ADMIN'), updateStaffStatus);

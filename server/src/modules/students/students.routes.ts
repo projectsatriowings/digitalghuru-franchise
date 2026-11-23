@@ -5,6 +5,9 @@ import {
   getAdmissionPrefixInfo,
   getStudentById,
   getMyStudentProfile,
+  getMyStudentDashboard,
+  getMyStudentTimetable,
+  getMyStudentAttendanceHistory,
   updateStudent,
   updateStudentStatus,
   updateStudentAccountStatus,
@@ -102,6 +105,9 @@ router.use(authenticateToken);
 router.get('/:id/photo', requireRole('SUPER_ADMIN', 'FRANCHISE_OWNER', 'BRANCH_ADMIN', 'ACADEMIC_ADMIN', 'STAFF', 'PARENT', 'STUDENT'), getStudentPhoto);
 router.get('/photo-raw/:key', requireRole('SUPER_ADMIN', 'FRANCHISE_OWNER', 'BRANCH_ADMIN', 'ACADEMIC_ADMIN', 'STAFF', 'PARENT', 'STUDENT'), getRawPhoto);
 router.get('/my/profile', requireRole('STUDENT'), getMyStudentProfile);
+router.get('/my/dashboard', requireRole('STUDENT'), getMyStudentDashboard);
+router.get('/my/timetable', requireRole('STUDENT'), getMyStudentTimetable);
+router.get('/my/attendance-history', requireRole('STUDENT'), getMyStudentAttendanceHistory);
 
 router.use(requireStudentModuleContext);
 

@@ -1,0 +1,39 @@
+{
+  "cli": {
+    "version": ">= 9.0.0"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "env": {
+        "API_ENV": "development",
+        "EXPO_PUBLIC_API_URL": "http://10.0.2.2:5000/api"
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://api.digitalghuru.com/api"
+      }
+    },
+    "production": {
+      "android": {
+        "buildType": "app-bundle"
+      },
+      "ios": {
+        "simulator": false
+      },
+      "env": {
+        "API_ENV": "production",
+        "EXPO_PUBLIC_API_URL": "https://api.digitalghuru.com/api"
+      }
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}

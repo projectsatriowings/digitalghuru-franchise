@@ -12,6 +12,8 @@ import {
   getParentStudentAttendance,
   getParentStudentTeachers,
   getParentStudentAcademics,
+  getParentStudentHomework,
+  getParentStudentTimetable,
 } from './parents.controller.js';
 import { authenticateToken, requireRole, requireInstituteContext } from '../../middleware/auth.js';
 
@@ -25,6 +27,8 @@ router.get('/my/dashboard-summary', getParentDashboardSummary);
 router.get('/students/:studentId/attendance', getParentStudentAttendance);
 router.get('/students/:studentId/teachers', getParentStudentTeachers);
 router.get('/students/:studentId/academics', getParentStudentAcademics);
+router.get('/students/:studentId/homework', getParentStudentHomework);
+router.get('/students/:studentId/timetable', getParentStudentTimetable);
 
 // Institute-scoped parent management
 router.use(requireInstituteContext);

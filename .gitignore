@@ -42,6 +42,8 @@ prisma/*.db-journal
 # Expo / React Native
 .expo/
 web-build/
+*.aab
+*.apk
 *.jks
 *.p8
 *.p12

@@ -77,6 +77,9 @@ router.use(auth_js_1.authenticateToken);
 router.get('/:id/photo', (0, auth_js_1.requireRole)('SUPER_ADMIN', 'FRANCHISE_OWNER', 'BRANCH_ADMIN', 'ACADEMIC_ADMIN', 'STAFF', 'PARENT', 'STUDENT'), students_controller_js_1.getStudentPhoto);
 router.get('/photo-raw/:key', (0, auth_js_1.requireRole)('SUPER_ADMIN', 'FRANCHISE_OWNER', 'BRANCH_ADMIN', 'ACADEMIC_ADMIN', 'STAFF', 'PARENT', 'STUDENT'), students_controller_js_1.getRawPhoto);
 router.get('/my/profile', (0, auth_js_1.requireRole)('STUDENT'), students_controller_js_1.getMyStudentProfile);
+router.get('/my/dashboard', (0, auth_js_1.requireRole)('STUDENT'), students_controller_js_1.getMyStudentDashboard);
+router.get('/my/timetable', (0, auth_js_1.requireRole)('STUDENT'), students_controller_js_1.getMyStudentTimetable);
+router.get('/my/attendance-history', (0, auth_js_1.requireRole)('STUDENT'), students_controller_js_1.getMyStudentAttendanceHistory);
 router.use(requireStudentModuleContext);
 // Student management routes
 router.get('/admission-prefix', (0, auth_js_1.requireRole)('SUPER_ADMIN', 'FRANCHISE_OWNER', 'ACADEMIC_ADMIN', 'STAFF'), students_controller_js_1.getAdmissionPrefixInfo);

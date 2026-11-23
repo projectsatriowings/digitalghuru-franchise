@@ -1,0 +1,68 @@
+{
+  "expo": {
+    "name": "Digital Guru Franchise",
+    "slug": "digital-guru-franchise",
+    "version": "1.0.2",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0F172A"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.digitalghuru.franchise",
+      "buildNumber": "3",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSCameraUsageDescription": "Digital Guru requires camera access for homework submission and document scanning.",
+        "NSPhotoLibraryUsageDescription": "Digital Guru requires photo library access to upload assignments and receipts.",
+        "NSLocationWhenInUseUsageDescription": "Digital Guru requires location access to verify staff attendance inside campus geofence.",
+        "NSMicrophoneUsageDescription": "Digital Guru requires microphone access for voice-assisted attendance marking."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0F172A"
+      },
+      "package": "com.digitalghuru.franchise",
+      "versionCode": 3,
+      "permissions": [
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "READ_MEDIA_IMAGES",
+        "ACCESS_FINE_LOCATION",
+        "RECORD_AUDIO",
+        "POST_NOTIFICATIONS"
+      ]
+    },
+    "plugins": [
+      "expo-secure-store",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#FE4D01"
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "compileSdkVersion": 36,
+            "targetSdkVersion": 36
+          }
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "665cc492-84b2-4c9d-bcb7-b57422482a37"
+      }
+    },
+    "owner": "atriowings"
+  }
+}
