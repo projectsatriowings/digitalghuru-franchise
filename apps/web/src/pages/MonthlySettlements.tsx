@@ -24,6 +24,7 @@ import {
   Info,
   ExternalLink,
   Lock,
+  Download,
 } from 'lucide-react';
 
 export const MonthlySettlements: React.FC = () => {
@@ -35,39 +36,45 @@ export const MonthlySettlements: React.FC = () => {
     totalEligibleCollections: 0,
     totalFranchisePayable: 0,
     totalDgShare: 0,
+    totalTransferredAmount: 0,
+    totalRemainingBalance: 0,
     pendingApprovalCount: 0,
     approvedAmount: 0,
+    partiallyPaidCount: 0,
     completedAmount: 0,
   });
 
-  // Filters
+  // Filters & Tabs
   const currentMonthStr = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
   const [selectedMonth, setSelectedMonth] = useState<string>(currentMonthStr);
   const [selectedFranchiseId, setSelectedFranchiseId] = useState<string>('ALL');
   const [selectedStatus, setSelectedStatus] = useState<string>('ALL');
+  const [activeTab, setActiveTab] = useState<'ALL' | 'PENDING' | 'APPROVED' | 'PARTIAL' | 'PAID' | 'HOLD'>('ALL');
   const [franchisesList, setFranchisesList] = useState<any[]>([]);
 
-  // Detailed Modal
+  // Detailed Audit Modal
   const [activeSettlement, setActiveSettlement] = useState<any>(null);
   const [showDetailModal, setShowDetailModal] = useState<boolean>(false);
   const [loadingDetail, setLoadingDetail] = useState<boolean>(false);
 
-  // Generation Modal
+  // Statement Generation Modal
   const [showGenModal, setShowGenModal] = useState<boolean>(false);
   const [genMonth, setGenMonth] = useState<string>(currentMonthStr);
   const [genFranchiseId, setGenFranchiseId] = useState<string>('ALL');
   const [generating, setGenerating] = useState<boolean>(false);
 
-  // Transfer Confirmation Modal
-  const [showTransferConfirmModal, setShowTransferConfirmModal] = useState<boolean>(false);
-  const [initiatingTransfers, setInitiatingTransfers] = useState<boolean>(false);
-
-  // Direct Bank Transfer Modal
-  const [showDirectTransferModal, setShowDirectTransferModal] = useState<boolean>(false);
-  const [directTxRef, setDirectTxRef] = useState<string>('');
-  const [directReceiptUrl, setDirectReceiptUrl] = useState<string>('');
-  const [directNotes, setDirectNotes] = useState<string>('');
-  const [submittingDirect, setSubmittingDirect] = useState<boolean>(false);
+  // Manual Bank Transfer Modal
+  const [showManualTransferModal, setShowManualTransferModal] = useState<boolean>(false);
+  const [transferAmount, setTransferAmount] = useState<number>(0);
+  const [transferDate, setTransferDate] = useState<string>('');
+  const [transferMethod, setTransferMethod] = useState<'NEFT' | 'RTGS' | 'IMPS' | 'UPI' | 'OTHER'>('NEFT');
+  const [utrNumber, setUtrNumber] = useState<string>('');
+  const [recipientBankName, setRecipientBankName] = useState<string>('');
+  const [recipientAccountLast4, setRecipientAccountLast4] = useState<string>('');
+  const [recipientIfsc, setRecipientIfsc] = useState<string>('');
+  const [paymentProofUrl, setPaymentProofUrl] = useState<string>('');
+  const [transferRemarks, setTransferRemarks] = useState<string>('');
+  const [submittingTransfer, setSubmittingTransfer] = useState<boolean>(false);
 
   // Adjustment Modal
   const [showAdjustmentModal, setShowAdjustmentModal] = useState<boolean>(false);
@@ -78,7 +85,7 @@ export const MonthlySettlements: React.FC = () => {
 
   // Action Reason Modal (for Reject / On Hold)
   const [showActionModal, setShowActionModal] = useState<boolean>(false);
-  const [actionType, setActionType] = useState<'ON_HOLD' | 'REJECTED' | null>(null);
+  const [actionType, setActionType] = useState<'ON_HOLD' | 'REJECTED' | 'CANCELLED' | 'PENDING_APPROVAL' | null>(null);
   const [actionReason, setActionReason] = useState<string>('');
   const [submittingAction, setSubmittingAction] = useState<boolean>(false);
 
@@ -101,7 +108,16 @@ export const MonthlySettlements: React.FC = () => {
       const params = new URLSearchParams();
       if (selectedMonth && selectedMonth !== 'ALL') params.append('settlementMonth', selectedMonth);
       if (selectedFranchiseId && selectedFranchiseId !== 'ALL') params.append('franchiseId', selectedFranchiseId);
-      if (selectedStatus && selectedStatus !== 'ALL') params.append('status', selectedStatus);
+
+      // Status resolution based on tab or dropdown
+      let statusToQuery = selectedStatus;
+      if (activeTab === 'PENDING') statusToQuery = 'PENDING_APPROVAL';
+      else if (activeTab === 'APPROVED') statusToQuery = 'APPROVED';
+      else if (activeTab === 'PARTIAL') statusToQuery = 'PARTIALLY_PAID';
+      else if (activeTab === 'PAID') statusToQuery = 'PAID';
+      else if (activeTab === 'HOLD') statusToQuery = 'ON_HOLD';
+
+      if (statusToQuery && statusToQuery !== 'ALL') params.append('status', statusToQuery);
 
       const res = await apiFetch(`/settlements?${params.toString()}`);
       if (res.success && res.data) {
@@ -121,7 +137,7 @@ export const MonthlySettlements: React.FC = () => {
 
   useEffect(() => {
     loadSettlements();
-  }, [selectedMonth, selectedFranchiseId, selectedStatus]);
+  }, [selectedMonth, selectedFranchiseId, selectedStatus, activeTab]);
 
   const openSettlementDetail = async (id: string) => {
     try {
@@ -143,7 +159,7 @@ export const MonthlySettlements: React.FC = () => {
     try {
       const res = await apiFetch(`/settlements/${id}/approve`, {
         method: 'POST',
-        body: JSON.stringify({ notes: 'Approved by Super Admin' }),
+        body: JSON.stringify({ notes: 'Approved by Super Admin for manual bank transfer' }),
       });
       if (res.success) {
         showToast('Settlement approved successfully', 'success');
@@ -179,52 +195,71 @@ export const MonthlySettlements: React.FC = () => {
     }
   };
 
-  const handleInitiateTransfers = async () => {
-    if (!activeSettlement) return;
-    try {
-      setInitiatingTransfers(true);
-      const res = await apiFetch(`/settlements/${activeSettlement.id}/transfers/initiate`, {
-        method: 'POST',
-        body: JSON.stringify({ confirm: true }),
-      });
-      if (res.success) {
-        showToast(res.message || 'Transfers processed successfully', 'success');
-        setShowTransferConfirmModal(false);
-        loadSettlements();
-        openSettlementDetail(activeSettlement.id);
-      }
-    } catch (err: any) {
-      showToast(err.message || 'Transfer initiation failed', 'error');
-    } finally {
-      setInitiatingTransfers(false);
-    }
+  const openManualTransferModal = (settlement: any) => {
+    setActiveSettlement(settlement);
+    const payable = Number(settlement.franchisePayableAmount);
+    const transferred = Number(settlement.totalTransferredAmount || 0);
+    const remaining = Number(
+      settlement.remainingPayableAmount !== null && Number(settlement.remainingPayableAmount) >= 0
+        ? settlement.remainingPayableAmount
+        : Math.max(0, payable - transferred)
+    );
+
+    setTransferAmount(remaining > 0 ? remaining : payable);
+    setTransferDate(new Date().toISOString().split('T')[0]);
+    setTransferMethod('NEFT');
+    setUtrNumber('');
+    setRecipientBankName(settlement.franchise?.beneficiaryBankName || '');
+    setRecipientAccountLast4(
+      settlement.franchise?.beneficiaryAccountNumber
+        ? settlement.franchise.beneficiaryAccountNumber.slice(-4)
+        : ''
+    );
+    setRecipientIfsc(settlement.franchise?.beneficiaryIfsc || '');
+    setPaymentProofUrl('');
+    setTransferRemarks('');
+    setShowManualTransferModal(true);
   };
 
-  const handleDirectPayout = async () => {
-    if (!activeSettlement || !directTxRef.trim()) return;
+  const handleRecordManualTransfer = async () => {
+    if (!activeSettlement) return;
+    if (transferAmount <= 0) {
+      showToast('Transfer amount must be greater than zero', 'warning');
+      return;
+    }
+    if (!utrNumber.trim()) {
+      showToast('Bank transaction reference / UTR number is required', 'warning');
+      return;
+    }
+
     try {
-      setSubmittingDirect(true);
-      const res = await apiFetch(`/settlements/${activeSettlement.id}/transfers/direct`, {
+      setSubmittingTransfer(true);
+      const res = await apiFetch(`/settlements/${activeSettlement.id}/transfers/manual`, {
         method: 'POST',
         body: JSON.stringify({
-          transactionReference: directTxRef.trim(),
-          bankReceiptUrl: directReceiptUrl.trim() || undefined,
-          notes: directNotes.trim() || undefined,
+          amount: transferAmount,
+          transferDate: transferDate || undefined,
+          transferMethod,
+          utrNumber: utrNumber.trim(),
+          recipientBankName: recipientBankName.trim() || undefined,
+          recipientAccountLast4: recipientAccountLast4.trim() || undefined,
+          recipientIfsc: recipientIfsc.trim().toUpperCase() || undefined,
+          paymentProofUrl: paymentProofUrl.trim() || undefined,
+          remarks: transferRemarks.trim() || undefined,
+          status: 'VERIFIED',
         }),
       });
+
       if (res.success) {
-        showToast('Direct bank payout recorded successfully', 'success');
-        setShowDirectTransferModal(false);
-        setDirectTxRef('');
-        setDirectReceiptUrl('');
-        setDirectNotes('');
+        showToast(res.message || 'Manual bank transfer recorded successfully', 'success');
+        setShowManualTransferModal(false);
         loadSettlements();
         openSettlementDetail(activeSettlement.id);
       }
     } catch (err: any) {
-      showToast(err.message || 'Direct payout recording failed', 'error');
+      showToast(err.message || 'Failed to record bank transfer', 'error');
     } finally {
-      setSubmittingDirect(false);
+      setSubmittingTransfer(false);
     }
   };
 
@@ -282,9 +317,16 @@ export const MonthlySettlements: React.FC = () => {
   const renderStatusBadge = (status: string) => {
     switch (status) {
       case 'COMPLETED':
+      case 'PAID':
         return (
           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
-            <CheckCircle2 className="w-3.5 h-3.5" /> Completed
+            <CheckCircle2 className="w-3.5 h-3.5" /> Fully Paid
+          </span>
+        );
+      case 'PARTIALLY_PAID':
+        return (
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-purple-100 text-purple-800 border border-purple-200">
+            <Clock className="w-3.5 h-3.5" /> Partially Paid
           </span>
         );
       case 'APPROVED':
@@ -293,28 +335,11 @@ export const MonthlySettlements: React.FC = () => {
             <ShieldCheck className="w-3.5 h-3.5" /> Approved
           </span>
         );
-      case 'PROCESSING':
-        return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-purple-100 text-purple-800 border border-purple-200 animate-pulse">
-            <RotateCw className="w-3.5 h-3.5 animate-spin" /> Processing
-          </span>
-        );
       case 'PENDING_APPROVAL':
+      case 'PENDING_REVIEW':
         return (
           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-200">
-            <Clock className="w-3.5 h-3.5" /> Pending Approval
-          </span>
-        );
-      case 'PARTIALLY_FAILED':
-        return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-orange-100 text-orange-800 border border-orange-200">
-            <AlertTriangle className="w-3.5 h-3.5" /> Partially Failed
-          </span>
-        );
-      case 'FAILED':
-        return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-rose-100 text-rose-800 border border-rose-200">
-            <XCircle className="w-3.5 h-3.5" /> Failed
+            <Clock className="w-3.5 h-3.5" /> Pending Review
           </span>
         );
       case 'ON_HOLD':
@@ -323,10 +348,11 @@ export const MonthlySettlements: React.FC = () => {
             <Lock className="w-3.5 h-3.5" /> On Hold
           </span>
         );
+      case 'CANCELLED':
       case 'REJECTED':
         return (
           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-rose-100 text-rose-800 border border-rose-200">
-            <XCircle className="w-3.5 h-3.5" /> Rejected
+            <XCircle className="w-3.5 h-3.5" /> Cancelled
           </span>
         );
       default:
@@ -345,16 +371,16 @@ export const MonthlySettlements: React.FC = () => {
         <div>
           <div className="flex items-center gap-2">
             <span className="px-2.5 py-0.5 rounded-md text-xs font-bold bg-[#006FFF]/10 text-[#006FFF]">
-              Payment Management
+              Payment & Settlement Operations
             </span>
             <span className="text-slate-400">•</span>
-            <span className="text-xs text-slate-500 font-medium">Asia/Kolkata Calendar</span>
+            <span className="text-xs text-slate-500 font-medium">Manual Monthly Bank Transfers</span>
           </div>
           <h1 className="text-2xl font-black text-slate-900 font-display mt-1 tracking-tight">
             Monthly Franchise Settlements
           </h1>
           <p className="text-sm text-slate-500 mt-0.5">
-            Super Admin approval-based revenue settlements & Razorpay Route transfers.
+            Super Admin monthly statement review, approvals, and manual bank transfer recording (NEFT / RTGS / IMPS).
           </p>
         </div>
 
@@ -375,7 +401,7 @@ export const MonthlySettlements: React.FC = () => {
         </div>
       </div>
 
-      {/* KPI Financial Metric Cards */}
+      {/* KPI Financial Overview Metric Cards */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
           <span className="text-xs font-semibold text-slate-400 block uppercase tracking-wider">Eligible Collections</span>
@@ -390,7 +416,7 @@ export const MonthlySettlements: React.FC = () => {
           <span className="text-lg font-black text-[#006FFF] mt-1 block">
             ₹{summary.totalFranchisePayable?.toLocaleString('en-IN') || '0'}
           </span>
-          <span className="text-[11px] text-slate-400 mt-0.5 block">Franchise share pool</span>
+          <span className="text-[11px] text-slate-400 mt-0.5 block">Total franchise share</span>
         </div>
 
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
@@ -398,32 +424,101 @@ export const MonthlySettlements: React.FC = () => {
           <span className="text-lg font-black text-emerald-600 mt-1 block">
             ₹{summary.totalDgShare?.toLocaleString('en-IN') || '0'}
           </span>
-          <span className="text-[11px] text-slate-400 mt-0.5 block">Platform revenue</span>
+          <span className="text-[11px] text-slate-400 mt-0.5 block">Retained platform fee</span>
         </div>
 
         <div className="bg-white p-4 rounded-xl border border-amber-200 bg-amber-50/30 shadow-sm">
-          <span className="text-xs font-semibold text-amber-700 block uppercase tracking-wider">Pending Approval</span>
+          <span className="text-xs font-semibold text-amber-700 block uppercase tracking-wider">Pending Review</span>
           <span className="text-lg font-black text-amber-900 mt-1 block">
             {summary.pendingApprovalCount || 0}
           </span>
-          <span className="text-[11px] text-amber-600 mt-0.5 block">Requires review</span>
+          <span className="text-[11px] text-amber-600 mt-0.5 block">Awaiting approval</span>
         </div>
 
         <div className="bg-white p-4 rounded-xl border border-blue-200 bg-blue-50/30 shadow-sm">
-          <span className="text-xs font-semibold text-blue-700 block uppercase tracking-wider">Approved Amount</span>
+          <span className="text-xs font-semibold text-blue-700 block uppercase tracking-wider">Approved Payable</span>
           <span className="text-lg font-black text-blue-900 mt-1 block">
-            ₹{summary.approvedAmount?.toLocaleString('en-IN') || '0'}
+            ₹{summary.totalRemainingBalance?.toLocaleString('en-IN') || summary.approvedAmount?.toLocaleString('en-IN') || '0'}
           </span>
-          <span className="text-[11px] text-blue-600 mt-0.5 block">Ready for transfer</span>
+          <span className="text-[11px] text-blue-600 mt-0.5 block">Ready for bank transfer</span>
         </div>
 
         <div className="bg-white p-4 rounded-xl border border-emerald-200 bg-emerald-50/30 shadow-sm">
-          <span className="text-xs font-semibold text-emerald-700 block uppercase tracking-wider">Completed Payouts</span>
+          <span className="text-xs font-semibold text-emerald-700 block uppercase tracking-wider">Transferred Payouts</span>
           <span className="text-lg font-black text-emerald-900 mt-1 block">
-            ₹{summary.completedAmount?.toLocaleString('en-IN') || '0'}
+            ₹{summary.totalTransferredAmount?.toLocaleString('en-IN') || summary.completedAmount?.toLocaleString('en-IN') || '0'}
           </span>
-          <span className="text-[11px] text-emerald-600 mt-0.5 block">Transferred successfully</span>
+          <span className="text-[11px] text-emerald-600 mt-0.5 block">Transferred via bank</span>
         </div>
+      </div>
+
+      {/* Quick Navigation Tabs */}
+      <div className="flex items-center gap-2 border-b border-slate-200 pb-2 overflow-x-auto">
+        <button
+          onClick={() => setActiveTab('ALL')}
+          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+            activeTab === 'ALL'
+              ? 'bg-slate-900 text-white shadow-sm'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+          }`}
+        >
+          All Statements
+        </button>
+        <button
+          onClick={() => setActiveTab('PENDING')}
+          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+            activeTab === 'PENDING'
+              ? 'bg-amber-600 text-white shadow-sm'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+          }`}
+        >
+          Pending Review
+          {summary.pendingApprovalCount > 0 && (
+            <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-white/20">
+              {summary.pendingApprovalCount}
+            </span>
+          )}
+        </button>
+        <button
+          onClick={() => setActiveTab('APPROVED')}
+          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+            activeTab === 'APPROVED'
+              ? 'bg-blue-600 text-white shadow-sm'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+          }`}
+        >
+          Approved (Awaiting Transfer)
+        </button>
+        <button
+          onClick={() => setActiveTab('PARTIAL')}
+          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+            activeTab === 'PARTIAL'
+              ? 'bg-purple-600 text-white shadow-sm'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+          }`}
+        >
+          Partially Paid
+        </button>
+        <button
+          onClick={() => setActiveTab('PAID')}
+          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+            activeTab === 'PAID'
+              ? 'bg-emerald-600 text-white shadow-sm'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+          }`}
+        >
+          Fully Paid
+        </button>
+        <button
+          onClick={() => setActiveTab('HOLD')}
+          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+            activeTab === 'HOLD'
+              ? 'bg-slate-700 text-white shadow-sm'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+          }`}
+        >
+          On Hold / Cancelled
+        </button>
       </div>
 
       {/* Filter Toolbar */}
@@ -456,26 +551,6 @@ export const MonthlySettlements: React.FC = () => {
               ))}
             </select>
           </div>
-
-          {/* Status Filter */}
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Status:</span>
-            <select
-              value={selectedStatus}
-              onChange={(e) => setSelectedStatus(e.target.value)}
-              className="px-3 py-1.5 text-xs font-semibold border border-slate-200 rounded-lg bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#006FFF]/20"
-            >
-              <option value="ALL">All Statuses</option>
-              <option value="PENDING_APPROVAL">Pending Approval</option>
-              <option value="APPROVED">Approved</option>
-              <option value="PROCESSING">Processing</option>
-              <option value="COMPLETED">Completed</option>
-              <option value="PARTIALLY_FAILED">Partially Failed</option>
-              <option value="FAILED">Failed</option>
-              <option value="ON_HOLD">On Hold</option>
-              <option value="REJECTED">Rejected</option>
-            </select>
-          </div>
         </div>
 
         <span className="text-xs text-slate-400 font-medium">
@@ -496,8 +571,8 @@ export const MonthlySettlements: React.FC = () => {
                 <th className="px-4 py-3.5">Refunds</th>
                 <th className="px-4 py-3.5">Split %</th>
                 <th className="px-4 py-3.5">Franchise Share</th>
-                <th className="px-4 py-3.5">DG Share</th>
-                <th className="px-4 py-3.5">Beneficiary</th>
+                <th className="px-4 py-3.5">Transferred</th>
+                <th className="px-4 py-3.5">Remaining</th>
                 <th className="px-4 py-3.5">Status</th>
                 <th className="px-4 py-3.5 text-right">Actions</th>
               </tr>
@@ -518,76 +593,98 @@ export const MonthlySettlements: React.FC = () => {
                   </td>
                 </tr>
               ) : (
-                settlements.map((s) => (
-                  <tr key={s.id} className="hover:bg-slate-50/60 transition-colors">
-                    <td className="px-4 py-3 font-mono font-bold text-slate-900">
-                      {s.statementNumber}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="font-bold text-slate-900">{s.franchise?.name}</div>
-                      <div className="text-[11px] text-slate-400 font-mono">{s.franchise?.code}</div>
-                    </td>
-                    <td className="px-4 py-3 text-slate-600">
-                      <div className="font-semibold">{s.settlementMonth}</div>
-                      <div className="text-[11px] text-slate-400">
-                        {new Date(s.startDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })} - {new Date(s.endDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 font-semibold text-slate-900">
-                      ₹{Number(s.totalCapturedPayments).toLocaleString('en-IN')}
-                      <span className="block text-[10px] text-slate-400 font-normal">{s.transactionCount} txns</span>
-                    </td>
-                    <td className="px-4 py-3 text-slate-600">
-                      {Number(s.refundDeductions) > 0 ? (
-                        <span className="text-rose-600 font-semibold">-₹{Number(s.refundDeductions).toLocaleString('en-IN')}</span>
-                      ) : (
-                        '₹0'
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="font-bold text-[#006FFF]">{Number(s.applicableFranchisePercentage)}%</span>
-                      <span className="text-slate-400"> / {Number(s.applicableDigitalGuruPercentage)}%</span>
-                    </td>
-                    <td className="px-4 py-3 font-bold text-slate-900">
-                      ₹{Number(s.franchisePayableAmount).toLocaleString('en-IN')}
-                    </td>
-                    <td className="px-4 py-3 font-semibold text-emerald-700">
-                      ₹{Number(s.digitalGuruShareAmount).toLocaleString('en-IN')}
-                    </td>
-                    <td className="px-4 py-3">
-                      {s.transferEligibility ? (
-                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                          <CheckCircle2 className="w-3 h-3" /> Ready
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
-                          <AlertTriangle className="w-3 h-3" /> Pending
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      {renderStatusBadge(s.status)}
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <div className="flex items-center justify-end gap-1.5">
-                        <button
-                          onClick={() => openSettlementDetail(s.id)}
-                          className="px-2.5 py-1 text-xs font-bold rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-100 hover:text-slate-900 transition-colors"
-                        >
-                          Review
-                        </button>
-                        {s.status === 'PENDING_APPROVAL' && (
-                          <button
-                            onClick={() => handleApproveSettlement(s.id)}
-                            className="px-2.5 py-1 text-xs font-bold rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white transition-colors"
-                          >
-                            Approve
-                          </button>
+                settlements.map((s) => {
+                  const payable = Number(s.franchisePayableAmount);
+                  const transferred = Number(s.totalTransferredAmount || 0);
+                  const remaining = Number(
+                    s.remainingPayableAmount !== null && Number(s.remainingPayableAmount) >= 0
+                      ? s.remainingPayableAmount
+                      : Math.max(0, payable - transferred)
+                  );
+                  const isEligibleForTransfer =
+                    (s.status === 'APPROVED' || s.status === 'PARTIALLY_PAID') && remaining > 0;
+
+                  return (
+                    <tr key={s.id} className="hover:bg-slate-50/60 transition-colors">
+                      <td className="px-4 py-3 font-mono font-bold text-slate-900">
+                        {s.statementNumber}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="font-bold text-slate-900">{s.franchise?.name}</div>
+                        <div className="text-[11px] text-slate-400 font-mono">{s.franchise?.code}</div>
+                      </td>
+                      <td className="px-4 py-3 text-slate-600">
+                        <div className="font-semibold">{s.settlementMonth}</div>
+                        <div className="text-[11px] text-slate-400">
+                          {new Date(s.startDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })} - {new Date(s.endDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 font-semibold text-slate-900">
+                        ₹{Number(s.totalCapturedPayments).toLocaleString('en-IN')}
+                        <span className="block text-[10px] text-slate-400 font-normal">{s.transactionCount} txns</span>
+                      </td>
+                      <td className="px-4 py-3 text-slate-600">
+                        {Number(s.refundDeductions) > 0 ? (
+                          <span className="text-rose-600 font-semibold">-₹{Number(s.refundDeductions).toLocaleString('en-IN')}</span>
+                        ) : (
+                          '₹0'
                         )}
-                      </div>
-                    </td>
-                  </tr>
-                ))
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="font-bold text-[#006FFF]">{Number(s.applicableFranchisePercentage)}%</span>
+                        <span className="text-slate-400"> / {Number(s.applicableDigitalGuruPercentage)}%</span>
+                      </td>
+                      <td className="px-4 py-3 font-bold text-slate-900">
+                        ₹{payable.toLocaleString('en-IN')}
+                      </td>
+                      <td className="px-4 py-3 font-bold text-emerald-700">
+                        ₹{transferred.toLocaleString('en-IN')}
+                        {s.bankTransfers && s.bankTransfers.length > 0 && (
+                          <span className="block text-[10px] text-emerald-600 font-normal">
+                            {s.bankTransfers.length} transfer{s.bankTransfers.length > 1 ? 's' : ''}
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 font-bold text-slate-900">
+                        {remaining > 0 ? (
+                          <span className="text-blue-700 font-bold">₹{remaining.toLocaleString('en-IN')}</span>
+                        ) : (
+                          <span className="text-emerald-700 font-bold">₹0 (Settled)</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        {renderStatusBadge(s.status)}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            onClick={() => openSettlementDetail(s.id)}
+                            className="px-2.5 py-1 text-xs font-bold rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-100 hover:text-slate-900 transition-colors cursor-pointer"
+                          >
+                            Review
+                          </button>
+                          {(s.status === 'PENDING_APPROVAL' || s.status === 'PENDING_REVIEW') && (
+                            <button
+                              onClick={() => handleApproveSettlement(s.id)}
+                              className="px-2.5 py-1 text-xs font-bold rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white transition-colors cursor-pointer"
+                            >
+                              Approve
+                            </button>
+                          )}
+                          {isEligibleForTransfer && (
+                            <button
+                              onClick={() => openManualTransferModal(s)}
+                              className="px-2.5 py-1 text-xs font-bold rounded-lg bg-[#006FFF] hover:bg-[#0057CC] text-white transition-colors cursor-pointer"
+                              title="Record manual bank transfer"
+                            >
+                              Record Transfer
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -595,7 +692,7 @@ export const MonthlySettlements: React.FC = () => {
       </div>
 
       {/* ========================================================================= */}
-      {/* DETAILED SETTLEMENT AUDIT MODAL (SECTION F) */}
+      {/* DETAILED SETTLEMENT AUDIT MODAL */}
       {/* ========================================================================= */}
       {showDetailModal && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
@@ -630,7 +727,7 @@ export const MonthlySettlements: React.FC = () => {
               {loadingDetail ? (
                 <div className="py-16 text-center text-slate-400">
                   <RotateCw className="w-6 h-6 animate-spin mx-auto mb-2 text-[#006FFF]" />
-                  Loading transaction-level breakdown...
+                  Loading statement details...
                 </div>
               ) : activeSettlement && (
                 <>
@@ -645,28 +742,38 @@ export const MonthlySettlements: React.FC = () => {
                     </div>
 
                     <div className="p-3.5 bg-blue-50/50 rounded-xl border border-blue-200">
-                      <span className="text-[11px] font-semibold text-blue-700 block uppercase">Franchise Payable ({Number(activeSettlement.applicableFranchisePercentage)}%)</span>
+                      <span className="text-[11px] font-semibold text-blue-700 block uppercase">
+                        Franchise Share ({Number(activeSettlement.applicableFranchisePercentage)}%)
+                      </span>
                       <span className="text-base font-black text-[#006FFF] mt-0.5 block">
                         ₹{Number(activeSettlement.franchisePayableAmount).toLocaleString('en-IN')}
                       </span>
-                      <span className="text-[10px] text-blue-600 block">Payable to beneficiary</span>
+                      <span className="text-[10px] text-blue-600 block">Total approved share</span>
                     </div>
 
                     <div className="p-3.5 bg-emerald-50/50 rounded-xl border border-emerald-200">
-                      <span className="text-[11px] font-semibold text-emerald-700 block uppercase">DigitalGhuru Share ({Number(activeSettlement.applicableDigitalGuruPercentage)}%)</span>
+                      <span className="text-[11px] font-semibold text-emerald-700 block uppercase">Transferred Amount</span>
                       <span className="text-base font-black text-emerald-800 mt-0.5 block">
-                        ₹{Number(activeSettlement.digitalGuruShareAmount).toLocaleString('en-IN')}
+                        ₹{Number(activeSettlement.totalTransferredAmount || 0).toLocaleString('en-IN')}
                       </span>
-                      <span className="text-[10px] text-emerald-600 block">Retained platform fees</span>
+                      <span className="text-[10px] text-emerald-600 block">
+                        {activeSettlement.bankTransfers?.length || 0} manual transfer{activeSettlement.bankTransfers?.length !== 1 ? 's' : ''}
+                      </span>
                     </div>
 
-                    <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200">
-                      <span className="text-[11px] font-semibold text-slate-500 block uppercase">Approval Audit</span>
-                      <span className="text-xs font-bold text-slate-900 mt-1 block">
-                        {activeSettlement.approvedBy?.fullName || 'Pending Review'}
+                    <div className="p-3.5 bg-amber-50/50 rounded-xl border border-amber-200">
+                      <span className="text-[11px] font-semibold text-amber-700 block uppercase">Remaining Balance</span>
+                      <span className="text-base font-black text-amber-900 mt-0.5 block">
+                        ₹{Number(
+                          activeSettlement.remainingPayableAmount !== null && Number(activeSettlement.remainingPayableAmount) >= 0
+                            ? activeSettlement.remainingPayableAmount
+                            : Math.max(0, Number(activeSettlement.franchisePayableAmount) - Number(activeSettlement.totalTransferredAmount || 0))
+                        ).toLocaleString('en-IN')}
                       </span>
-                      <span className="text-[10px] text-slate-400 block">
-                        {activeSettlement.approvedAt ? new Date(activeSettlement.approvedAt).toLocaleString('en-IN') : 'Not approved yet'}
+                      <span className="text-[10px] text-amber-700 block">
+                        {Number(activeSettlement.remainingPayableAmount || 0) <= 0 && activeSettlement.status === 'PAID'
+                          ? 'Fully Settled'
+                          : 'Due for bank transfer'}
                       </span>
                     </div>
                   </div>
@@ -675,7 +782,7 @@ export const MonthlySettlements: React.FC = () => {
                   <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div>
                       <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
-                        Approved Beneficiary Account (Route Transfers)
+                        Franchise Bank Transfer Beneficiary Account
                       </span>
                       <div className="flex flex-wrap items-center gap-x-6 gap-y-1 text-slate-700">
                         <div>
@@ -689,18 +796,14 @@ export const MonthlySettlements: React.FC = () => {
                         <div>
                           <span className="text-slate-400">Account:</span>{' '}
                           <span className="font-mono font-bold">
-                            {activeSettlement.franchise?.beneficiaryAccountNumber ? `****${activeSettlement.franchise.beneficiaryAccountNumber.slice(-4)}` : '—'}
+                            {activeSettlement.franchise?.beneficiaryAccountNumber
+                              ? `****${activeSettlement.franchise.beneficiaryAccountNumber.slice(-4)}`
+                              : '—'}
                           </span>
                         </div>
                         <div>
                           <span className="text-slate-400">IFSC:</span>{' '}
                           <span className="font-mono font-bold">{activeSettlement.franchise?.beneficiaryIfsc || '—'}</span>
-                        </div>
-                        <div>
-                          <span className="text-slate-400">Linked Account ID:</span>{' '}
-                          <span className="font-mono font-bold text-[#006FFF]">
-                            {activeSettlement.franchise?.razorpayAccountId || 'None'}
-                          </span>
                         </div>
                       </div>
                     </div>
@@ -708,13 +811,101 @@ export const MonthlySettlements: React.FC = () => {
                     <div>
                       {activeSettlement.transferEligibility ? (
                         <span className="px-3 py-1 bg-emerald-100 text-emerald-800 font-bold rounded-lg border border-emerald-300">
-                          Eligible for Transfer
+                          Beneficiary Details Verified
                         </span>
                       ) : (
                         <span className="px-3 py-1 bg-amber-100 text-amber-800 font-bold rounded-lg border border-amber-300">
-                          Transfer Ineligible: Account Unverified
+                          Beneficiary Details Incomplete
                         </span>
                       )}
+                    </div>
+                  </div>
+
+                  {/* Recorded Manual Bank Transfers Table */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2">
+                        <CreditCard className="w-4 h-4 text-emerald-600" />
+                        Recorded Manual Bank Transfers ({activeSettlement.bankTransfers?.length || 0})
+                      </h3>
+                      <span className="text-[11px] text-slate-400 font-medium">DigitalGhuru Bank Transfer Audits</span>
+                    </div>
+
+                    <div className="border border-slate-200 rounded-xl overflow-hidden">
+                      <table className="w-full text-left text-xs">
+                        <thead className="bg-slate-50 text-slate-600 font-semibold uppercase tracking-wider border-b border-slate-200">
+                          <tr>
+                            <th className="px-3 py-2.5">Date</th>
+                            <th className="px-3 py-2.5">Method</th>
+                            <th className="px-3 py-2.5">Bank Reference / UTR</th>
+                            <th className="px-3 py-2.5">Amount Transferred</th>
+                            <th className="px-3 py-2.5">Recipient Bank Account</th>
+                            <th className="px-3 py-2.5">Recorded By</th>
+                            <th className="px-3 py-2.5">Receipt Proof</th>
+                            <th className="px-3 py-2.5">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {!activeSettlement.bankTransfers || activeSettlement.bankTransfers.length === 0 ? (
+                            <tr>
+                              <td colSpan={8} className="py-6 text-center text-slate-400">
+                                No manual bank transfers recorded yet for this statement.
+                              </td>
+                            </tr>
+                          ) : (
+                            activeSettlement.bankTransfers.map((trf: any) => (
+                              <tr key={trf.id} className="hover:bg-slate-50/50">
+                                <td className="px-3 py-2 text-slate-600">
+                                  {new Date(trf.transferDate).toLocaleDateString('en-IN', {
+                                    day: '2-digit',
+                                    month: 'short',
+                                    year: 'numeric',
+                                  })}
+                                </td>
+                                <td className="px-3 py-2 font-mono font-bold text-slate-800">
+                                  {trf.transferMethod}
+                                </td>
+                                <td className="px-3 py-2 font-mono font-bold text-blue-700">
+                                  {trf.utrNumber}
+                                </td>
+                                <td className="px-3 py-2 font-black text-slate-900">
+                                  ₹{Number(trf.amount).toLocaleString('en-IN')}
+                                </td>
+                                <td className="px-3 py-2 text-slate-600">
+                                  {trf.recipientBankName || '—'}{' '}
+                                  {trf.recipientAccountLast4 ? `(****${trf.recipientAccountLast4})` : ''}
+                                </td>
+                                <td className="px-3 py-2 text-slate-700">
+                                  {trf.recordedBy?.fullName || 'Super Admin'}
+                                </td>
+                                <td className="px-3 py-2">
+                                  {trf.paymentProofUrl ? (
+                                    <a
+                                      href={trf.paymentProofUrl}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="inline-flex items-center gap-1 text-[#006FFF] hover:underline font-semibold"
+                                    >
+                                      View Proof <ExternalLink className="w-3 h-3" />
+                                    </a>
+                                  ) : (
+                                    <span className="text-slate-400">—</span>
+                                  )}
+                                </td>
+                                <td className="px-3 py-2">
+                                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                    trf.status === 'VERIFIED'
+                                      ? 'bg-emerald-100 text-emerald-800'
+                                      : 'bg-amber-100 text-amber-800'
+                                  }`}>
+                                    {trf.status}
+                                  </span>
+                                </td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
                     </div>
                   </div>
 
@@ -722,14 +913,14 @@ export const MonthlySettlements: React.FC = () => {
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
                       <h3 className="font-bold text-slate-900 text-sm">
-                        Captured Payments Included in Statement ({activeSettlement.payments?.length || 0})
+                        Captured Student Payments Included ({activeSettlement.payments?.length || 0})
                       </h3>
                       <span className="text-[11px] text-slate-400 font-medium">Authoritative Gateway Records</span>
                     </div>
 
-                    <div className="border border-slate-200 rounded-xl overflow-hidden">
+                    <div className="border border-slate-200 rounded-xl overflow-hidden max-h-60 overflow-y-auto">
                       <table className="w-full text-left text-xs">
-                        <thead className="bg-slate-50 text-slate-600 font-semibold uppercase tracking-wider border-b border-slate-200">
+                        <thead className="bg-slate-50 text-slate-600 font-semibold uppercase tracking-wider border-b border-slate-200 sticky top-0">
                           <tr>
                             <th className="px-3 py-2.5">Date (IST)</th>
                             <th className="px-3 py-2.5">Receipt #</th>
@@ -739,7 +930,7 @@ export const MonthlySettlements: React.FC = () => {
                             <th className="px-3 py-2.5">Gross Paid</th>
                             <th className="px-3 py-2.5">Franchise %</th>
                             <th className="px-3 py-2.5">Franchise Share</th>
-                            <th className="px-3 py-2.5">Transfer Status</th>
+                            <th className="px-3 py-2.5">Payment Status</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
@@ -753,7 +944,12 @@ export const MonthlySettlements: React.FC = () => {
                             activeSettlement.payments?.map((p: any) => (
                               <tr key={p.id} className="hover:bg-slate-50/50">
                                 <td className="px-3 py-2 text-slate-600">
-                                  {new Date(p.paidAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                                  {new Date(p.paidAt).toLocaleDateString('en-IN', {
+                                    day: '2-digit',
+                                    month: 'short',
+                                    hour: '2-digit',
+                                    minute: '2-digit',
+                                  })}
                                 </td>
                                 <td className="px-3 py-2 font-mono font-bold text-slate-800">{p.receiptNumber}</td>
                                 <td className="px-3 py-2 font-mono text-slate-500 text-[11px]">{p.gatewayPaymentId || p.transactionReference || '—'}</td>
@@ -771,13 +967,13 @@ export const MonthlySettlements: React.FC = () => {
                                 </td>
                                 <td className="px-3 py-2">
                                   <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                                    p.transferStatus === 'PROCESSED'
+                                    p.status === 'SUCCESS' || p.status === 'CAPTURED'
                                       ? 'bg-emerald-100 text-emerald-800'
-                                      : p.transferStatus === 'FAILED'
-                                      ? 'bg-rose-100 text-rose-800'
+                                      : p.status === 'REFUNDED'
+                                      ? 'bg-amber-100 text-amber-800'
                                       : 'bg-slate-100 text-slate-700'
                                   }`}>
-                                    {p.transferStatus || 'PENDING'}
+                                    {p.status || 'SUCCESS'}
                                   </span>
                                 </td>
                               </tr>
@@ -831,7 +1027,7 @@ export const MonthlySettlements: React.FC = () => {
                 >
                   <Printer className="w-4 h-4" /> Download / Print Statement
                 </button>
-                {activeSettlement?.status === 'APPROVED' && (
+                {(activeSettlement?.status === 'APPROVED' || activeSettlement?.status === 'PARTIALLY_PAID') && (
                   <button
                     onClick={() => setShowAdjustmentModal(true)}
                     className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 bg-white text-slate-700 font-bold text-xs hover:bg-slate-100 transition-colors cursor-pointer"
@@ -842,58 +1038,229 @@ export const MonthlySettlements: React.FC = () => {
               </div>
 
               <div className="flex items-center gap-2">
-                {activeSettlement?.status === 'PENDING_APPROVAL' && (
+                {(activeSettlement?.status === 'PENDING_APPROVAL' || activeSettlement?.status === 'PENDING_REVIEW') && (
                   <>
                     <button
                       onClick={() => {
                         setActionType('ON_HOLD');
                         setShowActionModal(true);
                       }}
-                      className="px-3.5 py-2 rounded-xl border border-slate-300 text-slate-700 font-bold text-xs hover:bg-slate-100 transition-colors"
+                      className="px-3.5 py-2 rounded-xl border border-slate-300 text-slate-700 font-bold text-xs hover:bg-slate-100 transition-colors cursor-pointer"
                     >
                       Put On Hold
                     </button>
                     <button
                       onClick={() => {
-                        setActionType('REJECTED');
+                        setActionType('CANCELLED');
                         setShowActionModal(true);
                       }}
-                      className="px-3.5 py-2 rounded-xl border border-rose-200 bg-rose-50 text-rose-700 font-bold text-xs hover:bg-rose-100 transition-colors"
+                      className="px-3.5 py-2 rounded-xl border border-rose-200 bg-rose-50 text-rose-700 font-bold text-xs hover:bg-rose-100 transition-colors cursor-pointer"
                     >
-                      Reject Settlement
+                      Cancel Statement
                     </button>
                     <button
                       onClick={() => handleApproveSettlement(activeSettlement.id)}
-                      className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition-colors shadow-sm"
+                      className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition-colors shadow-sm cursor-pointer"
                     >
                       Approve Settlement
                     </button>
                   </>
                 )}
 
-                {(activeSettlement?.status === 'APPROVED' || activeSettlement?.status === 'PARTIALLY_FAILED') && (
-                  <>
-                    <button
-                      onClick={() => setShowDirectTransferModal(true)}
-                      className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-slate-700 font-bold text-xs hover:bg-slate-100 transition-colors"
-                      title="Direct Bank Payout alternative"
-                    >
-                      Direct Bank Payout
-                    </button>
-                    <button
-                      onClick={() => setShowTransferConfirmModal(true)}
-                      disabled={!activeSettlement.transferEligibility}
-                      className={`flex items-center gap-2 px-4 py-2 rounded-xl text-white font-bold text-xs transition-colors shadow-sm ${
-                        activeSettlement.transferEligibility
-                          ? 'bg-[#006FFF] hover:bg-[#0057CC] cursor-pointer'
-                          : 'bg-slate-400 cursor-not-allowed opacity-60'
-                      }`}
-                    >
-                      <Send className="w-3.5 h-3.5" /> Approve & Initiate Route Transfer
-                    </button>
-                  </>
+                {(activeSettlement?.status === 'APPROVED' || activeSettlement?.status === 'PARTIALLY_PAID') && (
+                  <button
+                    onClick={() => openManualTransferModal(activeSettlement)}
+                    disabled={Number(activeSettlement.remainingPayableAmount || 0) <= 0 && activeSettlement.status === 'PAID'}
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition-colors shadow-sm cursor-pointer"
+                  >
+                    <CreditCard className="w-3.5 h-3.5" /> Record Bank Transfer
+                  </button>
                 )}
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* RECORD MANUAL BANK TRANSFER MODAL */}
+      {/* ========================================================================= */}
+      {showManualTransferModal && activeSettlement && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white max-w-lg w-full rounded-2xl p-6 shadow-2xl border border-slate-200 space-y-4 text-xs">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div>
+                <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                  <CreditCard className="w-5 h-5 text-emerald-600" /> Record Manual Bank Transfer
+                </h3>
+                <p className="text-slate-500 text-[11px] mt-0.5">
+                  Record official NEFT / RTGS / IMPS payout details to the franchise bank account.
+                </p>
+              </div>
+              <button
+                onClick={() => setShowManualTransferModal(false)}
+                className="text-slate-400 hover:text-slate-700 p-1"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Settlement Balance Info Banner */}
+            <div className="p-3 bg-blue-50/60 rounded-xl border border-blue-200 grid grid-cols-3 gap-2 text-center">
+              <div>
+                <span className="text-[10px] text-slate-500 uppercase block font-semibold">Total Approved</span>
+                <span className="font-bold text-slate-900">
+                  ₹{Number(activeSettlement.franchisePayableAmount).toLocaleString('en-IN')}
+                </span>
+              </div>
+              <div>
+                <span className="text-[10px] text-emerald-700 uppercase block font-semibold">Already Transferred</span>
+                <span className="font-bold text-emerald-800">
+                  ₹{Number(activeSettlement.totalTransferredAmount || 0).toLocaleString('en-IN')}
+                </span>
+              </div>
+              <div>
+                <span className="text-[10px] text-blue-700 uppercase block font-semibold">Remaining Payable</span>
+                <span className="font-black text-blue-900">
+                  ₹{Number(
+                    activeSettlement.remainingPayableAmount !== null && Number(activeSettlement.remainingPayableAmount) >= 0
+                      ? activeSettlement.remainingPayableAmount
+                      : Math.max(0, Number(activeSettlement.franchisePayableAmount) - Number(activeSettlement.totalTransferredAmount || 0))
+                  ).toLocaleString('en-IN')}
+                </span>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">Transfer Amount (₹) *</label>
+                  <input
+                    type="number"
+                    min="1"
+                    step="0.01"
+                    value={transferAmount}
+                    onChange={(e) => setTransferAmount(parseFloat(e.target.value) || 0)}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-slate-900 font-bold"
+                  />
+                  <span className="text-[10px] text-slate-400 mt-0.5 block">Supports partial payments</span>
+                </div>
+
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">Transfer Date *</label>
+                  <input
+                    type="date"
+                    value={transferDate}
+                    onChange={(e) => setTransferDate(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-slate-900 font-medium"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">Transfer Method *</label>
+                  <select
+                    value={transferMethod}
+                    onChange={(e) => setTransferMethod(e.target.value as any)}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-slate-900 font-medium bg-white"
+                  >
+                    <option value="NEFT">NEFT (National Electronic Funds Transfer)</option>
+                    <option value="RTGS">RTGS (Real Time Gross Settlement)</option>
+                    <option value="IMPS">IMPS (Immediate Payment Service)</option>
+                    <option value="UPI">UPI (Corporate Bank Transfer)</option>
+                    <option value="OTHER">Other Bank Transfer</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">Bank Reference / UTR Number *</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. CMS123456789012"
+                    value={utrNumber}
+                    onChange={(e) => setUtrNumber(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-slate-900 font-mono font-bold"
+                  />
+                  <span className="text-[10px] text-slate-400 mt-0.5 block">Unique transaction reference</span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2 bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+                <div>
+                  <label className="font-semibold text-slate-500 block text-[10px]">Recipient Bank</label>
+                  <input
+                    type="text"
+                    value={recipientBankName}
+                    onChange={(e) => setRecipientBankName(e.target.value)}
+                    placeholder="Bank name"
+                    className="w-full px-2 py-1 border border-slate-200 rounded text-[11px] bg-white font-medium"
+                  />
+                </div>
+                <div>
+                  <label className="font-semibold text-slate-500 block text-[10px]">Account (Last 4)</label>
+                  <input
+                    type="text"
+                    maxLength={4}
+                    value={recipientAccountLast4}
+                    onChange={(e) => setRecipientAccountLast4(e.target.value)}
+                    placeholder="e.g. 5678"
+                    className="w-full px-2 py-1 border border-slate-200 rounded text-[11px] bg-white font-mono font-bold"
+                  />
+                </div>
+                <div>
+                  <label className="font-semibold text-slate-500 block text-[10px]">IFSC Code</label>
+                  <input
+                    type="text"
+                    maxLength={11}
+                    value={recipientIfsc}
+                    onChange={(e) => setRecipientIfsc(e.target.value.toUpperCase())}
+                    placeholder="HDFC0001234"
+                    className="w-full px-2 py-1 border border-slate-200 rounded text-[11px] bg-white font-mono font-bold"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="font-bold text-slate-700 block mb-1">Bank Payment Proof / Receipt URL (Optional)</label>
+                <input
+                  type="url"
+                  placeholder="https://..."
+                  value={paymentProofUrl}
+                  onChange={(e) => setPaymentProofUrl(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-slate-900"
+                />
+              </div>
+
+              <div>
+                <label className="font-bold text-slate-700 block mb-1">Internal Remarks / Notes (Optional)</label>
+                <textarea
+                  rows={2}
+                  placeholder="Transferred via DigitalGhuru primary account..."
+                  value={transferRemarks}
+                  onChange={(e) => setTransferRemarks(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-slate-900"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setShowManualTransferModal(false)}
+                className="px-4 py-2 rounded-xl text-slate-600 font-bold text-xs hover:bg-slate-100"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={submittingTransfer || transferAmount <= 0 || !utrNumber.trim()}
+                onClick={handleRecordManualTransfer}
+                className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-2 cursor-pointer shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {submittingTransfer ? <RotateCw className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+                Confirm Bank Transfer
+              </button>
             </div>
           </div>
         </div>
@@ -966,130 +1333,6 @@ export const MonthlySettlements: React.FC = () => {
       )}
 
       {/* ========================================================================= */}
-      {/* EXPLICIT TRANSFER CONFIRMATION MODAL (SECTION F & G) */}
-      {/* ========================================================================= */}
-      {showTransferConfirmModal && activeSettlement && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white max-w-md w-full rounded-2xl p-6 shadow-2xl border border-slate-200 space-y-4">
-            <div className="w-12 h-12 rounded-full bg-blue-50 text-[#006FFF] flex items-center justify-center mx-auto">
-              <Send className="w-6 h-6" />
-            </div>
-
-            <div className="text-center">
-              <h3 className="text-base font-bold text-slate-900">Confirm Route Transfer Initiation</h3>
-              <p className="text-xs text-slate-500 mt-1">
-                You are about to initiate real transfers of{' '}
-                <strong className="text-slate-900 font-bold">
-                  ₹{Number(activeSettlement.franchisePayableAmount).toLocaleString('en-IN')}
-                </strong>{' '}
-                to Linked Account{' '}
-                <strong className="font-mono text-[#006FFF]">
-                  {activeSettlement.franchise?.razorpayAccountId}
-                </strong>{' '}
-                for {activeSettlement.statementNumber}.
-              </p>
-            </div>
-
-            <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-amber-800 text-xs">
-              <strong>Financial Safeguard:</strong> Transfers are executed against each captured payment with idempotency keys. Double transfers are prevented.
-            </div>
-
-            <div className="flex items-center justify-end gap-3 pt-2">
-              <button
-                type="button"
-                onClick={() => setShowTransferConfirmModal(false)}
-                className="px-4 py-2 rounded-xl text-slate-600 font-bold text-xs hover:bg-slate-100"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={initiatingTransfers}
-                onClick={handleInitiateTransfers}
-                className="px-4 py-2 rounded-xl bg-[#006FFF] hover:bg-[#0057CC] text-white font-bold text-xs flex items-center gap-2 cursor-pointer shadow-md shadow-[#006FFF]/20"
-              >
-                {initiatingTransfers ? <RotateCw className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
-                Yes, Authorize Transfer
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ========================================================================= */}
-      {/* DIRECT BANK PAYOUT MODAL */}
-      {/* ========================================================================= */}
-      {showDirectTransferModal && activeSettlement && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white max-w-md w-full rounded-2xl p-6 shadow-2xl border border-slate-200 space-y-4 text-xs">
-            <div className="flex items-center justify-between">
-              <h3 className="text-base font-bold text-slate-900">Record Direct Bank Payout</h3>
-              <button onClick={() => setShowDirectTransferModal(false)} className="text-slate-400 hover:text-slate-700">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <p className="text-slate-500">
-              Record a direct bank transfer (NEFT/RTGS/IMPS) when Razorpay Route is not used. Marks the statement COMPLETED.
-            </p>
-
-            <div className="space-y-3">
-              <div>
-                <label className="font-bold text-slate-700 block mb-1">Bank Reference / UTR Number *</label>
-                <input
-                  type="text"
-                  placeholder="e.g. CMS123456789012"
-                  value={directTxRef}
-                  onChange={(e) => setDirectTxRef(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-slate-800 font-mono"
-                />
-              </div>
-
-              <div>
-                <label className="font-bold text-slate-700 block mb-1">Bank Receipt / Proof URL</label>
-                <input
-                  type="text"
-                  placeholder="https://..."
-                  value={directReceiptUrl}
-                  onChange={(e) => setDirectReceiptUrl(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-slate-800"
-                />
-              </div>
-
-              <div>
-                <label className="font-bold text-slate-700 block mb-1">Notes</label>
-                <textarea
-                  rows={2}
-                  placeholder="Settled via HDFC Corporate Banking"
-                  value={directNotes}
-                  onChange={(e) => setDirectNotes(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-slate-800"
-                />
-              </div>
-            </div>
-
-            <div className="flex items-center justify-end gap-3 pt-2">
-              <button
-                type="button"
-                onClick={() => setShowDirectTransferModal(false)}
-                className="px-4 py-2 rounded-xl text-slate-600 font-bold text-xs hover:bg-slate-100"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={submittingDirect || !directTxRef.trim()}
-                onClick={handleDirectPayout}
-                className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-2 cursor-pointer shadow-sm"
-              >
-                {submittingDirect ? <RotateCw className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
-                Confirm Direct Payout
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ========================================================================= */}
       {/* AUDITABLE ADJUSTMENT MODAL */}
       {/* ========================================================================= */}
       {showAdjustmentModal && activeSettlement && (
@@ -1155,7 +1398,7 @@ export const MonthlySettlements: React.FC = () => {
                 className="px-4 py-2 rounded-xl bg-[#006FFF] hover:bg-[#0057CC] text-white font-bold text-xs flex items-center gap-2 cursor-pointer shadow-sm"
               >
                 {submittingAdj ? <RotateCw className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
-                Save Adjustment
+                Record Adjustment
               </button>
             </div>
           </div>
@@ -1163,25 +1406,28 @@ export const MonthlySettlements: React.FC = () => {
       )}
 
       {/* ========================================================================= */}
-      {/* STATUS ACTION REASON MODAL (ON_HOLD / REJECT) */}
+      {/* ACTION REASON MODAL (ON_HOLD / REJECTED / CANCELLED) */}
       {/* ========================================================================= */}
       {showActionModal && activeSettlement && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white max-w-md w-full rounded-2xl p-6 shadow-2xl border border-slate-200 space-y-4 text-xs">
             <div className="flex items-center justify-between">
               <h3 className="text-base font-bold text-slate-900">
-                {actionType === 'ON_HOLD' ? 'Put Settlement On Hold' : 'Reject Settlement Statement'}
+                {actionType === 'ON_HOLD' ? 'Place Settlement On Hold' : 'Cancel Settlement Statement'}
               </h3>
               <button onClick={() => setShowActionModal(false)} className="text-slate-400 hover:text-slate-700">
                 <X className="w-5 h-5" />
               </button>
             </div>
+            <p className="text-slate-500">
+              Please specify a clear reason for the audit log before updating statement status.
+            </p>
 
             <div>
-              <label className="font-bold text-slate-700 block mb-1">Reason / Notes *</label>
+              <label className="font-bold text-slate-700 block mb-1">Reason *</label>
               <textarea
                 rows={3}
-                placeholder="State the reason for this action..."
+                placeholder="Reason for audit log..."
                 value={actionReason}
                 onChange={(e) => setActionReason(e.target.value)}
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg text-slate-800"
@@ -1200,12 +1446,10 @@ export const MonthlySettlements: React.FC = () => {
                 type="button"
                 disabled={submittingAction || !actionReason.trim()}
                 onClick={handleUpdateStatus}
-                className={`px-4 py-2 rounded-xl text-white font-bold text-xs flex items-center gap-2 cursor-pointer shadow-sm ${
-                  actionType === 'REJECTED' ? 'bg-rose-600 hover:bg-rose-700' : 'bg-slate-800 hover:bg-slate-900'
-                }`}
+                className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs flex items-center gap-2 cursor-pointer"
               >
                 {submittingAction ? <RotateCw className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
-                Confirm {actionType === 'ON_HOLD' ? 'Hold' : 'Rejection'}
+                Confirm Status Change
               </button>
             </div>
           </div>
@@ -1214,4 +1458,5 @@ export const MonthlySettlements: React.FC = () => {
     </div>
   );
 };
+
 export default MonthlySettlements;

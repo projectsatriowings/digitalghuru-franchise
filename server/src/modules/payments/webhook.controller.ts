@@ -193,14 +193,134 @@ export async function handleRazorpayWebhook(req: Request, res: Response) {
     }
 
     // =========================================================================
-    // EVENTS: transfer.processed, transfer.failed, transfer.reversed (Section G)
+    // EVENT: refund.created (Informational acknowledgment only — no balance change)
+    // FINANCIAL INTEGRITY RULE: refund.created indicates refund initiation only.
+    // Financial adjustments MUST only be applied upon receiving refund.processed.
+    // =========================================================================
+    if (event === 'refund.created') {
+      const refundEntity = payload?.refund?.entity;
+      console.log(`[Webhook] Refund ${refundEntity?.id} created for payment ${refundEntity?.payment_id} (pending bank settlement). Financial balance untouched.`);
+      return res.json({
+        status: 'refund_created_acknowledged',
+        message: 'Refund initiated; financial balance will adjust when refund.processed is received.',
+      });
+    }
+
+    // =========================================================================
+    // EVENT: refund.processed (Authoritative financial settlement of refund)
+    // =========================================================================
+    if (event === 'refund.processed') {
+      const refundEntity = payload?.refund?.entity;
+      if (!refundEntity) {
+        return res.json({ status: 'ignored_missing_entity' });
+      }
+
+      const gatewayPaymentId = refundEntity.payment_id;
+      const refundId = refundEntity.id;
+      const refundAmountPaise = refundEntity.amount;
+      const refundAmountRupees = refundAmountPaise / 100;
+
+      const payment = await prisma.payment.findFirst({
+        where: {
+          OR: [
+            { gatewayPaymentId },
+            { transactionReference: gatewayPaymentId },
+          ],
+        },
+        include: {
+          feeAssignment: true,
+          adjustments: true,
+        },
+      });
+
+      if (!payment) {
+        console.warn(`[Webhook] Refund received for unknown payment ${gatewayPaymentId}`);
+        return res.json({ status: 'payment_not_found' });
+      }
+
+      // Check anti-replay / idempotency: has this refund already been recorded?
+      const existingRefund = payment.adjustments.find(
+        (adj) => adj.adjustmentType === 'REFUND' && adj.reason?.includes(refundId)
+      );
+
+      if (existingRefund) {
+        console.log(`[Webhook] Refund ${refundId} already recorded, skipping.`);
+        return res.json({ status: 'already_processed' });
+      }
+
+      await prisma.$transaction(async (tx) => {
+        // 1. Create PaymentAdjustment record
+        await tx.paymentAdjustment.create({
+          data: {
+            instituteId: payment.instituteId,
+            paymentId: payment.id,
+            feeAssignmentId: payment.feeAssignmentId,
+            adjustmentType: 'REFUND',
+            amount: new Prisma.Decimal(refundAmountRupees),
+            reason: `Razorpay Refund ${refundId}`,
+            authorizedById: (await tx.user.findFirst({ where: { role: 'SUPER_ADMIN' } }))?.id || payment.recordedById,
+          },
+        });
+
+        // 2. Recalculate StudentFeeAssignment status
+        if (payment.feeAssignmentId) {
+          const allPayments = await tx.payment.findMany({
+            where: { feeAssignmentId: payment.feeAssignmentId, status: 'SUCCESS' },
+            include: { adjustments: { where: { adjustmentType: 'REFUND' } } },
+          });
+
+          let netPaid = new Prisma.Decimal(0);
+          for (const p of allPayments) {
+            netPaid = netPaid.plus(p.amountPaid);
+            for (const adj of p.adjustments) {
+              netPaid = netPaid.minus(adj.amount);
+            }
+          }
+
+          const assignment = await tx.studentFeeAssignment.findUnique({
+            where: { id: payment.feeAssignmentId },
+          });
+
+          if (assignment) {
+            const finalAmount = assignment.finalAmount;
+            const newStatus = netPaid.greaterThanOrEqualTo(finalAmount)
+              ? PaymentStatus.PAID
+              : netPaid.greaterThan(0)
+              ? PaymentStatus.PARTIALLY_PAID
+              : PaymentStatus.PENDING;
+
+            await tx.studentFeeAssignment.update({
+              where: { id: payment.feeAssignmentId },
+              data: { status: newStatus },
+            });
+          }
+        }
+      });
+
+      console.log(`[Webhook] Refund ${refundId} settled and recorded successfully for payment ${gatewayPaymentId}`);
+      return res.json({ status: 'refund_processed' });
+    }
+
+    // =========================================================================
+    // EVENT: refund.failed
+    // =========================================================================
+    if (event === 'refund.failed') {
+      const refundEntity = payload?.refund?.entity;
+      console.warn(`[Webhook] Refund ${refundEntity?.id} failed at bank gateway.`);
+      return res.json({ status: 'refund_failed_acknowledged' });
+    }
+
+    // =========================================================================
+    // EVENTS: transfer.processed, transfer.failed, transfer.reversed (Route Payouts - Isolated)
     // =========================================================================
     if (['transfer.processed', 'transfer.failed', 'transfer.reversed'].includes(event)) {
-      const transferEntity = payload?.transfer?.entity;
-      if (transferEntity) {
-        await settlementTransferService.reconcileTransferWebhook(event, transferEntity);
+      if (process.env.ENABLE_RAZORPAY_ROUTE === 'true') {
+        const transferEntity = payload?.transfer?.entity;
+        if (transferEntity) {
+          await settlementTransferService.reconcileTransferWebhook(event, transferEntity);
+        }
       }
-      return res.json({ status: 'transfer_webhook_reconciled' });
+      return res.json({ status: 'transfer_webhook_acknowledged' });
     }
 
     return res.json({ status: 'event_acknowledged' });
