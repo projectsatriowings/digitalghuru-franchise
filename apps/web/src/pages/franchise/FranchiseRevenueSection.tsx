@@ -280,7 +280,9 @@ export const FranchiseRevenueSection: React.FC<FranchiseRevenueSectionProps> = (
                 <th className="px-4 py-3">Student Collections</th>
                 <th className="px-4 py-3">Refunds</th>
                 <th className="px-4 py-3">Agreed Split</th>
-                <th className="px-4 py-3">Franchise Payable</th>
+                <th className="px-4 py-3">Franchise Share</th>
+                <th className="px-4 py-3">Transferred</th>
+                <th className="px-4 py-3">Remaining</th>
                 <th className="px-4 py-3">Status</th>
                 <th className="px-4 py-3 text-right">Actions</th>
               </tr>
@@ -288,7 +290,7 @@ export const FranchiseRevenueSection: React.FC<FranchiseRevenueSectionProps> = (
             <tbody className="divide-y divide-slate-100">
               {settlements.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-10 text-center text-slate-400">
+                  <td colSpan={10} className="py-10 text-center text-slate-400">
                     <FileText className="w-8 h-8 text-slate-300 mx-auto mb-2" />
                     No monthly settlement statements generated yet for your franchise.
                     <div className="text-[11px] text-slate-400 mt-1">
@@ -297,59 +299,79 @@ export const FranchiseRevenueSection: React.FC<FranchiseRevenueSectionProps> = (
                   </td>
                 </tr>
               ) : (
-                settlements.map((s: any) => (
-                  <tr key={s.id} className="hover:bg-slate-50/50 transition-colors">
-                    <td className="px-4 py-3 font-mono font-bold text-slate-900">
-                      {s.statementNumber}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="font-bold text-slate-800">{s.settlementMonth}</div>
-                      <div className="text-[11px] text-slate-400">
-                        {new Date(s.startDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })} - {new Date(s.endDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 font-semibold text-slate-900">
-                      {formatCurrency(s.totalCapturedPayments)}
-                      <span className="block text-[10px] text-slate-400 font-normal">{s.transactionCount} transactions</span>
-                    </td>
-                    <td className="px-4 py-3 text-slate-600">
-                      {Number(s.refundDeductions) > 0 ? (
-                        <span className="text-rose-600 font-semibold">-{formatCurrency(s.refundDeductions)}</span>
-                      ) : (
-                        '₹0.00'
-                      )}
-                    </td>
-                    <td className="px-4 py-3 font-bold text-[#006FFF]">
-                      {Number(s.applicableFranchisePercentage)}%
-                    </td>
-                    <td className="px-4 py-3 font-black text-slate-900">
-                      {formatCurrency(s.franchisePayableAmount)}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
-                        s.status === 'COMPLETED'
-                          ? 'bg-emerald-100 text-emerald-800'
-                          : s.status === 'APPROVED'
-                          ? 'bg-blue-100 text-blue-800'
-                          : s.status === 'PROCESSING'
-                          ? 'bg-purple-100 text-purple-800'
-                          : s.status === 'PENDING_APPROVAL'
-                          ? 'bg-amber-100 text-amber-800'
-                          : 'bg-slate-100 text-slate-700'
-                      }`}>
-                        {s.status}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <button
-                        onClick={() => openStatementDetail(s.id)}
-                        className="px-3 py-1 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-100 font-semibold text-xs transition-colors cursor-pointer"
-                      >
-                        View Statement
-                      </button>
-                    </td>
-                  </tr>
-                ))
+                settlements.map((s: any) => {
+                  const payable = Number(s.franchisePayableAmount);
+                  const transferred = Number(s.totalTransferredAmount || 0);
+                  const remaining = Number(
+                    s.remainingPayableAmount !== null && Number(s.remainingPayableAmount) >= 0
+                      ? s.remainingPayableAmount
+                      : Math.max(0, payable - transferred)
+                  );
+
+                  return (
+                    <tr key={s.id} className="hover:bg-slate-50/50 transition-colors">
+                      <td className="px-4 py-3 font-mono font-bold text-slate-900">
+                        {s.statementNumber}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="font-bold text-slate-800">{s.settlementMonth}</div>
+                        <div className="text-[11px] text-slate-400">
+                          {new Date(s.startDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })} - {new Date(s.endDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 font-semibold text-slate-900">
+                        {formatCurrency(s.totalCapturedPayments)}
+                        <span className="block text-[10px] text-slate-400 font-normal">{s.transactionCount} transactions</span>
+                      </td>
+                      <td className="px-4 py-3 text-slate-600">
+                        {Number(s.refundDeductions) > 0 ? (
+                          <span className="text-rose-600 font-semibold">-{formatCurrency(s.refundDeductions)}</span>
+                        ) : (
+                          '₹0.00'
+                        )}
+                      </td>
+                      <td className="px-4 py-3 font-bold text-[#006FFF]">
+                        {Number(s.applicableFranchisePercentage)}%
+                      </td>
+                      <td className="px-4 py-3 font-black text-slate-900">
+                        {formatCurrency(s.franchisePayableAmount)}
+                      </td>
+                      <td className="px-4 py-3 font-bold text-emerald-700">
+                        {formatCurrency(transferred)}
+                      </td>
+                      <td className="px-4 py-3 font-bold text-slate-900">
+                        {remaining > 0 ? (
+                          <span className="text-blue-700">{formatCurrency(remaining)}</span>
+                        ) : (
+                          <span className="text-emerald-700">₹0.00 (Settled)</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                          s.status === 'COMPLETED' || s.status === 'PAID'
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : s.status === 'PARTIALLY_PAID'
+                            ? 'bg-purple-100 text-purple-800'
+                            : s.status === 'APPROVED'
+                            ? 'bg-blue-100 text-blue-800'
+                            : s.status === 'PENDING_APPROVAL' || s.status === 'PENDING_REVIEW'
+                            ? 'bg-amber-100 text-amber-800'
+                            : 'bg-slate-100 text-slate-700'
+                        }`}>
+                          {s.status === 'COMPLETED' ? 'PAID' : s.status}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <button
+                          onClick={() => openStatementDetail(s.id)}
+                          className="px-3 py-1 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-100 font-semibold text-xs transition-colors cursor-pointer"
+                        >
+                          View Statement
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -508,16 +530,102 @@ export const FranchiseRevenueSection: React.FC<FranchiseRevenueSectionProps> = (
                       <span className="font-bold text-slate-900">{formatCurrency(activeStatement.totalCapturedPayments)}</span>
                     </div>
                     <div>
-                      <span className="text-slate-400 block text-[10px]">Refund Deductions</span>
-                      <span className="font-bold text-slate-900">{formatCurrency(activeStatement.refundDeductions)}</span>
+                      <span className="text-slate-400 block text-[10px]">
+                        Franchise Share ({Number(activeStatement.applicableFranchisePercentage)}%)
+                      </span>
+                      <span className="font-bold text-[#006FFF]">{formatCurrency(activeStatement.franchisePayableAmount)}</span>
                     </div>
                     <div>
-                      <span className="text-slate-400 block text-[10px]">Agreed Percentage</span>
-                      <span className="font-bold text-[#006FFF]">{Number(activeStatement.applicableFranchisePercentage)}%</span>
+                      <span className="text-slate-400 block text-[10px]">Transferred to Bank</span>
+                      <span className="font-bold text-emerald-700">{formatCurrency(activeStatement.totalTransferredAmount || 0)}</span>
                     </div>
                     <div>
-                      <span className="text-slate-400 block text-[10px]">Total Transactions</span>
-                      <span className="font-bold text-slate-900">{activeStatement.transactionCount} payments</span>
+                      <span className="text-slate-400 block text-[10px]">Remaining Balance</span>
+                      <span className="font-black text-slate-900">
+                        {formatCurrency(
+                          activeStatement.remainingPayableAmount !== null && Number(activeStatement.remainingPayableAmount) >= 0
+                            ? activeStatement.remainingPayableAmount
+                            : Math.max(0, Number(activeStatement.franchisePayableAmount) - Number(activeStatement.totalTransferredAmount || 0))
+                        )}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Official Bank Transfers History */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <h5 className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
+                        <CreditCard className="w-3.5 h-3.5 text-emerald-600" /> Official Bank Transfers ({activeStatement.bankTransfers?.length || 0})
+                      </h5>
+                      <span className="text-[10px] text-slate-400">Direct Bank Payouts</span>
+                    </div>
+
+                    <div className="border border-slate-200 rounded-xl overflow-hidden">
+                      <table className="w-full text-left text-xs">
+                        <thead className="bg-slate-50 text-slate-600 font-semibold border-b border-slate-200">
+                          <tr>
+                            <th className="px-3 py-2">Transfer Date</th>
+                            <th className="px-3 py-2">Method</th>
+                            <th className="px-3 py-2">Bank Reference / UTR</th>
+                            <th className="px-3 py-2">Amount</th>
+                            <th className="px-3 py-2">Proof</th>
+                            <th className="px-3 py-2">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {!activeStatement.bankTransfers || activeStatement.bankTransfers.length === 0 ? (
+                            <tr>
+                              <td colSpan={6} className="py-4 text-center text-slate-400">
+                                No bank transfers recorded yet for this monthly settlement.
+                              </td>
+                            </tr>
+                          ) : (
+                            activeStatement.bankTransfers.map((trf: any) => (
+                              <tr key={trf.id} className="hover:bg-slate-50/50">
+                                <td className="px-3 py-1.5 text-slate-600">
+                                  {new Date(trf.transferDate).toLocaleDateString('en-IN', {
+                                    day: '2-digit',
+                                    month: 'short',
+                                    year: 'numeric',
+                                  })}
+                                </td>
+                                <td className="px-3 py-1.5 font-mono font-bold text-slate-800">
+                                  {trf.transferMethod}
+                                </td>
+                                <td className="px-3 py-1.5 font-mono font-bold text-blue-700">
+                                  {trf.utrNumber}
+                                </td>
+                                <td className="px-3 py-1.5 font-bold text-emerald-700">
+                                  {formatCurrency(trf.amount)}
+                                </td>
+                                <td className="px-3 py-1.5">
+                                  {trf.paymentProofUrl ? (
+                                    <a
+                                      href={trf.paymentProofUrl}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="text-[#006FFF] hover:underline font-semibold"
+                                    >
+                                      View Receipt
+                                    </a>
+                                  ) : (
+                                    <span className="text-slate-400">—</span>
+                                  )}
+                                </td>
+                                <td className="px-3 py-1.5">
+                                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                    trf.status === 'VERIFIED'
+                                      ? 'bg-emerald-100 text-emerald-800'
+                                      : 'bg-amber-100 text-amber-800'
+                                  }`}>
+                                    {trf.status}
+                                  </span>
+                                </td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
                     </div>
                   </div>
 

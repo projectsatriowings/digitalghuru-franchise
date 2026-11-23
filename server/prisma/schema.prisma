@@ -85,12 +85,16 @@ enum RoyaltyPaymentStatus {
 enum SettlementStatus {
   DRAFT
   PENDING_APPROVAL
+  PENDING_REVIEW
   APPROVED
+  PARTIALLY_PAID
+  PAID
   PROCESSING
   COMPLETED
   PARTIALLY_FAILED
   FAILED
   ON_HOLD
+  CANCELLED
   REJECTED
 }
 
@@ -344,6 +348,8 @@ model User {
   xpLedgerEntries           StudentXpLedger[]
   approvedSettlements       FranchiseSettlement[]     @relation("SettlementApprover")
   authorizedSettlementAdjustments SettlementAdjustment[] @relation("SettlementAdjustmentAuthorizer")
+  recordedBankTransfers     ManualBankTransfer[]      @relation("RecordedBankTransfers")
+  verifiedBankTransfers     ManualBankTransfer[]      @relation("VerifiedBankTransfers")
 
   @@index([role])
   @@index([email])
@@ -1686,6 +1692,7 @@ model Franchise {
   onlineStudents    Student[]                 @relation("FranchiseOnlineStudents")
   payments          Payment[]                 @relation("FranchisePayments")
   settlements       FranchiseSettlement[]
+  manualBankTransfers ManualBankTransfer[]
 
   @@index([status])
   @@index([name])
@@ -1871,6 +1878,8 @@ model FranchiseSettlement {
   applicableDigitalGuruPercentage  Decimal          @default(50.00) @db.Decimal(5, 2)
   franchisePayableAmount           Decimal          @default(0.00) @db.Decimal(12, 2)
   digitalGuruShareAmount           Decimal          @default(0.00) @db.Decimal(12, 2)
+  totalTransferredAmount           Decimal          @default(0.00) @db.Decimal(12, 2)
+  remainingPayableAmount           Decimal          @default(0.00) @db.Decimal(12, 2)
   transactionCount                 Int              @default(0)
   transferEligibility              Boolean          @default(false)
   beneficiarySnapshot              Json?            // Snapshot of verified beneficiary bank details at statement time
@@ -1890,6 +1899,7 @@ model FranchiseSettlement {
   payments                         Payment[]
   adjustments                      SettlementAdjustment[]
   transfers                        SettlementTransfer[]
+  bankTransfers                    ManualBankTransfer[]
 
   @@unique([franchiseId, settlementMonth])
   @@index([franchiseId])
@@ -1932,6 +1942,37 @@ model SettlementTransfer {
 
   @@index([settlementId])
   @@index([paymentId])
+  @@index([status])
+}
+
+model ManualBankTransfer {
+  id                    String              @id @default(uuid())
+  settlementId          String
+  settlement            FranchiseSettlement @relation(fields: [settlementId], references: [id], onDelete: Cascade)
+  franchiseId           String
+  franchise             Franchise           @relation(fields: [franchiseId], references: [id], onDelete: Cascade)
+  amount                Decimal             @db.Decimal(12, 2)
+  transferDate          DateTime            @default(now())
+  transferMethod        String              // "NEFT", "RTGS", "IMPS", "UPI", "OTHER"
+  utrNumber             String              @unique // Bank transaction reference / UTR (strictly unique across system)
+  recipientBankName     String?
+  recipientAccountLast4 String?
+  recipientIfsc         String?
+  paymentProofUrl       String?             @db.Text
+  remarks               String?             @db.Text
+  status                String              @default("PENDING_VERIFICATION") // "PENDING_VERIFICATION", "VERIFIED", "REJECTED"
+  recordedById          String
+  recordedBy            User                @relation("RecordedBankTransfers", fields: [recordedById], references: [id])
+  recordedAt            DateTime            @default(now())
+  verifiedById          String?
+  verifiedBy            User?               @relation("VerifiedBankTransfers", fields: [verifiedById], references: [id])
+  verifiedAt            DateTime?
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+
+  @@index([settlementId])
+  @@index([franchiseId])
+  @@index([transferDate])
   @@index([status])
 }
 

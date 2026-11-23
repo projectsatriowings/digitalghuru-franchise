@@ -85,10 +85,11 @@ class SettlementEngineService {
         // 5. Calculate payable amounts (in integer paise)
         const netEligibleRupees = agg.netEligibleCollections;
         const shares = revenue_engine_service_js_1.revenueEngineService.calculateShares(netEligibleRupees, applicableFranchisePercentage);
-        // 6. Beneficiary eligibility check
-        const hasLinkedAccount = Boolean(franchise.razorpayAccountId && franchise.razorpayAccountId.trim());
-        const isBeneficiaryVerified = franchise.beneficiaryStatus === 'VERIFIED';
-        const transferEligibility = hasLinkedAccount && isBeneficiaryVerified && shares.franchiseShareAmount > 0;
+        // 6. Beneficiary eligibility check (Manual bank transfers require configured bank account details)
+        const hasBankDetails = Boolean(franchise.beneficiaryAccountNumber &&
+            franchise.beneficiaryIfsc &&
+            franchise.beneficiaryName);
+        const transferEligibility = hasBankDetails && shares.franchiseShareAmount > 0;
         const statementNumber = this.generateStatementNumber(franchise.code, settlementMonth);
         const initialStatus = options.autoSubmit ? client_1.SettlementStatus.PENDING_APPROVAL : client_1.SettlementStatus.DRAFT;
         const beneficiarySnapshot = {
@@ -114,6 +115,8 @@ class SettlementEngineService {
                 applicableDigitalGuruPercentage,
                 franchisePayableAmount: shares.franchiseShareAmount,
                 digitalGuruShareAmount: shares.digitalGuruShareAmount,
+                totalTransferredAmount: existing ? Number(existing.totalTransferredAmount || 0) : 0,
+                remainingPayableAmount: existing ? Math.max(0, shares.franchiseShareAmount - Number(existing.totalTransferredAmount || 0)) : shares.franchiseShareAmount,
                 transactionCount: agg.paymentCount,
                 transferEligibility,
                 beneficiarySnapshot,
@@ -124,6 +127,8 @@ class SettlementEngineService {
         const settlement = await prisma_js_1.prisma.$transaction(async (tx) => {
             let record;
             if (existing) {
+                const totalTransferred = Number(existing.totalTransferredAmount || 0);
+                const remainingPayable = Math.max(0, shares.franchiseShareAmount - totalTransferred);
                 record = await tx.franchiseSettlement.update({
                     where: { id: existing.id },
                     data: {
@@ -134,10 +139,13 @@ class SettlementEngineService {
                         applicableDigitalGuruPercentage: new client_1.Prisma.Decimal(applicableDigitalGuruPercentage),
                         franchisePayableAmount: new client_1.Prisma.Decimal(shares.franchiseShareAmount),
                         digitalGuruShareAmount: new client_1.Prisma.Decimal(shares.digitalGuruShareAmount),
+                        remainingPayableAmount: new client_1.Prisma.Decimal(remainingPayable),
                         transactionCount: agg.paymentCount,
                         transferEligibility,
                         beneficiarySnapshot,
-                        status: initialStatus,
+                        status: (existing.status === client_1.SettlementStatus.DRAFT || existing.status === client_1.SettlementStatus.PENDING_APPROVAL || existing.status === client_1.SettlementStatus.PENDING_REVIEW)
+                            ? initialStatus
+                            : existing.status,
                     },
                 });
             }
@@ -157,6 +165,8 @@ class SettlementEngineService {
                         applicableDigitalGuruPercentage: new client_1.Prisma.Decimal(applicableDigitalGuruPercentage),
                         franchisePayableAmount: new client_1.Prisma.Decimal(shares.franchiseShareAmount),
                         digitalGuruShareAmount: new client_1.Prisma.Decimal(shares.digitalGuruShareAmount),
+                        totalTransferredAmount: new client_1.Prisma.Decimal(0.00),
+                        remainingPayableAmount: new client_1.Prisma.Decimal(shares.franchiseShareAmount),
                         transactionCount: agg.paymentCount,
                         transferEligibility,
                         beneficiarySnapshot,
@@ -225,9 +235,13 @@ class SettlementEngineService {
         if (!settlement) {
             throw new Error(`Settlement not found with ID ${settlementId}`);
         }
-        if (settlement.status !== client_1.SettlementStatus.PENDING_APPROVAL && settlement.status !== client_1.SettlementStatus.DRAFT) {
+        if (settlement.status !== client_1.SettlementStatus.PENDING_APPROVAL &&
+            settlement.status !== client_1.SettlementStatus.PENDING_REVIEW &&
+            settlement.status !== client_1.SettlementStatus.DRAFT) {
             throw new Error(`Cannot approve settlement with current status "${settlement.status}"`);
         }
+        const currentTransferred = Number(settlement.totalTransferredAmount || 0);
+        const calculatedRemaining = Math.max(0, Number(settlement.franchisePayableAmount) - currentTransferred);
         const updated = await prisma_js_1.prisma.$transaction(async (tx) => {
             const approved = await tx.franchiseSettlement.update({
                 where: { id: settlementId },
@@ -236,6 +250,7 @@ class SettlementEngineService {
                     approvedById: superAdminId,
                     approvedAt: new Date(),
                     approvalNotes: notes || 'Approved by Super Admin',
+                    remainingPayableAmount: new client_1.Prisma.Decimal(calculatedRemaining),
                 },
             });
             // Audit Log
@@ -268,15 +283,16 @@ class SettlementEngineService {
         if (!settlement) {
             throw new Error(`Settlement not found with ID ${settlementId}`);
         }
-        if (settlement.status === client_1.SettlementStatus.COMPLETED) {
-            throw new Error('Cannot change status of a completed settlement.');
+        if (settlement.status === client_1.SettlementStatus.COMPLETED || settlement.status === client_1.SettlementStatus.PAID) {
+            throw new Error('Cannot change status of a completed or fully paid settlement.');
         }
         const updated = await prisma_js_1.prisma.$transaction(async (tx) => {
+            const isRejectionOrCancellation = newStatus === 'REJECTED' || newStatus === 'CANCELLED';
             const record = await tx.franchiseSettlement.update({
                 where: { id: settlementId },
                 data: {
                     status: newStatus,
-                    failureReason: newStatus === 'REJECTED' ? (reason || 'Rejected by Super Admin') : undefined,
+                    failureReason: isRejectionOrCancellation ? (reason || `Marked as ${newStatus} by Super Admin`) : undefined,
                     approvalNotes: reason,
                 },
             });

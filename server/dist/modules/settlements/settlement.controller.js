@@ -1,12 +1,15 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.addAdjustmentSchema = exports.directPayoutSchema = exports.initiateTransfersSchema = exports.updateStatusSchema = exports.approveSettlementSchema = exports.generateSettlementSchema = void 0;
+exports.addAdjustmentSchema = exports.directPayoutSchema = exports.initiateTransfersSchema = exports.verifyTransferSchema = exports.recordManualTransferSchema = exports.updateStatusSchema = exports.approveSettlementSchema = exports.generateSettlementSchema = void 0;
 exports.listSettlements = listSettlements;
 exports.getSettlementById = getSettlementById;
 exports.generateMonthlySettlements = generateMonthlySettlements;
 exports.approveSettlement = approveSettlement;
 exports.updateSettlementStatus = updateSettlementStatus;
 exports.initiateTransfers = initiateTransfers;
+exports.recordManualTransfer = recordManualTransfer;
+exports.getSettlementTransfers = getSettlementTransfers;
+exports.verifyManualTransfer = verifyManualTransfer;
 exports.executeDirectPayout = executeDirectPayout;
 exports.addAdjustment = addAdjustment;
 const prisma_js_1 = require("../../prisma.js");
@@ -26,8 +29,24 @@ exports.approveSettlementSchema = zod_1.z.object({
     notes: zod_1.z.string().max(500).optional(),
 });
 exports.updateStatusSchema = zod_1.z.object({
-    status: zod_1.z.enum(['ON_HOLD', 'REJECTED', 'PENDING_APPROVAL']),
+    status: zod_1.z.enum(['ON_HOLD', 'CANCELLED', 'REJECTED', 'PENDING_APPROVAL', 'PENDING_REVIEW']),
     reason: zod_1.z.string().min(3, 'A clear reason is required'),
+});
+exports.recordManualTransferSchema = zod_1.z.object({
+    amount: zod_1.z.number().positive('Transfer amount must be positive'),
+    transferDate: zod_1.z.string().or(zod_1.z.date()).optional(),
+    transferMethod: zod_1.z.enum(['NEFT', 'RTGS', 'IMPS', 'UPI', 'OTHER']).default('NEFT'),
+    utrNumber: zod_1.z.string().min(3, 'Bank transaction reference / UTR is required').max(100),
+    recipientBankName: zod_1.z.string().optional(),
+    recipientAccountLast4: zod_1.z.string().max(4).optional(),
+    recipientIfsc: zod_1.z.string().max(11).optional(),
+    paymentProofUrl: zod_1.z.string().url().optional().or(zod_1.z.literal('')),
+    remarks: zod_1.z.string().max(500).optional(),
+    status: zod_1.z.enum(['PENDING_VERIFICATION', 'VERIFIED', 'REJECTED']).default('VERIFIED'),
+});
+exports.verifyTransferSchema = zod_1.z.object({
+    status: zod_1.z.enum(['VERIFIED', 'REJECTED']),
+    notes: zod_1.z.string().max(500).optional(),
 });
 exports.initiateTransfersSchema = zod_1.z.object({
     confirm: zod_1.z.literal(true, {
@@ -98,13 +117,24 @@ async function listSettlements(req, res) {
                         revenueSharePercentage: true,
                         razorpayAccountId: true,
                         beneficiaryStatus: true,
+                        beneficiaryBankName: true,
+                        beneficiaryAccountNumber: true,
+                        beneficiaryIfsc: true,
+                        beneficiaryName: true,
                     },
                 },
                 approvedBy: {
                     select: { id: true, fullName: true, email: true },
                 },
+                bankTransfers: {
+                    include: {
+                        recordedBy: { select: { id: true, fullName: true, email: true } },
+                        verifiedBy: { select: { id: true, fullName: true, email: true } },
+                    },
+                    orderBy: { transferDate: 'desc' },
+                },
                 _count: {
-                    select: { payments: true, transfers: true, adjustments: true },
+                    select: { payments: true, transfers: true, adjustments: true, bankTransfers: true },
                 },
             },
             orderBy: [
@@ -116,22 +146,33 @@ async function listSettlements(req, res) {
         let totalEligibleCollections = 0;
         let totalFranchisePayable = 0;
         let totalDgShare = 0;
+        let totalTransferredAmount = 0;
+        let totalRemainingBalance = 0;
         let pendingApprovalCount = 0;
         let approvedAmount = 0;
+        let partiallyPaidCount = 0;
         let completedAmount = 0;
         for (const s of settlements) {
             const payable = Number(s.franchisePayableAmount);
+            const transferred = Number(s.totalTransferredAmount || 0);
+            const remaining = Number(s.remainingPayableAmount !== null && Number(s.remainingPayableAmount) >= 0 ? s.remainingPayableAmount : Math.max(0, payable - transferred));
             totalEligibleCollections += Number(s.totalEligibleCollections);
             totalFranchisePayable += payable;
             totalDgShare += Number(s.digitalGuruShareAmount);
-            if (s.status === 'PENDING_APPROVAL') {
+            totalTransferredAmount += transferred;
+            totalRemainingBalance += remaining;
+            if (s.status === 'PENDING_APPROVAL' || s.status === 'PENDING_REVIEW') {
                 pendingApprovalCount++;
             }
             if (s.status === 'APPROVED') {
-                approvedAmount += payable;
+                approvedAmount += remaining;
             }
-            if (s.status === 'COMPLETED') {
-                completedAmount += payable;
+            if (s.status === 'PARTIALLY_PAID') {
+                partiallyPaidCount++;
+                approvedAmount += remaining;
+            }
+            if (s.status === 'COMPLETED' || s.status === 'PAID') {
+                completedAmount += transferred > 0 ? transferred : payable;
             }
         }
         return res.json({
@@ -143,8 +184,11 @@ async function listSettlements(req, res) {
                     totalEligibleCollections: Number(totalEligibleCollections.toFixed(2)),
                     totalFranchisePayable: Number(totalFranchisePayable.toFixed(2)),
                     totalDgShare: Number(totalDgShare.toFixed(2)),
+                    totalTransferredAmount: Number(totalTransferredAmount.toFixed(2)),
+                    totalRemainingBalance: Number(totalRemainingBalance.toFixed(2)),
                     pendingApprovalCount,
                     approvedAmount: Number(approvedAmount.toFixed(2)),
+                    partiallyPaidCount,
                     completedAmount: Number(completedAmount.toFixed(2)),
                 },
             },
@@ -182,6 +226,13 @@ async function getSettlementById(req, res) {
                 },
                 transfers: {
                     orderBy: { createdAt: 'desc' },
+                },
+                bankTransfers: {
+                    include: {
+                        recordedBy: { select: { id: true, fullName: true, email: true } },
+                        verifiedBy: { select: { id: true, fullName: true, email: true } },
+                    },
+                    orderBy: { transferDate: 'desc' },
                 },
                 payments: {
                     include: {
@@ -292,6 +343,12 @@ async function updateSettlementStatus(req, res) {
  */
 async function initiateTransfers(req, res) {
     try {
+        if (process.env.ENABLE_RAZORPAY_ROUTE !== 'true') {
+            return res.status(400).json({
+                success: false,
+                error: 'Razorpay Route is disabled. Settlements are processed via manual monthly bank transfers (NEFT / RTGS / IMPS).',
+            });
+        }
         const { id } = req.params;
         const parse = exports.initiateTransfersSchema.safeParse(req.body);
         if (!parse.success) {
@@ -315,6 +372,86 @@ async function initiateTransfers(req, res) {
     catch (err) {
         console.error('[Initiate Transfers Error]', err);
         return res.status(400).json({ success: false, error: err.message || 'Failed to initiate transfers' });
+    }
+}
+/**
+ * Record Manual Bank Transfer (Super Admin Only)
+ * Records NEFT / RTGS / IMPS / UPI transfer with UTR, supporting partial payments
+ */
+async function recordManualTransfer(req, res) {
+    try {
+        const { id } = req.params;
+        const parse = exports.recordManualTransferSchema.safeParse(req.body);
+        if (!parse.success) {
+            return res.status(400).json({
+                success: false,
+                error: 'Validation failed',
+                details: parse.error.errors,
+            });
+        }
+        const result = await settlement_transfer_service_js_1.settlementTransferService.recordManualBankTransfer(id, req.user.userId, parse.data);
+        return res.json({
+            success: true,
+            message: result.isFullyPaid
+                ? 'Manual bank transfer recorded successfully. Settlement is now fully PAID.'
+                : `Manual bank transfer of ₹${parse.data.amount} recorded. Remaining balance: ₹${result.remainingBalance.toFixed(2)}.`,
+            data: result,
+        });
+    }
+    catch (err) {
+        console.error('[Record Manual Transfer Error]', err);
+        return res.status(400).json({ success: false, error: err.message || 'Failed to record manual bank transfer' });
+    }
+}
+/**
+ * Get Manual Bank Transfer History for a Settlement
+ */
+async function getSettlementTransfers(req, res) {
+    try {
+        const { id } = req.params;
+        const userRole = req.user.role;
+        const userId = req.user.userId;
+        const settlement = await prisma_js_1.prisma.franchiseSettlement.findUnique({
+            where: { id },
+            include: { franchise: true },
+        });
+        if (!settlement) {
+            return res.status(404).json({ success: false, error: 'Settlement not found' });
+        }
+        if (userRole === 'FRANCHISE_OWNER' && settlement.franchise.ownerUserId !== userId) {
+            return res.status(403).json({ success: false, error: 'Forbidden: Access to other franchise transfers is denied' });
+        }
+        const transfers = await settlement_transfer_service_js_1.settlementTransferService.getSettlementTransfers(id);
+        return res.json({
+            success: true,
+            data: transfers,
+        });
+    }
+    catch (err) {
+        console.error('[Get Settlement Transfers Error]', err);
+        return res.status(500).json({ success: false, error: 'Failed to retrieve transfer history' });
+    }
+}
+/**
+ * Verify a Manual Bank Transfer (Super Admin Only)
+ */
+async function verifyManualTransfer(req, res) {
+    try {
+        const { transferId } = req.params;
+        const parse = exports.verifyTransferSchema.safeParse(req.body);
+        if (!parse.success) {
+            return res.status(400).json({ success: false, error: 'Validation failed', details: parse.error.errors });
+        }
+        const updated = await settlement_transfer_service_js_1.settlementTransferService.verifyManualBankTransfer(transferId, req.user.userId, parse.data.status, parse.data.notes);
+        return res.json({
+            success: true,
+            message: `Bank transfer marked as ${parse.data.status}`,
+            data: updated,
+        });
+    }
+    catch (err) {
+        console.error('[Verify Manual Transfer Error]', err);
+        return res.status(400).json({ success: false, error: err.message || 'Failed to verify bank transfer' });
     }
 }
 /**

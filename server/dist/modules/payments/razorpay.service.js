@@ -14,17 +14,34 @@ class RazorpayService {
         this.keySecret = process.env.RAZORPAY_KEY_SECRET;
         this.webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
     }
-    isLiveConfigured() {
-        return Boolean(this.keyId && this.keySecret);
-    }
     getKeyId() {
-        return this.keyId || 'rzp_test_simulated';
+        return (process.env.RAZORPAY_KEY_ID || this.keyId || '').trim();
+    }
+    getKeySecret() {
+        return (process.env.RAZORPAY_KEY_SECRET || this.keySecret || '').trim() || undefined;
+    }
+    getWebhookSecret() {
+        return (process.env.RAZORPAY_WEBHOOK_SECRET || this.webhookSecret || '').trim() || undefined;
+    }
+    isLiveConfigured() {
+        const kid = this.getKeyId();
+        const ksec = this.getKeySecret();
+        return Boolean(kid &&
+            ksec &&
+            !kid.includes('YOUR_KEY_ID') &&
+            !ksec.includes('YOUR_KEY_SECRET') &&
+            kid !== 'rzp_test_simulated');
+    }
+    isSimulation() {
+        return !this.isLiveConfigured();
     }
     getBasicAuthHeader() {
-        if (!this.keyId || !this.keySecret) {
+        const kid = this.getKeyId();
+        const ksec = this.getKeySecret();
+        if (!kid || !ksec) {
             throw new Error('Razorpay credentials not configured');
         }
-        return 'Basic ' + Buffer.from(`${this.keyId}:${this.keySecret}`).toString('base64');
+        return 'Basic ' + Buffer.from(`${kid}:${ksec}`).toString('base64');
     }
     /**
      * Create Razorpay Order from backend (Rule C)
@@ -60,6 +77,9 @@ class RazorpayService {
             };
         }
         // Controlled simulation mode for development/testing
+        if (process.env.NODE_ENV === 'production') {
+            throw new Error('Razorpay credentials missing. Simulated order creation is strictly prohibited in production.');
+        }
         const mockOrderId = `order_sim_${Date.now()}_${crypto_1.default.randomBytes(4).toString('hex')}`;
         return {
             id: mockOrderId,
@@ -76,13 +96,19 @@ class RazorpayService {
         if (!signature || !orderId || !paymentId) {
             return false;
         }
-        // Simulation check
-        if (!this.keySecret || orderId.startsWith('order_sim_') || orderId.startsWith('order_test_')) {
+        const secret = this.getKeySecret();
+        // Simulation check - strictly disabled in production
+        if (process.env.NODE_ENV === 'production') {
+            if (!secret) {
+                return false;
+            }
+        }
+        else if (!secret || orderId.startsWith('order_sim_') || orderId.startsWith('order_test_')) {
             return signature.length > 0;
         }
         try {
             const expectedSignature = crypto_1.default
-                .createHmac('sha256', this.keySecret)
+                .createHmac('sha256', secret)
                 .update(`${orderId}|${paymentId}`)
                 .digest('hex');
             return crypto_1.default.timingSafeEqual(Buffer.from(expectedSignature, 'utf8'), Buffer.from(signature, 'utf8'));
@@ -96,7 +122,7 @@ class RazorpayService {
      * Verify Razorpay Webhook Signature using raw request body
      */
     verifyWebhookSignature(rawBody, signature) {
-        const secret = this.webhookSecret || this.keySecret;
+        const secret = this.getWebhookSecret() || this.getKeySecret();
         if (!secret) {
             // In development without webhook secret, accept if test header present
             return process.env.NODE_ENV !== 'production';
