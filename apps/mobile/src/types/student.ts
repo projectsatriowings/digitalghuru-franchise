@@ -129,11 +129,12 @@ export interface LearningMaterialItem {
   title: string;
   description?: string | null;
   type: 'DOCUMENT' | 'WORKSHEET' | 'NOTES' | 'ASSIGNMENT' | 'SYLLABUS' | 'HOMEWORK' | 'OTHER';
+  fileType?: string;
   fileSize?: number | null;
   mimeType?: string | null;
   fileUrl?: string | null;
   fileName?: string | null;
-  subject?: string;
+  subject?: string | { id?: string; name: string };
   createdAt: string;
 }
 
@@ -158,6 +159,11 @@ export interface NotificationItem {
   title: string;
   message: string;
   type?: string;
+  entityType?: string;
+  entityId?: string;
+  studentId?: string;
+  link?: string;
+  metadata?: any;
   isRead: boolean;
   createdAt: string;
   data?: any;

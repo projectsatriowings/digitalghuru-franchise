@@ -11,6 +11,8 @@ router.get('/my/dashboard-summary', parents_controller_js_1.getParentDashboardSu
 router.get('/students/:studentId/attendance', parents_controller_js_1.getParentStudentAttendance);
 router.get('/students/:studentId/teachers', parents_controller_js_1.getParentStudentTeachers);
 router.get('/students/:studentId/academics', parents_controller_js_1.getParentStudentAcademics);
+router.get('/students/:studentId/homework', parents_controller_js_1.getParentStudentHomework);
+router.get('/students/:studentId/timetable', parents_controller_js_1.getParentStudentTimetable);
 // Institute-scoped parent management
 router.use(auth_js_1.requireInstituteContext);
 router.get('/', (0, auth_js_1.requireRole)('SUPER_ADMIN', 'ACADEMIC_ADMIN', 'STAFF'), parents_controller_js_1.listParents);

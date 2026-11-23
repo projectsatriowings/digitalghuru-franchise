@@ -198,7 +198,7 @@ export const ParentFeesScreen: React.FC = () => {
                       </Text>
                       <View style={styles.amountBreakdownRow}>
                         <Text style={styles.amountBreakdownText}>
-                          Amount: ₹{item.amount.toLocaleString('en-IN')}
+                          Amount: ₹{(item.amount ?? item.assignedAmount ?? 0).toLocaleString('en-IN')}
                         </Text>
                         <Text style={styles.amountBreakdownText}>
                           • Paid: ₹{item.paidAmount.toLocaleString('en-IN')}
@@ -208,7 +208,7 @@ export const ParentFeesScreen: React.FC = () => {
 
                     <View style={styles.statementBalanceCol}>
                       <Text style={styles.balanceAmount}>
-                        ₹{item.balance.toLocaleString('en-IN')}
+                        ₹{(item.balance ?? item.remainingAmount ?? 0).toLocaleString('en-IN')}
                       </Text>
                       <Badge
                         text={
@@ -251,7 +251,7 @@ export const ParentFeesScreen: React.FC = () => {
                       Receipt #{payment.receiptNumber || payment.id.slice(0, 8).toUpperCase()}
                     </Text>
                     <Text style={styles.paymentDate}>
-                      {new Date(payment.paymentDate).toLocaleDateString()} • {payment.paymentMode}
+                      {new Date(payment.paymentDate).toLocaleDateString()} • {payment.paymentMode || payment.paymentMethod || 'Online'}
                     </Text>
                     {payment.transactionRef ? (
                       <Text style={styles.transactionRefText}>
@@ -262,7 +262,7 @@ export const ParentFeesScreen: React.FC = () => {
 
                   <View style={styles.paymentAmountCol}>
                     <Text style={styles.paidAmountText}>
-                      ₹{payment.amount.toLocaleString('en-IN')}
+                      ₹{(payment.amount ?? payment.amountPaid ?? 0).toLocaleString('en-IN')}
                     </Text>
                     <Badge text="Success" variant="success" style={styles.statusBadge} />
                   </View>

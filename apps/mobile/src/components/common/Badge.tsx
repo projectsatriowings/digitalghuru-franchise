@@ -2,16 +2,20 @@ import React from 'react';
 import { View, Text, StyleSheet, ViewStyle, TextStyle } from 'react-native';
 import { brandColors, theme } from '../../theme';
 
-interface BadgeProps {
-  text: string;
+export interface BadgeProps {
+  text?: string;
+  label?: string;
   variant?: 'student' | 'parent' | 'teacher' | 'success' | 'warning' | 'info' | 'error' | 'neutral';
+  size?: 'sm' | 'md' | 'lg' | string;
   style?: ViewStyle;
   textStyle?: TextStyle;
 }
 
 export const Badge: React.FC<BadgeProps> = ({
   text,
+  label,
   variant = 'info',
+  size = 'md',
   style,
   textStyle,
 }) => {
@@ -38,11 +42,27 @@ export const Badge: React.FC<BadgeProps> = ({
   };
 
   const colors = getBadgeColors();
+  const isSm = size === 'sm';
+  const displayText = label || text || '';
 
   return (
-    <View style={[styles.badge, { backgroundColor: colors.bg }, style]}>
-      <Text style={[styles.badgeText, { color: colors.text }, textStyle]}>
-        {text}
+    <View
+      style={[
+        styles.badge,
+        isSm && styles.badgeSm,
+        { backgroundColor: colors.bg },
+        style,
+      ]}
+    >
+      <Text
+        style={[
+          styles.badgeText,
+          isSm && styles.badgeTextSm,
+          { color: colors.text },
+          textStyle,
+        ]}
+      >
+        {displayText}
       </Text>
     </View>
   );
@@ -55,10 +75,18 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: theme.radii.full,
   },
+  badgeSm: {
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+  },
   badgeText: {
     fontSize: 11,
     fontWeight: '700',
     letterSpacing: 0.3,
     textTransform: 'uppercase',
+  },
+  badgeTextSm: {
+    fontSize: 10,
+    letterSpacing: 0.2,
   },
 });

@@ -273,7 +273,7 @@ export const ParentFeedbackScreen: React.FC = () => {
                               isSelected && styles.teacherPillTextActive,
                             ]}
                           >
-                            {t.user.fullName} ({t.subjects?.[0]?.name || 'Faculty'})
+                            {t.user?.fullName || t.fullName} ({(typeof t.subjects?.[0] === 'object' ? (t.subjects[0] as any)?.name : t.subjects?.[0]) || 'Faculty'})
                           </Text>
                         </TouchableOpacity>
                       );
