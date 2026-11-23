@@ -49,11 +49,12 @@ export const ParentMaterialsScreen: React.FC = () => {
   }, [refetch]);
 
   // Extract unique subjects
-  const subjects = ['ALL', ...Array.from(new Set(materials.map((m) => m.subject?.name).filter(Boolean)))];
+  const subjects = ['ALL', ...Array.from(new Set(materials.map((m) => (typeof m.subject === 'string' ? m.subject : m.subject?.name)).filter(Boolean)))];
 
   const filteredMaterials = materials.filter((m) => {
     if (selectedSubject === 'ALL') return true;
-    return m.subject?.name === selectedSubject;
+    const subName = typeof m.subject === 'string' ? m.subject : m.subject?.name;
+    return subName === selectedSubject;
   });
 
   const handleOpenMaterial = (url?: string) => {
@@ -154,7 +155,7 @@ export const ParentMaterialsScreen: React.FC = () => {
                   <View style={styles.materialInfoCol}>
                     <Text style={styles.materialTitle}>{item.title}</Text>
                     <Text style={styles.materialSubject}>
-                      {item.subject?.name || 'General Handout'}
+                      {typeof item.subject === 'string' ? item.subject : item.subject?.name || 'General Handout'}
                     </Text>
 
                     {item.description ? (
@@ -178,7 +179,7 @@ export const ParentMaterialsScreen: React.FC = () => {
 
                   <TouchableOpacity
                     style={styles.openBtn}
-                    onPress={() => handleOpenMaterial(item.fileUrl)}
+                    onPress={() => handleOpenMaterial(item.fileUrl || undefined)}
                     accessibilityLabel="Open document"
                   >
                     <Download size={18} color="#006FFF" />

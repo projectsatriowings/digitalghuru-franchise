@@ -15,6 +15,11 @@ router.use(auth_js_1.requireInstituteContext);
 router.get('/', (0, auth_js_1.requireRole)('SUPER_ADMIN', 'ACADEMIC_ADMIN'), staff_controller_js_1.listStaff);
 router.get('/next-code', (0, auth_js_1.requireRole)('SUPER_ADMIN', 'ACADEMIC_ADMIN'), staff_controller_js_1.getNextEmployeeCodeHandler);
 router.post('/', (0, auth_js_1.requireRole)('SUPER_ADMIN', 'ACADEMIC_ADMIN'), staff_controller_js_1.createStaff);
+// Teacher Mobile Portal Endpoints
+router.get('/my/profile', (0, auth_js_1.requireRole)('SUPER_ADMIN', 'ACADEMIC_ADMIN', 'STAFF'), staff_controller_js_1.getMyStaffProfile);
+router.get('/my/dashboard', (0, auth_js_1.requireRole)('SUPER_ADMIN', 'ACADEMIC_ADMIN', 'STAFF'), staff_controller_js_1.getMyStaffDashboard);
+router.get('/my/timetable', (0, auth_js_1.requireRole)('SUPER_ADMIN', 'ACADEMIC_ADMIN', 'STAFF'), staff_controller_js_1.getMyStaffTimetable);
+router.get('/my/students', (0, auth_js_1.requireRole)('SUPER_ADMIN', 'ACADEMIC_ADMIN', 'STAFF'), staff_controller_js_1.getMyStaffStudents);
 router.get('/:id', (0, auth_js_1.requireRole)('SUPER_ADMIN', 'ACADEMIC_ADMIN', 'STAFF'), staff_controller_js_1.getStaffById);
 router.patch('/:id', (0, auth_js_1.requireRole)('SUPER_ADMIN', 'ACADEMIC_ADMIN'), staff_controller_js_1.updateStaff);
 router.patch('/:id/status', (0, auth_js_1.requireRole)('SUPER_ADMIN', 'ACADEMIC_ADMIN'), staff_controller_js_1.updateStaffStatus);

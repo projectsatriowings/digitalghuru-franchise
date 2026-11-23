@@ -13,10 +13,13 @@ exports.getParentDashboardSummary = getParentDashboardSummary;
 exports.getParentStudentAttendance = getParentStudentAttendance;
 exports.getParentStudentTeachers = getParentStudentTeachers;
 exports.getParentStudentAcademics = getParentStudentAcademics;
+exports.getParentStudentHomework = getParentStudentHomework;
+exports.getParentStudentTimetable = getParentStudentTimetable;
 const prisma_js_1 = require("../../prisma.js");
 const zod_1 = require("zod");
 const security_js_1 = require("../../utils/security.js");
 const student_authorization_service_js_1 = require("../students/student-authorization.service.js");
+const timetable_resolver_js_1 = require("../students/timetable-resolver.js");
 exports.createParentSchema = zod_1.z.object({
     fullName: zod_1.z.string().min(2, 'Full name is required'),
     phone: zod_1.z.string().min(10, 'Valid phone number is required'),
@@ -1371,6 +1374,48 @@ async function getParentStudentAcademics(req, res) {
                 passingMarks: Number(e.passingMarks),
             }));
         }
+        // Published Examination Marks (Report Cards)
+        const examMarks = await prisma_js_1.prisma.examMark.findMany({
+            where: {
+                studentId,
+                exam: { isPublished: true },
+            },
+            include: {
+                exam: {
+                    select: {
+                        id: true,
+                        title: true,
+                        examType: true,
+                        examDate: true,
+                        totalMarks: true,
+                        passingMarks: true,
+                        subject: { select: { id: true, name: true, code: true } },
+                    },
+                },
+            },
+            orderBy: { exam: { examDate: 'desc' } },
+        });
+        const formattedMarks = examMarks.map((m) => {
+            const total = Number(m.exam.totalMarks);
+            const score = Number(m.marksObtained);
+            const passing = Number(m.exam.passingMarks);
+            const percentage = total > 0 ? Math.round((score / total) * 100) : 0;
+            const isPassed = !m.isAbsent && score >= passing;
+            return {
+                id: m.id,
+                examTitle: m.exam.title,
+                examType: m.exam.examType,
+                subject: m.exam.subject.name,
+                examDate: m.exam.examDate,
+                marksObtained: score,
+                totalMarks: total,
+                passingMarks: passing,
+                percentage,
+                isPassed,
+                isAbsent: m.isAbsent,
+                remarks: m.remarks,
+            };
+        });
         return res.json({
             success: true,
             data: {
@@ -1386,11 +1431,164 @@ async function getParentStudentAcademics(req, res) {
                 homework,
                 feedbacks: formattedFeedbacks,
                 upcomingExams,
+                marks: formattedMarks,
             },
         });
     }
     catch (err) {
         console.error('[Parent Student Academics Error]', err);
         return res.status(500).json({ success: false, error: 'Failed to fetch academic report' });
+    }
+}
+/**
+ * GET /api/parents/students/:studentId/homework
+ * Child-specific homework tracking enriched with submission, grading, and overdue status.
+ */
+async function getParentStudentHomework(req, res) {
+    try {
+        if (req.user?.role !== 'PARENT') {
+            return res.status(403).json({ success: false, error: 'Forbidden: Parent access only' });
+        }
+        const { studentId } = req.params;
+        const isAuth = await (0, student_authorization_service_js_1.isStudentAuthorized)(req, studentId, prisma_js_1.prisma);
+        if (!isAuth) {
+            return res.status(403).json({ success: false, error: 'Forbidden: You are not authorized for this student' });
+        }
+        const student = await prisma_js_1.prisma.student.findUnique({
+            where: { id: studentId },
+            include: {
+                enrollments: {
+                    where: { isActive: true },
+                    select: { batchId: true },
+                },
+            },
+        });
+        if (!student) {
+            return res.status(404).json({ success: false, error: 'Student not found' });
+        }
+        const enrolledBatchIds = student.enrollments.map((e) => e.batchId).filter(Boolean);
+        if (enrolledBatchIds.length === 0) {
+            return res.json({ success: true, data: { homework: [] } });
+        }
+        const materials = await prisma_js_1.prisma.learningMaterial.findMany({
+            where: {
+                batchId: { in: enrolledBatchIds },
+                type: 'HOMEWORK',
+                isPublished: true,
+            },
+            include: {
+                subject: { select: { id: true, name: true, code: true } },
+                uploader: { select: { id: true, fullName: true } },
+                submissions: {
+                    where: { studentId },
+                    select: {
+                        id: true,
+                        status: true,
+                        submittedAt: true,
+                        grade: true,
+                        feedback: true,
+                        fileUrl: true,
+                        fileName: true,
+                        isLate: true,
+                    },
+                },
+            },
+            orderBy: { dueDate: 'asc' },
+        });
+        const now = new Date();
+        const homework = materials.map((m) => {
+            const sub = m.submissions[0];
+            const isSubmitted = !!sub;
+            let status = 'PENDING';
+            if (sub?.status === 'GRADED' || sub?.status === 'EVALUATED') {
+                status = 'EVALUATED';
+            }
+            else if (isSubmitted) {
+                status = 'SUBMITTED';
+            }
+            else if (m.dueDate && new Date(m.dueDate) < now) {
+                status = 'OVERDUE';
+            }
+            return {
+                id: m.id,
+                title: m.title,
+                description: m.description,
+                subject: m.subject?.name || 'General',
+                teacherName: m.uploader.fullName,
+                dueDate: m.dueDate,
+                createdAt: m.createdAt,
+                fileUrl: m.fileUrl,
+                fileName: m.fileName,
+                isSubmitted,
+                submissionStatus: status,
+                submittedAt: sub?.submittedAt || null,
+                grade: sub?.grade || null,
+                feedback: sub?.feedback || null,
+                submissionFileUrl: sub?.fileUrl || null,
+                isLate: sub?.isLate || false,
+            };
+        });
+        return res.json({
+            success: true,
+            data: { homework },
+        });
+    }
+    catch (err) {
+        console.error('[Parent Student Homework Error]', err);
+        return res.status(500).json({ success: false, error: 'Failed to fetch student homework' });
+    }
+}
+/**
+ * GET /api/parents/students/:studentId/timetable
+ * Child-specific structured weekly timetable reusing the core timetable resolver.
+ */
+async function getParentStudentTimetable(req, res) {
+    try {
+        if (req.user?.role !== 'PARENT') {
+            return res.status(403).json({ success: false, error: 'Forbidden: Parent access only' });
+        }
+        const { studentId } = req.params;
+        const isAuth = await (0, student_authorization_service_js_1.isStudentAuthorized)(req, studentId, prisma_js_1.prisma);
+        if (!isAuth) {
+            return res.status(403).json({ success: false, error: 'Forbidden: You are not authorized for this student' });
+        }
+        const student = await prisma_js_1.prisma.student.findUnique({
+            where: { id: studentId },
+            include: {
+                enrollments: {
+                    where: { isActive: true },
+                    include: {
+                        batch: {
+                            include: {
+                                batchSubjects: {
+                                    where: { isActive: true },
+                                    include: {
+                                        subject: true,
+                                        staffProfile: {
+                                            include: {
+                                                user: { select: { id: true, fullName: true, email: true } },
+                                            },
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        });
+        if (!student) {
+            return res.status(404).json({ success: false, error: 'Student not found' });
+        }
+        const activeBatch = student.enrollments[0]?.batch || null;
+        const timetable = (0, timetable_resolver_js_1.resolveStructuredTimetable)(activeBatch);
+        return res.json({
+            success: true,
+            data: { timetable },
+        });
+    }
+    catch (err) {
+        console.error('[Parent Student Timetable Error]', err);
+        return res.status(500).json({ success: false, error: 'Failed to fetch student timetable' });
     }
 }

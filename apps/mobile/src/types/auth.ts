@@ -31,6 +31,7 @@ export interface ActiveInstitute {
   id: string;
   code: string;
   name: string;
+  phone?: string | null;
 }
 
 export interface LoginResponseData {

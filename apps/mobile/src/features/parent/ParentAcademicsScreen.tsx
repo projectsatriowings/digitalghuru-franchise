@@ -211,7 +211,7 @@ export const ParentAcademicsScreen: React.FC = () => {
                   <Text style={styles.sectionTitle}>TEACHER EVALUATION & FEEDBACK</Text>
                 </View>
 
-                {teacherEvaluations.map((evalItem) => (
+                {teacherEvaluations.map((evalItem: any) => (
                   <Card key={evalItem.id} style={styles.evaluationCard}>
                     <View style={styles.evalHeaderRow}>
                       <View style={styles.evalTitleCol}>
