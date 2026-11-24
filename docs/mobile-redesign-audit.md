@@ -1,7 +1,7 @@
 # Digital Guru Franchise – Complete Mobile UI Redesign and Functional Architecture Audit
 
 **Document:** `docs/mobile-redesign-audit.md`  
-**Branch:** `feat/mobile-role-redesign`  
+**Branch:** `padhma-priya`  
 **Date:** November 24, 2026  
 **Status:** Complete Architectural Baseline  
 

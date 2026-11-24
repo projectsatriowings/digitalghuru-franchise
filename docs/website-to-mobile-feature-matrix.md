@@ -1,7 +1,7 @@
 # Digital Guru Franchise – Website to Mobile Feature Parity Matrix
 
 **Document:** `docs/website-to-mobile-feature-matrix.md`  
-**Branch:** `feat/mobile-role-redesign`  
+**Branch:** `padhma-priya`  
 **Date:** November 24, 2026  
 **Status:** Complete Feature Mapping  
 
