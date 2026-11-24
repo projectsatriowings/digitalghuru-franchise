@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, Text, ActivityIndicator, StyleSheet, Image } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { useAuthStore } from '../store/authStore';
 import { AuthNavigator } from './AuthNavigator';
@@ -28,9 +28,11 @@ export const RootNavigator: React.FC = () => {
   if (isRestoringSession) {
     return (
       <View style={styles.splashContainer}>
-        <View style={styles.splashBadge}>
-          <Text style={styles.splashBadgeText}>DG</Text>
-        </View>
+        <Image
+          source={require('../../assets/logo.png')}
+          style={styles.splashLogo}
+          resizeMode="contain"
+        />
         <Text style={styles.splashTitle}>DIGITAL GURU</Text>
         <Text style={styles.splashSubtitle}>Franchise & Learning Enterprise</Text>
         <ActivityIndicator
@@ -72,6 +74,11 @@ const styles = StyleSheet.create({
     backgroundColor: brandColors.navy,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  splashLogo: {
+    width: 200,
+    height: 70,
+    marginBottom: theme.spacing.md,
   },
   splashBadge: {
     width: 68,

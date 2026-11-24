@@ -8,6 +8,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Linking,
+  Image,
 } from 'react-native';
 import { brandColors, roleThemes, theme } from '../../theme';
 import { useAuthStore } from '../../store/authStore';
@@ -135,9 +136,11 @@ export const LoginScreen: React.FC = () => {
       >
         {/* Brand Banner */}
         <View style={styles.brandContainer}>
-          <View style={styles.logoBadge}>
-            <Text style={styles.logoBadgeText}>DG</Text>
-          </View>
+          <Image
+            source={require('../../../assets/logo.png')}
+            style={styles.logoImage}
+            resizeMode="contain"
+          />
           <Text style={styles.brandTitle}>DIGITAL GURU</Text>
           <Text style={styles.brandSubtitle}>Franchise & Learning Enterprise</Text>
         </View>
@@ -340,6 +343,11 @@ const styles = StyleSheet.create({
   brandContainer: {
     alignItems: 'center',
     marginBottom: theme.spacing.xl,
+  },
+  logoImage: {
+    width: 220,
+    height: 64,
+    marginBottom: theme.spacing.sm,
   },
   logoBadge: {
     width: 60,

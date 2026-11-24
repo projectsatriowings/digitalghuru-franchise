@@ -79,14 +79,17 @@ export const StudentDashboardScreen: React.FC = () => {
     student,
     institute,
     batch,
-    todayClasses = [],
+    todayClasses,
     attendanceOverview,
     homeworkOverview,
-    recentMaterials = [],
+    recentMaterials,
     academicProgress,
     notificationsOverview,
   } = dashboard;
 
+  const safeTodayClasses = Array.isArray(todayClasses) ? todayClasses : [];
+  const safeRecentMaterials = Array.isArray(recentMaterials) ? recentMaterials : [];
+  const safeUpcomingHomework = Array.isArray(homeworkOverview?.upcoming) ? homeworkOverview.upcoming : [];
   const unreadCount = notificationsOverview?.unreadCount || 0;
 
   return (
@@ -222,7 +225,7 @@ export const StudentDashboardScreen: React.FC = () => {
           </TouchableOpacity>
         </View>
 
-        {todayClasses.length === 0 ? (
+        {safeTodayClasses.length === 0 ? (
           <Card style={styles.emptyCard}>
             <Calendar size={32} color={brandColors.textMuted} />
             <Text style={styles.emptyTitle}>No Classes Scheduled Today</Text>
@@ -231,7 +234,7 @@ export const StudentDashboardScreen: React.FC = () => {
             </Text>
           </Card>
         ) : (
-          todayClasses.map((slot, index) => (
+          safeTodayClasses.map((slot, index) => (
             <Card key={slot.id || index} style={styles.classCard}>
               <View style={styles.classTimeColumn}>
                 <Clock size={16} color={brandColors.blue} />
@@ -265,7 +268,7 @@ export const StudentDashboardScreen: React.FC = () => {
           </TouchableOpacity>
         </View>
 
-        {(!homeworkOverview?.upcoming || homeworkOverview.upcoming.length === 0) ? (
+        {safeUpcomingHomework.length === 0 ? (
           <Card style={styles.emptyCard}>
             <CheckCircle2 size={32} color={brandColors.success} />
             <Text style={styles.emptyTitle}>All Caught Up!</Text>
@@ -274,7 +277,7 @@ export const StudentDashboardScreen: React.FC = () => {
             </Text>
           </Card>
         ) : (
-          homeworkOverview.upcoming.map((hw) => (
+          safeUpcomingHomework.map((hw) => (
             <Card key={hw.id} style={styles.homeworkCard}>
               <View style={styles.homeworkHeader}>
                 <Badge text={hw.subject || 'Assignment'} variant="student" />
@@ -323,7 +326,7 @@ export const StudentDashboardScreen: React.FC = () => {
           </TouchableOpacity>
         </View>
 
-        {recentMaterials.length === 0 ? (
+        {safeRecentMaterials.length === 0 ? (
           <Card style={styles.emptyCard}>
             <BookOpen size={32} color={brandColors.textMuted} />
             <Text style={styles.emptyTitle}>No Materials Yet</Text>
@@ -332,7 +335,7 @@ export const StudentDashboardScreen: React.FC = () => {
             </Text>
           </Card>
         ) : (
-          recentMaterials.map((mat) => (
+          safeRecentMaterials.map((mat) => (
             <Card key={mat.id} style={styles.materialCard}>
               <View style={styles.materialIconWrap}>
                 <FileText size={20} color={brandColors.blue} />

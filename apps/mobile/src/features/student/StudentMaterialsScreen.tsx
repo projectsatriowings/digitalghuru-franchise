@@ -47,20 +47,24 @@ export const StudentMaterialsScreen: React.FC = () => {
     refetch();
   }, [refetch]);
 
-  // Extract distinct material types
+  // Extract distinct material types safely
+  const safeMaterials = useMemo(() => {
+    return Array.isArray(materials) ? materials : [];
+  }, [materials]);
+
   const typeFilterList = useMemo(() => {
     const types = new Set<string>();
     types.add('ALL');
-    materials.forEach((m) => {
-      if (m.type) types.add(m.type);
+    safeMaterials.forEach((m) => {
+      if (m?.type) types.add(m.type);
     });
     return Array.from(types);
-  }, [materials]);
+  }, [safeMaterials]);
 
   const filteredMaterials = useMemo(() => {
-    if (selectedType === 'ALL') return materials;
-    return materials.filter((m) => m.type === selectedType);
-  }, [materials, selectedType]);
+    if (selectedType === 'ALL') return safeMaterials;
+    return safeMaterials.filter((m) => m?.type === selectedType);
+  }, [safeMaterials, selectedType]);
 
   const handleOpenMaterial = async (material: LearningMaterialItem) => {
     try {
