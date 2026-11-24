@@ -9,7 +9,9 @@ import {
   Platform,
   Linking,
   Image,
+  StatusBar as RNStatusBar,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { brandColors, roleThemes, theme } from '../../theme';
 import { useAuthStore } from '../../store/authStore';
 import { Button } from '../../components/common/Button';
@@ -66,6 +68,8 @@ const DEMO_PERSONAS = [
 ];
 
 export const LoginScreen: React.FC = () => {
+  const insets = useSafeAreaInsets();
+  const topSafePadding = Math.max(insets.top, Platform.OS === 'android' ? (RNStatusBar.currentHeight || 24) : 0) + theme.spacing.lg;
   const { login, loginDemo, isLoading, error, clearError } = useAuthStore();
 
   const [identifier, setIdentifier] = useState('');
@@ -130,7 +134,7 @@ export const LoginScreen: React.FC = () => {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, { paddingTop: topSafePadding }]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >

@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   RefreshControl,
   ActivityIndicator,
+  Image,
 } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigation } from '@react-navigation/native';
@@ -97,32 +98,41 @@ export const StudentDashboardScreen: React.FC = () => {
       {/* Top Header Bar */}
       <View style={styles.topHeader}>
         <View style={styles.headerLeft}>
+          <Image
+            source={require('../../../assets/logo.png')}
+            style={styles.headerLogo}
+            resizeMode="contain"
+          />
+        </View>
+        <View style={styles.headerRight}>
           <View style={styles.avatar}>
             <Text style={styles.avatarText}>
               {(student?.firstName?.[0] || 'S') + (student?.lastName?.[0] || '')}
             </Text>
           </View>
-          <View style={styles.greetingContainer}>
-            <Text style={styles.greetingSub}>Welcome back,</Text>
-            <Text style={styles.studentName} numberOfLines={1}>
-              {student?.fullName || `${student?.firstName} ${student?.lastName}`}
-            </Text>
-          </View>
+          <TouchableOpacity
+            style={styles.notificationBtn}
+            onPress={() => navigation.navigate('StudentNotifications')}
+            accessibilityLabel="Notifications"
+          >
+            <Bell size={22} color={brandColors.textPrimary} />
+            {unreadCount > 0 && (
+              <View style={styles.notificationBadge}>
+                <Text style={styles.notificationBadgeText}>
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
         </View>
-        <TouchableOpacity
-          style={styles.notificationBtn}
-          onPress={() => navigation.navigate('StudentNotifications')}
-          accessibilityLabel="Notifications"
-        >
-          <Bell size={22} color={brandColors.textPrimary} />
-          {unreadCount > 0 && (
-            <View style={styles.notificationBadge}>
-              <Text style={styles.notificationBadgeText}>
-                {unreadCount > 9 ? '9+' : unreadCount}
-              </Text>
-            </View>
-          )}
-        </TouchableOpacity>
+      </View>
+
+      {/* Greeting Banner */}
+      <View style={styles.welcomeBanner}>
+        <Text style={styles.greetingSub}>Welcome back,</Text>
+        <Text style={styles.studentName} numberOfLines={1}>
+          {student?.fullName || `${student?.firstName} ${student?.lastName}`}
+        </Text>
       </View>
 
       <ScrollView
@@ -446,15 +456,28 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: theme.spacing.lg,
     paddingTop: theme.spacing.sm,
-    paddingBottom: theme.spacing.md,
+    paddingBottom: theme.spacing.sm,
     backgroundColor: brandColors.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: brandColors.borderLight,
   },
   headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    flex: 1,
+  },
+  headerLogo: {
+    width: 140,
+    height: 38,
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+  },
+  welcomeBanner: {
+    paddingHorizontal: theme.spacing.lg,
+    paddingBottom: theme.spacing.sm,
+    backgroundColor: brandColors.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: brandColors.borderLight,
   },
   avatar: {
     width: 44,
