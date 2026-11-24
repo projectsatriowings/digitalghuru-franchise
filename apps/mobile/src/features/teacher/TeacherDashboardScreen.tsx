@@ -99,7 +99,7 @@ export const TeacherDashboardScreen: React.FC = () => {
   const unreadNotifs = recentNotifications.filter((n: any) => !n.isRead).length;
 
   return (
-    <ScreenContainer>
+    <ScreenContainer backgroundColor={brandColors.surface}>
       {/* Teacher Top Header */}
       <View style={styles.topHeader}>
         <View style={styles.headerLeft}>

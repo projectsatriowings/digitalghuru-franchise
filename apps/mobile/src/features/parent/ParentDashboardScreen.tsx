@@ -100,7 +100,7 @@ export const ParentDashboardScreen: React.FC = () => {
   const unreadNotifications = dashboard.unreadCounts?.notifications || 0;
 
   return (
-    <ScreenContainer>
+    <ScreenContainer backgroundColor={brandColors.surface}>
       {/* Top Header Bar */}
       <View style={styles.topHeader}>
         <View style={styles.headerLeft}>

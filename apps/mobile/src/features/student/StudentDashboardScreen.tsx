@@ -94,7 +94,7 @@ export const StudentDashboardScreen: React.FC = () => {
   const unreadCount = notificationsOverview?.unreadCount || 0;
 
   return (
-    <ScreenContainer>
+    <ScreenContainer backgroundColor={brandColors.surface}>
       {/* Top Header Bar */}
       <View style={styles.topHeader}>
         <View style={styles.headerLeft}>
@@ -103,6 +103,10 @@ export const StudentDashboardScreen: React.FC = () => {
             style={styles.headerLogo}
             resizeMode="contain"
           />
+          <View style={styles.brandTitleWrap}>
+            <Text style={styles.brandTitleText}>DIGITAL GURU</Text>
+            <Text style={styles.brandSubtitleText}>Student Portal</Text>
+          </View>
         </View>
         <View style={styles.headerRight}>
           <View style={styles.avatar}>
@@ -462,10 +466,27 @@ const styles = StyleSheet.create({
   headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: theme.spacing.sm,
   },
   headerLogo: {
-    width: 140,
+    width: 38,
     height: 38,
+  },
+  brandTitleWrap: {
+    justifyContent: 'center',
+  },
+  brandTitleText: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: brandColors.navy,
+    letterSpacing: 0.5,
+  },
+  brandSubtitleText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: brandColors.blue,
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
   },
   headerRight: {
     flexDirection: 'row',
