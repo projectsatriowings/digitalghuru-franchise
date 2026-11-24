@@ -246,15 +246,18 @@ app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
   });
 });
 
-// Start standalone server only when executed directly from CLI (e.g. `node server/dist/index.js` or `tsx server/src/index.ts`)
+// Start standalone server only when executed directly from CLI or PM2 (e.g. `node server/dist/index.js` or via PM2)
 // Never start when loaded as a module in serverless functions (Vercel, AWS Lambda, tests, or wrappers)
 const isDirectExecution = Boolean(
-  process.argv[1] &&
   (
-    process.argv[1].endsWith('server/src/index.ts') ||
-    process.argv[1].endsWith('server\\src\\index.ts') ||
-    process.argv[1].endsWith('server/dist/index.js') ||
-    process.argv[1].endsWith('server\\dist\\index.js')
+    Boolean(process.env.pm_id !== undefined || process.env.pm_exec_path) ||
+    Boolean(
+      process.argv[1] &&
+      (
+        process.argv[1].endsWith('index.ts') ||
+        process.argv[1].endsWith('index.js')
+      )
+    )
   ) &&
   !process.env.VERCEL &&
   !process.env.AWS_LAMBDA_FUNCTION_NAME
