@@ -9,11 +9,13 @@ import {
 } from 'react-native';
 import { brandColors, theme } from '../../theme';
 
-interface ButtonProps {
-  title: string;
+export interface ButtonProps {
+  title?: string;
+  label?: string;
   onPress: () => void;
   variant?: 'primary' | 'secondary' | 'outline' | 'danger';
   roleTheme?: 'STUDENT' | 'PARENT' | 'STAFF';
+  size?: 'sm' | 'md' | 'lg' | string;
   isLoading?: boolean;
   disabled?: boolean;
   style?: ViewStyle;
@@ -23,9 +25,11 @@ interface ButtonProps {
 
 export const Button: React.FC<ButtonProps> = ({
   title,
+  label,
   onPress,
   variant = 'primary',
   roleTheme,
+  size = 'md',
   isLoading = false,
   disabled = false,
   style,
@@ -61,6 +65,8 @@ export const Button: React.FC<ButtonProps> = ({
 
   const isOutline = variant === 'outline';
   const borderColor = roleTheme ? theme.roles[roleTheme].primary : brandColors.blue;
+  const isSm = size === 'sm';
+  const buttonTitle = title || label || '';
 
   return (
     <TouchableOpacity
@@ -69,6 +75,7 @@ export const Button: React.FC<ButtonProps> = ({
       disabled={disabled || isLoading}
       style={[
         styles.button,
+        isSm && styles.buttonSm,
         {
           backgroundColor: getBackgroundColor(),
           borderWidth: isOutline ? 1.5 : 0,
@@ -82,8 +89,16 @@ export const Button: React.FC<ButtonProps> = ({
       ) : (
         <>
           {icon}
-          <Text style={[styles.text, { color: getTextColor() }, icon ? styles.textWithIcon : null, textStyle]}>
-            {title}
+          <Text
+            style={[
+              styles.text,
+              isSm && styles.textSm,
+              { color: getTextColor() },
+              icon ? styles.textWithIcon : null,
+              textStyle,
+            ]}
+          >
+            {buttonTitle}
           </Text>
         </>
       )}
@@ -101,10 +116,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.lg,
     ...theme.shadows.sm,
   },
+  buttonSm: {
+    height: 36,
+    paddingHorizontal: theme.spacing.md,
+  },
   text: {
     fontSize: 15,
     fontWeight: '600',
     letterSpacing: 0.2,
+  },
+  textSm: {
+    fontSize: 13,
   },
   textWithIcon: {
     marginLeft: theme.spacing.sm,

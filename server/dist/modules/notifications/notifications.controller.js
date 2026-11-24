@@ -441,13 +441,20 @@ async function registerPushToken(req, res) {
 async function removePushToken(req, res) {
     try {
         const userId = req.user?.userId;
-        const { token } = req.body;
-        if (!token) {
-            return res.status(400).json({ success: false, error: 'Push token is required' });
+        const token = req.body?.token || req.query?.token;
+        if (token) {
+            await prisma_js_1.prisma.devicePushToken.deleteMany({
+                where: { token, ...(userId ? { userId } : {}) },
+            });
         }
-        await prisma_js_1.prisma.devicePushToken.deleteMany({
-            where: { token, ...(userId ? { userId } : {}) },
-        });
+        else if (userId) {
+            await prisma_js_1.prisma.devicePushToken.deleteMany({
+                where: { userId },
+            });
+        }
+        else {
+            return res.status(400).json({ success: false, error: 'Push token or user context required' });
+        }
         return res.json({ success: true, message: 'Push token unregistered successfully' });
     }
     catch (err) {

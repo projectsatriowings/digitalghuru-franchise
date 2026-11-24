@@ -11,6 +11,7 @@ interface HeaderProps {
   showLogout?: boolean;
   showBack?: boolean;
   onBack?: () => void;
+  rightElement?: React.ReactNode;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -19,6 +20,7 @@ export const Header: React.FC<HeaderProps> = ({
   showLogout = true,
   showBack = false,
   onBack,
+  rightElement,
 }) => {
   const navigation = useNavigation<any>();
   const { activeInstitute, logout, activeRole } = useAuthStore();
@@ -68,7 +70,9 @@ export const Header: React.FC<HeaderProps> = ({
             </Text>
           </View>
         </View>
-        {showLogout && (
+        {rightElement ? (
+          rightElement
+        ) : showLogout ? (
           <TouchableOpacity
             style={styles.logoutButton}
             onPress={logout}
@@ -76,7 +80,7 @@ export const Header: React.FC<HeaderProps> = ({
           >
             <LogOut size={18} color="#64748B" />
           </TouchableOpacity>
-        )}
+        ) : null}
       </View>
 
       {(title || subtitle) && (

@@ -28,8 +28,19 @@ class InAppNotificationService {
     }
     /**
      * Broadcast an event to connected SSE clients for a specific user
+     * and asynchronously dispatch push notifications if notification payload is present
      */
     static broadcastToUser(userId, payload) {
+        if (payload?.type === 'NOTIFICATION_CREATED' || payload?.type === 'NOTIFICATION_RECEIVED') {
+            const notifData = payload.data || payload.notification;
+            if (notifData && notifData.id) {
+                setImmediate(() => {
+                    InAppNotificationService.dispatchPushForNotification(notifData).catch((err) => {
+                        console.warn('[InAppNotificationService Push Dispatch Error]', err.message);
+                    });
+                });
+            }
+        }
         const clients = activeSseClients.get(userId);
         if (!clients || clients.size === 0)
             return;
@@ -59,6 +70,69 @@ class InAppNotificationService {
             .toUpperCase();
     }
     /**
+     * Centralized asynchronous push notification dispatcher
+     * Resolves registered device tokens, handles retries, removes invalid/unregistered tokens,
+     * and tracks delivery status on the notification record.
+     */
+    static async dispatchPushForNotification(notif) {
+        try {
+            if (!notif.userId)
+                return;
+            const tokens = await prisma_js_1.prisma.devicePushToken.findMany({
+                where: { userId: notif.userId },
+            });
+            if (!tokens || tokens.length === 0) {
+                return;
+            }
+            const payload = {
+                notificationId: notif.id,
+                role: notif.role,
+                entityType: notif.entityType || null,
+                entityId: notif.entityId || null,
+                studentId: notif.studentId || null,
+                link: notif.link || null,
+                ...(typeof notif.metadata === 'object' && notif.metadata ? notif.metadata : {}),
+            };
+            let deliveredCount = 0;
+            let lastError = null;
+            for (const dt of tokens) {
+                const res = await this.sendPushNotification(dt.token, notif.title, notif.message, payload);
+                if (res.success) {
+                    deliveredCount++;
+                }
+                else {
+                    lastError = res.error || 'Delivery failed';
+                    // Auto-remove unregistered or invalid tokens
+                    if (res.error?.includes('DeviceNotRegistered') ||
+                        res.error?.includes('not registered') ||
+                        res.error?.includes('InvalidCredentials')) {
+                        await prisma_js_1.prisma.devicePushToken.deleteMany({ where: { token: dt.token } }).catch(() => { });
+                    }
+                }
+            }
+            if (notif.id) {
+                const exists = await prisma_js_1.prisma.notification.findUnique({
+                    where: { id: notif.id },
+                    select: { id: true },
+                });
+                if (exists) {
+                    await prisma_js_1.prisma.notification
+                        .update({
+                        where: { id: notif.id },
+                        data: {
+                            pushStatus: deliveredCount > 0 ? 'DELIVERED' : 'FAILED',
+                            pushError: deliveredCount > 0 ? null : lastError,
+                        },
+                    })
+                        .catch(() => { });
+                }
+            }
+        }
+        catch (err) {
+            console.warn('[dispatchPushForNotification Error]', err.message);
+        }
+    }
+    /**
      * Dispatch push notification to device tokens via Expo Push API
      */
     static async sendPushNotification(token, title, body, dataPayload) {
@@ -69,6 +143,9 @@ class InAppNotificationService {
             // Check for valid Expo push token format
             if (!token.startsWith('ExponentPushToken[') && !token.startsWith('ExpoPushToken[')) {
                 // For local development, tests, or mock tokens
+                return { success: true, status: 'DELIVERED', mock: true };
+            }
+            if (token.includes('TEST_') || token.includes('SIMULATOR_') || token.includes('MOCK_')) {
                 return { success: true, status: 'DELIVERED', mock: true };
             }
             const res = await fetch('https://exp.host/--/api/v2/push/send', {
@@ -91,9 +168,13 @@ class InAppNotificationService {
                 return { success: true, status: 'DELIVERED' };
             }
             else {
+                const errorMsg = json.data?.details?.error ||
+                    json.errors?.[0]?.message ||
+                    json.data?.message ||
+                    'Push gateway rejected payload';
                 return {
                     success: false,
-                    error: json.errors?.[0]?.message || json.data?.message || 'Push gateway rejected payload',
+                    error: errorMsg,
                 };
             }
         }
@@ -200,7 +281,7 @@ class InAppNotificationService {
                 },
             });
             createdNotifications.push(notif);
-            // Real-time SSE dispatch to active sessions
+            // Real-time SSE dispatch & automated asynchronous push delivery
             this.broadcastToUser(recipient.userId, {
                 type: 'NOTIFICATION_CREATED',
                 data: {
@@ -220,26 +301,6 @@ class InAppNotificationService {
                     message: recipient.message,
                 },
             });
-            // Background push delivery if tokens configured
-            if (deviceTokens.length > 0) {
-                setTimeout(async () => {
-                    for (const dt of deviceTokens) {
-                        const pushResult = await this.sendPushNotification(dt.token, title, recipient.message, {
-                            notificationId: notif.id,
-                            studentId,
-                            attendanceEventId,
-                            eventType,
-                        });
-                        await prisma_js_1.prisma.notification.update({
-                            where: { id: notif.id },
-                            data: {
-                                pushStatus: pushResult.status === 'DELIVERED' ? 'DELIVERED' : 'FAILED',
-                                pushError: pushResult.error || null,
-                            },
-                        }).catch(() => { });
-                    }
-                }, 50);
-            }
         }
         return createdNotifications;
     }

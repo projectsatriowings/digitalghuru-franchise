@@ -9,6 +9,7 @@ export interface TimetableSlot {
   subjectName: string;
   batchName: string;
   teacherName?: string | null;
+  staffProfileId?: string | null;
   timeDisplay: string;
   startTime?: string | null;
   endTime?: string | null;
@@ -204,6 +205,7 @@ export function resolveStructuredTimetable(batch: any, now: Date = new Date()): 
             subjectName,
             batchName: batch.name,
             teacherName,
+            staffProfileId: bs.staffProfileId || bs.staffProfile?.id || null,
             timeDisplay,
             startTime: timeMatch[1].trim(),
             endTime: timeMatch[2].trim(),
@@ -222,6 +224,7 @@ export function resolveStructuredTimetable(batch: any, now: Date = new Date()): 
             subjectName,
             batchName: batch.name,
             teacherName,
+            staffProfileId: bs.staffProfileId || bs.staffProfile?.id || null,
             timeDisplay: scheduleString,
             rawSchedule: scheduleString,
             isParsed: false,

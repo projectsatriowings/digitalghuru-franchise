@@ -144,6 +144,8 @@ export interface ParentFeedbackReviewItem {
 }
 
 export interface ParentAcademicsData {
+  summary?: any;
+  teacherEvaluations?: any[];
   student: {
     id: string;
     firstName: string;
@@ -190,9 +192,15 @@ export interface ParentHomeworkItem {
   id: string;
   title: string;
   description?: string | null;
-  subject: string;
+  subject: string | { id?: string; name: string };
   teacherName: string;
   dueDate?: string | null;
+  maxMarks?: number | null;
+  submission?: {
+    score?: number | null;
+    submittedAt: string;
+    feedback?: string | null;
+  } | null;
   createdAt: string;
   fileUrl?: string | null;
   fileName?: string | null;
@@ -208,6 +216,9 @@ export interface ParentHomeworkItem {
 export interface ParentFeeStatementItem {
   id: string;
   feeStructureName: string;
+  feeStructure?: { id: string; name: string };
+  amount?: number;
+  balance?: number;
   term?: string | null;
   academicYear?: string | null;
   assignedAmount: number;
@@ -243,9 +254,12 @@ export interface ParentPaymentItem {
   receiptNumber: string;
   paymentDate: string;
   amountPaid: number;
+  amount?: number;
   paymentMethod: string;
+  paymentMode?: string;
   status: string;
   transactionReference?: string | null;
+  transactionRef?: string | null;
   receiptUrl?: string | null;
   feeStructureName?: string;
 }
@@ -255,8 +269,11 @@ export interface ParentInquiryItem {
   studentId: string;
   category: string;
   feedbackText: string;
-  status: 'PENDING' | 'REVIEWED' | 'RESOLVED';
+  status: 'PENDING' | 'REVIEWED' | 'RESOLVED' | 'ACKNOWLEDGED';
   responseText?: string | null;
+  subject?: string;
+  message?: string;
+  response?: string;
   createdAt: string;
   respondedAt?: string | null;
   staffResponder?: {
@@ -264,11 +281,21 @@ export interface ParentInquiryItem {
   } | null;
 }
 
+export interface CreateParentInquiryPayload {
+  studentId: string;
+  category: string;
+  subject?: string;
+  message?: string;
+  feedbackText?: string;
+  teacherId?: string;
+}
+
 export interface ParentTeacherItem {
   id: string;
   fullName: string;
+  user?: { fullName: string };
   email?: string | null;
   phone?: string | null;
-  subjects: string[];
+  subjects: Array<string | { id?: string; name: string }>;
   designation?: string | null;
 }

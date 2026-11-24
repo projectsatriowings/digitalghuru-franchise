@@ -1631,7 +1631,7 @@ export async function getParentStudentHomework(req: AuthenticatedRequest, res: R
       const sub = m.submissions[0];
       const isSubmitted = !!sub;
       let status: 'PENDING' | 'SUBMITTED' | 'EVALUATED' | 'OVERDUE' = 'PENDING';
-      if (sub?.status === 'EVALUATED') {
+      if (sub?.status === 'GRADED' || (sub?.status as any) === 'EVALUATED') {
         status = 'EVALUATED';
       } else if (isSubmitted) {
         status = 'SUBMITTED';

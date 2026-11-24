@@ -160,7 +160,7 @@ export const ParentHomeworkScreen: React.FC = () => {
                   <View style={styles.hwTitleCol}>
                     <Text style={styles.hwTitle}>{item.title}</Text>
                     <Text style={styles.hwSubject}>
-                      {item.subject?.name || 'General Subject'}
+                      {typeof item.subject === 'string' ? item.subject : item.subject?.name || 'General Subject'}
                     </Text>
                   </View>
                   <Badge
@@ -193,7 +193,7 @@ export const ParentHomeworkScreen: React.FC = () => {
                         isOverdue && { color: '#EF4444', fontWeight: '700' },
                       ]}
                     >
-                      {new Date(item.dueDate).toLocaleDateString()}
+                      {item.dueDate ? new Date(item.dueDate).toLocaleDateString() : 'No Due Date'}
                     </Text>
                   </View>
 
