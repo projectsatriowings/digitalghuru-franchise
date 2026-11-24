@@ -96,13 +96,16 @@ export const FranchiseCourses: React.FC = () => {
         });
         setFeeInputs(feesMap);
         setEnrollments(enrollmentsRes.data || []);
+      } else {
+        setCourses([]);
+        setEnrollments([]);
       }
     } catch (err: any) {
       toast.error(err.message || 'Failed to load franchise courses');
     } finally {
       setLoading(false);
     }
-  }, [activeInstitute?.id, toast]);
+  }, [activeInstitute?.id]);
 
   useEffect(() => {
     loadData();
@@ -359,9 +362,13 @@ export const FranchiseCourses: React.FC = () => {
           {courses.length === 0 ? (
             <div className="bg-white rounded-2xl border border-slate-200 p-16 text-center">
               <BookOpen className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-              <h3 className="text-base font-bold text-slate-900">No HQ-permitted courses available yet</h3>
-              <p className="text-sm text-slate-500 mt-1">
-                Courses permitted for your franchise by Digital Guru HQ (Super Admin) will appear here for activation.
+              <h3 className="text-base font-bold text-slate-900">
+                {!franchise ? 'No Franchise Assigned to This Branch' : 'No HQ-permitted courses available yet'}
+              </h3>
+              <p className="text-sm text-slate-500 mt-1 max-w-md mx-auto">
+                {!franchise
+                  ? 'Your current branch is not connected to a franchise network. Contact your platform administrator to link this branch to a franchise.'
+                  : 'Courses permitted for your franchise by Digital Guru HQ (Super Admin) will appear here for activation.'}
               </p>
             </div>
           ) : (
