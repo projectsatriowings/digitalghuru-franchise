@@ -47,22 +47,22 @@ export async function getStudentProfileApi(): Promise<StudentProfileFull> {
 export async function getStudentMaterialsApi(subjectId?: string): Promise<LearningMaterialItem[]> {
   const params: any = {};
   if (subjectId) params.subjectId = subjectId;
-  const response = await apiClient.get<ApiResponse<LearningMaterialItem[]> | LearningMaterialItem[]>('/materials', { params });
+  const response = await apiClient.get<any>('/materials', { params });
   const rawData = response.data;
   if (Array.isArray(rawData)) return rawData;
-  if (rawData && (rawData as ApiResponse<LearningMaterialItem[]>).data) {
-    return (rawData as ApiResponse<LearningMaterialItem[]>).data || [];
-  }
+  if (Array.isArray(rawData?.data)) return rawData.data;
+  if (Array.isArray(rawData?.data?.materials)) return rawData.data.materials;
+  if (Array.isArray(rawData?.materials)) return rawData.materials;
   return [];
 }
 
 export async function getStudentHomeworkApi(): Promise<HomeworkItem[]> {
-  const response = await apiClient.get<ApiResponse<HomeworkItem[]> | HomeworkItem[]>('/homework');
+  const response = await apiClient.get<any>('/homework');
   const rawData = response.data;
   if (Array.isArray(rawData)) return rawData;
-  if (rawData && (rawData as ApiResponse<HomeworkItem[]>).data) {
-    return (rawData as ApiResponse<HomeworkItem[]>).data || [];
-  }
+  if (Array.isArray(rawData?.data)) return rawData.data;
+  if (Array.isArray(rawData?.data?.homework)) return rawData.data.homework;
+  if (Array.isArray(rawData?.homework)) return rawData.homework;
   return [];
 }
 

@@ -61,15 +61,19 @@ export const StudentHomeworkScreen: React.FC = () => {
     refetch();
   }, [refetch]);
 
+  const safeHomeworkList = useMemo(() => {
+    return Array.isArray(homeworkList) ? homeworkList : [];
+  }, [homeworkList]);
+
   const filteredHomework = useMemo(() => {
     if (filterTab === 'PENDING') {
-      return homeworkList.filter((hw) => !hw.isSubmitted && hw.submissionStatus !== 'SUBMITTED' && hw.submissionStatus !== 'EVALUATED');
+      return safeHomeworkList.filter((hw) => !hw?.isSubmitted && hw?.submissionStatus !== 'SUBMITTED' && hw?.submissionStatus !== 'EVALUATED');
     }
     if (filterTab === 'SUBMITTED') {
-      return homeworkList.filter((hw) => hw.isSubmitted || hw.submissionStatus === 'SUBMITTED' || hw.submissionStatus === 'EVALUATED');
+      return safeHomeworkList.filter((hw) => hw?.isSubmitted || hw?.submissionStatus === 'SUBMITTED' || hw?.submissionStatus === 'EVALUATED');
     }
-    return homeworkList;
-  }, [homeworkList, filterTab]);
+    return safeHomeworkList;
+  }, [safeHomeworkList, filterTab]);
 
   // Pick document
   const handlePickDocument = async () => {

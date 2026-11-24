@@ -228,14 +228,14 @@ export async function getTeacherMaterialsApi(batchId?: string): Promise<TeacherM
   const params: any = {};
   if (batchId) params.batchId = batchId;
 
-  const response = await apiClient.get<ApiResponse<TeacherMaterialItem[]> | TeacherMaterialItem[]>('/materials', {
+  const response = await apiClient.get<any>('/materials', {
     params,
   });
   const rawData = response.data;
   if (Array.isArray(rawData)) return rawData;
-  if (rawData && (rawData as ApiResponse<TeacherMaterialItem[]>).data) {
-    return (rawData as ApiResponse<TeacherMaterialItem[]>).data || [];
-  }
+  if (Array.isArray(rawData?.data)) return rawData.data;
+  if (Array.isArray(rawData?.data?.materials)) return rawData.data.materials;
+  if (Array.isArray(rawData?.materials)) return rawData.materials;
   return [];
 }
 

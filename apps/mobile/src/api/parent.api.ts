@@ -79,14 +79,14 @@ export async function getParentAcademicsApi(studentId: string): Promise<ParentAc
  * GET /api/parents/students/:studentId/homework
  */
 export async function getParentHomeworkApi(studentId: string): Promise<ParentHomeworkItem[]> {
-  const response = await apiClient.get<ApiResponse<ParentHomeworkItem[]> | ParentHomeworkItem[]>(
+  const response = await apiClient.get<any>(
     `/parents/students/${studentId}/homework`
   );
   const rawData = response.data;
   if (Array.isArray(rawData)) return rawData;
-  if (rawData && (rawData as ApiResponse<ParentHomeworkItem[]>).data) {
-    return (rawData as ApiResponse<ParentHomeworkItem[]>).data || [];
-  }
+  if (Array.isArray(rawData?.data)) return rawData.data;
+  if (Array.isArray(rawData?.data?.homework)) return rawData.data.homework;
+  if (Array.isArray(rawData?.homework)) return rawData.homework;
   return [];
 }
 
@@ -123,15 +123,15 @@ export async function getParentFeeStatementApi(studentId: string): Promise<Paren
  * GET /api/fees/payments?studentId=...
  */
 export async function getParentPaymentsApi(studentId: string): Promise<ParentPaymentItem[]> {
-  const response = await apiClient.get<ApiResponse<ParentPaymentItem[]> | ParentPaymentItem[]>(
+  const response = await apiClient.get<any>(
     '/fees/payments',
     { params: { studentId } }
   );
   const rawData = response.data;
   if (Array.isArray(rawData)) return rawData;
-  if (rawData && (rawData as ApiResponse<ParentPaymentItem[]>).data) {
-    return (rawData as ApiResponse<ParentPaymentItem[]>).data || [];
-  }
+  if (Array.isArray(rawData?.data)) return rawData.data;
+  if (Array.isArray(rawData?.data?.payments)) return rawData.data.payments;
+  if (Array.isArray(rawData?.payments)) return rawData.payments;
   return [];
 }
 
@@ -142,15 +142,15 @@ export async function getParentPaymentsApi(studentId: string): Promise<ParentPay
 export async function getParentFeedbackApi(studentId?: string): Promise<ParentInquiryItem[]> {
   const params: any = {};
   if (studentId) params.studentId = studentId;
-  const response = await apiClient.get<ApiResponse<ParentInquiryItem[]> | ParentInquiryItem[]>(
+  const response = await apiClient.get<any>(
     '/feedback',
     { params }
   );
   const rawData = response.data;
   if (Array.isArray(rawData)) return rawData;
-  if (rawData && (rawData as ApiResponse<ParentInquiryItem[]>).data) {
-    return (rawData as ApiResponse<ParentInquiryItem[]>).data || [];
-  }
+  if (Array.isArray(rawData?.data)) return rawData.data;
+  if (Array.isArray(rawData?.data?.inquiries)) return rawData.data.inquiries;
+  if (Array.isArray(rawData?.data?.feedback)) return rawData.data.feedback;
   return [];
 }
 

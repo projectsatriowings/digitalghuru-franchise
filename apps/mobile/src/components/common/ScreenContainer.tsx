@@ -1,11 +1,13 @@
 import React from 'react';
 import {
-  SafeAreaView,
-  StatusBar,
   StyleSheet,
   View,
   ViewStyle,
+  Platform,
+  StatusBar as RNStatusBar,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { StatusBar } from 'expo-status-bar';
 import { brandColors } from '../../theme';
 
 interface ScreenContainerProps {
@@ -19,19 +21,23 @@ export const ScreenContainer: React.FC<ScreenContainerProps> = ({
   style,
   backgroundColor = brandColors.background,
 }) => {
+  const insets = useSafeAreaInsets();
+  const statusBarHeight = Platform.OS === 'android' ? (RNStatusBar.currentHeight || 24) : 0;
+  const topPadding = Math.max(insets.top, statusBarHeight);
+
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor }]}>
-      <StatusBar barStyle="dark-content" backgroundColor={backgroundColor} />
-      <View style={[styles.container, style]}>{children}</View>
-    </SafeAreaView>
+    <View style={[styles.container, { backgroundColor, paddingTop: topPadding }]}>
+      <StatusBar style="dark" backgroundColor={backgroundColor} />
+      <View style={[styles.inner, style]}>{children}</View>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  safeArea: {
+  container: {
     flex: 1,
   },
-  container: {
+  inner: {
     flex: 1,
   },
 });

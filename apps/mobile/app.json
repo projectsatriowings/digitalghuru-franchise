@@ -29,7 +29,7 @@
         "backgroundColor": "#0F172A"
       },
       "package": "com.digitalghuru.franchise",
-      "versionCode": 4,
+      "versionCode": 7,
       "permissions": [
         "CAMERA",
         "READ_EXTERNAL_STORAGE",
