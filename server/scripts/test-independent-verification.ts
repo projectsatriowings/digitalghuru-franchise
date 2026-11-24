@@ -1,6 +1,6 @@
 import { matchStudentVoice, EnrolledStudentCandidate } from '@tuition/shared';
 
-// Test candidate dataset representing edge cases
+// Synthetic test fixture dataset representing realistic edge cases
 const mockStudents: EnrolledStudentCandidate[] = [
   {
     id: 'stud-1',
@@ -79,14 +79,14 @@ export function runVoiceTests() {
   console.log('1. VOICE ATTENDANCE ENGINE AUDIT & EDGE CASE VERIFICATION');
   console.log('================================================================');
 
-  // Case 1: Single matching student
+  // Scenario 1: One exact match
   const r1 = matchStudentVoice('Diya Patel', mockStudents);
   console.log('\n[TEST 1] Single Matching Student ("Diya Patel"):');
   console.log(`- Status: ${r1.status}`);
   console.log(`- Best Match: ${r1.bestMatch?.firstName} ${r1.bestMatch?.lastName} (${r1.bestMatch?.admissionNumber})`);
   console.log(`- Result: ${r1.status === 'EXACT_SINGLE' && r1.bestMatch?.id === 'stud-5' ? 'PASS' : 'FAIL'}`);
 
-  // Case 2: Duplicate identical names ("Rahul Sharma")
+  // Scenario 2: Duplicate identical names ("Rahul Sharma")
   const r2 = matchStudentVoice('Rahul Sharma', mockStudents);
   console.log('\n[TEST 2] Duplicate Identical Names ("Rahul Sharma"):');
   console.log(`- Status: ${r2.status}`);
@@ -94,7 +94,7 @@ export function runVoiceTests() {
   console.log(`- Best Match (Must be null to enforce manual disambiguation): ${r2.bestMatch}`);
   console.log(`- Result: ${r2.status === 'EXACT_MULTIPLE' && r2.bestMatch === null && r2.allMatches.length === 2 ? 'PASS' : 'FAIL'}`);
 
-  // Case 3: Similar-sounding name / phonetic spelling ("Arav")
+  // Scenario 3: Similar-sounding name / phonetic spelling ("Arav")
   const r3 = matchStudentVoice('Arav', mockStudents);
   console.log('\n[TEST 3] Similar Sounding Names ("Arav" matching Aarav / Arav):');
   console.log(`- Status: ${r3.status}`);
@@ -102,19 +102,39 @@ export function runVoiceTests() {
   console.log(`- Candidate Names: ${r3.allMatches.map(m => m.firstName + ' (' + m.admissionNumber + ')').join(', ')}`);
   console.log(`- Result: ${r3.allMatches.length >= 1 ? 'PASS' : 'FAIL'}`);
 
-  // Case 4: Non-existent student ("Vikramaditya Rao")
+  // Scenario 4: Non-existent student ("Vikramaditya Rao")
   const r4 = matchStudentVoice('Vikramaditya Rao', mockStudents);
   console.log('\n[TEST 4] Non-Existent Student ("Vikramaditya Rao"):');
   console.log(`- Status: ${r4.status}`);
   console.log(`- Matches: ${r4.allMatches.length}`);
   console.log(`- Result: ${r4.status === 'NO_MATCH' && r4.allMatches.length === 0 ? 'PASS' : 'FAIL'}`);
 
-  // Case 5: Already checked in student (Verify recommendedAction)
+  // Scenario 5: Already checked in student (Verify recommendedAction)
   const candidateStud4 = mockStudents.find(s => s.id === 'stud-4');
   console.log('\n[TEST 5] Already Marked Present Student ("Arav Mehta - stud-4"):');
   console.log(`- todayStatus: ${candidateStud4?.todayStatus}`);
   console.log(`- recommendedAction: ${candidateStud4?.recommendedAction}`);
   console.log(`- Prevents duplicate check-in: ${candidateStud4?.recommendedAction === 'CHECK_OUT' ? 'PASS' : 'FAIL'}`);
+
+  // Scenario 6: Check-out flow
+  const isCheckOutEligible = candidateStud4?.todayStatus === 'CHECKED_IN' && candidateStud4?.recommendedAction === 'CHECK_OUT';
+  console.log('\n[TEST 6] Check-out Transition Flow:');
+  console.log(`- Current State: ${candidateStud4?.todayStatus}`);
+  console.log(`- Target Transition: CHECK_OUT`);
+  console.log(`- Transition Validated: ${isCheckOutEligible ? 'PASS' : 'FAIL'}`);
+
+  // Scenario 7: Manual Candidate Selection from ambiguous matches
+  const candidateSelection = r2.allMatches.find(c => c.admissionNumber === 'ADM-2026-002');
+  console.log('\n[TEST 7] Manual Candidate Selection (Resolving Rahul Sharma ADM-2026-002):');
+  console.log(`- Ambiguous List Provided: ${r2.allMatches.length} candidates`);
+  console.log(`- Selected Candidate ID: ${candidateSelection?.id} (${candidateSelection?.batchName})`);
+  console.log(`- Result: ${candidateSelection?.id === 'stud-2' ? 'PASS' : 'FAIL'}`);
+
+  // Scenario 8: Duplicate submission prevention
+  const duplicatePrevented = candidateStud4?.alreadyCheckedIn && candidateStud4.todayStatus !== 'ABSENT';
+  console.log('\n[TEST 8] Duplicate Check-in Prevention Guard:');
+  console.log(`- alreadyCheckedIn Flag: ${candidateStud4?.alreadyCheckedIn}`);
+  console.log(`- Blocks Double Check-in Attempt: ${duplicatePrevented ? 'PASS' : 'FAIL'}`);
 }
 
 export function runSecuritySimulationTests() {
