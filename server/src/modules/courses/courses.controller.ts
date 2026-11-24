@@ -552,19 +552,31 @@ export async function getMyFranchiseCourseContext(req: Request, res: Response) {
         select: { id: true },
       });
       if (!owned) {
-        return res.status(403).json({ success: false, message: 'No franchise assigned to this account' });
+        return res.json({
+          success: true,
+          data: { franchise: null, branches: [], students: [], isBranchScoped: false, message: 'No franchise assigned to this account' },
+        });
       }
       franchiseId = owned.id;
     } else {
       const memberships = await prisma.instituteMembership.findMany({
         where: { userId, isActive: true },
-        include: { institute: { select: { id: true, franchiseId: true } } },
+        include: { institute: { select: { id: true, name: true, franchiseId: true } } },
       });
       const matchingFranchises = memberships
         .map((m) => m.institute?.franchiseId)
         .filter((fid): fid is string => Boolean(fid));
       if (matchingFranchises.length === 0) {
-        return res.status(403).json({ success: false, message: 'No franchise branch assigned to this account' });
+        return res.json({
+          success: true,
+          data: {
+            franchise: null,
+            branches: memberships.map((m) => ({ id: m.institute.id, name: m.institute.name })),
+            students: [],
+            isBranchScoped: true,
+            message: 'No franchise branch assigned to this account',
+          },
+        });
       }
       franchiseId = franchiseId && matchingFranchises.includes(franchiseId) ? franchiseId : matchingFranchises[0];
       isBranchScoped = true;
