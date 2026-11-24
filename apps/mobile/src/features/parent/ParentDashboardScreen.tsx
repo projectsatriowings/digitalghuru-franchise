@@ -530,7 +530,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 16,
-    paddingBottom: 36,
+    paddingBottom: 100,
   },
   attendanceTrackerCard: {
     backgroundColor: '#FFFFFF',

@@ -63,7 +63,7 @@ export function handleNotificationDeepLink(payload: NotificationPayload) {
       // If studentId is present, validate and select child context
       if (studentId) {
         const { children, setSelectedChild } = useParentStore.getState();
-        const matchedChild = children.find((c) => c.id === studentId);
+        const matchedChild = children.find((c) => c.studentId === studentId || (c as any).id === studentId);
         if (matchedChild) {
           setSelectedChild(matchedChild);
         }

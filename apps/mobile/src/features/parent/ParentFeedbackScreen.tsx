@@ -95,6 +95,7 @@ export const ParentFeedbackScreen: React.FC = () => {
 
     submitMutation.mutate({
       studentId,
+      category: 'GENERAL',
       subject: subject.trim(),
       message: message.trim(),
       teacherId: selectedTeacherId || undefined,
@@ -324,7 +325,7 @@ export const ParentFeedbackScreen: React.FC = () => {
 const styles = StyleSheet.create({
   scrollContent: {
     padding: 16,
-    paddingBottom: 40,
+    paddingBottom: 100,
   },
   centerContainer: {
     padding: 40,

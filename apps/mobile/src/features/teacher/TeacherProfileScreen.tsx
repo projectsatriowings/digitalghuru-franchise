@@ -214,7 +214,7 @@ export const TeacherProfileScreen: React.FC = () => {
 const styles = StyleSheet.create({
   scrollContent: {
     padding: theme.spacing.md,
-    paddingBottom: 60,
+    paddingBottom: 100,
   },
   centerContainer: {
     flex: 1,

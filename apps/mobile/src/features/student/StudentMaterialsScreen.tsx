@@ -192,7 +192,9 @@ export const StudentMaterialsScreen: React.FC = () => {
                 <View style={styles.typeBadgeRow}>
                   <Badge text={material.type || 'DOCUMENT'} variant="student" />
                   {material.subject && (
-                    <Text style={styles.subjectText}>{material.subject}</Text>
+                    <Text style={styles.subjectText}>
+                      {typeof material.subject === 'object' && material.subject ? (material.subject as any).name : material.subject}
+                    </Text>
                   )}
                 </View>
                 <Text style={styles.dateText}>
@@ -298,7 +300,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: theme.spacing.md,
-    paddingBottom: theme.spacing.xxl,
+    paddingBottom: 100,
   },
   emptyCard: {
     alignItems: 'center',

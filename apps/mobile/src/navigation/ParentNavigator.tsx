@@ -12,6 +12,7 @@ import { ParentFeedbackScreen } from '../features/parent/ParentFeedbackScreen';
 import { ParentNotificationsScreen } from '../features/parent/ParentNotificationsScreen';
 import { ParentProfileScreen } from '../features/parent/ParentProfileScreen';
 import { brandColors } from '../theme';
+import { AnimatedTabBar } from '../components/design-system';
 import {
   LayoutDashboard,
   CalendarCheck,
@@ -26,21 +27,9 @@ const Stack = createNativeStackNavigator();
 const ParentTabNavigator: React.FC = () => {
   return (
     <Tab.Navigator
+      tabBar={(props) => <AnimatedTabBar {...props} role="PARENT" />}
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: brandColors.navy,
-        tabBarInactiveTintColor: '#94A3B8',
-        tabBarStyle: {
-          backgroundColor: '#FFFFFF',
-          borderTopColor: '#F1F5F9',
-          height: 62,
-          paddingBottom: 8,
-          paddingTop: 6,
-        },
-        tabBarLabelStyle: {
-          fontSize: 11,
-          fontWeight: '600',
-        },
       }}
     >
       <Tab.Screen

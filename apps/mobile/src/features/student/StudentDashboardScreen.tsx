@@ -353,7 +353,7 @@ export const StudentDashboardScreen: React.FC = () => {
               <View style={styles.materialInfo}>
                 <Text style={styles.materialTitle} numberOfLines={1}>{mat.title}</Text>
                 <Text style={styles.materialMeta}>
-                  {mat.subject || 'General'} • {mat.type || 'DOCUMENT'}
+                  {typeof mat.subject === 'object' && mat.subject ? (mat.subject as any).name : (mat.subject || 'General')} • {mat.type || 'DOCUMENT'}
                 </Text>
               </View>
               <TouchableOpacity
@@ -533,7 +533,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: theme.spacing.md,
-    paddingBottom: theme.spacing.xxl,
+    paddingBottom: 100,
   },
   bannerCard: {
     backgroundColor: '#EFF6FF',

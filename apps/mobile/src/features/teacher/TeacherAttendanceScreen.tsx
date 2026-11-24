@@ -249,7 +249,7 @@ export const TeacherAttendanceScreen: React.FC = () => {
 const styles = StyleSheet.create({
   scrollContent: {
     padding: 16,
-    paddingBottom: 40,
+    paddingBottom: 100,
   },
   voiceButton: {
     flexDirection: 'row',

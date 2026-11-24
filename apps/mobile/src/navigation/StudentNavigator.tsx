@@ -10,6 +10,7 @@ import { StudentProgressScreen } from '../features/student/StudentProgressScreen
 import { StudentNotificationsScreen } from '../features/student/StudentNotificationsScreen';
 import { StudentProfileScreen } from '../features/student/StudentProfileScreen';
 import { brandColors } from '../theme';
+import { AnimatedTabBar } from '../components/design-system';
 import {
   LayoutDashboard,
   Calendar,
@@ -24,21 +25,9 @@ const Stack = createNativeStackNavigator();
 const StudentTabNavigator: React.FC = () => {
   return (
     <Tab.Navigator
+      tabBar={(props) => <AnimatedTabBar {...props} role="STUDENT" />}
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: brandColors.blue,
-        tabBarInactiveTintColor: '#94A3B8',
-        tabBarStyle: {
-          backgroundColor: '#FFFFFF',
-          borderTopColor: '#F1F5F9',
-          height: 62,
-          paddingBottom: 8,
-          paddingTop: 6,
-        },
-        tabBarLabelStyle: {
-          fontSize: 11,
-          fontWeight: '600',
-        },
       }}
     >
       <Tab.Screen

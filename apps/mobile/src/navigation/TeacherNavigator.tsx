@@ -18,6 +18,7 @@ import { TeacherTimetableScreen } from '../features/teacher/TeacherTimetableScre
 import { TeacherNotificationsScreen } from '../features/teacher/TeacherNotificationsScreen';
 import { TeacherProfileScreen } from '../features/teacher/TeacherProfileScreen';
 import { brandColors } from '../theme';
+import { AnimatedTabBar } from '../components/design-system';
 import {
   LayoutDashboard,
   CalendarCheck,
@@ -32,21 +33,9 @@ const Stack = createNativeStackNavigator();
 const TeacherTabNavigator: React.FC = () => {
   return (
     <Tab.Navigator
+      tabBar={(props) => <AnimatedTabBar {...props} role="STAFF" />}
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: brandColors.orange,
-        tabBarInactiveTintColor: '#94A3B8',
-        tabBarStyle: {
-          backgroundColor: '#FFFFFF',
-          borderTopColor: '#F1F5F9',
-          height: 62,
-          paddingBottom: 8,
-          paddingTop: 6,
-        },
-        tabBarLabelStyle: {
-          fontSize: 11,
-          fontWeight: '600',
-        },
       }}
     >
       <Tab.Screen
