@@ -17,7 +17,7 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://api.digitalghuru.com/api"
+        "EXPO_PUBLIC_API_URL": "https://franchise.digitalghuru.com/api"
       }
     },
     "production": {
@@ -29,7 +29,7 @@
       },
       "env": {
         "API_ENV": "production",
-        "EXPO_PUBLIC_API_URL": "https://api.digitalghuru.com/api"
+        "EXPO_PUBLIC_API_URL": "https://franchise.digitalghuru.com/api"
       }
     }
   },

@@ -100,7 +100,7 @@ To manage or export keystores via CLI or Web:
 
 | Component | Target Configuration | Status |
 | :--- | :--- | :--- |
-| **Production API URL** | `https://api.digitalghuru.com/api` | Embedded in Hermes bytecode |
+| **Production API URL** | `https://franchise.digitalghuru.com/api` | Embedded in Hermes bytecode |
 | **API Protocol** | HTTPS / TLS 1.3 Strict | Valid SSL Certificate |
 | **Database Engine** | Neon Serverless PostgreSQL (`projectsatriowings`) | Pooled connection with connection-guard |
 | **Push Notification Service** | Firebase Cloud Messaging (FCM) v1 & Expo Push API | Live token registration & dispatch |

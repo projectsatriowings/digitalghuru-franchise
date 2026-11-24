@@ -19,7 +19,7 @@
 - **Target SDK:** **Android 16 (API 36)**
 - **Compile SDK:** **Android 16 (API 36)**
 - **Min SDK:** **Android 7.0 (API 24)**
-- **Production API:** `https://api.digitalghuru.com/api`
+- **Production API:** `https://franchise.digitalghuru.com/api`
 
 ---
 
