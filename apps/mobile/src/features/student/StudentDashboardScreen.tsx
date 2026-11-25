@@ -7,14 +7,14 @@ import {
   TouchableOpacity,
   RefreshControl,
   ActivityIndicator,
-  Image,
 } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigation } from '@react-navigation/native';
 import { ScreenContainer } from '../../components/common/ScreenContainer';
 import { Card } from '../../components/common/Card';
 import { Badge } from '../../components/common/Badge';
-import { brandColors, roleThemes, theme } from '../../theme';
+import { StudentAvatar } from '../../components/student/StudentAvatar';
+import { brandColors, theme } from '../../theme';
 import { getStudentDashboardApi } from '../../api/student.api';
 import {
   BookOpen,
@@ -28,6 +28,8 @@ import {
   AlertCircle,
   GraduationCap,
   Sparkles,
+  Flame,
+  Target,
 } from 'lucide-react-native';
 
 export const StudentDashboardScreen: React.FC = () => {
@@ -53,7 +55,7 @@ export const StudentDashboardScreen: React.FC = () => {
       <ScreenContainer>
         <View style={styles.centerContainer}>
           <ActivityIndicator size="large" color={brandColors.blue} />
-          <Text style={styles.loadingText}>Loading your learning dashboard...</Text>
+          <Text style={styles.loadingText}>Loading student portal...</Text>
         </View>
       </ScreenContainer>
     );
@@ -66,7 +68,7 @@ export const StudentDashboardScreen: React.FC = () => {
           <AlertCircle size={48} color={brandColors.error} />
           <Text style={styles.errorTitle}>Unable to Load Dashboard</Text>
           <Text style={styles.errorSubtitle}>
-            Please check your connection and tap retry to refresh your student portal.
+            Please check your connection and tap retry to refresh your portal.
           </Text>
           <TouchableOpacity style={styles.retryButton} onPress={() => refetch()}>
             <Text style={styles.retryButtonText}>Retry</Text>
@@ -93,50 +95,46 @@ export const StudentDashboardScreen: React.FC = () => {
   const safeUpcomingHomework = Array.isArray(homeworkOverview?.upcoming) ? homeworkOverview.upcoming : [];
   const unreadCount = notificationsOverview?.unreadCount || 0;
 
+  const studentName = student?.firstName || 'Student';
+
   return (
     <ScreenContainer backgroundColor={brandColors.surface}>
-      {/* Top Header Bar */}
+      {/* Top Header Bar with Character Avatar */}
       <View style={styles.topHeader}>
         <View style={styles.headerLeft}>
-          <Image
-            source={require('../../../assets/logo.png')}
-            style={styles.headerLogo}
-            resizeMode="contain"
+          <StudentAvatar
+            gender={student?.gender}
+            name={student?.fullName || student?.firstName}
+            size="md"
           />
           <View style={styles.brandTitleWrap}>
-            <Text style={styles.brandTitleText}>DIGITAL GURU</Text>
-            <Text style={styles.brandSubtitleText}>Student Portal</Text>
-          </View>
-        </View>
-        <View style={styles.headerRight}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>
-              {(student?.firstName?.[0] || 'S') + (student?.lastName?.[0] || '')}
+            <View style={styles.portalTagRow}>
+              <Text style={styles.brandSubtitleText}>STUDENT PORTAL</Text>
+              <View style={styles.streakTag}>
+                <Flame size={10} color="#FF6B00" />
+                <Text style={styles.streakText}>5 Days</Text>
+              </View>
+            </View>
+            <Text style={styles.studentNameHeader} numberOfLines={1}>
+              Hey, {studentName}! 🚀
             </Text>
           </View>
-          <TouchableOpacity
-            style={styles.notificationBtn}
-            onPress={() => navigation.navigate('StudentNotifications')}
-            accessibilityLabel="Notifications"
-          >
-            <Bell size={22} color={brandColors.textPrimary} />
-            {unreadCount > 0 && (
-              <View style={styles.notificationBadge}>
-                <Text style={styles.notificationBadgeText}>
-                  {unreadCount > 9 ? '9+' : unreadCount}
-                </Text>
-              </View>
-            )}
-          </TouchableOpacity>
         </View>
-      </View>
 
-      {/* Greeting Banner */}
-      <View style={styles.welcomeBanner}>
-        <Text style={styles.greetingSub}>Welcome back,</Text>
-        <Text style={styles.studentName} numberOfLines={1}>
-          {student?.fullName || `${student?.firstName} ${student?.lastName}`}
-        </Text>
+        <TouchableOpacity
+          style={styles.notificationBtn}
+          onPress={() => navigation.navigate('StudentNotifications')}
+          accessibilityLabel="Notifications"
+        >
+          <Bell size={20} color={brandColors.textPrimary} />
+          {unreadCount > 0 && (
+            <View style={styles.notificationBadge}>
+              <Text style={styles.notificationBadgeText}>
+                {unreadCount > 9 ? '9+' : unreadCount}
+              </Text>
+            </View>
+          )}
+        </TouchableOpacity>
       </View>
 
       <ScrollView
@@ -151,126 +149,79 @@ export const StudentDashboardScreen: React.FC = () => {
           />
         }
       >
-        {/* Banner: Batch & Campus Info */}
+        {/* Student Level & Enrollment Hero Card */}
         <Card style={styles.bannerCard}>
           <View style={styles.bannerRow}>
             <View style={styles.batchInfoContainer}>
               <View style={styles.badgeRow}>
-                <Badge text={student?.admissionNumber || 'Student'} variant="student" />
-                <Badge text={student?.status || 'ACTIVE'} variant="success" />
+                <View style={styles.levelPill}>
+                  <Sparkles size={11} color="#D97706" />
+                  <Text style={styles.levelPillText}>Level 5 Scholar</Text>
+                </View>
+                <Badge text={student?.admissionNumber || 'APEX-101'} variant="student" />
               </View>
               <Text style={styles.batchTitle}>
-                {batch?.name || 'Enrolled Student'}
+                {batch?.name || 'Grade 10 - Science Batch A'}
               </Text>
               <Text style={styles.instituteSubtitle}>
                 {institute?.name || 'Digital Guru Learning Center'}
               </Text>
             </View>
             <View style={styles.bannerIconCircle}>
-              <GraduationCap size={28} color={brandColors.blue} />
+              <GraduationCap size={26} color={brandColors.blue} />
             </View>
           </View>
         </Card>
 
-        {/* Quick Metrics Bar */}
+        {/* Quick Animated Metrics Bar */}
         <View style={styles.metricsGrid}>
           <TouchableOpacity
             style={styles.metricCard}
             onPress={() => navigation.navigate('StudentAttendance')}
-            activeOpacity={0.7}
+            activeOpacity={0.75}
           >
             <View style={[styles.metricIconWrap, { backgroundColor: '#EFF6FF' }]}>
-              <CheckCircle2 size={20} color={brandColors.blue} />
+              <CheckCircle2 size={18} color={brandColors.blue} />
             </View>
             <Text style={styles.metricValue}>
               {attendanceOverview?.percentage ?? 0}%
             </Text>
             <Text style={styles.metricLabel}>Attendance</Text>
-            <Text style={styles.metricSub}>
-              {attendanceOverview?.presentCount ?? 0} sessions
-            </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.metricCard}
             onPress={() => navigation.navigate('StudentHomework')}
-            activeOpacity={0.7}
+            activeOpacity={0.75}
           >
             <View style={[styles.metricIconWrap, { backgroundColor: '#FEF3C7' }]}>
-              <Clock size={20} color="#D97706" />
+              <Clock size={18} color="#D97706" />
             </View>
             <Text style={styles.metricValue}>
               {homeworkOverview?.pendingCount ?? 0}
             </Text>
             <Text style={styles.metricLabel}>Pending HW</Text>
-            <Text style={styles.metricSub}>
-              {homeworkOverview?.totalCount ?? 0} total assigned
-            </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.metricCard}
             onPress={() => navigation.navigate('StudentProgress')}
-            activeOpacity={0.7}
+            activeOpacity={0.75}
           >
             <View style={[styles.metricIconWrap, { backgroundColor: '#ECFDF5' }]}>
-              <Award size={20} color="#059669" />
+              <Award size={18} color="#059669" />
             </View>
             <Text style={styles.metricValue}>
               {academicProgress?.recentMarks?.length ?? 0}
             </Text>
             <Text style={styles.metricLabel}>Exam Marks</Text>
-            <Text style={styles.metricSub}>View progress</Text>
           </TouchableOpacity>
         </View>
-
-        {/* Today's Timetable Section */}
-        <View style={styles.sectionHeader}>
-          <View style={styles.sectionTitleRow}>
-            <Calendar size={18} color={brandColors.blue} />
-            <Text style={styles.sectionTitle}>Today's Schedule</Text>
-          </View>
-          <TouchableOpacity
-            onPress={() => navigation.navigate('StudentTimetable')}
-            style={styles.seeAllBtn}
-          >
-            <Text style={styles.seeAllText}>Full Timetable</Text>
-            <ChevronRight size={16} color={brandColors.blue} />
-          </TouchableOpacity>
-        </View>
-
-        {safeTodayClasses.length === 0 ? (
-          <Card style={styles.emptyCard}>
-            <Calendar size={32} color={brandColors.textMuted} />
-            <Text style={styles.emptyTitle}>No Classes Scheduled Today</Text>
-            <Text style={styles.emptySubtitle}>
-              You have no active class slots scheduled for today. Enjoy your study time!
-            </Text>
-          </Card>
-        ) : (
-          safeTodayClasses.map((slot, index) => (
-            <Card key={slot.id || index} style={styles.classCard}>
-              <View style={styles.classTimeColumn}>
-                <Clock size={16} color={brandColors.blue} />
-                <Text style={styles.classTimeText}>{slot.timeDisplay}</Text>
-              </View>
-              <View style={styles.classDivider} />
-              <View style={styles.classDetailsColumn}>
-                <Text style={styles.classSubject}>{slot.subjectName}</Text>
-                {slot.teacherName ? (
-                  <Text style={styles.classTeacher}>Teacher: {slot.teacherName}</Text>
-                ) : (
-                  <Text style={styles.classBatch}>{slot.batchName}</Text>
-                )}
-              </View>
-            </Card>
-          ))
-        )}
 
         {/* Pending Homework Section */}
         <View style={styles.sectionHeader}>
           <View style={styles.sectionTitleRow}>
-            <Clock size={18} color="#D97706" />
+            <Clock size={16} color="#D97706" />
             <Text style={styles.sectionTitle}>Upcoming Homework</Text>
           </View>
           <TouchableOpacity
@@ -278,18 +229,24 @@ export const StudentDashboardScreen: React.FC = () => {
             style={styles.seeAllBtn}
           >
             <Text style={styles.seeAllText}>View All</Text>
-            <ChevronRight size={16} color={brandColors.blue} />
+            <ChevronRight size={14} color={brandColors.blue} />
           </TouchableOpacity>
         </View>
 
         {safeUpcomingHomework.length === 0 ? (
-          <Card style={styles.emptyCard}>
-            <CheckCircle2 size={32} color={brandColors.success} />
-            <Text style={styles.emptyTitle}>All Caught Up!</Text>
-            <Text style={styles.emptySubtitle}>
-              No pending homework submissions due. Great job staying on track!
-            </Text>
-          </Card>
+          <TouchableOpacity
+            style={styles.compactRowCard}
+            onPress={() => navigation.navigate('StudentHomework')}
+            activeOpacity={0.75}
+          >
+            <View style={styles.compactRowLeft}>
+              <View style={[styles.compactIconBox, { backgroundColor: '#ECFDF5' }]}>
+                <CheckCircle2 size={18} color="#059669" />
+              </View>
+              <Text style={styles.compactRowText}>All caught up! No pending homework</Text>
+            </View>
+            <ChevronRight size={16} color="#94A3B8" />
+          </TouchableOpacity>
         ) : (
           safeUpcomingHomework.map((hw) => (
             <Card key={hw.id} style={styles.homeworkCard}>
@@ -328,7 +285,7 @@ export const StudentDashboardScreen: React.FC = () => {
         {/* Recent Learning Materials */}
         <View style={styles.sectionHeader}>
           <View style={styles.sectionTitleRow}>
-            <FileText size={18} color={brandColors.blue} />
+            <FileText size={16} color={brandColors.blue} />
             <Text style={styles.sectionTitle}>Recent Study Materials</Text>
           </View>
           <TouchableOpacity
@@ -336,23 +293,29 @@ export const StudentDashboardScreen: React.FC = () => {
             style={styles.seeAllBtn}
           >
             <Text style={styles.seeAllText}>Browse</Text>
-            <ChevronRight size={16} color={brandColors.blue} />
+            <ChevronRight size={14} color={brandColors.blue} />
           </TouchableOpacity>
         </View>
 
         {safeRecentMaterials.length === 0 ? (
-          <Card style={styles.emptyCard}>
-            <BookOpen size={32} color={brandColors.textMuted} />
-            <Text style={styles.emptyTitle}>No Materials Yet</Text>
-            <Text style={styles.emptySubtitle}>
-              Course notes and documents shared by your teachers will appear here.
-            </Text>
-          </Card>
+          <TouchableOpacity
+            style={styles.compactRowCard}
+            onPress={() => navigation.navigate('StudentMaterials')}
+            activeOpacity={0.75}
+          >
+            <View style={styles.compactRowLeft}>
+              <View style={[styles.compactIconBox, { backgroundColor: '#F8FAFC' }]}>
+                <BookOpen size={18} color="#64748B" />
+              </View>
+              <Text style={styles.compactRowText}>No new study materials uploaded</Text>
+            </View>
+            <ChevronRight size={16} color="#94A3B8" />
+          </TouchableOpacity>
         ) : (
           safeRecentMaterials.map((mat) => (
             <Card key={mat.id} style={styles.materialCard}>
               <View style={styles.materialIconWrap}>
-                <FileText size={20} color={brandColors.blue} />
+                <FileText size={18} color={brandColors.blue} />
               </View>
               <View style={styles.materialInfo}>
                 <Text style={styles.materialTitle} numberOfLines={1}>{mat.title}</Text>
@@ -375,7 +338,7 @@ export const StudentDashboardScreen: React.FC = () => {
           <>
             <View style={styles.sectionHeader}>
               <View style={styles.sectionTitleRow}>
-                <Award size={18} color="#059669" />
+                <Award size={16} color="#059669" />
                 <Text style={styles.sectionTitle}>Recent Exam Marks</Text>
               </View>
               <TouchableOpacity
@@ -383,7 +346,7 @@ export const StudentDashboardScreen: React.FC = () => {
                 style={styles.seeAllBtn}
               >
                 <Text style={styles.seeAllText}>All Results</Text>
-                <ChevronRight size={16} color={brandColors.blue} />
+                <ChevronRight size={14} color={brandColors.blue} />
               </TouchableOpacity>
             </View>
 
@@ -428,18 +391,18 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     marginTop: theme.spacing.md,
-    fontSize: theme.typography.body.fontSize,
+    fontSize: 14,
     color: brandColors.textSecondary,
   },
   errorTitle: {
-    fontSize: theme.typography.h3.fontSize,
+    fontSize: 18,
     fontWeight: '700',
     color: brandColors.textPrimary,
     marginTop: theme.spacing.md,
     marginBottom: theme.spacing.xs,
   },
   errorSubtitle: {
-    fontSize: theme.typography.caption.fontSize,
+    fontSize: 13,
     color: brandColors.textSecondary,
     textAlign: 'center',
     marginBottom: theme.spacing.lg,
@@ -459,86 +422,71 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: theme.spacing.lg,
-    paddingTop: theme.spacing.sm,
+    paddingTop: theme.spacing.md,
     paddingBottom: theme.spacing.sm,
     backgroundColor: brandColors.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
   },
   headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: theme.spacing.sm,
-  },
-  headerLogo: {
-    width: 38,
-    height: 38,
+    flex: 1,
   },
   brandTitleWrap: {
     justifyContent: 'center',
+    flex: 1,
   },
-  brandTitleText: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: brandColors.navy,
-    letterSpacing: 0.5,
+  portalTagRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 2,
   },
   brandSubtitleText: {
     fontSize: 10,
-    fontWeight: '700',
+    fontWeight: '800',
     color: brandColors.blue,
     letterSpacing: 0.8,
     textTransform: 'uppercase',
   },
-  headerRight: {
+  streakTag: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: theme.spacing.sm,
+    gap: 2,
+    backgroundColor: '#FFF7ED',
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#FFEDD5',
   },
-  welcomeBanner: {
-    paddingHorizontal: theme.spacing.lg,
-    paddingBottom: theme.spacing.sm,
-    backgroundColor: brandColors.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: brandColors.borderLight,
+  streakText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#C2410C',
   },
-  avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: brandColors.blue,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: theme.spacing.sm,
-  },
-  avatarText: {
-    color: brandColors.white,
+  studentNameHeader: {
     fontSize: 16,
-    fontWeight: '700',
-  },
-  greetingContainer: {
-    flex: 1,
-  },
-  greetingSub: {
-    fontSize: 12,
-    color: brandColors.textMuted,
-  },
-  studentName: {
-    fontSize: 17,
-    fontWeight: '700',
+    fontWeight: '800',
     color: brandColors.textPrimary,
   },
   notificationBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: brandColors.surfaceMuted,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#F8FAFC',
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
     position: 'relative',
   },
   notificationBadge: {
     position: 'absolute',
-    top: 6,
-    right: 6,
+    top: -2,
+    right: -2,
     backgroundColor: brandColors.error,
     borderRadius: 8,
     minWidth: 16,
@@ -554,12 +502,13 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: theme.spacing.md,
-    paddingBottom: 100,
+    paddingBottom: 80,
   },
   bannerCard: {
     backgroundColor: '#EFF6FF',
     borderColor: '#BFDBFE',
     marginBottom: theme.spacing.md,
+    padding: 14,
   },
   bannerRow: {
     flexDirection: 'row',
@@ -571,23 +520,40 @@ const styles = StyleSheet.create({
   },
   badgeRow: {
     flexDirection: 'row',
+    alignItems: 'center',
     gap: 6,
     marginBottom: 6,
   },
+  levelPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+  },
+  levelPillText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#B45309',
+  },
   batchTitle: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '700',
     color: brandColors.textPrimary,
     marginBottom: 2,
   },
   instituteSubtitle: {
-    fontSize: 13,
+    fontSize: 12,
     color: brandColors.textSecondary,
   },
   bannerIconCircle: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: '#DBEAFE',
     justifyContent: 'center',
     alignItems: 'center',
@@ -596,46 +562,43 @@ const styles = StyleSheet.create({
   metricsGrid: {
     flexDirection: 'row',
     gap: 8,
-    marginBottom: theme.spacing.lg,
+    marginBottom: theme.spacing.md,
   },
   metricCard: {
     flex: 1,
     backgroundColor: brandColors.surface,
-    padding: theme.spacing.sm,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
     borderRadius: theme.borderRadius.md,
     borderWidth: 1,
-    borderColor: brandColors.borderLight,
+    borderColor: '#E2E8F0',
     alignItems: 'center',
   },
   metricIconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 4,
   },
   metricValue: {
-    fontSize: 18,
-    fontWeight: '700',
+    fontSize: 16,
+    fontWeight: '800',
     color: brandColors.textPrimary,
   },
   metricLabel: {
     fontSize: 11,
     fontWeight: '600',
     color: brandColors.textSecondary,
-  },
-  metricSub: {
-    fontSize: 10,
-    color: brandColors.textMuted,
     marginTop: 2,
   },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: theme.spacing.sm,
-    marginBottom: theme.spacing.sm,
+    marginTop: theme.spacing.xs,
+    marginBottom: 8,
   },
   sectionTitleRow: {
     flexDirection: 'row',
@@ -643,7 +606,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   sectionTitle: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '700',
     color: brandColors.textPrimary,
   },
@@ -653,27 +616,38 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   seeAllText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
     color: brandColors.blue,
   },
-  emptyCard: {
+  compactRowCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: theme.spacing.md,
+  },
+  compactRowLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  compactIconBox: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: theme.spacing.lg,
-    marginBottom: theme.spacing.sm,
   },
-  emptyTitle: {
-    fontSize: 15,
+  compactRowText: {
+    fontSize: 13,
     fontWeight: '600',
-    color: brandColors.textPrimary,
-    marginTop: theme.spacing.sm,
-    marginBottom: 2,
-  },
-  emptySubtitle: {
-    fontSize: 12,
-    color: brandColors.textMuted,
-    textAlign: 'center',
+    color: '#475569',
   },
   classCard: {
     flexDirection: 'row',

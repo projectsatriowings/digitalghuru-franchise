@@ -34,7 +34,6 @@ export const RootNavigator: React.FC = () => {
           resizeMode="contain"
         />
         <Text style={styles.splashTitle}>DIGITAL GURU</Text>
-        <Text style={styles.splashSubtitle}>Franchise & Learning Enterprise</Text>
         <ActivityIndicator
           size="small"
           color={brandColors.gold}

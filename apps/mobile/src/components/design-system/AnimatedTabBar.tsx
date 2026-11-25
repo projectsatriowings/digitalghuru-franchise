@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -6,15 +6,17 @@ import {
   Pressable,
   Animated,
   Dimensions,
-  Platform,
 } from 'react-native';
+import Svg, { Path } from 'react-native-svg';
 import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { brandColors, theme } from '../../theme';
+import { brandColors } from '../../theme';
 
 interface AnimatedTabBarCustomProps extends BottomTabBarProps {
   role?: 'STUDENT' | 'PARENT' | 'STAFF' | 'TEACHER';
 }
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 export const AnimatedTabBar: React.FC<AnimatedTabBarCustomProps> = ({
   state,
@@ -24,6 +26,9 @@ export const AnimatedTabBar: React.FC<AnimatedTabBarCustomProps> = ({
 }) => {
   const insets = useSafeAreaInsets();
   const normalizedRole = role === 'TEACHER' ? 'STAFF' : role;
+  const numTabs = state.routes.length || 5;
+
+  const [containerWidth, setContainerWidth] = useState(SCREEN_WIDTH * 0.92);
 
   const getRoleAccentColor = () => {
     switch (normalizedRole) {
@@ -38,59 +43,127 @@ export const AnimatedTabBar: React.FC<AnimatedTabBarCustomProps> = ({
   };
 
   const activeColor = getRoleAccentColor();
+  const activeIndex = state.index;
+
+  const tabWidth = containerWidth / numTabs;
+  const targetX = (activeIndex + 0.5) * tabWidth;
+
+  const notchXAnim = useRef(new Animated.Value(targetX)).current;
+
+  useEffect(() => {
+    Animated.spring(notchXAnim, {
+      toValue: targetX,
+      speed: 18,
+      bounciness: 6,
+      useNativeDriver: false,
+    }).start();
+  }, [activeIndex, targetX]);
+
+  // Generate SVG path for the wave navbar with cutout notch at cx
+  const createCurvedPath = (cx: number, w: number, h: number) => {
+    const r = 24; // corner radius
+    const notchWidth = 36;
+    const notchDepth = 22;
+
+    return `
+      M 0,${r}
+      Q 0,0 ${r},0
+      L ${Math.max(r, cx - notchWidth)},0
+      C ${cx - 20},0 ${cx - 16},${notchDepth} ${cx},${notchDepth}
+      C ${cx + 16},${notchDepth} ${cx + 20},0 ${Math.min(w - r, cx + notchWidth)},0
+      L ${w - r},0
+      Q ${w},0 ${w},${r}
+      L ${w},${h}
+      L 0,${h}
+      Z
+    `;
+  };
+
+  const [pathString, setPathString] = useState(() =>
+    createCurvedPath(targetX, containerWidth, 75)
+  );
+
+  useEffect(() => {
+    const listener = notchXAnim.addListener(({ value }) => {
+      setPathString(createCurvedPath(value, containerWidth, 75));
+    });
+    return () => notchXAnim.removeListener(listener);
+  }, [containerWidth]);
 
   return (
-    <View
-      style={[
-        styles.outerContainer,
-        {
-          paddingBottom: Math.max(insets.bottom, 12),
-        },
-      ]}
-    >
-      <View style={styles.floatingBar}>
-        {state.routes.map((route, index) => {
-          const { options } = descriptors[route.key];
-          const isFocused = state.index === index;
+    <View style={styles.outerContainer}>
+      <View
+        style={styles.floatingBarContainer}
+        onLayout={(e) => {
+          const w = e.nativeEvent.layout.width;
+          if (w > 0) setContainerWidth(w);
+        }}
+      >
+        {/* SVG Curved Wave Background */}
+        <Svg
+          width={containerWidth}
+          height={75 + Math.max(insets.bottom, 10)}
+          style={StyleSheet.absoluteFill}
+        >
+          <Path
+            d={pathString}
+            fill="#FFFFFF"
+            stroke="#E2E8F0"
+            strokeWidth="1"
+          />
+        </Svg>
 
-          const label =
-            options.tabBarLabel !== undefined
-              ? options.tabBarLabel
-              : options.title !== undefined
-              ? options.title
-              : route.name;
+        <View
+          style={[
+            styles.tabsRow,
+            {
+              paddingBottom: Math.max(insets.bottom, 8),
+            },
+          ]}
+        >
+          {state.routes.map((route, index) => {
+            const { options } = descriptors[route.key];
+            const isFocused = state.index === index;
 
-          const onPress = () => {
-            const event = navigation.emit({
-              type: 'tabPress',
-              target: route.key,
-              canPreventDefault: true,
-            });
+            const label =
+              options.tabBarLabel !== undefined
+                ? options.tabBarLabel
+                : options.title !== undefined
+                ? options.title
+                : route.name;
 
-            if (!isFocused && !event.defaultPrevented) {
-              navigation.navigate(route.name, route.params);
-            }
-          };
+            const onPress = () => {
+              const event = navigation.emit({
+                type: 'tabPress',
+                target: route.key,
+                canPreventDefault: true,
+              });
 
-          const onLongPress = () => {
-            navigation.emit({
-              type: 'tabLongPress',
-              target: route.key,
-            });
-          };
+              if (!isFocused && !event.defaultPrevented) {
+                navigation.navigate(route.name, route.params);
+              }
+            };
 
-          return (
-            <TabItem
-              key={route.key}
-              isFocused={isFocused}
-              options={options}
-              label={typeof label === 'string' ? label : route.name}
-              activeColor={activeColor}
-              onPress={onPress}
-              onLongPress={onLongPress}
-            />
-          );
-        })}
+            const onLongPress = () => {
+              navigation.emit({
+                type: 'tabLongPress',
+                target: route.key,
+              });
+            };
+
+            return (
+              <TabItem
+                key={route.key}
+                isFocused={isFocused}
+                options={options}
+                label={typeof label === 'string' ? label : route.name}
+                activeColor={activeColor}
+                onPress={onPress}
+                onLongPress={onLongPress}
+              />
+            );
+          })}
+        </View>
       </View>
     </View>
   );
@@ -114,14 +187,23 @@ const TabItem: React.FC<TabItemProps> = ({
   onLongPress,
 }) => {
   const scaleAnim = useRef(new Animated.Value(isFocused ? 1.05 : 1)).current;
+  const translateYAnim = useRef(new Animated.Value(isFocused ? -16 : 0)).current;
 
   useEffect(() => {
-    Animated.spring(scaleAnim, {
-      toValue: isFocused ? 1.08 : 1,
-      speed: 30,
-      bounciness: 6,
-      useNativeDriver: true,
-    }).start();
+    Animated.parallel([
+      Animated.spring(scaleAnim, {
+        toValue: isFocused ? 1.05 : 1,
+        speed: 20,
+        bounciness: 6,
+        useNativeDriver: true,
+      }),
+      Animated.spring(translateYAnim, {
+        toValue: isFocused ? -16 : 0,
+        speed: 20,
+        bounciness: 6,
+        useNativeDriver: true,
+      }),
+    ]).start();
   }, [isFocused]);
 
   const IconComponent = options.tabBarIcon;
@@ -131,46 +213,44 @@ const TabItem: React.FC<TabItemProps> = ({
       onPress={onPress}
       onLongPress={onLongPress}
       style={styles.tabItem}
-      hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+      hitSlop={{ top: 10, bottom: 8, left: 4, right: 4 }}
     >
-      <Animated.View
-        style={[
-          styles.tabContent,
-          {
-            transform: [{ scale: scaleAnim }],
-          },
-        ]}
-      >
-        {isFocused ? (
-          <View
-            style={[
-              styles.activeIndicatorPill,
-              { backgroundColor: `${activeColor}18` },
-            ]}
-          />
-        ) : null}
-
-        {IconComponent ? (
-          <IconComponent
-            focused={isFocused}
-            color={isFocused ? activeColor : brandColors.textMuted}
-            size={22}
-          />
-        ) : null}
+      <View style={styles.itemWrapper}>
+        <Animated.View
+          style={[
+            isFocused ? styles.activeIconCircle : styles.inactiveIconWrap,
+            isFocused && { backgroundColor: activeColor, shadowColor: activeColor },
+            {
+              transform: [
+                { translateY: translateYAnim },
+                { scale: scaleAnim },
+              ],
+            },
+          ]}
+        >
+          {IconComponent ? (
+            <IconComponent
+              focused={isFocused}
+              color={isFocused ? '#FFFFFF' : '#64748B'}
+              size={isFocused ? 22 : 20}
+            />
+          ) : null}
+        </Animated.View>
 
         <Text
           style={[
             styles.tabLabel,
             {
-              color: isFocused ? activeColor : brandColors.textMuted,
-              fontWeight: isFocused ? '700' : '500',
+              color: isFocused ? activeColor : '#64748B',
+              fontWeight: isFocused ? '800' : '600',
+              marginTop: isFocused ? -8 : 4,
             },
           ]}
           numberOfLines={1}
         >
           {label}
         </Text>
-      </Animated.View>
+      </View>
     </Pressable>
   );
 };
@@ -185,44 +265,49 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
     pointerEvents: 'box-none',
   },
-  floatingBar: {
+  floatingBarContainer: {
+    width: '92%',
+    maxWidth: 440,
+    height: 75,
+    justifyContent: 'flex-end',
+    marginBottom: 8,
+  },
+  tabsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-around',
-    width: '92%',
-    maxWidth: 420,
-    backgroundColor: 'rgba(255, 255, 255, 0.94)',
-    borderRadius: theme.radii.full,
-    paddingVertical: 8,
-    paddingHorizontal: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.9)',
-    ...theme.shadows.lg,
-    elevation: 8,
+    paddingTop: 10,
+    paddingHorizontal: 4,
   },
   tabItem: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 4,
   },
-  tabContent: {
+  itemWrapper: {
     alignItems: 'center',
     justifyContent: 'center',
-    position: 'relative',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
   },
-  activeIndicatorPill: {
-    position: 'absolute',
-    top: -2,
-    bottom: -2,
-    left: -4,
-    right: -4,
-    borderRadius: theme.radii.full,
+  activeIconCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 3.5,
+    borderColor: '#FFFFFF',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  inactiveIconWrap: {
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   tabLabel: {
     fontSize: 10,
-    marginTop: 3,
   },
 });

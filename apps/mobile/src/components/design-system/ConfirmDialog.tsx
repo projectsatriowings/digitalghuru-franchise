@@ -5,12 +5,11 @@ import {
   StyleSheet,
   Modal,
   Pressable,
-  StyleProp,
-  ViewStyle,
+  TouchableOpacity,
+  ActivityIndicator,
 } from 'react-native';
 import { brandColors, theme } from '../../theme';
-import { GlassCard } from './GlassCard';
-import { GlassButton } from './GlassButton';
+import { LogOut, AlertTriangle } from 'lucide-react-native';
 
 export interface ConfirmDialogProps {
   visible: boolean;
@@ -22,20 +21,18 @@ export interface ConfirmDialogProps {
   onConfirm: () => void;
   onCancel: () => void;
   loading?: boolean;
-  style?: StyleProp<ViewStyle>;
 }
 
 export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   visible,
   title,
   message,
-  confirmLabel = 'Confirm',
+  confirmLabel = 'Log Out',
   cancelLabel = 'Cancel',
-  destructive = false,
+  destructive = true,
   onConfirm,
   onCancel,
   loading = false,
-  style,
 }) => {
   return (
     <Modal
@@ -46,28 +43,46 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
     >
       <View style={styles.backdrop}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onCancel} />
-        <GlassCard style={[styles.dialogCard, style]} padding="xl">
+        <View style={styles.dialogCard}>
+          {/* Top Icon Badge */}
+          <View style={[styles.iconCircle, destructive && styles.destructiveIconCircle]}>
+            {destructive ? (
+              <LogOut size={22} color="#EF4444" />
+            ) : (
+              <AlertTriangle size={22} color={brandColors.blue} />
+            )}
+          </View>
+
           <Text style={styles.title}>{title}</Text>
           <Text style={styles.message}>{message}</Text>
+
           <View style={styles.buttonRow}>
-            <GlassButton
-              label={cancelLabel}
-              onPress={onCancel}
-              variant="outline"
-              size="md"
+            <TouchableOpacity
               style={styles.cancelBtn}
+              onPress={onCancel}
               disabled={loading}
-            />
-            <GlassButton
-              label={confirmLabel}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.cancelBtnText}>{cancelLabel}</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.confirmBtn,
+                destructive ? styles.destructiveBtn : styles.primaryBtn,
+              ]}
               onPress={onConfirm}
-              variant={destructive ? 'danger' : 'primary'}
-              size="md"
-              style={styles.confirmBtn}
-              loading={loading}
-            />
+              disabled={loading}
+              activeOpacity={0.8}
+            >
+              {loading ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <Text style={styles.confirmBtnText}>{confirmLabel}</Text>
+              )}
+            </TouchableOpacity>
           </View>
-        </GlassCard>
+        </View>
       </View>
     </Modal>
   );
@@ -76,7 +91,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.5)',
+    backgroundColor: 'rgba(15, 23, 42, 0.6)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: theme.spacing.lg,
@@ -85,28 +100,80 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 340,
     backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 24,
+    alignItems: 'center',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.18,
+    shadowRadius: 16,
+    elevation: 12,
+  },
+  iconCircle: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#EFF6FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
+  },
+  destructiveIconCircle: {
+    backgroundColor: '#FEF2F2',
   },
   title: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: brandColors.textPrimary,
-    marginBottom: 8,
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginBottom: 6,
+    textAlign: 'center',
   },
   message: {
     fontSize: 13,
-    color: brandColors.textSecondary,
-    lineHeight: 18,
-    marginBottom: 20,
+    color: '#64748B',
+    textAlign: 'center',
+    lineHeight: 19,
+    marginBottom: 22,
   },
   buttonRow: {
     flexDirection: 'row',
-    justifyContent: 'flex-end',
+    width: '100%',
     gap: 10,
   },
   cancelBtn: {
     flex: 1,
+    paddingVertical: 12,
+    borderRadius: theme.radii.full,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cancelBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#475569',
   },
   confirmBtn: {
     flex: 1,
+    paddingVertical: 12,
+    borderRadius: theme.radii.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  destructiveBtn: {
+    backgroundColor: '#EF4444',
+    shadowColor: '#EF4444',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  primaryBtn: {
+    backgroundColor: '#006FFF',
+  },
+  confirmBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
 });

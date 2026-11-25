@@ -118,7 +118,7 @@ export const TeacherDashboardScreen: React.FC = () => {
               {teacher?.fullName || user?.fullName || 'Faculty Member'}
             </Text>
             <Text style={styles.designationText} numberOfLines={1}>
-              {teacher?.designation || 'Classroom Instructor'} • {activeInstitute?.name || 'Franchise Center'}
+              {teacher?.designation || 'Classroom Instructor'}
             </Text>
           </View>
         </View>

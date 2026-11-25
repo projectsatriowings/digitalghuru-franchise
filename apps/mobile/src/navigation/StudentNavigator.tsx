@@ -2,7 +2,6 @@ import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { StudentDashboardScreen } from '../features/student/StudentDashboardScreen';
-import { StudentTimetableScreen } from '../features/student/StudentTimetableScreen';
 import { StudentHomeworkScreen } from '../features/student/StudentHomeworkScreen';
 import { StudentMaterialsScreen } from '../features/student/StudentMaterialsScreen';
 import { StudentAttendanceScreen } from '../features/student/StudentAttendanceScreen';
@@ -13,7 +12,6 @@ import { brandColors } from '../theme';
 import { AnimatedTabBar } from '../components/design-system';
 import {
   LayoutDashboard,
-  Calendar,
   CheckSquare,
   BookOpen,
   User,
@@ -36,14 +34,6 @@ const StudentTabNavigator: React.FC = () => {
         options={{
           tabBarLabel: 'Dashboard',
           tabBarIcon: ({ color, size }) => <LayoutDashboard size={size} color={color} />,
-        }}
-      />
-      <Tab.Screen
-        name="StudentTimetable"
-        component={StudentTimetableScreen}
-        options={{
-          tabBarLabel: 'Timetable',
-          tabBarIcon: ({ color, size }) => <Calendar size={size} color={color} />,
         }}
       />
       <Tab.Screen

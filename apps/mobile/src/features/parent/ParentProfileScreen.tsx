@@ -66,16 +66,6 @@ export const ParentProfileScreen: React.FC = () => {
         {/* Parent Hero Card */}
         <Card style={styles.parentHeroCard}>
           <View style={styles.avatarRow}>
-            <View style={styles.parentAvatar}>
-              <Text style={styles.parentAvatarText}>
-                {(user?.fullName || 'Parent')
-                  .split(' ')
-                  .map((n) => n[0])
-                  .slice(0, 2)
-                  .join('')}
-              </Text>
-            </View>
-
             <View style={styles.parentDetailsCol}>
               <Text style={styles.parentName}>{user?.fullName || 'Parent'}</Text>
               <Badge text="Verified Parent" variant="success" style={styles.roleBadge} />
@@ -116,26 +106,6 @@ export const ParentProfileScreen: React.FC = () => {
               style={[styles.childCard, isSelected && styles.childCardActive]}
             >
               <View style={styles.childCardRow}>
-                <View
-                  style={[
-                    styles.childAvatar,
-                    isSelected && styles.childAvatarActive,
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.childAvatarText,
-                      isSelected && styles.childAvatarTextActive,
-                    ]}
-                  >
-                    {child.fullName
-                      .split(' ')
-                      .map((n) => n[0])
-                      .slice(0, 2)
-                      .join('')}
-                  </Text>
-                </View>
-
                 <View style={styles.childCardInfo}>
                   <Text style={styles.childCardName}>{child.fullName}</Text>
                   <Text style={styles.childCardBatch}>

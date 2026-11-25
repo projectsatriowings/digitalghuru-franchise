@@ -104,22 +104,10 @@ export const ParentDashboardScreen: React.FC = () => {
       {/* Top Header Bar */}
       <View style={styles.topHeader}>
         <View style={styles.headerLeft}>
-          <View style={styles.parentAvatar}>
-            <Text style={styles.parentAvatarText}>
-              {(user?.fullName || 'Parent')
-                .split(' ')
-                .map((n) => n[0])
-                .slice(0, 2)
-                .join('')}
-            </Text>
-          </View>
           <View style={styles.headerTitles}>
-            <Text style={styles.welcomeSubtitle}>Parent Portal</Text>
+            <Text style={styles.welcomeSubtitle}>PARENT PORTAL</Text>
             <Text style={styles.parentName} numberOfLines={1}>
               {user?.fullName || 'Parent'}
-            </Text>
-            <Text style={styles.campusName} numberOfLines={1}>
-              {activeInstitute?.name || 'Franchise Campus'}
             </Text>
           </View>
         </View>

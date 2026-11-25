@@ -109,6 +109,7 @@ export const StudentTimetableScreen: React.FC = () => {
       <Header
         title="Class Timetable"
         subtitle={timetable.batchName ? `Batch: ${timetable.batchName}` : 'Weekly Class Schedule'}
+        showBack
       />
 
       {/* Weekday Switcher Tabs */}

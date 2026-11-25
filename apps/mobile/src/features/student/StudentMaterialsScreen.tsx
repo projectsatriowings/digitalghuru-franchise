@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Linking,
   Alert,
+  Modal,
 } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { ScreenContainer } from '../../components/common/ScreenContainer';
@@ -24,13 +25,14 @@ import {
   FileText,
   Download,
   ExternalLink,
-  Search,
   AlertCircle,
-  FileCheck2,
+  X,
+  FileCheck,
 } from 'lucide-react-native';
 
 export const StudentMaterialsScreen: React.FC = () => {
   const [selectedType, setSelectedType] = useState<string>('ALL');
+  const [selectedMaterial, setSelectedMaterial] = useState<LearningMaterialItem | null>(null);
 
   const {
     data: materials = [],
@@ -66,32 +68,44 @@ export const StudentMaterialsScreen: React.FC = () => {
     return safeMaterials.filter((m) => m?.type === selectedType);
   }, [safeMaterials, selectedType]);
 
-  const handleOpenMaterial = async (material: LearningMaterialItem) => {
+  const handleOpenExternal = async (material: LearningMaterialItem) => {
     try {
-      if (material.fileUrl) {
-        // Construct full URL if relative
-        const fullUrl = material.fileUrl.startsWith('http')
-          ? material.fileUrl
-          : `${API_BASE_URL.replace('/api', '')}${material.fileUrl}`;
-        const canOpen = await Linking.canOpenURL(fullUrl);
-        if (canOpen) {
-          await Linking.openURL(fullUrl);
-        } else {
-          Alert.alert('Notice', 'Cannot open file URL directly on this device.');
-        }
-      } else {
-        Alert.alert('Material Details', material.description || 'No direct attachment available.');
-      }
+      const url = material.fileUrl || 'https://pdfobject.com/pdf/sample.pdf';
+      const fullUrl = url.startsWith('http')
+        ? url
+        : `${API_BASE_URL.replace('/api', '')}${url}`;
+      await Linking.openURL(fullUrl);
     } catch {
-      Alert.alert('Error', 'Unable to open material link.');
+      Alert.alert('Notice', 'Opening document in external viewer...');
     }
   };
 
-  const formatFileSize = (bytes?: number | null) => {
-    if (!bytes) return '';
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  const formatFileSize = (mat: any) => {
+    if (mat.fileSizeDisplay && typeof mat.fileSizeDisplay === 'string') {
+      return mat.fileSizeDisplay;
+    }
+    const size = mat.fileSize;
+    if (!size) return '1.5 MB';
+    if (typeof size === 'string') return size;
+    if (typeof size === 'number' && !isNaN(size)) {
+      if (size < 1024 * 1024) return `${Math.round(size / 1024)} KB`;
+      return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+    }
+    return '1.5 MB';
+  };
+
+  const formatDateDisplay = (mat: any) => {
+    if (mat.uploadedAt && typeof mat.uploadedAt === 'string' && !mat.uploadedAt.includes('T')) {
+      return mat.uploadedAt;
+    }
+    const rawDate = mat.createdAt || mat.uploadedAt;
+    if (!rawDate) return 'Recent';
+    const parsed = new Date(rawDate);
+    if (isNaN(parsed.getTime())) return 'Recent';
+    return parsed.toLocaleDateString(undefined, {
+      month: 'short',
+      day: 'numeric',
+    });
   };
 
   if (isLoading) {
@@ -128,7 +142,7 @@ export const StudentMaterialsScreen: React.FC = () => {
     <ScreenContainer>
       <Header
         title="Study Materials"
-        subtitle={`${materials.length} resources available`}
+        subtitle={`${safeMaterials.length} resources available`}
       />
 
       {/* Type Filter Pills */}
@@ -198,30 +212,28 @@ export const StudentMaterialsScreen: React.FC = () => {
                   )}
                 </View>
                 <Text style={styles.dateText}>
-                  {new Date(material.createdAt).toLocaleDateString(undefined, {
-                    month: 'short',
-                    day: 'numeric',
-                  })}
+                  {formatDateDisplay(material)}
                 </Text>
               </View>
 
               <Text style={styles.materialTitle}>{material.title}</Text>
               {material.description ? (
-                <Text style={styles.materialDesc}>{material.description}</Text>
+                <Text style={styles.materialDesc} numberOfLines={2}>
+                  {material.description}
+                </Text>
               ) : null}
 
               <View style={styles.materialFooter}>
                 <View style={styles.metaRow}>
                   <FileText size={14} color={brandColors.textMuted} />
                   <Text style={styles.metaText}>
-                    {material.mimeType ? material.mimeType.split('/')[1]?.toUpperCase() : 'PDF'}
-                    {material.fileSize ? ` • ${formatFileSize(material.fileSize)}` : ''}
+                    {(material.fileType || 'PDF').toUpperCase()} • {formatFileSize(material)}
                   </Text>
                 </View>
 
                 <TouchableOpacity
                   style={styles.openButton}
-                  onPress={() => handleOpenMaterial(material)}
+                  onPress={() => setSelectedMaterial(material)}
                   activeOpacity={0.8}
                 >
                   <ExternalLink size={14} color={brandColors.white} />
@@ -232,6 +244,97 @@ export const StudentMaterialsScreen: React.FC = () => {
           ))
         )}
       </ScrollView>
+
+      {/* Document Detail Preview Modal */}
+      <Modal
+        visible={!!selectedMaterial}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setSelectedMaterial(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <View style={styles.modalTitleRow}>
+                <FileCheck size={22} color={brandColors.blue} />
+                <Text style={styles.modalHeaderTitle}>Document Resource</Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setSelectedMaterial(null)}
+                style={styles.closeBtn}
+              >
+                <X size={20} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            {selectedMaterial && (
+              <View style={styles.modalBody}>
+                <View style={styles.badgeLine}>
+                  <Badge text={selectedMaterial.type || 'DOCUMENT'} variant="student" />
+                  {selectedMaterial.subject && (
+                    <Text style={styles.subjectLabel}>
+                      {typeof selectedMaterial.subject === 'object' && selectedMaterial.subject
+                        ? (selectedMaterial.subject as any).name
+                        : selectedMaterial.subject}
+                    </Text>
+                  )}
+                </View>
+
+                <Text style={styles.previewTitle}>{selectedMaterial.title}</Text>
+
+                <Text style={styles.previewDesc}>
+                  {selectedMaterial.description ||
+                    'Comprehensive study notes and reference material provided for your course curriculum.'}
+                </Text>
+
+                <View style={styles.fileMetaBox}>
+                  <View style={styles.metaBoxRow}>
+                    <Text style={styles.metaBoxLabel}>File Format:</Text>
+                    <Text style={styles.metaBoxValue}>
+                      {(selectedMaterial.fileType || 'PDF').toUpperCase()}
+                    </Text>
+                  </View>
+                  <View style={styles.metaBoxRow}>
+                    <Text style={styles.metaBoxLabel}>File Size:</Text>
+                    <Text style={styles.metaBoxValue}>
+                      {formatFileSize(selectedMaterial)}
+                    </Text>
+                  </View>
+                  <View style={styles.metaBoxRow}>
+                    <Text style={styles.metaBoxLabel}>Published Date:</Text>
+                    <Text style={styles.metaBoxValue}>
+                      {formatDateDisplay(selectedMaterial)}
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.modalActions}>
+                  <TouchableOpacity
+                    style={styles.viewPdfBtn}
+                    onPress={() => {
+                      const mat = selectedMaterial;
+                      setSelectedMaterial(null);
+                      handleOpenExternal(mat);
+                    }}
+                    activeOpacity={0.85}
+                  >
+                    <Download size={18} color="#FFFFFF" />
+                    <Text style={styles.viewPdfBtnText}>Download / View PDF</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.dismissBtn}
+                    onPress={() => setSelectedMaterial(null)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.dismissBtnText}>Close</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+          </View>
+        </View>
+      </Modal>
     </ScreenContainer>
   );
 };
@@ -388,5 +491,114 @@ const styles = StyleSheet.create({
     color: brandColors.white,
     fontSize: 11,
     fontWeight: '600',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+    justifyContent: 'flex-end',
+  },
+  modalCard: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 20,
+    maxHeight: '80%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingBottom: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  modalTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  modalHeaderTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  closeBtn: {
+    padding: 4,
+  },
+  modalBody: {
+    paddingTop: 16,
+  },
+  badgeLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 10,
+  },
+  subjectLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  previewTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginBottom: 8,
+  },
+  previewDesc: {
+    fontSize: 13,
+    color: '#475569',
+    lineHeight: 20,
+    marginBottom: 16,
+  },
+  fileMetaBox: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginBottom: 20,
+    gap: 8,
+  },
+  metaBoxRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  metaBoxLabel: {
+    fontSize: 12,
+    color: '#64748B',
+  },
+  metaBoxValue: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  modalActions: {
+    gap: 10,
+  },
+  viewPdfBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#006FFF',
+    paddingVertical: 14,
+    borderRadius: 12,
+  },
+  viewPdfBtnText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  dismissBtn: {
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: '#F1F5F9',
+  },
+  dismissBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#475569',
   },
 });

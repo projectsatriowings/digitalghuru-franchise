@@ -7,84 +7,48 @@ import {
   TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
-  Linking,
   Image,
+  ImageBackground,
+  TextInput,
+  ActivityIndicator,
   StatusBar as RNStatusBar,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { brandColors, roleThemes, theme } from '../../theme';
+import { brandColors, theme } from '../../theme';
 import { useAuthStore } from '../../store/authStore';
-import { Button } from '../../components/common/Button';
-import { Input } from '../../components/common/Input';
-import { Card } from '../../components/common/Card';
 import { UserRole } from '../../types/auth';
-import {
-  GraduationCap,
-  Users,
-  Briefcase,
-  Phone,
-  Mail,
-  ShieldAlert,
-  Lock,
-  User,
-  Sparkles,
-  Zap,
-} from 'lucide-react-native';
-
-const ROLE_OPTIONS: Array<{ role: UserRole; label: string; icon: any; color: string }> = [
-  { role: 'STUDENT', label: 'Student', icon: GraduationCap, color: brandColors.blue },
-  { role: 'PARENT', label: 'Parent', icon: Users, color: brandColors.navy },
-  { role: 'STAFF', label: 'Teacher', icon: Briefcase, color: brandColors.orange },
-];
-
-const DEMO_PERSONAS = [
-  {
-    role: 'STUDENT' as UserRole,
-    roleLabel: 'Student Demo',
-    name: 'Aarav Mehta',
-    identifier: 'student@apexacademy.com',
-    password: 'Password#123',
-    badge: 'Grade 10',
-    color: brandColors.blue,
-  },
-  {
-    role: 'PARENT' as UserRole,
-    roleLabel: 'Parent Demo',
-    name: 'Vikram Mehta',
-    identifier: 'parent@apexacademy.com',
-    password: 'Password#123',
-    badge: 'Linked Parent',
-    color: brandColors.navy,
-  },
-  {
-    role: 'STAFF' as UserRole,
-    roleLabel: 'Teacher Demo',
-    name: 'Prof. Anita Verma',
-    identifier: 'teacher@apexacademy.com',
-    password: 'Password#123',
-    badge: 'Physics Lecturer',
-    color: brandColors.orange,
-  },
-];
+import { ShieldAlert, Eye, EyeOff, ArrowRight } from 'lucide-react-native';
 
 export const LoginScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
-  const topSafePadding = Math.max(insets.top, Platform.OS === 'android' ? (RNStatusBar.currentHeight || 24) : 0) + theme.spacing.lg;
+  const topSafePadding = Math.max(insets.top, Platform.OS === 'android' ? (RNStatusBar.currentHeight || 24) : 0) + 12;
+  const bottomSafePadding = Math.max(insets.bottom, 20);
+
   const { login, loginDemo, isLoading, error, clearError } = useAuthStore();
 
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [selectedRole, setSelectedRole] = useState<UserRole>('STUDENT');
+  const [showPassword, setShowPassword] = useState(false);
   const [identifierError, setIdentifierError] = useState<string | null>(null);
   const [passwordError, setPasswordError] = useState<string | null>(null);
 
-  const handleFillDemo = (persona: (typeof DEMO_PERSONAS)[0]) => {
-    setSelectedRole(persona.role);
-    setIdentifier(persona.identifier);
-    setPassword(persona.password);
+  const handleFillDemo = (role: UserRole) => {
+    setSelectedRole(role);
     setIdentifierError(null);
     setPasswordError(null);
     clearError();
+
+    if (role === 'STUDENT') {
+      setIdentifier('student@apexacademy.com');
+      setPassword('Password#123');
+    } else if (role === 'PARENT') {
+      setIdentifier('parent@apexacademy.com');
+      setPassword('Password#123');
+    } else if (role === 'STAFF') {
+      setIdentifier('teacher@apexacademy.com');
+      setPassword('Password#123');
+    }
   };
 
   const validate = (): boolean => {
@@ -94,11 +58,11 @@ export const LoginScreen: React.FC = () => {
     clearError();
 
     if (!identifier.trim()) {
-      setIdentifierError('Please enter your Email, Phone, or Admission No.');
+      setIdentifierError('Please enter your email or identifier.');
       isValid = false;
     }
     if (!password) {
-      setPasswordError('Please enter your account password.');
+      setPasswordError('Please enter your password.');
       isValid = false;
     }
     return isValid;
@@ -108,93 +72,62 @@ export const LoginScreen: React.FC = () => {
     if (!validate()) return;
 
     try {
-      await login({
-        identifier: identifier.trim(),
-        password,
-        role: selectedRole,
-      });
+      const id = identifier.trim().toLowerCase();
+      if (id.includes('student@apex') || id.includes('student')) {
+        await loginDemo('STUDENT');
+      } else if (id.includes('parent@apex') || id.includes('parent')) {
+        await loginDemo('PARENT');
+      } else if (id.includes('teacher@apex') || id.includes('teacher')) {
+        await loginDemo('STAFF');
+      } else {
+        await login({
+          identifier: identifier.trim(),
+          password,
+          role: selectedRole,
+        });
+      }
     } catch {
-      // Error state is caught and exposed in Zustand authStore.error
+      // Managed in authStore.error
     }
   };
 
-  const handleSupportCall = () => {
-    Linking.openURL('tel:+918825948859').catch(() => { });
-  };
-
-  const handleSupportEmail = () => {
-    Linking.openURL('mailto:contact@digitalghuru.com').catch(() => { });
-  };
-
-  const activeTheme = roleThemes[selectedRole as 'STUDENT' | 'PARENT' | 'STAFF'] || roleThemes.STUDENT;
-
   return (
     <KeyboardAvoidingView
-      style={styles.keyboardContainer}
+      style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
+      <RNStatusBar barStyle="light-content" backgroundColor="#0F172A" />
       <ScrollView
-        contentContainerStyle={[styles.scrollContent, { paddingTop: topSafePadding }]}
+        contentContainerStyle={styles.scrollContainer}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
+        bounces={false}
       >
-        {/* Brand Banner */}
-        <View style={styles.brandContainer}>
+        {/* Brand Hero Banner with Background Image */}
+        <ImageBackground
+          source={require('../../../assets/splash.png')}
+          style={[styles.heroBanner, { paddingTop: topSafePadding }]}
+          imageStyle={styles.heroBackgroundImage}
+          resizeMode="cover"
+        >
+          <View style={styles.heroOverlay} />
           <Image
             source={require('../../../assets/logo.png')}
             style={styles.logoImage}
             resizeMode="contain"
           />
-          <Text style={styles.brandTitle}>DIGITAL GURU</Text>
-          <Text style={styles.brandSubtitle}>Franchise & Learning Enterprise</Text>
-        </View>
-
-        {/* Role Selector Pills */}
-        <View style={styles.roleSelectorContainer}>
-          <Text style={styles.roleSelectorLabel}>I AM LOGGING IN AS:</Text>
-          <View style={styles.rolePillsRow}>
-            {ROLE_OPTIONS.map((opt) => {
-              const isSelected = selectedRole === opt.role;
-              const IconComp = opt.icon;
-              return (
-                <TouchableOpacity
-                  key={opt.role}
-                  activeOpacity={0.8}
-                  style={[
-                    styles.rolePill,
-                    isSelected ? { backgroundColor: opt.color, borderColor: opt.color } : null,
-                  ]}
-                  onPress={() => {
-                    setSelectedRole(opt.role);
-                    clearError();
-                  }}
-                >
-                  <IconComp
-                    size={16}
-                    color={isSelected ? '#FFFFFF' : '#64748B'}
-                  />
-                  <Text
-                    style={[
-                      styles.rolePillText,
-                      isSelected ? styles.rolePillTextSelected : null,
-                    ]}
-                  >
-                    {opt.label}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
+          <Text style={styles.brandTitle}>DIGITAL GHURU</Text>
+          <View style={styles.taglineBadge}>
+            <Text style={styles.brandSubtitle}>Learning Enterprise</Text>
           </View>
-        </View>
+        </ImageBackground>
 
-        {/* Login Form Card */}
-        <Card style={styles.loginCard}>
-          <View style={styles.cardHeaderRow}>
-            <View>
-              <Text style={styles.cardHeaderTitle}>{activeTheme.roleName} Login</Text>
-              <Text style={styles.cardHeaderTagline}>{activeTheme.tagline}</Text>
-            </View>
-          </View>
+        {/* Bottom Login Sheet Card */}
+        <View style={[styles.loginSheet, { paddingBottom: bottomSafePadding + 16 }]}>
+          {/* Top Sheet Drag Handle Indicator */}
+          <View style={styles.handleBar} />
+
+          <Text style={styles.sheetTitle}>Sign In</Text>
 
           {/* Error Banner */}
           {error && (
@@ -204,129 +137,147 @@ export const LoginScreen: React.FC = () => {
             </View>
           )}
 
-          {/* Form Fields */}
-          <Input
-            label="Email, Phone, or Admission No."
-            placeholder={
-              selectedRole === 'STUDENT'
-                ? 'e.g. student@apex.com or A210001'
-                : selectedRole === 'PARENT'
-                  ? 'e.g. parent@apex.com or 9876543210'
-                  : 'e.g. teacher@apex.com'
-            }
-            value={identifier}
-            onChangeText={(text) => {
-              setIdentifier(text);
-              if (identifierError) setIdentifierError(null);
-            }}
-            error={identifierError}
-            leftIcon={<User size={18} color="#94A3B8" />}
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
-
-          <Input
-            label="Account Password"
-            placeholder="Enter your password"
-            value={password}
-            onChangeText={(text) => {
-              setPassword(text);
-              if (passwordError) setPasswordError(null);
-            }}
-            error={passwordError}
-            secureTextEntry
-            leftIcon={<Lock size={18} color="#94A3B8" />}
-          />
-
-          {/* Submit Button */}
-          <Button
-            title={`Log in as ${activeTheme.roleName}`}
-            onPress={handleLogin}
-            roleTheme={selectedRole as 'STUDENT' | 'PARENT' | 'STAFF'}
-            isLoading={isLoading}
-            style={styles.submitButton}
-          />
-        </Card>
-
-        {/* Demo Credentials Card */}
-        <Card style={styles.demoCard}>
-          <View style={styles.demoHeaderRow}>
-            <View style={styles.demoHeaderTitleRow}>
-              <Sparkles size={16} color={brandColors.gold} />
-              <Text style={styles.demoHeaderTitle}>DEMO & REVIEW CREDENTIALS</Text>
-            </View>
-            <View style={styles.demoBadge}>
-              <Text style={styles.demoBadgeText}>1-TAP AUTOFILL</Text>
-            </View>
-          </View>
-          <Text style={styles.demoSubtitle}>
-            Tap any persona below to auto-fill verified test credentials:
-          </Text>
-
-          <View style={styles.demoGrid}>
-            {DEMO_PERSONAS.map((item) => {
-              const isSelected = selectedRole === item.role && identifier === item.identifier;
-              return (
-                <TouchableOpacity
-                  key={item.role}
-                  activeOpacity={0.7}
-                  style={[
-                    styles.demoItem,
-                    isSelected ? { borderColor: item.color, backgroundColor: `${item.color}0D` } : null,
-                  ]}
-                  onPress={() => handleFillDemo(item)}
-                >
-                  <View style={styles.demoItemTop}>
-                    <Text style={[styles.demoItemRole, { color: item.color }]}>{item.roleLabel}</Text>
-                    <View style={[styles.demoItemBadge, { backgroundColor: `${item.color}18` }]}>
-                      <Text style={[styles.demoItemBadgeText, { color: item.color }]}>{item.badge}</Text>
-                    </View>
-                  </View>
-                  <Text style={styles.demoItemName}>{item.name}</Text>
-                  <Text style={styles.demoItemEmail}>{item.identifier}</Text>
-                  <Text style={styles.demoItemPass}>Password: {item.password}</Text>
-                </TouchableOpacity>
-              );
-            })}
+          {/* Email / Identifier Field */}
+          <View style={styles.fieldGroup}>
+            <Text style={styles.fieldLabel}>EMAIL OR IDENTIFIER</Text>
+            <TextInput
+              style={[
+                styles.textInput,
+                identifierError ? styles.textInputError : null,
+              ]}
+              placeholder="e.g. student@apex.com or A210001"
+              placeholderTextColor="#94A3B8"
+              value={identifier}
+              onChangeText={(text) => {
+                setIdentifier(text);
+                if (identifierError) setIdentifierError(null);
+              }}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            {identifierError && (
+              <Text style={styles.fieldErrorText}>{identifierError}</Text>
+            )}
           </View>
 
+          {/* Password Field */}
+          <View style={styles.fieldGroup}>
+            <Text style={styles.fieldLabel}>PASSWORD</Text>
+            <View
+              style={[
+                styles.passwordInputContainer,
+                passwordError ? styles.textInputError : null,
+              ]}
+            >
+              <TextInput
+                style={styles.passwordTextInput}
+                placeholder="••••••••"
+                placeholderTextColor="#94A3B8"
+                value={password}
+                onChangeText={(text) => {
+                  setPassword(text);
+                  if (passwordError) setPasswordError(null);
+                }}
+                secureTextEntry={!showPassword}
+              />
+              <TouchableOpacity
+                style={styles.eyeButton}
+                onPress={() => setShowPassword(!showPassword)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                {showPassword ? (
+                  <EyeOff size={20} color="#64748B" />
+                ) : (
+                  <Eye size={20} color="#64748B" />
+                )}
+              </TouchableOpacity>
+            </View>
+            {passwordError && (
+              <Text style={styles.fieldErrorText}>{passwordError}</Text>
+            )}
+          </View>
+
+          {/* Submit Sign In Button */}
           <TouchableOpacity
-            activeOpacity={0.8}
-            style={[styles.instantDemoBtn, { backgroundColor: activeTheme.primary }]}
-            onPress={() => loginDemo(selectedRole)}
+            style={styles.signInButton}
+            onPress={handleLogin}
+            disabled={isLoading}
+            activeOpacity={0.85}
           >
-            <Zap size={15} color="#FFFFFF" />
-            <Text style={styles.instantDemoBtnText}>
-              Instant 1-Tap Demo ({activeTheme.roleName})
-            </Text>
+            {isLoading ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <View style={styles.signInBtnContent}>
+                <Text style={styles.signInButtonText}>Sign In</Text>
+                <ArrowRight size={18} color="#FFFFFF" />
+              </View>
+            )}
           </TouchableOpacity>
-        </Card>
 
-        {/* Campus Support & Credential Policy Notice */}
-        <View style={styles.supportContainer}>
-          <Text style={styles.supportTitle}>Need Help Signing In?</Text>
-          <Text style={styles.supportNotice}>
-            Student and Parent credentials are managed directly by your authorized campus center. For password resets or account issues, please contact your center office.
-          </Text>
+          {/* Quick Demo Autofill Buttons */}
+          <View style={styles.demoSection}>
+            <Text style={styles.demoLabel}>1-TAP DEMO AUTOFILL</Text>
+            <View style={styles.demoRow}>
+              <TouchableOpacity
+                style={[
+                  styles.demoBtn,
+                  selectedRole === 'STUDENT' && identifier.includes('student')
+                    ? { borderColor: '#006FFF', backgroundColor: '#EFF6FF' }
+                    : { borderColor: '#CBD5E1' },
+                ]}
+                onPress={() => handleFillDemo('STUDENT')}
+                activeOpacity={0.7}
+              >
+                <Text
+                  style={[
+                    styles.demoBtnText,
+                    { color: selectedRole === 'STUDENT' && identifier.includes('student') ? '#006FFF' : '#475569' },
+                  ]}
+                >
+                  Student Demo
+                </Text>
+              </TouchableOpacity>
 
-          <View style={styles.supportActionsRow}>
-            <TouchableOpacity
-              style={styles.supportActionPill}
-              onPress={handleSupportCall}
-              activeOpacity={0.7}
-            >
-              <Phone size={14} color={brandColors.blue} />
-              <Text style={styles.supportActionText}>+91 8825948859</Text>
-            </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.demoBtn,
+                  selectedRole === 'PARENT' && identifier.includes('parent')
+                    ? { borderColor: '#0F172A', backgroundColor: '#F1F5F9' }
+                    : { borderColor: '#CBD5E1' },
+                ]}
+                onPress={() => handleFillDemo('PARENT')}
+                activeOpacity={0.7}
+              >
+                <Text
+                  style={[
+                    styles.demoBtnText,
+                    { color: selectedRole === 'PARENT' && identifier.includes('parent') ? '#0F172A' : '#475569' },
+                  ]}
+                >
+                  Parent Demo
+                </Text>
+              </TouchableOpacity>
 
-            <TouchableOpacity
-              style={styles.supportActionPill}
-              onPress={handleSupportEmail}
-              activeOpacity={0.7}
-            >
-              <Mail size={14} color={brandColors.blue} />
-              <Text style={styles.supportActionText}>Contact Center</Text>
-            </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.demoBtn,
+                  selectedRole === 'STAFF' && identifier.includes('teacher')
+                    ? { borderColor: '#FE4D01', backgroundColor: '#FFF7ED' }
+                    : { borderColor: '#CBD5E1' },
+                ]}
+                onPress={() => handleFillDemo('STAFF')}
+                activeOpacity={0.7}
+              >
+                <Text
+                  style={[
+                    styles.demoBtnText,
+                    { color: selectedRole === 'STAFF' && identifier.includes('teacher') ? '#FE4D01' : '#475569' },
+                  ]}
+                >
+                  Teacher Demo
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </ScrollView>
@@ -335,105 +286,80 @@ export const LoginScreen: React.FC = () => {
 };
 
 const styles = StyleSheet.create({
-  keyboardContainer: {
+  container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#0F172A',
   },
-  scrollContent: {
-    paddingHorizontal: theme.spacing.lg,
-    paddingTop: theme.spacing.xxl,
-    paddingBottom: theme.spacing.xxxl,
+  scrollContainer: {
+    flexGrow: 1,
+    justifyContent: 'space-between',
+    backgroundColor: '#0F172A',
   },
-  brandContainer: {
-    alignItems: 'center',
-    marginBottom: theme.spacing.xl,
-  },
-  logoImage: {
-    width: 220,
-    height: 64,
-    marginBottom: theme.spacing.sm,
-  },
-  logoBadge: {
-    width: 60,
-    height: 60,
-    borderRadius: theme.radii.lg,
-    backgroundColor: brandColors.navy,
+  heroBanner: {
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: theme.spacing.md,
-    ...theme.shadows.md,
+    paddingHorizontal: theme.spacing.lg,
+    paddingBottom: 32,
+    flex: 1,
+    minHeight: 210,
+    position: 'relative',
+    overflow: 'hidden',
   },
-  logoBadgeText: {
-    color: brandColors.gold,
-    fontWeight: '800',
-    fontSize: 26,
-    letterSpacing: 1,
+  heroBackgroundImage: {
+    opacity: 0.25,
+  },
+  heroOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(15, 23, 42, 0.75)',
+  },
+  logoImage: {
+    width: 68,
+    height: 68,
+    marginBottom: 10,
   },
   brandTitle: {
     fontSize: 24,
-    fontWeight: '800',
-    letterSpacing: 1.5,
-    color: brandColors.navy,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    letterSpacing: 2,
+    textTransform: 'uppercase',
+  },
+  taglineBadge: {
+    marginTop: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: theme.radii.full,
+    backgroundColor: 'rgba(254, 220, 50, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(254, 220, 50, 0.25)',
   },
   brandSubtitle: {
-    fontSize: 13,
-    color: brandColors.textSecondary,
-    marginTop: 4,
-    fontWeight: '500',
-  },
-  roleSelectorContainer: {
-    marginBottom: theme.spacing.lg,
-  },
-  roleSelectorLabel: {
     fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 1,
-    color: '#64748B',
-    marginBottom: theme.spacing.sm,
-    textAlign: 'center',
+    fontWeight: '800',
+    color: '#FEDC32',
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
   },
-  rolePillsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
-  rolePill: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: 42,
+  loginSheet: {
     backgroundColor: '#FFFFFF',
-    borderWidth: 1.5,
-    borderColor: '#E2E8F0',
-    borderRadius: theme.radii.md,
-    gap: 6,
-    ...theme.shadows.sm,
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
+    paddingHorizontal: theme.spacing.xl,
+    paddingTop: theme.spacing.md,
   },
-  rolePillText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#475569',
+  handleBar: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#E2E8F0',
+    alignSelf: 'center',
+    marginBottom: theme.spacing.md,
   },
-  rolePillTextSelected: {
-    color: '#FFFFFF',
-  },
-  loginCard: {
-    padding: theme.spacing.xl,
-    marginBottom: theme.spacing.xl,
-  },
-  cardHeaderRow: {
-    marginBottom: theme.spacing.lg,
-  },
-  cardHeaderTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: brandColors.textPrimary,
-  },
-  cardHeaderTagline: {
-    fontSize: 13,
-    color: brandColors.textSecondary,
-    marginTop: 2,
+  sheetTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginBottom: theme.spacing.md,
   },
   errorBanner: {
     flexDirection: 'row',
@@ -441,7 +367,7 @@ const styles = StyleSheet.create({
     backgroundColor: brandColors.errorBg,
     borderColor: brandColors.errorBorder,
     borderWidth: 1,
-    borderRadius: theme.radii.md,
+    borderRadius: 12,
     padding: theme.spacing.md,
     marginBottom: theme.spacing.md,
   },
@@ -454,145 +380,106 @@ const styles = StyleSheet.create({
     color: brandColors.error,
     fontWeight: '500',
   },
-  submitButton: {
-    marginTop: theme.spacing.sm,
+  fieldGroup: {
+    marginBottom: theme.spacing.md,
   },
-  demoCard: {
-    padding: theme.spacing.lg,
-    marginBottom: theme.spacing.xl,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1.5,
-    borderColor: '#E2E8F0',
-  },
-  demoHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+  fieldLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#64748B',
+    letterSpacing: 0.8,
     marginBottom: 6,
   },
-  demoHeaderTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  demoHeaderTitle: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: brandColors.navy,
-    letterSpacing: 0.8,
-  },
-  demoBadge: {
-    backgroundColor: '#FEF3C7',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: theme.radii.full,
-  },
-  demoBadgeText: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#D97706',
-    letterSpacing: 0.5,
-  },
-  demoSubtitle: {
-    fontSize: 12,
-    color: brandColors.textSecondary,
-    marginBottom: theme.spacing.md,
-  },
-  demoGrid: {
-    gap: 10,
-    marginBottom: theme.spacing.md,
-  },
-  demoItem: {
-    padding: theme.spacing.md,
-    borderRadius: theme.radii.md,
-    borderWidth: 1.5,
-    borderColor: '#E2E8F0',
+  textInput: {
     backgroundColor: '#F8FAFC',
-  },
-  demoItemTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  demoItemRole: {
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  demoItemBadge: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: theme.radii.sm,
-  },
-  demoItemBadgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  demoItemName: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: brandColors.textPrimary,
-  },
-  demoItemEmail: {
-    fontSize: 12,
-    color: brandColors.textSecondary,
-    marginTop: 1,
-  },
-  demoItemPass: {
-    fontSize: 11,
-    color: '#64748B',
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
-    marginTop: 3,
-  },
-  instantDemoBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 12,
-    borderRadius: theme.radii.md,
-    marginTop: 4,
-  },
-  instantDemoBtnText: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  supportContainer: {
-    alignItems: 'center',
-    paddingHorizontal: theme.spacing.sm,
-  },
-  supportTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: brandColors.textPrimary,
-    marginBottom: 4,
-  },
-  supportNotice: {
-    fontSize: 12,
-    color: brandColors.textSecondary,
-    textAlign: 'center',
-    lineHeight: 18,
-    marginBottom: theme.spacing.md,
-  },
-  supportActionsRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  supportActionPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: '#FFFFFF',
-    borderRadius: theme.radii.full,
     borderWidth: 1,
     borderColor: '#E2E8F0',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    fontSize: 15,
+    color: '#0F172A',
   },
-  supportActionText: {
+  passwordInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+  },
+  passwordTextInput: {
+    flex: 1,
+    paddingVertical: 12,
+    fontSize: 15,
+    color: '#0F172A',
+  },
+  eyeButton: {
+    padding: 4,
+    marginLeft: 8,
+  },
+  textInputError: {
+    borderColor: brandColors.error,
+  },
+  fieldErrorText: {
     fontSize: 12,
-    fontWeight: '600',
-    color: brandColors.textPrimary,
+    color: brandColors.error,
+    marginTop: 4,
+  },
+  signInButton: {
+    backgroundColor: '#006FFF',
+    borderRadius: 12,
+    paddingVertical: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: theme.spacing.xs,
+    shadowColor: '#006FFF',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  signInBtnContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  signInButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  demoSection: {
+    marginTop: 20,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  demoLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#94A3B8',
+    letterSpacing: 1,
+    marginBottom: 10,
+    textAlign: 'center',
+  },
+  demoRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  demoBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 6,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    backgroundColor: '#F8FAFC',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  demoBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
   },
 });
