@@ -18,7 +18,6 @@ import { brandColors, theme } from '../../theme';
 import { getStudentDashboardApi } from '../../api/student.api';
 import {
   BookOpen,
-  Calendar,
   CheckCircle2,
   Clock,
   Bell,
@@ -29,7 +28,10 @@ import {
   GraduationCap,
   Sparkles,
   Flame,
+  Zap,
+  Star,
   Target,
+  ArrowUpRight,
 } from 'lucide-react-native';
 
 export const StudentDashboardScreen: React.FC = () => {
@@ -55,7 +57,7 @@ export const StudentDashboardScreen: React.FC = () => {
       <ScreenContainer>
         <View style={styles.centerContainer}>
           <ActivityIndicator size="large" color={brandColors.blue} />
-          <Text style={styles.loadingText}>Loading student portal...</Text>
+          <Text style={styles.loadingText}>Unlocking your student universe...</Text>
         </View>
       </ScreenContainer>
     );
@@ -82,7 +84,6 @@ export const StudentDashboardScreen: React.FC = () => {
     student,
     institute,
     batch,
-    todayClasses,
     attendanceOverview,
     homeworkOverview,
     recentMaterials,
@@ -90,16 +91,15 @@ export const StudentDashboardScreen: React.FC = () => {
     notificationsOverview,
   } = dashboard;
 
-  const safeTodayClasses = Array.isArray(todayClasses) ? todayClasses : [];
   const safeRecentMaterials = Array.isArray(recentMaterials) ? recentMaterials : [];
   const safeUpcomingHomework = Array.isArray(homeworkOverview?.upcoming) ? homeworkOverview.upcoming : [];
   const unreadCount = notificationsOverview?.unreadCount || 0;
 
-  const studentName = student?.firstName || 'Student';
+  const studentName = student?.firstName || 'Scholar';
 
   return (
-    <ScreenContainer backgroundColor={brandColors.surface}>
-      {/* Top Header Bar with Character Avatar */}
+    <ScreenContainer backgroundColor="#F8FAFC">
+      {/* Playful & Vibrant Top Header Bar */}
       <View style={styles.topHeader}>
         <View style={styles.headerLeft}>
           <StudentAvatar
@@ -111,12 +111,12 @@ export const StudentDashboardScreen: React.FC = () => {
             <View style={styles.portalTagRow}>
               <Text style={styles.brandSubtitleText}>STUDENT PORTAL</Text>
               <View style={styles.streakTag}>
-                <Flame size={10} color="#FF6B00" />
-                <Text style={styles.streakText}>5 Days</Text>
+                <Flame size={11} color="#EA580C" />
+                <Text style={styles.streakText}>5 Days 🔥</Text>
               </View>
             </View>
             <Text style={styles.studentNameHeader} numberOfLines={1}>
-              Hey, {studentName}! 🚀
+              Hey, {studentName}! ⚡
             </Text>
           </View>
         </View>
@@ -126,7 +126,7 @@ export const StudentDashboardScreen: React.FC = () => {
           onPress={() => navigation.navigate('StudentNotifications')}
           accessibilityLabel="Notifications"
         >
-          <Bell size={20} color={brandColors.textPrimary} />
+          <Bell size={20} color="#0F172A" />
           {unreadCount > 0 && (
             <View style={styles.notificationBadge}>
               <Text style={styles.notificationBadgeText}>
@@ -149,17 +149,21 @@ export const StudentDashboardScreen: React.FC = () => {
           />
         }
       >
-        {/* Student Level & Enrollment Hero Card */}
-        <Card style={styles.bannerCard}>
-          <View style={styles.bannerRow}>
-            <View style={styles.batchInfoContainer}>
-              <View style={styles.badgeRow}>
+        {/* Vibrant Gamified Scholar Level Hero Banner */}
+        <View style={styles.heroCard}>
+          <View style={styles.heroRow}>
+            <View style={styles.heroTextCol}>
+              <View style={styles.levelBadgeRow}>
+                <View style={styles.xpPill}>
+                  <Star size={11} color="#D97706" fill="#FEDC32" />
+                  <Text style={styles.xpText}>1,250 XP</Text>
+                </View>
                 <View style={styles.levelPill}>
-                  <Sparkles size={11} color="#D97706" />
+                  <Zap size={11} color="#006FFF" />
                   <Text style={styles.levelPillText}>Level 5 Scholar</Text>
                 </View>
-                <Badge text={student?.admissionNumber || 'APEX-101'} variant="student" />
               </View>
+
               <Text style={styles.batchTitle}>
                 {batch?.name || 'Grade 10 - Science Batch A'}
               </Text>
@@ -167,62 +171,65 @@ export const StudentDashboardScreen: React.FC = () => {
                 {institute?.name || 'Digital Guru Learning Center'}
               </Text>
             </View>
-            <View style={styles.bannerIconCircle}>
-              <GraduationCap size={26} color={brandColors.blue} />
+
+            <View style={styles.heroIconCircle}>
+              <GraduationCap size={28} color="#FEDC32" />
             </View>
           </View>
-        </Card>
+        </View>
 
-        {/* Quick Animated Metrics Bar */}
+        {/* Vibrant Interactive Metrics Grid */}
         <View style={styles.metricsGrid}>
           <TouchableOpacity
-            style={styles.metricCard}
+            style={[styles.metricCard, { backgroundColor: '#EFF6FF', borderColor: '#BFDBFE' }]}
             onPress={() => navigation.navigate('StudentAttendance')}
-            activeOpacity={0.75}
+            activeOpacity={0.8}
           >
-            <View style={[styles.metricIconWrap, { backgroundColor: '#EFF6FF' }]}>
-              <CheckCircle2 size={18} color={brandColors.blue} />
+            <View style={[styles.metricIconWrap, { backgroundColor: '#006FFF' }]}>
+              <CheckCircle2 size={16} color="#FFFFFF" />
             </View>
-            <Text style={styles.metricValue}>
+            <Text style={[styles.metricValue, { color: '#006FFF' }]}>
               {attendanceOverview?.percentage ?? 0}%
             </Text>
             <Text style={styles.metricLabel}>Attendance</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={styles.metricCard}
+            style={[styles.metricCard, { backgroundColor: '#FFF7ED', borderColor: '#FED7AA' }]}
             onPress={() => navigation.navigate('StudentHomework')}
-            activeOpacity={0.75}
+            activeOpacity={0.8}
           >
-            <View style={[styles.metricIconWrap, { backgroundColor: '#FEF3C7' }]}>
-              <Clock size={18} color="#D97706" />
+            <View style={[styles.metricIconWrap, { backgroundColor: '#EA580C' }]}>
+              <Target size={16} color="#FFFFFF" />
             </View>
-            <Text style={styles.metricValue}>
+            <Text style={[styles.metricValue, { color: '#EA580C' }]}>
               {homeworkOverview?.pendingCount ?? 0}
             </Text>
             <Text style={styles.metricLabel}>Pending HW</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={styles.metricCard}
+            style={[styles.metricCard, { backgroundColor: '#ECFDF5', borderColor: '#A7F3D0' }]}
             onPress={() => navigation.navigate('StudentProgress')}
-            activeOpacity={0.75}
+            activeOpacity={0.8}
           >
-            <View style={[styles.metricIconWrap, { backgroundColor: '#ECFDF5' }]}>
-              <Award size={18} color="#059669" />
+            <View style={[styles.metricIconWrap, { backgroundColor: '#10B981' }]}>
+              <Award size={16} color="#FFFFFF" />
             </View>
-            <Text style={styles.metricValue}>
+            <Text style={[styles.metricValue, { color: '#10B981' }]}>
               {academicProgress?.recentMarks?.length ?? 0}
             </Text>
             <Text style={styles.metricLabel}>Exam Marks</Text>
           </TouchableOpacity>
         </View>
 
-        {/* Pending Homework Section */}
+        {/* Upcoming Homework Missions Section */}
         <View style={styles.sectionHeader}>
           <View style={styles.sectionTitleRow}>
-            <Clock size={16} color="#D97706" />
-            <Text style={styles.sectionTitle}>Upcoming Homework</Text>
+            <View style={[styles.sectionIconBadge, { backgroundColor: '#FFF7ED' }]}>
+              <Clock size={15} color="#EA580C" />
+            </View>
+            <Text style={styles.sectionTitle}>Homework Missions</Text>
           </View>
           <TouchableOpacity
             onPress={() => navigation.navigate('StudentHomework')}
@@ -237,13 +244,13 @@ export const StudentDashboardScreen: React.FC = () => {
           <TouchableOpacity
             style={styles.compactRowCard}
             onPress={() => navigation.navigate('StudentHomework')}
-            activeOpacity={0.75}
+            activeOpacity={0.8}
           >
             <View style={styles.compactRowLeft}>
               <View style={[styles.compactIconBox, { backgroundColor: '#ECFDF5' }]}>
-                <CheckCircle2 size={18} color="#059669" />
+                <CheckCircle2 size={18} color="#10B981" />
               </View>
-              <Text style={styles.compactRowText}>All caught up! No pending homework</Text>
+              <Text style={styles.compactRowText}>All homework missions completed! 🎉</Text>
             </View>
             <ChevronRight size={16} color="#94A3B8" />
           </TouchableOpacity>
@@ -252,9 +259,12 @@ export const StudentDashboardScreen: React.FC = () => {
             <Card key={hw.id} style={styles.homeworkCard}>
               <View style={styles.homeworkHeader}>
                 <Badge text={hw.subject || 'Assignment'} variant="student" />
-                <Text style={styles.dueDateText}>
-                  Due {new Date(hw.dueDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                </Text>
+                <View style={styles.dueDateBadge}>
+                  <Clock size={11} color="#D97706" />
+                  <Text style={styles.dueDateText}>
+                    Due {new Date(hw.dueDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                  </Text>
+                </View>
               </View>
               <Text style={styles.homeworkTitle}>{hw.title}</Text>
               {hw.description ? (
@@ -263,18 +273,20 @@ export const StudentDashboardScreen: React.FC = () => {
                 </Text>
               ) : null}
               <View style={styles.homeworkFooter}>
-                <Text style={[
-                  styles.submissionStatus,
-                  hw.isSubmitted ? styles.statusSubmitted : styles.statusPending,
-                ]}>
-                  {hw.isSubmitted ? 'Submitted' : 'Pending Submission'}
-                </Text>
+                <View style={styles.statusPill}>
+                  <Text style={[
+                    styles.submissionStatus,
+                    hw.isSubmitted ? styles.statusSubmitted : styles.statusPending,
+                  ]}>
+                    {hw.isSubmitted ? 'Submitted 🎉' : 'Mission Pending 🎯'}
+                  </Text>
+                </View>
                 <TouchableOpacity
-                  style={styles.actionPill}
+                  style={styles.actionPillBtn}
                   onPress={() => navigation.navigate('StudentHomework')}
                 >
-                  <Text style={styles.actionPillText}>
-                    {hw.isSubmitted ? 'View Submission' : 'Submit Now'}
+                  <Text style={styles.actionPillBtnText}>
+                    {hw.isSubmitted ? 'View Work' : 'Submit Work 🚀'}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -282,11 +294,13 @@ export const StudentDashboardScreen: React.FC = () => {
           ))
         )}
 
-        {/* Recent Learning Materials */}
+        {/* Recent Study Materials Section */}
         <View style={styles.sectionHeader}>
           <View style={styles.sectionTitleRow}>
-            <FileText size={16} color={brandColors.blue} />
-            <Text style={styles.sectionTitle}>Recent Study Materials</Text>
+            <View style={[styles.sectionIconBadge, { backgroundColor: '#EFF6FF' }]}>
+              <BookOpen size={15} color="#006FFF" />
+            </View>
+            <Text style={styles.sectionTitle}>Course Study Materials</Text>
           </View>
           <TouchableOpacity
             onPress={() => navigation.navigate('StudentMaterials')}
@@ -301,13 +315,13 @@ export const StudentDashboardScreen: React.FC = () => {
           <TouchableOpacity
             style={styles.compactRowCard}
             onPress={() => navigation.navigate('StudentMaterials')}
-            activeOpacity={0.75}
+            activeOpacity={0.8}
           >
             <View style={styles.compactRowLeft}>
               <View style={[styles.compactIconBox, { backgroundColor: '#F8FAFC' }]}>
                 <BookOpen size={18} color="#64748B" />
               </View>
-              <Text style={styles.compactRowText}>No new study materials uploaded</Text>
+              <Text style={styles.compactRowText}>No new course materials uploaded</Text>
             </View>
             <ChevronRight size={16} color="#94A3B8" />
           </TouchableOpacity>
@@ -315,7 +329,7 @@ export const StudentDashboardScreen: React.FC = () => {
           safeRecentMaterials.map((mat) => (
             <Card key={mat.id} style={styles.materialCard}>
               <View style={styles.materialIconWrap}>
-                <FileText size={18} color={brandColors.blue} />
+                <FileText size={18} color="#006FFF" />
               </View>
               <View style={styles.materialInfo}>
                 <Text style={styles.materialTitle} numberOfLines={1}>{mat.title}</Text>
@@ -327,19 +341,22 @@ export const StudentDashboardScreen: React.FC = () => {
                 style={styles.materialBtn}
                 onPress={() => navigation.navigate('StudentMaterials')}
               >
-                <Text style={styles.materialBtnText}>Open</Text>
+                <Text style={styles.materialBtnText}>Preview</Text>
+                <ArrowUpRight size={12} color="#006FFF" />
               </TouchableOpacity>
             </Card>
           ))
         )}
 
-        {/* Recent Academic Marks */}
+        {/* Academic Exam Results */}
         {academicProgress?.recentMarks && academicProgress.recentMarks.length > 0 && (
           <>
             <View style={styles.sectionHeader}>
               <View style={styles.sectionTitleRow}>
-                <Award size={16} color="#059669" />
-                <Text style={styles.sectionTitle}>Recent Exam Marks</Text>
+                <View style={[styles.sectionIconBadge, { backgroundColor: '#ECFDF5' }]}>
+                  <Award size={15} color="#10B981" />
+                </View>
+                <Text style={styles.sectionTitle}>Exam Results & Marks</Text>
               </View>
               <TouchableOpacity
                 onPress={() => navigation.navigate('StudentProgress')}
@@ -353,10 +370,10 @@ export const StudentDashboardScreen: React.FC = () => {
             {academicProgress.recentMarks.map((mark) => (
               <Card key={mark.id} style={styles.markCard}>
                 <View style={styles.markRow}>
-                  <View>
+                  <View style={styles.markTitleCol}>
                     <Text style={styles.examTitle}>{mark.examTitle}</Text>
                     <Text style={styles.examSubject}>
-                      {mark.subjectName} • {new Date(mark.examDate).toLocaleDateString()}
+                      Subject: {mark.subjectName} • {new Date(mark.examDate).toLocaleDateString()}
                     </Text>
                   </View>
                   <View style={styles.scoreContainer}>
@@ -364,12 +381,17 @@ export const StudentDashboardScreen: React.FC = () => {
                       {mark.isAbsent ? 'ABSENT' : `${mark.marksObtained} / ${mark.totalMarks}`}
                     </Text>
                     {!mark.isAbsent && (
-                      <Text style={[
-                        styles.passTag,
-                        mark.marksObtained >= mark.passingMarks ? styles.passColor : styles.failColor
+                      <View style={[
+                        styles.passTagPill,
+                        mark.marksObtained >= mark.passingMarks ? styles.passPillBg : styles.failPillBg
                       ]}>
-                        {mark.marksObtained >= mark.passingMarks ? 'PASSED' : 'NEEDS IMPROVEMENT'}
-                      </Text>
+                        <Text style={[
+                          styles.passTagText,
+                          mark.marksObtained >= mark.passingMarks ? styles.passColor : styles.failColor
+                        ]}>
+                          {mark.marksObtained >= mark.passingMarks ? 'PASSED 🌟' : 'NEEDS WORK'}
+                        </Text>
+                      </View>
                     )}
                   </View>
                 </View>
@@ -392,6 +414,7 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: theme.spacing.md,
     fontSize: 14,
+    fontWeight: '600',
     color: brandColors.textSecondary,
   },
   errorTitle: {
@@ -424,7 +447,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.lg,
     paddingTop: theme.spacing.md,
     paddingBottom: theme.spacing.sm,
-    backgroundColor: brandColors.surface,
+    backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
     borderBottomColor: '#F1F5F9',
   },
@@ -447,35 +470,35 @@ const styles = StyleSheet.create({
   brandSubtitleText: {
     fontSize: 10,
     fontWeight: '800',
-    color: brandColors.blue,
+    color: '#006FFF',
     letterSpacing: 0.8,
     textTransform: 'uppercase',
   },
   streakTag: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 2,
+    gap: 3,
     backgroundColor: '#FFF7ED',
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-    borderRadius: 8,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: '#FFEDD5',
   },
   streakText: {
-    fontSize: 9,
+    fontSize: 10,
     fontWeight: '800',
     color: '#C2410C',
   },
   studentNameHeader: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '800',
-    color: brandColors.textPrimary,
+    color: '#0F172A',
   },
   notificationBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: '#F8FAFC',
     justifyContent: 'center',
     alignItems: 'center',
@@ -502,62 +525,85 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: theme.spacing.md,
-    paddingBottom: 80,
+    paddingBottom: 100,
   },
-  bannerCard: {
-    backgroundColor: '#EFF6FF',
-    borderColor: '#BFDBFE',
+  heroCard: {
+    backgroundColor: '#0F172A',
+    borderRadius: 20,
+    padding: 16,
     marginBottom: theme.spacing.md,
-    padding: 14,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    elevation: 6,
   },
-  bannerRow: {
+  heroRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  batchInfoContainer: {
+  heroTextCol: {
     flex: 1,
   },
-  badgeRow: {
+  levelBadgeRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginBottom: 6,
+    gap: 8,
+    marginBottom: 8,
+  },
+  xpPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(254, 220, 50, 0.15)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(254, 220, 50, 0.3)',
+  },
+  xpText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#FEDC32',
   },
   levelPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 3,
-    backgroundColor: '#FEF3C7',
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 8,
+    gap: 4,
+    backgroundColor: 'rgba(0, 111, 255, 0.2)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#FDE68A',
+    borderColor: 'rgba(0, 111, 255, 0.4)',
   },
   levelPillText: {
     fontSize: 10,
     fontWeight: '800',
-    color: '#B45309',
+    color: '#60A5FA',
   },
   batchTitle: {
     fontSize: 16,
-    fontWeight: '700',
-    color: brandColors.textPrimary,
+    fontWeight: '800',
+    color: '#FFFFFF',
     marginBottom: 2,
   },
   instituteSubtitle: {
     fontSize: 12,
-    color: brandColors.textSecondary,
+    color: '#94A3B8',
   },
-  bannerIconCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#DBEAFE',
+  heroIconCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(254, 220, 50, 0.15)',
     justifyContent: 'center',
     alignItems: 'center',
     marginLeft: theme.spacing.sm,
+    borderWidth: 1.5,
+    borderColor: 'rgba(254, 220, 50, 0.3)',
   },
   metricsGrid: {
     flexDirection: 'row',
@@ -566,12 +612,10 @@ const styles = StyleSheet.create({
   },
   metricCard: {
     flex: 1,
-    backgroundColor: brandColors.surface,
     paddingVertical: 12,
     paddingHorizontal: 8,
-    borderRadius: theme.borderRadius.md,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderRadius: 16,
+    borderWidth: 1.5,
     alignItems: 'center',
   },
   metricIconWrap: {
@@ -583,14 +627,13 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   metricValue: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: brandColors.textPrimary,
+    fontSize: 18,
+    fontWeight: '900',
   },
   metricLabel: {
     fontSize: 11,
-    fontWeight: '600',
-    color: brandColors.textSecondary,
+    fontWeight: '700',
+    color: '#475569',
     marginTop: 2,
   },
   sectionHeader: {
@@ -598,17 +641,24 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginTop: theme.spacing.xs,
-    marginBottom: 8,
+    marginBottom: 10,
   },
   sectionTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
+  },
+  sectionIconBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   sectionTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: brandColors.textPrimary,
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0F172A',
   },
   seeAllBtn: {
     flexDirection: 'row',
@@ -617,15 +667,15 @@ const styles = StyleSheet.create({
   },
   seeAllText: {
     fontSize: 12,
-    fontWeight: '600',
-    color: brandColors.blue,
+    fontWeight: '700',
+    color: '#006FFF',
   },
   compactRowCard: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: '#E2E8F0',
     paddingHorizontal: 14,
@@ -646,112 +696,88 @@ const styles = StyleSheet.create({
   },
   compactRowText: {
     fontSize: 13,
-    fontWeight: '600',
-    color: '#475569',
-  },
-  classCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: theme.spacing.xs,
-    padding: theme.spacing.sm,
-  },
-  classTimeColumn: {
-    width: 90,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-  },
-  classTimeText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: brandColors.textPrimary,
-    textAlign: 'center',
-  },
-  classDivider: {
-    width: 1,
-    height: 36,
-    backgroundColor: brandColors.borderLight,
-    marginHorizontal: theme.spacing.sm,
-  },
-  classDetailsColumn: {
-    flex: 1,
-  },
-  classSubject: {
-    fontSize: 14,
     fontWeight: '700',
-    color: brandColors.textPrimary,
-  },
-  classTeacher: {
-    fontSize: 12,
-    color: brandColors.textSecondary,
-    marginTop: 2,
-  },
-  classBatch: {
-    fontSize: 12,
-    color: brandColors.textMuted,
+    color: '#0F172A',
   },
   homeworkCard: {
     marginBottom: theme.spacing.xs,
-    padding: theme.spacing.sm,
+    padding: 14,
+    borderRadius: 16,
   },
   homeworkHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 4,
+    marginBottom: 6,
+  },
+  dueDateBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#FFF7ED',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
   },
   dueDateText: {
     fontSize: 11,
-    color: brandColors.textMuted,
+    fontWeight: '700',
+    color: '#C2410C',
   },
   homeworkTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: brandColors.textPrimary,
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#0F172A',
     marginBottom: 2,
   },
   homeworkDesc: {
     fontSize: 12,
-    color: brandColors.textSecondary,
-    marginBottom: 6,
+    color: '#64748B',
+    marginBottom: 8,
+    lineHeight: 17,
   },
   homeworkFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 4,
+    marginTop: 6,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
   },
+  statusPill: {},
   submissionStatus: {
     fontSize: 11,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   statusPending: {
     color: '#D97706',
   },
   statusSubmitted: {
-    color: brandColors.success,
+    color: '#10B981',
   },
-  actionPill: {
-    backgroundColor: '#EFF6FF',
-    paddingHorizontal: theme.spacing.sm,
-    paddingVertical: 4,
-    borderRadius: 6,
+  actionPillBtn: {
+    backgroundColor: '#006FFF',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
   },
-  actionPillText: {
-    color: brandColors.blue,
-    fontSize: 11,
-    fontWeight: '600',
+  actionPillBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
   },
   materialCard: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: theme.spacing.xs,
-    padding: theme.spacing.sm,
+    padding: 12,
+    borderRadius: 14,
   },
   materialIconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: 8,
+    width: 38,
+    height: 38,
+    borderRadius: 10,
     backgroundColor: '#EFF6FF',
     justifyContent: 'center',
     alignItems: 'center',
@@ -761,62 +787,80 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   materialTitle: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: brandColors.textPrimary,
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0F172A',
   },
   materialMeta: {
     fontSize: 11,
-    color: brandColors.textMuted,
+    color: '#64748B',
     marginTop: 2,
   },
   materialBtn: {
-    paddingHorizontal: theme.spacing.sm,
-    paddingVertical: 4,
-    borderRadius: 6,
-    backgroundColor: brandColors.surfaceMuted,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    backgroundColor: '#EFF6FF',
   },
   materialBtnText: {
     fontSize: 11,
-    fontWeight: '600',
-    color: brandColors.textSecondary,
+    fontWeight: '700',
+    color: '#006FFF',
   },
   markCard: {
     marginBottom: theme.spacing.xs,
-    padding: theme.spacing.sm,
+    padding: 14,
+    borderRadius: 16,
   },
   markRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
+  markTitleCol: {
+    flex: 1,
+  },
   examTitle: {
     fontSize: 14,
-    fontWeight: '600',
-    color: brandColors.textPrimary,
+    fontWeight: '700',
+    color: '#0F172A',
   },
   examSubject: {
     fontSize: 11,
-    color: brandColors.textMuted,
+    color: '#64748B',
     marginTop: 2,
   },
   scoreContainer: {
     alignItems: 'flex-end',
   },
   scoreText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: brandColors.textPrimary,
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0F172A',
   },
-  passTag: {
-    fontSize: 9,
-    fontWeight: '700',
-    marginTop: 2,
+  passTagPill: {
+    marginTop: 3,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  passPillBg: {
+    backgroundColor: '#ECFDF5',
+  },
+  failPillBg: {
+    backgroundColor: '#FEF2F2',
+  },
+  passTagText: {
+    fontSize: 10,
+    fontWeight: '800',
   },
   passColor: {
-    color: brandColors.success,
+    color: '#10B981',
   },
   failColor: {
-    color: brandColors.error,
+    color: '#EF4444',
   },
 });

@@ -10,6 +10,7 @@ import { resolveAbsolutePath, getRelativeStorageKey } from '../../utils/storage.
 import { getAuthorizedStaffAssignments } from '../students/student-authorization.service.js';
 import { resolveStructuredTimetable } from '../students/timetable-resolver.js';
 import { getInstituteLocalDate } from '../attendance/attendance.controller.js';
+import { serverCache } from '../../utils/cache.js';
 
 
 function safeParseDate(dateVal?: string | null): Date | null {
@@ -1608,6 +1609,14 @@ export async function getMyStaffDashboard(req: AuthenticatedRequest, res: Respon
       return res.status(400).json({ success: false, error: 'Institute and user context required' });
     }
 
+    const cacheKey = `dashboard:staff:${userId}:${instituteId}`;
+    if (req.query.refresh !== 'true') {
+      const cached = serverCache.get<any>(cacheKey);
+      if (cached) {
+        return res.json(cached);
+      }
+    }
+
     const assignments = await getAuthorizedStaffAssignments(req, prisma);
     const authorizedBatchIds = assignments.authorizedBatchIds;
 
@@ -1642,65 +1651,79 @@ export async function getMyStaffDashboard(req: AuthenticatedRequest, res: Respon
       return res.status(404).json({ success: false, error: 'Staff profile not found' });
     }
 
-    // Unique active students enrolled in teacher's batches
-    const studentCount = await prisma.student.count({
-      where: {
-        instituteId,
-        status: 'ACTIVE',
-        enrollments: {
-          some: {
-            batchId: { in: authorizedBatchIds },
-            isActive: true,
-          },
-        },
-      },
-    });
-
-    // Pending homework submissions needing evaluation
-    const pendingHomeworkCount = await prisma.homeworkSubmission.count({
-      where: {
-        material: {
-          instituteId,
-          batchId: { in: authorizedBatchIds },
-        },
-        gradedAt: null,
-      },
-    });
-
-    // Today's attendance summary in teacher's batches
     const serverNow = new Date();
     const eventDate = getInstituteLocalDate(serverNow);
 
-    const todayCheckIns = await prisma.attendanceEvent.findMany({
-      where: {
-        instituteId,
-        batchId: { in: authorizedBatchIds },
-        eventDate,
-        eventType: 'CHECK_IN',
-      },
-      select: { studentId: true, isLate: true },
-    });
+    // Concurrently fetch all independent teacher dashboard sub-queries in parallel
+    const [
+      studentCount,
+      pendingHomeworkCount,
+      todayCheckIns,
+      allBatches,
+      recentNotifications,
+    ] = await Promise.all([
+      // 1. Unique active students enrolled in teacher's batches
+      prisma.student.count({
+        where: {
+          instituteId,
+          status: 'ACTIVE',
+          enrollments: {
+            some: {
+              batchId: { in: authorizedBatchIds },
+              isActive: true,
+            },
+          },
+        },
+      }),
+      // 2. Pending homework submissions needing evaluation
+      prisma.homeworkSubmission.count({
+        where: {
+          material: {
+            instituteId,
+            batchId: { in: authorizedBatchIds },
+          },
+          gradedAt: null,
+        },
+      }),
+      // 3. Today's attendance summary in teacher's batches
+      prisma.attendanceEvent.findMany({
+        where: {
+          instituteId,
+          batchId: { in: authorizedBatchIds },
+          eventDate,
+          eventType: 'CHECK_IN',
+        },
+        select: { studentId: true, isLate: true },
+      }),
+      // 4. Today's scheduled periods for this staff
+      prisma.batch.findMany({
+        where: {
+          id: { in: authorizedBatchIds },
+          instituteId,
+          isActive: true,
+        },
+        include: {
+          batchSubjects: {
+            include: {
+              subject: true,
+              staffProfile: { include: { user: true } },
+            },
+          },
+        },
+      }),
+      // 5. Recent notifications
+      prisma.inAppNotification.findMany({
+        where: {
+          userId,
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 5,
+      }),
+    ]);
 
     const uniquePresentStudents = new Set(todayCheckIns.map((e) => e.studentId)).size;
     const lateStudentsCount = todayCheckIns.filter((e) => e.isLate).length;
     const attendancePercentage = studentCount > 0 ? Math.round((uniquePresentStudents / studentCount) * 100) : 0;
-
-    // Today's scheduled periods for this staff
-    const allBatches = await prisma.batch.findMany({
-      where: {
-        id: { in: authorizedBatchIds },
-        instituteId,
-        isActive: true,
-      },
-      include: {
-        batchSubjects: {
-          include: {
-            subject: true,
-            staffProfile: { include: { user: true } },
-          },
-        },
-      },
-    });
 
     const todayClasses: any[] = [];
     for (const b of allBatches) {
@@ -1722,16 +1745,7 @@ export async function getMyStaffDashboard(req: AuthenticatedRequest, res: Respon
 
     todayClasses.sort((a, b) => (a.startTime || '').localeCompare(b.startTime || ''));
 
-    // Recent notifications
-    const recentNotifications = await prisma.inAppNotification.findMany({
-      where: {
-        userId,
-      },
-      orderBy: { createdAt: 'desc' },
-      take: 5,
-    });
-
-    return res.json({
+    const responsePayload = {
       success: true,
       data: {
         teacher: {
@@ -1764,7 +1778,10 @@ export async function getMyStaffDashboard(req: AuthenticatedRequest, res: Respon
         todayClasses,
         recentNotifications,
       },
-    });
+    };
+
+    serverCache.set(cacheKey, responsePayload, 20000);
+    return res.json(responsePayload);
   } catch (err: any) {
     console.error('[getMyStaffDashboard Error]', err);
     return res.status(500).json({ success: false, error: 'Failed to retrieve staff dashboard' });

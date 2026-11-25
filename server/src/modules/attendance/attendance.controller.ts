@@ -7,6 +7,7 @@ import { AuthenticatedRequest } from '../../middleware/auth.js';
 import { config } from '../../config/index.js';
 import { NotificationService } from '../notifications/notification.service.js';
 import { InAppNotificationService } from '../notifications/inapp-notification.service.js';
+import { serverCache } from '../../utils/cache.js';
 import {
   getAuthorizedStudentScope,
   isStudentAuthorized,
@@ -281,6 +282,7 @@ export async function recordCheckIn(req: AuthenticatedRequest, res: Response) {
         eventType: 'CHECK_IN',
         eventTime: serverNow,
       });
+      serverCache.invalidate('dashboard:');
     } catch (smsErr: any) {
       console.error('[NotificationService] Non-blocking SMS enqueue warning:', smsErr.message);
     }
@@ -736,6 +738,7 @@ export async function recordCheckOut(req: AuthenticatedRequest, res: Response) {
         eventType: 'CHECK_OUT',
         eventTime: serverNow,
       });
+      serverCache.invalidate('dashboard:');
     } catch (smsErr: any) {
       console.error('[NotificationService] Non-blocking checkout SMS enqueue warning:', smsErr.message);
     }

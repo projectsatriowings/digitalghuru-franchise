@@ -10,6 +10,7 @@ import {
   MOCK_HOMEWORK,
   MOCK_PARENT_DASHBOARD,
   MOCK_PARENT_CHILDREN,
+  MOCK_PARENT_ACADEMICS,
   MOCK_TEACHER_DASHBOARD,
   MOCK_TEACHER_BATCHES,
   MOCK_TEACHER_PROFILE,
@@ -26,6 +27,7 @@ function getMockResponseForUrl(url: string): any {
   if (url.includes('/parents/my/dashboard-summary')) return MOCK_PARENT_DASHBOARD;
   if (url.includes('/parents/my/children')) return { children: MOCK_PARENT_CHILDREN };
   if (url.includes('/parents/students/') && url.includes('/attendance')) return MOCK_STUDENT_ATTENDANCE;
+  if (url.includes('/parents/students/') && url.includes('/academics')) return MOCK_PARENT_ACADEMICS;
   if (url.includes('/staff/my/dashboard')) return MOCK_TEACHER_DASHBOARD;
   if (url.includes('/staff/my/profile')) return { profile: MOCK_TEACHER_PROFILE };
   if (url.includes('/academics/batches')) return { batches: MOCK_TEACHER_BATCHES };

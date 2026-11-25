@@ -182,6 +182,52 @@ export const MOCK_MATERIALS = [
   },
 ];
 
+export const MOCK_PARENT_ACADEMICS = {
+  summary: {
+    averagePercentage: 88,
+    examsTaken: 3,
+  },
+  subjects: ['Physics', 'Mathematics', 'Chemistry'],
+  marks: [
+    {
+      id: 'm-1',
+      examTitle: 'Term 1 Mid-Term Examination',
+      subject: 'Physics',
+      examDate: '2026-10-15T10:00:00Z',
+      marksObtained: 85,
+      totalMarks: 100,
+      remarks: 'Excellent understanding of Electromagnetism concepts.',
+    },
+    {
+      id: 'm-2',
+      examTitle: 'Term 1 Mid-Term Examination',
+      subject: 'Mathematics',
+      examDate: '2026-10-18T10:00:00Z',
+      marksObtained: 92,
+      totalMarks: 100,
+      remarks: 'Top score in Quadratic Equations and Algebra.',
+    },
+    {
+      id: 'm-3',
+      examTitle: 'Monthly Science Quiz 2',
+      subject: 'Chemistry',
+      examDate: '2026-11-05T10:00:00Z',
+      marksObtained: 88,
+      totalMarks: 100,
+      remarks: 'Good grasp of Periodic Table trends.',
+    },
+  ],
+  teacherEvaluations: [
+    {
+      id: 'e-1',
+      category: 'Overall Classroom Discipline & Effort',
+      createdAt: '2026-11-10T10:00:00Z',
+      rating: 5,
+      remarks: 'Aarav is consistently punctual, actively participates in problem-solving discussions, and submits all assignments on time.',
+    },
+  ],
+};
+
 export const MOCK_HOMEWORK = [
   {
     id: 'hw-1',

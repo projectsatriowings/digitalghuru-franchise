@@ -330,18 +330,6 @@ export const ParentDashboardScreen: React.FC = () => {
             <View style={styles.quickActionsSection}>
               <Text style={styles.quickActionsHeader}>QUICK SERVICES</Text>
               <View style={styles.actionsGrid}>
-                {/* Timetable */}
-                <TouchableOpacity
-                  style={styles.actionTile}
-                  onPress={() => navigation.navigate('ParentTimetable')}
-                >
-                  <View style={[styles.actionIconBox, { backgroundColor: '#EFF6FF' }]}>
-                    <Calendar size={22} color="#006FFF" />
-                  </View>
-                  <Text style={styles.actionTitle}>Timetable</Text>
-                  <Text style={styles.actionDesc}>Class Schedule</Text>
-                </TouchableOpacity>
-
                 {/* Homework */}
                 <TouchableOpacity
                   style={styles.actionTile}
@@ -356,6 +344,18 @@ export const ParentDashboardScreen: React.FC = () => {
                       ? `${activeChild.fees.pendingAssignmentsCount} Pending`
                       : 'Assignments'}
                   </Text>
+                </TouchableOpacity>
+
+                {/* Attendance Logs */}
+                <TouchableOpacity
+                  style={styles.actionTile}
+                  onPress={() => navigation.navigate('ParentAttendance')}
+                >
+                  <View style={[styles.actionIconBox, { backgroundColor: '#EFF6FF' }]}>
+                    <Clock size={22} color="#006FFF" />
+                  </View>
+                  <Text style={styles.actionTitle}>Attendance</Text>
+                  <Text style={styles.actionDesc}>Check-in Logs</Text>
                 </TouchableOpacity>
 
                 {/* Study Materials */}

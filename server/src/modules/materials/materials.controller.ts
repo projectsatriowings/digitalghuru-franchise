@@ -6,6 +6,7 @@ import fs from 'fs';
 import path from 'path';
 import { AuthenticatedRequest } from '../../middleware/auth.js';
 import { resolveAbsolutePath, getRelativeStorageKey } from '../../utils/storage.js';
+import { serverCache } from '../../utils/cache.js';
 import {
   isStaffAssignedToBatch,
   isStaffAssignedToBatchSubject,
@@ -167,6 +168,14 @@ export async function listMaterials(req: AuthenticatedRequest, res: Response) {
     const instituteId = req.instituteId;
     if (!instituteId) {
       return res.status(400).json({ success: false, error: 'Institute context required' });
+    }
+
+    const cacheKey = `mat:${instituteId}:${req.user?.userId || 'all'}:${req.query.batchId || ''}:${req.query.subjectId || ''}:${req.query.type || ''}:${req.query.search || ''}`;
+    if (req.query.refresh !== 'true') {
+      const cached = serverCache.get<any>(cacheKey);
+      if (cached) {
+        return res.json(cached);
+      }
     }
 
     const batchId = req.query.batchId as string;
@@ -379,10 +388,12 @@ export async function listMaterials(req: AuthenticatedRequest, res: Response) {
       },
     });
 
-    return res.json({
+    const responsePayload = {
       success: true,
       data: { materials },
-    });
+    };
+    serverCache.set(cacheKey, responsePayload, 20000);
+    return res.json(responsePayload);
   } catch (err: any) {
     console.error('[List Materials Error]', err);
     return res.status(500).json({ success: false, error: 'Failed to fetch learning materials' });

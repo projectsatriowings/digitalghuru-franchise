@@ -15,6 +15,7 @@ import {
   getAdmissionYear,
 } from './admission-number.service.js';
 import { resolveStructuredTimetable } from './timetable-resolver.js';
+import { serverCache } from '../../utils/cache.js';
 
 export function formatStudentResponse<T extends { id: string; photoUrl?: string | null; notes?: string | null; updatedAt?: Date | string }>(student: T): T & { credentialsOnRecord?: { studentPassword: string | null; parentPassword: string | null } } {
   if (!student) return student;
@@ -1200,6 +1201,15 @@ export async function getMyStudentDashboard(req: AuthenticatedRequest, res: Resp
       return res.status(403).json({ success: false, error: 'Only student accounts can access this dashboard' });
     }
 
+    const cacheKey = `student:dashboard:${req.user.userId}`;
+    const isRefresh = req.query.refresh === 'true';
+    if (!isRefresh) {
+      const cached = serverCache.get<any>(cacheKey);
+      if (cached) {
+        return res.json(cached);
+      }
+    }
+
     const student = await prisma.student.findFirst({
       where: { userId: req.user.userId },
       include: {
@@ -1376,7 +1386,7 @@ export async function getMyStudentDashboard(req: AuthenticatedRequest, res: Resp
     // Resolve today's timetable
     const timetable = resolveStructuredTimetable(activeBatch);
 
-    return res.json({
+    const responsePayload = {
       success: true,
       data: {
         student: {
@@ -1440,7 +1450,10 @@ export async function getMyStudentDashboard(req: AuthenticatedRequest, res: Resp
           recent: recentNotifs,
         },
       },
-    });
+    };
+
+    serverCache.set(cacheKey, responsePayload, 20000);
+    return res.json(responsePayload);
   } catch (err: any) {
     console.error('[Student Dashboard Error]', err);
     return res.status(500).json({ success: false, error: 'Failed to aggregate student dashboard data' });

@@ -103,15 +103,6 @@ export const TeacherDashboardScreen: React.FC = () => {
       {/* Teacher Top Header */}
       <View style={styles.topHeader}>
         <View style={styles.headerLeft}>
-          <View style={styles.teacherAvatar}>
-            <Text style={styles.avatarText}>
-              {(teacher?.fullName || user?.fullName || 'T')
-                .split(' ')
-                .map((n) => n[0])
-                .slice(0, 2)
-                .join('')}
-            </Text>
-          </View>
           <View style={styles.headerTitles}>
             <Text style={styles.welcomeSubtitle}>FACULTY PORTAL</Text>
             <Text style={styles.teacherName} numberOfLines={1}>
