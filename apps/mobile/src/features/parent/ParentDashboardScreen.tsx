@@ -9,7 +9,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { ScreenContainer } from '../../components/common/ScreenContainer';
 import { Card } from '../../components/common/Card';
 import { Badge } from '../../components/common/Badge';
@@ -50,6 +50,12 @@ export const ParentDashboardScreen: React.FC = () => {
     queryKey: ['parent-dashboard-summary'],
     queryFn: getParentDashboardSummaryApi,
   });
+
+  useFocusEffect(
+    useCallback(() => {
+      refetch();
+    }, [refetch])
+  );
 
   // Sync children into Zustand store when fetched
   useEffect(() => {
@@ -100,26 +106,14 @@ export const ParentDashboardScreen: React.FC = () => {
   const unreadNotifications = dashboard.unreadCounts?.notifications || 0;
 
   return (
-    <ScreenContainer>
+    <ScreenContainer backgroundColor={brandColors.surface}>
       {/* Top Header Bar */}
       <View style={styles.topHeader}>
         <View style={styles.headerLeft}>
-          <View style={styles.parentAvatar}>
-            <Text style={styles.parentAvatarText}>
-              {(user?.fullName || 'Parent')
-                .split(' ')
-                .map((n) => n[0])
-                .slice(0, 2)
-                .join('')}
-            </Text>
-          </View>
           <View style={styles.headerTitles}>
-            <Text style={styles.welcomeSubtitle}>Parent Portal</Text>
+            <Text style={styles.welcomeSubtitle}>PARENT PORTAL</Text>
             <Text style={styles.parentName} numberOfLines={1}>
               {user?.fullName || 'Parent'}
-            </Text>
-            <Text style={styles.campusName} numberOfLines={1}>
-              {activeInstitute?.name || 'Franchise Campus'}
             </Text>
           </View>
         </View>
@@ -342,18 +336,6 @@ export const ParentDashboardScreen: React.FC = () => {
             <View style={styles.quickActionsSection}>
               <Text style={styles.quickActionsHeader}>QUICK SERVICES</Text>
               <View style={styles.actionsGrid}>
-                {/* Timetable */}
-                <TouchableOpacity
-                  style={styles.actionTile}
-                  onPress={() => navigation.navigate('ParentTimetable')}
-                >
-                  <View style={[styles.actionIconBox, { backgroundColor: '#EFF6FF' }]}>
-                    <Calendar size={22} color="#006FFF" />
-                  </View>
-                  <Text style={styles.actionTitle}>Timetable</Text>
-                  <Text style={styles.actionDesc}>Class Schedule</Text>
-                </TouchableOpacity>
-
                 {/* Homework */}
                 <TouchableOpacity
                   style={styles.actionTile}
@@ -368,6 +350,18 @@ export const ParentDashboardScreen: React.FC = () => {
                       ? `${activeChild.fees.pendingAssignmentsCount} Pending`
                       : 'Assignments'}
                   </Text>
+                </TouchableOpacity>
+
+                {/* Attendance Logs */}
+                <TouchableOpacity
+                  style={styles.actionTile}
+                  onPress={() => navigation.navigate('ParentAttendance')}
+                >
+                  <View style={[styles.actionIconBox, { backgroundColor: '#EFF6FF' }]}>
+                    <Clock size={22} color="#006FFF" />
+                  </View>
+                  <Text style={styles.actionTitle}>Attendance</Text>
+                  <Text style={styles.actionDesc}>Check-in Logs</Text>
                 </TouchableOpacity>
 
                 {/* Study Materials */}
@@ -530,7 +524,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 16,
-    paddingBottom: 36,
+    paddingBottom: 100,
   },
   attendanceTrackerCard: {
     backgroundColor: '#FFFFFF',

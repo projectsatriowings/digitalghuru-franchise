@@ -22,7 +22,9 @@ export const ScreenContainer: React.FC<ScreenContainerProps> = ({
   backgroundColor = brandColors.background,
 }) => {
   const insets = useSafeAreaInsets();
-  const statusBarHeight = Platform.OS === 'android' ? (RNStatusBar.currentHeight || 24) : 0;
+  // On modern Android punch-hole devices (like Samsung Galaxy), status bar height is typically 36-48dp.
+  // We use Math.max across insets.top, RNStatusBar.currentHeight, and a 38dp floor on Android to prevent overlay.
+  const statusBarHeight = Platform.OS === 'android' ? Math.max(RNStatusBar.currentHeight || 0, 38) : 0;
   const topPadding = Math.max(insets.top, statusBarHeight);
 
   return (

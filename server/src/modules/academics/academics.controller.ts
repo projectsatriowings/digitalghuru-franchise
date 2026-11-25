@@ -2,6 +2,7 @@ import { Response } from 'express';
 import { prisma } from '../../prisma.js';
 import { z } from 'zod';
 import { AuthenticatedRequest } from '../../middleware/auth.js';
+import { serverCache } from '../../utils/cache.js';
 import {
   isStudentAuthorized,
   isStaffAssignedToBatch,
@@ -72,6 +73,14 @@ export async function listBatches(req: AuthenticatedRequest, res: Response) {
     const instituteId = req.instituteId;
     if (!instituteId) return res.status(400).json({ success: false, error: 'Institute context required' });
 
+    const cacheKey = `batches:${instituteId}:${req.user?.userId || 'all'}`;
+    if (req.query.refresh !== 'true') {
+      const cached = serverCache.get<any>(cacheKey);
+      if (cached) {
+        return res.json(cached);
+      }
+    }
+
     const isStaff = req.user?.role === 'STAFF';
     let batchWhere: any = { instituteId };
     let authorizedSubjectIds: string[] | null = null;
@@ -136,7 +145,9 @@ export async function listBatches(req: AuthenticatedRequest, res: Response) {
         })
       : batches;
 
-    return res.json({ success: true, data: { batches: filteredBatches } });
+    const responsePayload = { success: true, data: { batches: filteredBatches } };
+    serverCache.set(cacheKey, responsePayload, 30000);
+    return res.json(responsePayload);
   } catch (err: any) {
     console.error('[listBatches error]', err);
     return res.status(500).json({ success: false, error: 'Failed to list batches' });

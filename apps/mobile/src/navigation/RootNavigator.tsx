@@ -33,8 +33,8 @@ export const RootNavigator: React.FC = () => {
           style={styles.splashLogo}
           resizeMode="contain"
         />
-        <Text style={styles.splashTitle}>DIGITAL GURU</Text>
-        <Text style={styles.splashSubtitle}>Franchise & Learning Enterprise</Text>
+        <Text style={styles.splashTitle}>DIGITAL GHURU</Text>
+        <Text style={styles.splashSubtitle}>Learning Enterprise</Text>
         <ActivityIndicator
           size="small"
           color={brandColors.gold}
@@ -71,44 +71,30 @@ export const RootNavigator: React.FC = () => {
 const styles = StyleSheet.create({
   splashContainer: {
     flex: 1,
-    backgroundColor: brandColors.navy,
+    backgroundColor: '#0F172A',
     alignItems: 'center',
     justifyContent: 'center',
   },
   splashLogo: {
-    width: 200,
-    height: 70,
-    marginBottom: theme.spacing.md,
-  },
-  splashBadge: {
-    width: 68,
-    height: 68,
-    borderRadius: theme.radii.lg,
-    backgroundColor: '#1E293B',
-    borderWidth: 2,
-    borderColor: brandColors.gold,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: theme.spacing.md,
-  },
-  splashBadgeText: {
-    color: brandColors.gold,
-    fontWeight: '800',
-    fontSize: 30,
-    letterSpacing: 1,
+    width: 84,
+    height: 84,
+    marginBottom: 16,
   },
   splashTitle: {
     color: '#FFFFFF',
     fontSize: 22,
-    fontWeight: '800',
-    letterSpacing: 1.5,
+    fontWeight: '900',
+    letterSpacing: 2,
   },
   splashSubtitle: {
-    color: '#94A3B8',
-    fontSize: 13,
+    color: '#FEDC32',
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
     marginTop: 4,
   },
   splashSpinner: {
-    marginTop: theme.spacing.xl,
+    marginTop: 24,
   },
 });

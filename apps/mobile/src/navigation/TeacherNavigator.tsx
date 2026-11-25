@@ -18,6 +18,7 @@ import { TeacherTimetableScreen } from '../features/teacher/TeacherTimetableScre
 import { TeacherNotificationsScreen } from '../features/teacher/TeacherNotificationsScreen';
 import { TeacherProfileScreen } from '../features/teacher/TeacherProfileScreen';
 import { brandColors } from '../theme';
+import { AnimatedTabBar } from '../components/design-system';
 import {
   LayoutDashboard,
   CalendarCheck,
@@ -32,25 +33,13 @@ const Stack = createNativeStackNavigator();
 const TeacherTabNavigator: React.FC = () => {
   return (
     <Tab.Navigator
+      tabBar={(props) => <AnimatedTabBar {...props} role="STAFF" />}
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: brandColors.orange,
-        tabBarInactiveTintColor: '#94A3B8',
-        tabBarStyle: {
-          backgroundColor: '#FFFFFF',
-          borderTopColor: '#F1F5F9',
-          height: 62,
-          paddingBottom: 8,
-          paddingTop: 6,
-        },
-        tabBarLabelStyle: {
-          fontSize: 11,
-          fontWeight: '600',
-        },
       }}
     >
       <Tab.Screen
-        name="TeacherDashboardTab"
+        name="TeacherDashboard"
         component={TeacherDashboardScreen}
         options={{
           tabBarLabel: 'Dashboard',
@@ -60,7 +49,7 @@ const TeacherTabNavigator: React.FC = () => {
         }}
       />
       <Tab.Screen
-        name="TeacherAttendanceTab"
+        name="TeacherAttendance"
         component={TeacherAttendanceScreen}
         options={{
           tabBarLabel: 'Attendance',
@@ -70,7 +59,7 @@ const TeacherTabNavigator: React.FC = () => {
         }}
       />
       <Tab.Screen
-        name="TeacherHomeworkTab"
+        name="TeacherHomework"
         component={TeacherHomeworkScreen}
         options={{
           tabBarLabel: 'Homework',
@@ -80,7 +69,7 @@ const TeacherTabNavigator: React.FC = () => {
         }}
       />
       <Tab.Screen
-        name="TeacherStudentsTab"
+        name="TeacherStudents"
         component={TeacherStudentsScreen}
         options={{
           tabBarLabel: 'Students',
@@ -90,7 +79,7 @@ const TeacherTabNavigator: React.FC = () => {
         }}
       />
       <Tab.Screen
-        name="TeacherProfileTab"
+        name="TeacherProfile"
         component={TeacherProfileScreen}
         options={{
           tabBarLabel: 'Profile',
@@ -98,6 +87,28 @@ const TeacherTabNavigator: React.FC = () => {
             <User size={size} color={color} />
           ),
         }}
+      />
+
+      {/* Sub-screens launched from Quick Services that retain the Floating Navigation Bar */}
+      <Tab.Screen
+        name="TeacherMaterials"
+        component={TeacherMaterialsScreen}
+        options={{ tabBarButton: () => null }}
+      />
+      <Tab.Screen
+        name="TeacherProgress"
+        component={TeacherProgressScreen}
+        options={{ tabBarButton: () => null }}
+      />
+      <Tab.Screen
+        name="TeacherBatches"
+        component={TeacherBatchesScreen}
+        options={{ tabBarButton: () => null }}
+      />
+      <Tab.Screen
+        name="TeacherTimetable"
+        component={TeacherTimetableScreen}
+        options={{ tabBarButton: () => null }}
       />
     </Tab.Navigator>
   );
@@ -107,22 +118,13 @@ export const TeacherNavigator: React.FC = () => {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="TeacherTabs" component={TeacherTabNavigator} />
-      <Stack.Screen name="TeacherDashboard" component={TeacherDashboardScreen} />
-      <Stack.Screen name="TeacherBatches" component={TeacherBatchesScreen} />
-      <Stack.Screen name="TeacherStudents" component={TeacherStudentsScreen} />
       <Stack.Screen name="TeacherStudentDetails" component={TeacherStudentDetailsScreen} />
-      <Stack.Screen name="TeacherAttendance" component={TeacherAttendanceScreen} />
       <Stack.Screen name="VoiceAttendance" component={VoiceAttendanceScreen} />
-      <Stack.Screen name="TeacherHomework" component={TeacherHomeworkScreen} />
       <Stack.Screen name="CreateHomework" component={CreateHomeworkScreen} />
       <Stack.Screen name="HomeworkSubmissions" component={HomeworkSubmissionsScreen} />
       <Stack.Screen name="EvaluateHomework" component={EvaluateHomeworkScreen} />
-      <Stack.Screen name="TeacherMaterials" component={TeacherMaterialsScreen} />
       <Stack.Screen name="UploadMaterial" component={UploadMaterialScreen} />
-      <Stack.Screen name="TeacherProgress" component={TeacherProgressScreen} />
-      <Stack.Screen name="TeacherTimetable" component={TeacherTimetableScreen} />
       <Stack.Screen name="TeacherNotifications" component={TeacherNotificationsScreen} />
-      <Stack.Screen name="TeacherProfile" component={TeacherProfileScreen} />
     </Stack.Navigator>
   );
 };

@@ -48,16 +48,6 @@ export const ChildSelectorCard: React.FC<ChildSelectorCardProps> = ({ onChildCha
         onPress={() => hasMultiple && setModalVisible(true)}
       >
         <View style={styles.contentRow}>
-          <View style={styles.avatarContainer}>
-            <Text style={styles.avatarText}>
-              {(selectedChild?.fullName || 'S')
-                .split(' ')
-                .map((n) => n[0])
-                .slice(0, 2)
-                .join('')}
-            </Text>
-          </View>
-
           <View style={styles.infoCol}>
             <View style={styles.labelRow}>
               <Text style={styles.monitoringLabel}>MONITORING STUDENT</Text>
@@ -125,26 +115,6 @@ export const ChildSelectorCard: React.FC<ChildSelectorCardProps> = ({ onChildCha
                     ]}
                     onPress={() => handleSelect(item)}
                   >
-                    <View
-                      style={[
-                        styles.optionAvatar,
-                        isSelected && styles.optionAvatarSelected,
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.optionAvatarText,
-                          isSelected && styles.optionAvatarTextSelected,
-                        ]}
-                      >
-                        {item.fullName
-                          .split(' ')
-                          .map((n) => n[0])
-                          .slice(0, 2)
-                          .join('')}
-                      </Text>
-                    </View>
-
                     <View style={styles.optionDetails}>
                       <Text style={styles.optionName}>{item.fullName}</Text>
                       <Text style={styles.optionBatch}>

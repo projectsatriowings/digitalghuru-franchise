@@ -3,6 +3,7 @@ import { prisma } from '../../prisma.js';
 import { z } from 'zod';
 import { AuthenticatedRequest } from '../../middleware/auth.js';
 import { hashPassword, generateSecureRandomToken } from '../../utils/security.js';
+import { serverCache } from '../../utils/cache.js';
 import { isStudentAuthorized } from '../students/student-authorization.service.js';
 import { resolveStructuredTimetable } from '../students/timetable-resolver.js';
 
@@ -817,6 +818,14 @@ export async function getParentDashboardSummary(req: AuthenticatedRequest, res: 
       return res.status(403).json({ success: false, error: 'Forbidden: Parent access only' });
     }
 
+    const cacheKey = `dashboard:parent:${req.user.userId}`;
+    if (req.query.refresh !== 'true') {
+      const cached = serverCache.get<any>(cacheKey);
+      if (cached) {
+        return res.json(cached);
+      }
+    }
+
     const parentProfile = await prisma.parentProfile.findUnique({
       where: { userId: req.user.userId },
       include: {
@@ -853,152 +862,158 @@ export async function getParentDashboardSummary(req: AuthenticatedRequest, res: 
     let totalOutstandingFees = 0;
     let nextUpcomingDueDate: Date | null = null;
 
-    const childrenSummaries = await Promise.all(
-      relations.map(async (rel) => {
-        const student = rel.student;
+    const [childrenSummaries, parentConversations, unreadNotificationsCount] = await Promise.all([
+      Promise.all(
+        relations.map(async (rel) => {
+          const student = rel.student;
+          const batchId = student.enrollments[0]?.batch?.id;
 
-        // Today's attendance
-        const todayEvents = await prisma.attendanceEvent.findMany({
-          where: {
-            studentId: student.id,
-            eventDate: { gte: todayStart, lte: todayEnd },
-          },
-          orderBy: { eventTime: 'asc' },
-        });
+          // Fetch all child sub-metrics concurrently in parallel
+          const [todayEvents, monthEvents, distinctBatchDays, feeAssignments, latestMark] = await Promise.all([
+            // 1. Today's attendance
+            prisma.attendanceEvent.findMany({
+              where: {
+                studentId: student.id,
+                eventDate: { gte: todayStart, lte: todayEnd },
+              },
+              orderBy: { eventTime: 'asc' },
+            }),
+            // 2. Monthly check-in events
+            prisma.attendanceEvent.findMany({
+              where: {
+                studentId: student.id,
+                eventType: 'CHECK_IN',
+                eventDate: { gte: monthStart, lte: todayEnd },
+              },
+              select: { eventDate: true, isLate: true },
+            }),
+            // 3. Batch working days in this month
+            batchId
+              ? prisma.attendanceEvent.findMany({
+                  where: {
+                    batchId,
+                    eventDate: { gte: monthStart, lte: todayEnd },
+                  },
+                  distinct: ['eventDate'],
+                  select: { eventDate: true },
+                })
+              : Promise.resolve([]),
+            // 4. Fee Dues
+            prisma.studentFeeAssignment.findMany({
+              where: {
+                studentId: student.id,
+                status: { in: ['PENDING', 'PARTIALLY_PAID', 'OVERDUE'] },
+              },
+              include: {
+                feeStructure: { select: { name: true } },
+                payments: { where: { status: 'SUCCESS' }, select: { amountPaid: true } },
+              },
+              orderBy: { dueDate: 'asc' },
+            }),
+            // 5. Latest Exam Result
+            prisma.examMark.findFirst({
+              where: {
+                studentId: student.id,
+                exam: { isPublished: true },
+              },
+              include: {
+                exam: {
+                  include: { subject: { select: { name: true } } },
+                },
+              },
+              orderBy: { exam: { examDate: 'desc' } },
+            }),
+          ]);
 
-        const checkIn = todayEvents.find((e) => e.eventType === 'CHECK_IN');
-        const checkOut = todayEvents.find((e) => e.eventType === 'CHECK_OUT');
+          const checkIn = todayEvents.find((e) => e.eventType === 'CHECK_IN');
+          const checkOut = todayEvents.find((e) => e.eventType === 'CHECK_OUT');
 
-        let todayStatus: 'CHECKED_IN' | 'CHECKED_OUT' | 'NOT_MARKED' | 'LATE' = 'NOT_MARKED';
-        if (checkOut) {
-          todayStatus = 'CHECKED_OUT';
-        } else if (checkIn) {
-          todayStatus = checkIn.isLate ? 'LATE' : 'CHECKED_IN';
-        }
-
-        // Monthly attendance percentage
-        const monthEvents = await prisma.attendanceEvent.findMany({
-          where: {
-            studentId: student.id,
-            eventType: 'CHECK_IN',
-            eventDate: { gte: monthStart, lte: todayEnd },
-          },
-          select: { eventDate: true, isLate: true },
-        });
-
-        // Batch working days in this month up to today
-        const batchId = student.enrollments[0]?.batch?.id;
-        let totalWorkingDays = 0;
-        if (batchId) {
-          const distinctBatchDays = await prisma.attendanceEvent.findMany({
-            where: {
-              batchId,
-              eventDate: { gte: monthStart, lte: todayEnd },
-            },
-            distinct: ['eventDate'],
-            select: { eventDate: true },
-          });
-          totalWorkingDays = distinctBatchDays.length;
-        }
-
-        const presentDays = monthEvents.length;
-        const attendancePercentage = totalWorkingDays > 0 ? Math.round((presentDays / totalWorkingDays) * 100) : 100;
-
-        // Fee Dues
-        const feeAssignments = await prisma.studentFeeAssignment.findMany({
-          where: {
-            studentId: student.id,
-            status: { in: ['PENDING', 'PARTIALLY_PAID', 'OVERDUE'] },
-          },
-          include: {
-            feeStructure: { select: { name: true } },
-            payments: { where: { status: 'SUCCESS' }, select: { amountPaid: true } },
-          },
-          orderBy: { dueDate: 'asc' },
-        });
-
-        let studentPendingFees = 0;
-        for (const fa of feeAssignments) {
-          const totalPaid = fa.payments.reduce((acc, p) => acc + Number(p.amountPaid), 0);
-          const remaining = Math.max(0, Number(fa.finalAmount) - totalPaid);
-          studentPendingFees += remaining;
-
-          if (!nextUpcomingDueDate || fa.dueDate < nextUpcomingDueDate) {
-            nextUpcomingDueDate = fa.dueDate;
+          let todayStatus: 'CHECKED_IN' | 'CHECKED_OUT' | 'NOT_MARKED' | 'LATE' = 'NOT_MARKED';
+          if (checkOut) {
+            todayStatus = 'CHECKED_OUT';
+          } else if (checkIn) {
+            todayStatus = checkIn.isLate ? 'LATE' : 'CHECKED_IN';
           }
-        }
-        totalOutstandingFees += studentPendingFees;
 
-        // Latest Exam Result
-        const latestMark = await prisma.examMark.findFirst({
-          where: {
-            studentId: student.id,
-            exam: { isPublished: true },
-          },
-          include: {
-            exam: {
-              include: { subject: { select: { name: true } } },
-            },
-          },
-          orderBy: { exam: { examDate: 'desc' } },
-        });
+          const totalWorkingDays = distinctBatchDays.length;
+          const presentDays = monthEvents.length;
+          const attendancePercentage = totalWorkingDays > 0 ? Math.round((presentDays / totalWorkingDays) * 100) : 100;
 
-        const latestExamResult = latestMark
-          ? {
-              examTitle: latestMark.exam.title,
-              subject: latestMark.exam.subject.name,
-              score: Number(latestMark.marksObtained),
-              totalMarks: Number(latestMark.exam.totalMarks),
-              percentage:
-                Number(latestMark.exam.totalMarks) > 0
-                  ? Math.round((Number(latestMark.marksObtained) / Number(latestMark.exam.totalMarks)) * 100)
-                  : 0,
-              examDate: latestMark.exam.examDate,
-              isAbsent: latestMark.isAbsent,
+          let studentPendingFees = 0;
+          for (const fa of feeAssignments) {
+            const totalPaid = fa.payments.reduce((acc, p) => acc + Number(p.amountPaid), 0);
+            const remaining = Math.max(0, Number(fa.finalAmount) - totalPaid);
+            studentPendingFees += remaining;
+
+            if (!nextUpcomingDueDate || fa.dueDate < nextUpcomingDueDate) {
+              nextUpcomingDueDate = fa.dueDate;
             }
-          : null;
+          }
+          totalOutstandingFees += studentPendingFees;
 
-        return {
-          studentId: student.id,
-          fullName: `${student.firstName} ${student.lastName}`,
-          admissionNumber: student.admissionNumber,
-          gender: student.gender,
-          photoUrl: student.photoUrl,
-          batchName: student.enrollments[0]?.batch?.name || 'Class',
-          relationship: rel.relation,
-          todayAttendance: {
-            status: todayStatus,
-            checkInTime: checkIn?.eventTime || null,
-            checkOutTime: checkOut?.eventTime || null,
-            isLate: checkIn?.isLate || false,
-          },
-          monthlyAttendance: {
-            presentDays,
-            totalWorkingDays,
-            percentage: attendancePercentage,
-          },
-          fees: {
-            pendingAmount: studentPendingFees,
-            pendingAssignmentsCount: feeAssignments.length,
-          },
-          latestExamResult,
-        };
-      })
-    );
+          const latestExamResult = latestMark
+            ? {
+                examTitle: latestMark.exam.title,
+                subject: latestMark.exam.subject.name,
+                score: Number(latestMark.marksObtained),
+                totalMarks: Number(latestMark.exam.totalMarks),
+                percentage:
+                  Number(latestMark.exam.totalMarks) > 0
+                    ? Math.round((Number(latestMark.marksObtained) / Number(latestMark.exam.totalMarks)) * 100)
+                    : 0,
+                examDate: latestMark.exam.examDate,
+                isAbsent: latestMark.isAbsent,
+              }
+            : null;
 
-    // Unread messages count
-    const parentConversations = await prisma.conversation.findMany({
-      where: {
-        members: { some: { userId: req.user.userId } },
-      },
-      include: {
-        members: { where: { userId: req.user.userId } },
-        messages: {
-          take: 1,
-          orderBy: { createdAt: 'desc' },
+          return {
+            studentId: student.id,
+            fullName: `${student.firstName} ${student.lastName}`,
+            admissionNumber: student.admissionNumber,
+            gender: student.gender,
+            photoUrl: student.photoUrl,
+            batchName: student.enrollments[0]?.batch?.name || 'Class',
+            relationship: rel.relation,
+            todayAttendance: {
+              status: todayStatus,
+              checkInTime: checkIn?.eventTime || null,
+              checkOutTime: checkOut?.eventTime || null,
+              isLate: checkIn?.isLate || false,
+            },
+            monthlyAttendance: {
+              presentDays,
+              totalWorkingDays,
+              percentage: attendancePercentage,
+            },
+            fees: {
+              pendingAmount: studentPendingFees,
+              pendingAssignmentsCount: feeAssignments.length,
+            },
+            latestExamResult,
+          };
+        })
+      ),
+      // Unread messages count
+      prisma.conversation.findMany({
+        where: {
+          members: { some: { userId: req.user.userId } },
         },
-      },
-    });
+        include: {
+          members: { where: { userId: req.user.userId } },
+          messages: {
+            take: 1,
+            orderBy: { createdAt: 'desc' },
+          },
+        },
+      }),
+      // Unread in-app notifications count
+      prisma.inAppNotification.count({
+        where: {
+          userId: req.user.userId,
+          isRead: false,
+        },
+      }),
+    ]);
 
     let unreadMessagesCount = 0;
     for (const conv of parentConversations) {
@@ -1013,15 +1028,7 @@ export async function getParentDashboardSummary(req: AuthenticatedRequest, res: 
       }
     }
 
-    // Unread in-app notifications count
-    const unreadNotificationsCount = await prisma.inAppNotification.count({
-      where: {
-        userId: req.user.userId,
-        isRead: false,
-      },
-    });
-
-    return res.json({
+    const responsePayload = {
       success: true,
       data: {
         parent: {
@@ -1040,7 +1047,9 @@ export async function getParentDashboardSummary(req: AuthenticatedRequest, res: 
           notifications: unreadNotificationsCount,
         },
       },
-    });
+    };
+    serverCache.set(cacheKey, responsePayload, 20000);
+    return res.json(responsePayload);
   } catch (err: any) {
     console.error('[Parent Dashboard Summary Error]', err);
     return res.status(500).json({ success: false, error: 'Failed to generate parent dashboard summary' });

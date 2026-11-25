@@ -26,10 +26,10 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#0F172A"
+        "backgroundColor": "#FFFFFF"
       },
       "package": "com.digitalghuru.franchise",
-      "versionCode": 7,
+      "versionCode": 8,
       "permissions": [
         "CAMERA",
         "READ_EXTERNAL_STORAGE",

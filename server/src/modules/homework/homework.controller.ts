@@ -5,6 +5,7 @@ import fs from 'fs';
 import path from 'path';
 import { AuthenticatedRequest } from '../../middleware/auth.js';
 import { resolveAbsolutePath, getRelativeStorageKey } from '../../utils/storage.js';
+import { serverCache } from '../../utils/cache.js';
 import {
   isStaffAssignedToBatch,
   isStaffAssignedToBatchSubject,
@@ -228,6 +229,14 @@ export async function listHomework(req: AuthenticatedRequest, res: Response) {
       return res.status(400).json({ success: false, error: 'Institute context required' });
     }
 
+    const cacheKey = `hw:${instituteId}:${req.user?.userId || 'all'}:${req.query.batchId || ''}:${req.query.subjectId || ''}:${req.query.status || ''}`;
+    if (req.query.refresh !== 'true') {
+      const cached = serverCache.get<any>(cacheKey);
+      if (cached) {
+        return res.json(cached);
+      }
+    }
+
     const batchId = req.query.batchId as string;
     const subjectId = req.query.subjectId as string;
     const status = req.query.status as string; // 'PUBLISHED' | 'DRAFT' | 'ALL'
@@ -410,10 +419,12 @@ export async function listHomework(req: AuthenticatedRequest, res: Response) {
       };
     });
 
-    return res.json({
+    const responsePayload = {
       success: true,
       data: { homework: formatted },
-    });
+    };
+    serverCache.set(cacheKey, responsePayload, 20000);
+    return res.json(responsePayload);
   } catch (err: any) {
     console.error('[List Homework Error]', err);
     return res.status(500).json({ success: false, error: 'Failed to list homework' });

@@ -2,17 +2,18 @@ import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { StudentDashboardScreen } from '../features/student/StudentDashboardScreen';
-import { StudentTimetableScreen } from '../features/student/StudentTimetableScreen';
 import { StudentHomeworkScreen } from '../features/student/StudentHomeworkScreen';
 import { StudentMaterialsScreen } from '../features/student/StudentMaterialsScreen';
 import { StudentAttendanceScreen } from '../features/student/StudentAttendanceScreen';
 import { StudentProgressScreen } from '../features/student/StudentProgressScreen';
+import { StudentTimetableScreen } from '../features/student/StudentTimetableScreen';
 import { StudentNotificationsScreen } from '../features/student/StudentNotificationsScreen';
 import { StudentProfileScreen } from '../features/student/StudentProfileScreen';
 import { brandColors } from '../theme';
+import { AnimatedTabBar } from '../components/design-system';
 import {
   LayoutDashboard,
-  Calendar,
+  CalendarCheck,
   CheckSquare,
   BookOpen,
   User,
@@ -24,25 +25,13 @@ const Stack = createNativeStackNavigator();
 const StudentTabNavigator: React.FC = () => {
   return (
     <Tab.Navigator
+      tabBar={(props) => <AnimatedTabBar {...props} role="STUDENT" />}
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: brandColors.blue,
-        tabBarInactiveTintColor: '#94A3B8',
-        tabBarStyle: {
-          backgroundColor: '#FFFFFF',
-          borderTopColor: '#F1F5F9',
-          height: 62,
-          paddingBottom: 8,
-          paddingTop: 6,
-        },
-        tabBarLabelStyle: {
-          fontSize: 11,
-          fontWeight: '600',
-        },
       }}
     >
       <Tab.Screen
-        name="StudentDashboardTab"
+        name="StudentDashboard"
         component={StudentDashboardScreen}
         options={{
           tabBarLabel: 'Dashboard',
@@ -50,11 +39,11 @@ const StudentTabNavigator: React.FC = () => {
         }}
       />
       <Tab.Screen
-        name="StudentTimetable"
-        component={StudentTimetableScreen}
+        name="StudentAttendance"
+        component={StudentAttendanceScreen}
         options={{
-          tabBarLabel: 'Timetable',
-          tabBarIcon: ({ color, size }) => <Calendar size={size} color={color} />,
+          tabBarLabel: 'Attendance',
+          tabBarIcon: ({ color, size }) => <CalendarCheck size={size} color={color} />,
         }}
       />
       <Tab.Screen
@@ -74,12 +63,24 @@ const StudentTabNavigator: React.FC = () => {
         }}
       />
       <Tab.Screen
-        name="StudentProfileTab"
+        name="StudentProfile"
         component={StudentProfileScreen}
         options={{
           tabBarLabel: 'Profile',
           tabBarIcon: ({ color, size }) => <User size={size} color={color} />,
         }}
+      />
+
+      {/* Sub-screens launched from Dashboard that retain the Floating Navigation Bar */}
+      <Tab.Screen
+        name="StudentProgress"
+        component={StudentProgressScreen}
+        options={{ tabBarButton: () => null }}
+      />
+      <Tab.Screen
+        name="StudentTimetable"
+        component={StudentTimetableScreen}
+        options={{ tabBarButton: () => null }}
       />
     </Tab.Navigator>
   );
@@ -89,8 +90,6 @@ export const StudentNavigator: React.FC = () => {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="StudentTabs" component={StudentTabNavigator} />
-      <Stack.Screen name="StudentAttendance" component={StudentAttendanceScreen} />
-      <Stack.Screen name="StudentProgress" component={StudentProgressScreen} />
       <Stack.Screen name="StudentNotifications" component={StudentNotificationsScreen} />
     </Stack.Navigator>
   );

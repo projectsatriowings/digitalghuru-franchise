@@ -261,7 +261,7 @@ export const TeacherHomeworkScreen: React.FC = () => {
 const styles = StyleSheet.create({
   scrollContent: {
     padding: theme.spacing.md,
-    paddingBottom: 80,
+    paddingBottom: 100,
   },
   createBtn: {
     flexDirection: 'row',

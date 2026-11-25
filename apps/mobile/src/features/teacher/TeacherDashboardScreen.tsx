@@ -99,26 +99,17 @@ export const TeacherDashboardScreen: React.FC = () => {
   const unreadNotifs = recentNotifications.filter((n: any) => !n.isRead).length;
 
   return (
-    <ScreenContainer>
+    <ScreenContainer backgroundColor={brandColors.surface}>
       {/* Teacher Top Header */}
       <View style={styles.topHeader}>
         <View style={styles.headerLeft}>
-          <View style={styles.teacherAvatar}>
-            <Text style={styles.avatarText}>
-              {(teacher?.fullName || user?.fullName || 'T')
-                .split(' ')
-                .map((n) => n[0])
-                .slice(0, 2)
-                .join('')}
-            </Text>
-          </View>
           <View style={styles.headerTitles}>
             <Text style={styles.welcomeSubtitle}>FACULTY PORTAL</Text>
             <Text style={styles.teacherName} numberOfLines={1}>
               {teacher?.fullName || user?.fullName || 'Faculty Member'}
             </Text>
             <Text style={styles.designationText} numberOfLines={1}>
-              {teacher?.designation || 'Classroom Instructor'} • {activeInstitute?.name || 'Franchise Center'}
+              {teacher?.designation || 'Classroom Instructor'}
             </Text>
           </View>
         </View>
@@ -464,7 +455,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 16,
-    paddingBottom: 40,
+    paddingBottom: 100,
   },
   voiceHeroCard: {
     backgroundColor: '#0A2540',

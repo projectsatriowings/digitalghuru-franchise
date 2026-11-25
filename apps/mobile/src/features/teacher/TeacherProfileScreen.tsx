@@ -1,11 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
   ScrollView,
   StyleSheet,
   TouchableOpacity,
-  Alert,
   ActivityIndicator,
 } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
@@ -14,25 +13,24 @@ import { Header } from '../../components/common/Header';
 import { Card } from '../../components/common/Card';
 import { Badge } from '../../components/common/Badge';
 import { Button } from '../../components/common/Button';
+import { ConfirmDialog } from '../../components/design-system/ConfirmDialog';
 import { getTeacherProfileApi } from '../../api/teacher.api';
 import { useAuthStore } from '../../store/authStore';
 import { brandColors, theme } from '../../theme';
 import {
-  User,
   Building,
   Mail,
   Phone,
   BookOpen,
-  Award,
   LogOut,
   AlertCircle,
   GraduationCap,
-  Briefcase,
   ShieldCheck,
 } from 'lucide-react-native';
 
 export const TeacherProfileScreen: React.FC = () => {
   const { logout } = useAuthStore();
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   const {
     data: profile,
@@ -44,21 +42,9 @@ export const TeacherProfileScreen: React.FC = () => {
     queryFn: () => getTeacherProfileApi(),
   });
 
-  const handleLogout = () => {
-    Alert.alert(
-      'Sign Out',
-      'Are you sure you want to sign out of Digital Guru Franchise Teacher portal?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Sign Out',
-          style: 'destructive',
-          onPress: async () => {
-            await logout();
-          },
-        },
-      ]
-    );
+  const handleConfirmLogout = async () => {
+    setShowLogoutConfirm(false);
+    await logout();
   };
 
   if (isLoading) {
@@ -88,6 +74,9 @@ export const TeacherProfileScreen: React.FC = () => {
 
   const assignedBatches = profile.assignedBatches || [];
   const assignedSubjects = profile.assignedSubjects || [];
+  const teacherName = profile.user?.fullName || (profile as any)?.fullName || 'Faculty Member';
+  const teacherEmail = profile.user?.email || (profile as any)?.email || '';
+  const teacherPhone = profile.user?.phone || (profile as any)?.phone || '';
 
   return (
     <ScreenContainer>
@@ -96,67 +85,62 @@ export const TeacherProfileScreen: React.FC = () => {
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {/* Main Identity Card */}
         <Card style={styles.identityCard}>
-          <View style={styles.avatarRow}>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>
-                {profile.user.fullName ? profile.user.fullName[0] : 'T'}
-              </Text>
-            </View>
-            <View style={styles.identityInfo}>
-              <Text style={styles.fullName}>{profile.user.fullName}</Text>
-              <Text style={styles.designation}>
-                {profile.designation || 'Faculty Member / Instructor'}
-              </Text>
-              <View style={styles.codeRow}>
-                <Badge
-                  label={profile.employeeCode || 'FACULTY'}
-                  variant="warning"
-                  size="sm"
-                />
-                <Badge label="Active Teacher" variant="success" size="sm" />
-              </View>
+          <View style={styles.identityInfo}>
+            <Text style={styles.fullName}>{teacherName}</Text>
+            <Text style={styles.designation}>
+              {profile.designation || 'Faculty Member / Instructor'}
+            </Text>
+            <View style={styles.codeRow}>
+              <Badge
+                label={profile.employeeCode || 'FACULTY'}
+                variant="warning"
+                size="sm"
+              />
+              <Badge label="Active Teacher" variant="success" size="sm" />
             </View>
           </View>
         </Card>
 
         {/* Institute Information */}
-        <Card style={styles.sectionCard}>
-          <Text style={styles.sectionTitle}>Institute & Center</Text>
-          <View style={styles.infoRow}>
-            <Building size={16} color="#FE4D01" />
-            <View style={styles.infoCol}>
-              <Text style={styles.infoLabel}>Tuition Center</Text>
-              <Text style={styles.infoValue}>{profile.institute.name}</Text>
+        {profile.institute && (
+          <Card style={styles.sectionCard}>
+            <Text style={styles.sectionTitle}>Institute & Center</Text>
+            <View style={styles.infoRow}>
+              <Building size={16} color="#FE4D01" />
+              <View style={styles.infoCol}>
+                <Text style={styles.infoLabel}>Tuition Center</Text>
+                <Text style={styles.infoValue}>{profile.institute.name}</Text>
+              </View>
             </View>
-          </View>
-          <View style={styles.infoRow}>
-            <ShieldCheck size={16} color="#0A2540" />
-            <View style={styles.infoCol}>
-              <Text style={styles.infoLabel}>Center Code</Text>
-              <Text style={styles.infoValue}>{profile.institute.code}</Text>
+            <View style={styles.infoRow}>
+              <ShieldCheck size={16} color="#0A2540" />
+              <View style={styles.infoCol}>
+                <Text style={styles.infoLabel}>Center Code</Text>
+                <Text style={styles.infoValue}>{profile.institute.code}</Text>
+              </View>
             </View>
-          </View>
-        </Card>
+          </Card>
+        )}
 
         {/* Contact Details */}
         <Card style={styles.sectionCard}>
           <Text style={styles.sectionTitle}>Contact & Account</Text>
-          {profile.user.email ? (
+          {teacherEmail ? (
             <View style={styles.infoRow}>
               <Mail size={16} color="#64748B" />
               <View style={styles.infoCol}>
                 <Text style={styles.infoLabel}>Email Address</Text>
-                <Text style={styles.infoValue}>{profile.user.email}</Text>
+                <Text style={styles.infoValue}>{teacherEmail}</Text>
               </View>
             </View>
           ) : null}
 
-          {profile.user.phone ? (
+          {teacherPhone ? (
             <View style={styles.infoRow}>
               <Phone size={16} color="#64748B" />
               <View style={styles.infoCol}>
                 <Text style={styles.infoLabel}>Phone Number</Text>
-                <Text style={styles.infoValue}>{profile.user.phone}</Text>
+                <Text style={styles.infoValue}>{teacherPhone}</Text>
               </View>
             </View>
           ) : null}
@@ -202,10 +186,22 @@ export const TeacherProfileScreen: React.FC = () => {
         )}
 
         {/* Sign Out Action */}
-        <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
+        <TouchableOpacity style={styles.logoutBtn} onPress={() => setShowLogoutConfirm(true)}>
           <LogOut size={18} color="#DC2626" />
           <Text style={styles.logoutBtnText}>Sign Out of Teacher Account</Text>
         </TouchableOpacity>
+
+        {/* Modern Red Badge Logout Dialog */}
+        <ConfirmDialog
+          visible={showLogoutConfirm}
+          title="Sign Out"
+          message="Are you sure you want to sign out of Digital Ghuru Teacher portal?"
+          confirmLabel="Log Out"
+          cancelLabel="Cancel"
+          destructive={true}
+          onConfirm={handleConfirmLogout}
+          onCancel={() => setShowLogoutConfirm(false)}
+        />
       </ScrollView>
     </ScreenContainer>
   );
@@ -214,7 +210,7 @@ export const TeacherProfileScreen: React.FC = () => {
 const styles = StyleSheet.create({
   scrollContent: {
     padding: theme.spacing.md,
-    paddingBottom: 60,
+    paddingBottom: 100,
   },
   centerContainer: {
     flex: 1,
@@ -241,29 +237,11 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 12,
   },
-  avatarRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-  },
-  avatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#0A2540',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarText: {
-    color: '#FEDC32',
-    fontSize: 22,
-    fontWeight: '800',
-  },
   identityInfo: {
     flex: 1,
   },
   fullName: {
-    fontSize: 17,
+    fontSize: 18,
     fontWeight: '800',
     color: '#0F172A',
   },
@@ -276,7 +254,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginTop: 6,
+    marginTop: 8,
   },
   sectionCard: {
     padding: 16,

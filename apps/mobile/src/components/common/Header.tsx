@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { brandColors, theme } from '../../theme';
 import { useAuthStore } from '../../store/authStore';
+import { ConfirmDialog } from '../design-system/ConfirmDialog';
 import { LogOut, ArrowLeft } from 'lucide-react-native';
 
 interface HeaderProps {
@@ -23,7 +24,8 @@ export const Header: React.FC<HeaderProps> = ({
   rightElement,
 }) => {
   const navigation = useNavigation<any>();
-  const { activeInstitute, logout, activeRole } = useAuthStore();
+  const { logout } = useAuthStore();
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   const handleBackPress = () => {
     if (onBack) {
@@ -33,63 +35,61 @@ export const Header: React.FC<HeaderProps> = ({
     }
   };
 
-  const getRoleBadgeColor = () => {
-    switch (activeRole) {
-      case 'STUDENT':
-        return '#006FFF';
-      case 'PARENT':
-        return '#0F172A';
-      case 'STAFF':
-        return '#FE4D01';
-      default:
-        return brandColors.blue;
-    }
+  const handleConfirmLogout = async () => {
+    setShowLogoutConfirm(false);
+    await logout();
   };
 
   return (
-    <View style={styles.headerContainer}>
-      <View style={styles.brandingRow}>
-        <View style={styles.brandingLeft}>
-          {showBack && (
+    <>
+      <View style={styles.headerContainer}>
+        <View style={styles.headerRow}>
+          <View style={styles.headerLeft}>
+            {showBack && (
+              <TouchableOpacity
+                style={styles.backButton}
+                onPress={handleBackPress}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                accessibilityLabel="Go back"
+              >
+                <ArrowLeft size={22} color={brandColors.textPrimary} />
+              </TouchableOpacity>
+            )}
+            {(title || subtitle) && (
+              <View style={styles.titleColumn}>
+                {title && <Text style={styles.pageTitle}>{title}</Text>}
+                {subtitle && <Text style={styles.pageSubtitle}>{subtitle}</Text>}
+              </View>
+            )}
+          </View>
+
+          {rightElement ? (
+            rightElement
+          ) : showLogout ? (
             <TouchableOpacity
-              style={styles.backButton}
-              onPress={handleBackPress}
+              style={styles.logoutButton}
+              onPress={() => setShowLogoutConfirm(true)}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              accessibilityLabel="Go back"
+              accessibilityLabel="Logout"
             >
-              <ArrowLeft size={20} color={brandColors.textPrimary} />
+              <LogOut size={18} color="#EF4444" />
             </TouchableOpacity>
-          )}
-          <View style={styles.logoBadge}>
-            <Text style={styles.logoText}>DG</Text>
-          </View>
-          <View style={styles.titleColumn}>
-            <Text style={styles.appName}>DIGITAL GURU</Text>
-            <Text style={styles.instituteText}>
-              {activeInstitute?.name || 'Franchise Platform'}
-            </Text>
-          </View>
+          ) : null}
         </View>
-        {rightElement ? (
-          rightElement
-        ) : showLogout ? (
-          <TouchableOpacity
-            style={styles.logoutButton}
-            onPress={logout}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          >
-            <LogOut size={18} color="#64748B" />
-          </TouchableOpacity>
-        ) : null}
       </View>
 
-      {(title || subtitle) && (
-        <View style={styles.pageTitleRow}>
-          {title && <Text style={styles.pageTitle}>{title}</Text>}
-          {subtitle && <Text style={styles.pageSubtitle}>{subtitle}</Text>}
-        </View>
-      )}
-    </View>
+      {/* Modern Custom Logout Confirmation Dialog */}
+      <ConfirmDialog
+        visible={showLogoutConfirm}
+        title="Sign Out"
+        message="Are you sure you want to sign out of Digital Ghuru?"
+        confirmLabel="Log Out"
+        cancelLabel="Cancel"
+        destructive={true}
+        onConfirm={handleConfirmLogout}
+        onCancel={() => setShowLogoutConfirm(false)}
+      />
+    </>
   );
 };
 
@@ -102,59 +102,26 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#F1F5F9',
   },
-  brandingRow: {
+  headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  brandingLeft: {
+  headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
+    marginRight: theme.spacing.md,
   },
   backButton: {
-    marginRight: 10,
+    marginRight: 12,
     padding: 2,
-  },
-  logoBadge: {
-    width: 36,
-    height: 36,
-    borderRadius: theme.radii.md,
-    backgroundColor: brandColors.navy,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  logoText: {
-    color: brandColors.gold,
-    fontWeight: '800',
-    fontSize: 16,
-    letterSpacing: 0.5,
   },
   titleColumn: {
     flex: 1,
-    marginLeft: theme.spacing.md,
-  },
-  appName: {
-    fontSize: 12,
-    fontWeight: '800',
-    letterSpacing: 1.2,
-    color: brandColors.navy,
-  },
-  instituteText: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: brandColors.textSecondary,
-  },
-  logoutButton: {
-    padding: 8,
-    borderRadius: theme.radii.sm,
-    backgroundColor: '#F8FAFC',
-  },
-  pageTitleRow: {
-    marginTop: theme.spacing.md,
   },
   pageTitle: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: '700',
     color: brandColors.textPrimary,
   },
@@ -162,5 +129,12 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: brandColors.textSecondary,
     marginTop: 2,
+  },
+  logoutButton: {
+    padding: 8,
+    borderRadius: theme.radii.md,
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FEE2E2',
   },
 });

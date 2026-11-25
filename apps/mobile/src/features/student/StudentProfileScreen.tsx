@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -7,33 +7,29 @@ import {
   TouchableOpacity,
   RefreshControl,
   ActivityIndicator,
-  Alert,
 } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { ScreenContainer } from '../../components/common/ScreenContainer';
 import { Header } from '../../components/common/Header';
 import { Card } from '../../components/common/Card';
 import { Badge } from '../../components/common/Badge';
-import { Button } from '../../components/common/Button';
+import { StudentAvatar } from '../../components/student/StudentAvatar';
+import { ConfirmDialog } from '../../components/design-system/ConfirmDialog';
 import { useAuthStore } from '../../store/authStore';
 import { brandColors, theme } from '../../theme';
 import { getStudentProfileApi } from '../../api/student.api';
 import {
-  User,
   GraduationCap,
   Building,
-  Phone,
-  Mail,
-  Calendar,
   Users,
   LogOut,
   AlertCircle,
-  MapPin,
   BookOpen,
 } from 'lucide-react-native';
 
 export const StudentProfileScreen: React.FC = () => {
   const { logout } = useAuthStore();
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   const {
     data: profile,
@@ -50,27 +46,15 @@ export const StudentProfileScreen: React.FC = () => {
     refetch();
   }, [refetch]);
 
-  const handleLogout = () => {
-    Alert.alert(
-      'Log Out',
-      'Are you sure you want to sign out of your Digital Guru student account?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Log Out',
-          style: 'destructive',
-          onPress: async () => {
-            await logout();
-          },
-        },
-      ]
-    );
+  const handleConfirmLogout = async () => {
+    setShowLogoutConfirm(false);
+    await logout();
   };
 
   if (isLoading) {
     return (
       <ScreenContainer>
-        <Header title="My Profile" subtitle="Loading profile details..." />
+        <Header title="Student Profile" subtitle="Loading profile details..." />
         <View style={styles.centerContainer}>
           <ActivityIndicator size="large" color={brandColors.blue} />
           <Text style={styles.loadingText}>Loading profile details...</Text>
@@ -82,7 +66,7 @@ export const StudentProfileScreen: React.FC = () => {
   if (isError || !profile) {
     return (
       <ScreenContainer>
-        <Header title="My Profile" subtitle="Student account" />
+        <Header title="Student Profile" subtitle="Student account" />
         <View style={styles.centerContainer}>
           <AlertCircle size={48} color={brandColors.error} />
           <Text style={styles.errorTitle}>Unable to Load Profile</Text>
@@ -120,13 +104,14 @@ export const StudentProfileScreen: React.FC = () => {
           />
         }
       >
-        {/* Profile Card */}
+        {/* Animated Character Profile Hero Card */}
         <Card style={styles.profileHeroCard}>
-          <View style={styles.profileAvatar}>
-            <Text style={styles.avatarText}>
-              {(profile.firstName?.[0] || 'S') + (profile.lastName?.[0] || '')}
-            </Text>
-          </View>
+          <StudentAvatar
+            gender={profile.gender}
+            name={profile.fullName || profile.firstName}
+            size="xl"
+            style={styles.avatarWrapper}
+          />
           <Text style={styles.studentName}>
             {profile.fullName || `${profile.firstName} ${profile.lastName}`}
           </Text>
@@ -193,7 +178,7 @@ export const StudentProfileScreen: React.FC = () => {
         <Card style={styles.infoCard}>
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>Center Name</Text>
-            <Text style={styles.infoValue}>{profile.institute?.name || 'Digital Guru Franchise'}</Text>
+            <Text style={styles.infoValue}>{profile.institute?.name || 'Digital Guru Learning Center'}</Text>
           </View>
           {profile.institute?.code && (
             <View style={styles.infoRow}>
@@ -246,13 +231,25 @@ export const StudentProfileScreen: React.FC = () => {
         <View style={styles.logoutContainer}>
           <TouchableOpacity
             style={styles.logoutBtn}
-            onPress={handleLogout}
+            onPress={() => setShowLogoutConfirm(true)}
             activeOpacity={0.8}
           >
             <LogOut size={18} color={brandColors.error} />
             <Text style={styles.logoutBtnText}>Log Out of Student Account</Text>
           </TouchableOpacity>
         </View>
+
+        {/* Modern Red Badge Logout Dialog */}
+        <ConfirmDialog
+          visible={showLogoutConfirm}
+          title="Sign Out"
+          message="Are you sure you want to sign out of your Digital Ghuru student account?"
+          confirmLabel="Log Out"
+          cancelLabel="Cancel"
+          destructive={true}
+          onConfirm={handleConfirmLogout}
+          onCancel={() => setShowLogoutConfirm(false)}
+        />
       </ScrollView>
     </ScreenContainer>
   );
@@ -295,7 +292,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: theme.spacing.md,
-    paddingBottom: theme.spacing.xxl,
+    paddingBottom: 100,
   },
   profileHeroCard: {
     alignItems: 'center',
@@ -304,19 +301,8 @@ const styles = StyleSheet.create({
     borderColor: '#BFDBFE',
     marginBottom: theme.spacing.md,
   },
-  profileAvatar: {
-    width: 68,
-    height: 68,
-    borderRadius: 34,
-    backgroundColor: brandColors.blue,
-    justifyContent: 'center',
-    alignItems: 'center',
+  avatarWrapper: {
     marginBottom: theme.spacing.sm,
-  },
-  avatarText: {
-    color: brandColors.white,
-    fontSize: 24,
-    fontWeight: '800',
   },
   studentName: {
     fontSize: 20,

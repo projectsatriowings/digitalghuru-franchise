@@ -486,7 +486,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: theme.spacing.md,
-    paddingBottom: theme.spacing.xxl,
+    paddingBottom: 100,
   },
   emptyCard: {
     alignItems: 'center',
