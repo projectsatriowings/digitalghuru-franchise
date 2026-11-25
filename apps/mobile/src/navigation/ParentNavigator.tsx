@@ -33,7 +33,7 @@ const ParentTabNavigator: React.FC = () => {
       }}
     >
       <Tab.Screen
-        name="ParentDashboardTab"
+        name="ParentDashboard"
         component={ParentDashboardScreen}
         options={{
           tabBarLabel: 'Dashboard',
@@ -43,7 +43,7 @@ const ParentTabNavigator: React.FC = () => {
         }}
       />
       <Tab.Screen
-        name="ParentAttendanceTab"
+        name="ParentAttendance"
         component={ParentAttendanceScreen}
         options={{
           tabBarLabel: 'Attendance',
@@ -53,7 +53,7 @@ const ParentTabNavigator: React.FC = () => {
         }}
       />
       <Tab.Screen
-        name="ParentAcademicsTab"
+        name="ParentAcademics"
         component={ParentAcademicsScreen}
         options={{
           tabBarLabel: 'Academics',
@@ -63,7 +63,7 @@ const ParentTabNavigator: React.FC = () => {
         }}
       />
       <Tab.Screen
-        name="ParentFeesTab"
+        name="ParentFees"
         component={ParentFeesScreen}
         options={{
           tabBarLabel: 'Fees',
@@ -73,7 +73,7 @@ const ParentTabNavigator: React.FC = () => {
         }}
       />
       <Tab.Screen
-        name="ParentProfileTab"
+        name="ParentProfile"
         component={ParentProfileScreen}
         options={{
           tabBarLabel: 'Profile',
@@ -81,6 +81,28 @@ const ParentTabNavigator: React.FC = () => {
             <User size={size} color={color} />
           ),
         }}
+      />
+
+      {/* Sub-screens launched from Quick Services that retain the Floating Navigation Bar */}
+      <Tab.Screen
+        name="ParentHomework"
+        component={ParentHomeworkScreen}
+        options={{ tabBarButton: () => null }}
+      />
+      <Tab.Screen
+        name="ParentMaterials"
+        component={ParentMaterialsScreen}
+        options={{ tabBarButton: () => null }}
+      />
+      <Tab.Screen
+        name="ParentFeedback"
+        component={ParentFeedbackScreen}
+        options={{ tabBarButton: () => null }}
+      />
+      <Tab.Screen
+        name="ParentTimetable"
+        component={ParentTimetableScreen}
+        options={{ tabBarButton: () => null }}
       />
     </Tab.Navigator>
   );
@@ -90,15 +112,7 @@ export const ParentNavigator: React.FC = () => {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="ParentTabs" component={ParentTabNavigator} />
-      <Stack.Screen name="ParentAttendance" component={ParentAttendanceScreen} />
-      <Stack.Screen name="ParentAcademics" component={ParentAcademicsScreen} />
-      <Stack.Screen name="ParentHomework" component={ParentHomeworkScreen} />
-      <Stack.Screen name="ParentTimetable" component={ParentTimetableScreen} />
-      <Stack.Screen name="ParentMaterials" component={ParentMaterialsScreen} />
-      <Stack.Screen name="ParentFees" component={ParentFeesScreen} />
-      <Stack.Screen name="ParentFeedback" component={ParentFeedbackScreen} />
       <Stack.Screen name="ParentNotifications" component={ParentNotificationsScreen} />
-      <Stack.Screen name="ParentProfile" component={ParentProfileScreen} />
     </Stack.Navigator>
   );
 };

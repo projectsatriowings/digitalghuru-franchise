@@ -5,49 +5,37 @@ import {
   ScrollView,
   StyleSheet,
   TouchableOpacity,
-  Alert,
 } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { ScreenContainer } from '../../components/common/ScreenContainer';
 import { Header } from '../../components/common/Header';
 import { Card } from '../../components/common/Card';
 import { Badge } from '../../components/common/Badge';
-import { Button } from '../../components/common/Button';
+import { ConfirmDialog } from '../../components/design-system/ConfirmDialog';
 import { useAuthStore } from '../../store/authStore';
 import { useParentStore } from '../../store/parentStore';
 import { getParentMyChildrenApi } from '../../api/parent.api';
 import { brandColors, theme } from '../../theme';
 import {
-  User,
-  Users,
   Building,
   Phone,
   Mail,
   LogOut,
-  ShieldCheck,
-  CheckCircle2,
-  GraduationCap,
-  ChevronRight,
 } from 'lucide-react-native';
 
 export const ParentProfileScreen: React.FC = () => {
   const { user, activeInstitute, logout } = useAuthStore();
   const { selectedChild, selectChildById, children } = useParentStore();
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   const { data: linkedChildren = [] } = useQuery({
     queryKey: ['parent-linked-children-profile'],
     queryFn: getParentMyChildrenApi,
   });
 
-  const handleConfirmLogout = () => {
-    Alert.alert('Sign Out', 'Are you sure you want to sign out of Digital Guru?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Sign Out',
-        style: 'destructive',
-        onPress: () => logout(),
-      },
-    ]);
+  const handleConfirmLogout = async () => {
+    setShowLogoutConfirm(false);
+    await logout();
   };
 
   return (
@@ -143,7 +131,7 @@ export const ParentProfileScreen: React.FC = () => {
             </View>
             <View style={styles.instituteCol}>
               <Text style={styles.instituteName}>
-                {activeInstitute?.name || 'Digital Guru Franchise Center'}
+                {activeInstitute?.name || 'Digital Guru Learning Center'}
               </Text>
               <Text style={styles.instituteCode}>
                 Campus Code: {activeInstitute?.code || 'MAIN-01'}
@@ -160,7 +148,7 @@ export const ParentProfileScreen: React.FC = () => {
         {/* Sign Out Button */}
         <TouchableOpacity
           style={styles.logoutButton}
-          onPress={handleConfirmLogout}
+          onPress={() => setShowLogoutConfirm(true)}
           activeOpacity={0.8}
         >
           <LogOut size={18} color="#EF4444" />
@@ -170,6 +158,18 @@ export const ParentProfileScreen: React.FC = () => {
         <Text style={styles.versionFooter}>
           Digital Guru Franchise Mobile • Version 2.0 (Phase 4)
         </Text>
+
+        {/* Custom Red Badge Confirmation Dialog */}
+        <ConfirmDialog
+          visible={showLogoutConfirm}
+          title="Sign Out"
+          message="Are you sure you want to sign out of Digital Ghuru Parent portal?"
+          confirmLabel="Log Out"
+          cancelLabel="Cancel"
+          destructive={true}
+          onConfirm={handleConfirmLogout}
+          onCancel={() => setShowLogoutConfirm(false)}
+        />
       </ScrollView>
     </ScreenContainer>
   );
@@ -190,22 +190,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 14,
-  },
-  parentAvatar: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: 'rgba(254, 220, 50, 0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 14,
-    borderWidth: 2,
-    borderColor: '#FEDC32',
-  },
-  parentAvatarText: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#FEDC32',
   },
   parentDetailsCol: {
     flex: 1,
@@ -264,26 +248,6 @@ const styles = StyleSheet.create({
   childCardRow: {
     flexDirection: 'row',
     alignItems: 'center',
-  },
-  childAvatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#F1F5F9',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  childAvatarActive: {
-    backgroundColor: '#0F172A',
-  },
-  childAvatarText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#475569',
-  },
-  childAvatarTextActive: {
-    color: '#FEDC32',
   },
   childCardInfo: {
     flex: 1,

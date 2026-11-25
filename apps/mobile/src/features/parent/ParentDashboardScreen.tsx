@@ -9,7 +9,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { ScreenContainer } from '../../components/common/ScreenContainer';
 import { Card } from '../../components/common/Card';
 import { Badge } from '../../components/common/Badge';
@@ -50,6 +50,12 @@ export const ParentDashboardScreen: React.FC = () => {
     queryKey: ['parent-dashboard-summary'],
     queryFn: getParentDashboardSummaryApi,
   });
+
+  useFocusEffect(
+    useCallback(() => {
+      refetch();
+    }, [refetch])
+  );
 
   // Sync children into Zustand store when fetched
   useEffect(() => {

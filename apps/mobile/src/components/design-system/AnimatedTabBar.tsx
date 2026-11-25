@@ -26,9 +26,25 @@ export const AnimatedTabBar: React.FC<AnimatedTabBarCustomProps> = ({
 }) => {
   const insets = useSafeAreaInsets();
   const normalizedRole = role === 'TEACHER' ? 'STAFF' : role;
-  const numTabs = state.routes.length || 5;
 
   const [containerWidth, setContainerWidth] = useState(SCREEN_WIDTH * 0.92);
+
+  // Filter visible tabs (excluding hidden sub-screen tab routes)
+  const visibleRoutes = state.routes.filter((route) => {
+    const btn = descriptors[route.key].options.tabBarButton;
+    if (btn === null) return false;
+    if (typeof btn === 'function' && btn() === null) return false;
+    return true;
+  });
+
+  const numTabs = visibleRoutes.length || 5;
+
+  // Find index of current active route inside visibleRoutes
+  const currentRouteKey = state.routes[state.index]?.key;
+  let activeVisibleIndex = visibleRoutes.findIndex((r) => r.key === currentRouteKey);
+  if (activeVisibleIndex === -1) {
+    activeVisibleIndex = 0; // Fallback for hidden sub-screens
+  }
 
   const getRoleAccentColor = () => {
     switch (normalizedRole) {
@@ -43,10 +59,9 @@ export const AnimatedTabBar: React.FC<AnimatedTabBarCustomProps> = ({
   };
 
   const activeColor = getRoleAccentColor();
-  const activeIndex = state.index;
 
   const tabWidth = containerWidth / numTabs;
-  const targetX = (activeIndex + 0.5) * tabWidth;
+  const targetX = (activeVisibleIndex + 0.5) * tabWidth;
 
   const notchXAnim = useRef(new Animated.Value(targetX)).current;
 
@@ -57,7 +72,7 @@ export const AnimatedTabBar: React.FC<AnimatedTabBarCustomProps> = ({
       bounciness: 6,
       useNativeDriver: false,
     }).start();
-  }, [activeIndex, targetX]);
+  }, [activeVisibleIndex, targetX]);
 
   // Generate SVG path for the wave navbar with cutout notch at cx
   const createCurvedPath = (cx: number, w: number, h: number) => {
@@ -121,9 +136,9 @@ export const AnimatedTabBar: React.FC<AnimatedTabBarCustomProps> = ({
             },
           ]}
         >
-          {state.routes.map((route, index) => {
+          {visibleRoutes.map((route) => {
             const { options } = descriptors[route.key];
-            const isFocused = state.index === index;
+            const isFocused = route.key === currentRouteKey;
 
             const label =
               options.tabBarLabel !== undefined

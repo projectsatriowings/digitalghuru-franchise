@@ -81,13 +81,13 @@ export const ParentAcademicsScreen: React.FC = () => {
           </View>
         ) : isError || !academicsData ? (
           <Card style={styles.errorCard}>
-            <AlertCircle size={36} color={brandColors.error} />
-            <Text style={styles.errorTitle}>Unable to Load Academic Records</Text>
+            <Award size={36} color="#64748B" />
+            <Text style={styles.errorTitle}>No Academic Records Found</Text>
             <Text style={styles.errorDesc}>
-              Could not retrieve exam scores and evaluations. Please try refreshing.
+              Exam scores and evaluations for this student will appear here once published by the center.
             </Text>
             <TouchableOpacity style={styles.retryBtn} onPress={() => refetch()}>
-              <Text style={styles.retryBtnText}>Retry</Text>
+              <Text style={styles.retryBtnText}>Refresh</Text>
             </TouchableOpacity>
           </Card>
         ) : (
