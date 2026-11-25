@@ -33,7 +33,7 @@ export const AnimatedTabBar: React.FC<AnimatedTabBarCustomProps> = ({
   const visibleRoutes = state.routes.filter((route) => {
     const btn = descriptors[route.key].options.tabBarButton;
     if (btn === null) return false;
-    if (typeof btn === 'function' && btn() === null) return false;
+    if (typeof btn === 'function' && (btn as any)({}) === null) return false;
     return true;
   });
 
