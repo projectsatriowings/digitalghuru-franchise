@@ -263,11 +263,18 @@ export async function recordCheckIn(req: AuthenticatedRequest, res: Response) {
       },
     });
 
-    // Queue SMS notification for guardians safely outside transaction
+    // Queue In-App notification & SMS notification for guardians safely outside transaction
     // (Preserves successful attendance record even if telephony provider or template fails)
     let smsNotifications: any[] = [];
     try {
       await InAppNotificationService.createAttendanceNotifications({
+        attendanceEventId: event.id,
+        studentId,
+        instituteId,
+        eventType: 'CHECK_IN',
+        eventTime: serverNow,
+      });
+      smsNotifications = await NotificationService.queueAttendanceNotification({
         attendanceEventId: event.id,
         studentId,
         instituteId,
@@ -302,8 +309,7 @@ export async function recordCheckIn(req: AuthenticatedRequest, res: Response) {
         smsNotification:
           smsNotifications.length > 0
             ? {
-                queued: false,
-          reason: 'In-app notification sent',
+                queued: true,
                 count: smsNotifications.length,
                 status: smsNotifications[0].status,
                 recipient: smsNotifications[0].phoneNumber.replace(/(\d{2})\d+(\d{2})/, '$1******$2'),
@@ -720,6 +726,20 @@ export async function recordCheckOut(req: AuthenticatedRequest, res: Response) {
       { timeout: 15000, maxWait: 10000 }
     );
 
+    // Queue SMS notification for guardians safely outside transaction
+    let checkoutSmsNotifications: any[] = [];
+    try {
+      checkoutSmsNotifications = await NotificationService.queueAttendanceNotification({
+        attendanceEventId: event.id,
+        studentId,
+        instituteId,
+        eventType: 'CHECK_OUT',
+        eventTime: serverNow,
+      });
+    } catch (smsErr: any) {
+      console.error('[NotificationService] Non-blocking checkout SMS enqueue warning:', smsErr.message);
+    }
+
     const checkOutTimeFormatted = new Intl.DateTimeFormat('en-IN', {
       timeZone: 'Asia/Kolkata',
       hour: '2-digit',
@@ -740,11 +760,20 @@ export async function recordCheckOut(req: AuthenticatedRequest, res: Response) {
           photoUrl: student.photoUrl,
           checkOutTimeFormatted,
         },
-        smsNotification: {
-          queued: false,
-          reason: 'In-app notification sent',
-          eventType: 'CHECK_OUT',
-        },
+        smsNotification:
+          checkoutSmsNotifications.length > 0
+            ? {
+                queued: true,
+                count: checkoutSmsNotifications.length,
+                status: checkoutSmsNotifications[0].status,
+                recipient: checkoutSmsNotifications[0].phoneNumber.replace(/(\d{2})\d+(\d{2})/, '$1******$2'),
+                eventType: 'CHECK_OUT',
+              }
+            : {
+                queued: false,
+                reason: 'No linked guardian with SMS permission enabled',
+                eventType: 'CHECK_OUT',
+              },
       },
     });
   } catch (err: any) {
