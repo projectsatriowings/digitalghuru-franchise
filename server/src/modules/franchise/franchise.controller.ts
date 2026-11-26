@@ -713,7 +713,10 @@ export async function createFranchise(req: AuthenticatedRequest, res: Response) 
             postalCode: data.postalCode?.trim() || null,
             country: data.country || 'India',
             authorizedContact: data.authorizedContact || {},
-            businessDetails: data.businessDetails || {},
+            businessDetails: {
+              ...(typeof data.businessDetails === 'object' && data.businessDetails !== null ? data.businessDetails : {}),
+              initialPassword: permanentPassword,
+            },
             status: 'ACTIVE',
             ownerUserId: ownerUser.id,
             notes: data.notes || null,
@@ -1078,10 +1081,16 @@ export async function getFranchiseById(req: AuthenticatedRequest, res: Response)
       .filter((inst) => computeInstallmentLiveStatus(inst) === 'OVERDUE')
       .reduce((sum, inst) => sum + Number(inst.outstandingBalance), 0);
 
+    const bizDetails = (franchise.businessDetails as Record<string, any>) || {};
+    const ownerPassword = bizDetails.initialPassword || null;
+
     return res.json({
       success: true,
       data: {
-        franchise,
+        franchise: {
+          ...franchise,
+          ownerPassword,
+        },
         installments: installments.map((inst) => ({
           ...inst,
           liveStatus: computeInstallmentLiveStatus(inst),
@@ -1383,6 +1392,19 @@ export async function resetFranchiseOwnerPassword(req: AuthenticatedRequest, res
         passwordHash,
         mustChangePassword: false,
         updatedAt: new Date(),
+      },
+    });
+
+    // Update franchise businessDetails with the updated permanent password for super admin view
+    const currentBizDetails = (franchise.businessDetails as Record<string, any>) || {};
+    await prisma.franchise.update({
+      where: { id: franchise.id },
+      data: {
+        businessDetails: {
+          ...currentBizDetails,
+          initialPassword: permanentPassword,
+          lastPasswordResetAt: new Date().toISOString(),
+        },
       },
     });
 
