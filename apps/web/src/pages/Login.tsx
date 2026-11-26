@@ -44,56 +44,16 @@ const DEMO_ACCOUNTS: DemoAccount[] = [
     subtext: 'Master Platform Portal',
     icon: ShieldCheck,
   },
-  {
-    role: 'FRANCHISE_OWNER',
-    label: 'Franchisee',
-    roleBadgeColor: 'text-[#006FFF]',
-    badgeBg: 'bg-blue-50 border-blue-200',
-    identifier: 'rajesh.owner@digitalghuru.example.com',
-    password: 'FranchiseOwner#2026',
-    subtext: 'Multi-Branch & Royalties',
-    icon: Building2,
-  },
-  {
-    role: 'STAFF',
-    label: 'Faculty / Staff',
-    roleBadgeColor: 'text-emerald-700',
-    badgeBg: 'bg-emerald-50 border-emerald-200',
-    identifier: 'teacher@apexacademy.com',
-    password: 'Password#123',
-    subtext: 'Attendance & Classes',
-    icon: Users,
-  },
-  {
-    role: 'PARENT',
-    label: 'Parent Portal',
-    roleBadgeColor: 'text-indigo-700',
-    badgeBg: 'bg-indigo-50 border-indigo-200',
-    identifier: '9826444306',
-    password: 'Password#123',
-    subtext: 'Phone: 9826444306',
-    icon: User,
-  },
-  {
-    role: 'STUDENT',
-    label: 'Student Portal',
-    roleBadgeColor: 'text-purple-700',
-    badgeBg: 'bg-purple-50 border-purple-200',
-    identifier: 'student@apexacademy.com',
-    password: 'Password#123',
-    subtext: 'Courses & LMS',
-    icon: GraduationCap,
-  },
 ];
 
 export const Login: React.FC = () => {
   const isDemoModeEnabled = import.meta.env.DEV || import.meta.env.VITE_ENABLE_DEMO_ACCOUNTS === 'true';
   const { login } = useAuth();
 
-  // Sign In States
-  const [selectedRole, setSelectedRole] = useState<UserRole>('FRANCHISE_OWNER');
-  const [identifier, setIdentifier] = useState('rajesh.owner@digitalghuru.example.com');
-  const [password, setPassword] = useState('FranchiseOwner#2026');
+  // Sign In States (Default to Super Admin)
+  const [selectedRole, setSelectedRole] = useState<UserRole>('SUPER_ADMIN');
+  const [identifier, setIdentifier] = useState('superadmin@gmail.com');
+  const [password, setPassword] = useState('admin@123');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
