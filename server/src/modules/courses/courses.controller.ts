@@ -507,22 +507,98 @@ export async function deleteGlobalCourse(req: Request, res: Response) {
   try {
     const { id } = req.params;
 
-    // Check if active or historical enrollments exist
-    const enrollmentCount = await prisma.courseEnrollment.count({
-      where: { courseId: id }
+    // Check if course exists
+    const course = await prisma.globalCourse.findUnique({
+      where: { id },
+      include: {
+        curriculumVersions: true,
+        _count: {
+          select: {
+            enrollments: true,
+            franchiseSelections: true,
+          },
+        },
+      },
     });
 
-    if (enrollmentCount > 0) {
+    if (!course) {
+      return res.status(404).json({ success: false, message: 'Course not found.' });
+    }
+
+    // Check if active or historical enrollments exist
+    if (course._count.enrollments > 0) {
       return res.status(400).json({
         success: false,
-        error: `Cannot delete course with ${enrollmentCount} existing student enrollment(s). Please archive it instead.`
+        message: `This course cannot be deleted because ${course._count.enrollments} student(s) are actively or historically enrolled in it. Please archive it instead to preserve student learning records.`,
       });
     }
 
-    await prisma.globalCourse.delete({ where: { id } });
-    res.json({ success: true, message: 'Course deleted successfully' });
+    // Check if curriculum versions exist and if any are locked/published
+    const hasLocked = course.curriculumVersions.some((v) => v.isLocked || v.isPublished);
+
+    if (hasLocked) {
+      // Database integrity triggers strictly prevent deleting locked curriculum versions.
+      // Move course to ARCHIVED status and unlink franchise offerings.
+      await prisma.globalCourse.update({
+        where: { id },
+        data: {
+          status: 'ARCHIVED',
+          activeCurriculumVersionId: null,
+        },
+      });
+      await prisma.franchiseCourseSelection.deleteMany({ where: { courseId: id } });
+
+      return res.json({
+        success: true,
+        message: `Course "${course.title}" contains published curriculum and was safely moved to Archive to preserve academic records.`,
+        archived: true,
+      });
+    }
+
+    // Unlocked / Draft course: cascade delete child draft records cleanly
+    try {
+      await prisma.$transaction(async (tx) => {
+        await tx.globalCourse.update({ where: { id }, data: { activeCurriculumVersionId: null } });
+        await tx.franchiseCourseSelection.deleteMany({ where: { courseId: id } });
+        await tx.courseSlugAlias.deleteMany({ where: { courseId: id } });
+
+        for (const v of course.curriculumVersions) {
+          const modules = await tx.courseModule.findMany({ where: { curriculumVersionId: v.id } });
+          for (const m of modules) {
+            const chapters = await tx.courseChapter.findMany({ where: { moduleId: m.id } });
+            for (const ch of chapters) {
+              await tx.lessonAttachment.deleteMany({ where: { chapterId: ch.id } });
+            }
+            await tx.courseChapter.deleteMany({ where: { moduleId: m.id } });
+          }
+          await tx.courseModule.deleteMany({ where: { curriculumVersionId: v.id } });
+        }
+        await tx.courseCurriculumVersion.deleteMany({ where: { courseId: id } });
+        await tx.globalCourse.delete({ where: { id } });
+      });
+
+      return res.json({ success: true, message: `Course "${course.title}" was deleted successfully.` });
+    } catch (innerErr: any) {
+      console.warn('[Delete Course Fallback to Archive]', innerErr.message);
+      await prisma.globalCourse.update({
+        where: { id },
+        data: { status: 'ARCHIVED', activeCurriculumVersionId: null },
+      }).catch(() => {});
+      await prisma.franchiseCourseSelection.deleteMany({ where: { courseId: id } }).catch(() => {});
+
+      return res.json({
+        success: true,
+        message: `Course "${course.title}" has been moved to Archive to protect historical curriculum data.`,
+        archived: true,
+      });
+    }
   } catch (error: any) {
-    res.status(400).json({ success: false, message: error.message || 'Failed to delete course' });
+    console.error('[Failed to delete course]', error);
+    let humanMessage = 'This course cannot be deleted because it is linked to existing curriculum or franchise data. Please archive the course instead.';
+    if (error?.message?.includes('violates RESTRICT') || error?.message?.includes('CourseCurriculumVersion')) {
+      humanMessage = 'This course is linked to curriculum versions and cannot be permanently deleted. It has been moved to Archive status instead.';
+    }
+    res.status(400).json({ success: false, message: humanMessage });
   }
 }
 

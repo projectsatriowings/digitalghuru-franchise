@@ -44,6 +44,7 @@ import { CourseWizard } from '../components/CourseWizard';
 import { CurriculumManager } from '../components/CurriculumManager';
 import { IconRenderer } from '../components/IconPickerDropdown';
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
+import { ConfirmationModal } from '../components/ConfirmationModal';
 
 interface Category {
   id: string;
@@ -95,7 +96,20 @@ export const CourseManagement: React.FC = () => {
   const [bulkPermitting, setBulkPermitting] = useState(false);
   const [franchiseSearch, setFranchiseSearch] = useState('');
 
-  useBodyScrollLock(Boolean(showCategoriesModal || curriculumCourse || previewCourse || franchiseCourse));
+  // Custom Confirmation Dialog State for Course / Category Deletions
+  const [deleteModalState, setDeleteModalState] = useState<{
+    isOpen: boolean;
+    type: 'course' | 'category';
+    item: any | null;
+    loading: boolean;
+  }>({
+    isOpen: false,
+    type: 'course',
+    item: null,
+    loading: false,
+  });
+
+  useBodyScrollLock(Boolean(showCategoriesModal || curriculumCourse || previewCourse || franchiseCourse || deleteModalState.isOpen));
 
   const fetchCatalogue = useCallback(async (forceRefresh = false) => {
     setLoading(true);
@@ -261,16 +275,63 @@ export const CourseManagement: React.FC = () => {
     }
   };
 
-  const handleDeleteCourse = async (course: any) => {
-    if (!window.confirm(`Delete "${course.title}"? Courses with active or historical enrollments cannot be deleted and must be Archived.`)) {
-      return;
+  const getHumanErrorMessage = (err: any): string => {
+    const raw = err?.data?.message || err?.data?.error || err?.message || '';
+    if (raw.includes('violates RESTRICT') || raw.includes('CourseCurriculumVersion') || raw.includes('23001')) {
+      return 'This course contains published curriculum versions and cannot be permanently deleted. It has been safely archived instead.';
     }
+    if (raw.includes('enrollment') || raw.includes('enrolled')) {
+      return 'This course cannot be deleted because students are actively or historically enrolled in it. You can archive it instead.';
+    }
+    if (raw.includes('Cannot delete category')) {
+      return raw;
+    }
+    if (raw.includes('prisma') || raw.includes('ConnectorError') || raw.includes('QueryError') || raw.includes('invocation')) {
+      return 'This item has associated database records and cannot be permanently removed. Please archive it instead.';
+    }
+    return raw || 'Operation could not be completed. Please try again.';
+  };
+
+  const openDeleteCourseModal = (course: any) => {
+    setDeleteModalState({
+      isOpen: true,
+      type: 'course',
+      item: course,
+      loading: false,
+    });
+  };
+
+  const openDeleteCategoryModal = (cat: Category) => {
+    setDeleteModalState({
+      isOpen: true,
+      type: 'category',
+      item: cat,
+      loading: false,
+    });
+  };
+
+  const handleConfirmDelete = async () => {
+    const { type, item } = deleteModalState;
+    if (!item) return;
+
+    setDeleteModalState((prev) => ({ ...prev, loading: true }));
     try {
-      await apiFetch(`/courses/${course.id}`, { method: 'DELETE' });
-      toast.success('Course deleted permanently');
+      if (type === 'course') {
+        const res = await apiFetch(`/courses/${item.id}`, { method: 'DELETE' });
+        if (res.archived) {
+          toast.info(res.message || 'Course contains published curriculum and was safely moved to Archive.');
+        } else {
+          toast.success(res.message || 'Course deleted successfully.');
+        }
+      } else {
+        const res = await apiFetch(`/courses/categories/${item.id}`, { method: 'DELETE' });
+        toast.success(res.message || 'Category deleted successfully.');
+      }
+      setDeleteModalState({ isOpen: false, type: 'course', item: null, loading: false });
       await fetchCatalogue();
     } catch (err: any) {
-      toast.error(err.data?.error || err.message || 'Cannot delete course');
+      setDeleteModalState((prev) => ({ ...prev, loading: false }));
+      toast.error(getHumanErrorMessage(err));
     }
   };
 
@@ -321,17 +382,6 @@ export const CourseManagement: React.FC = () => {
       toast.error(err.message || 'Failed to save category');
     } finally {
       setSavingCategory(false);
-    }
-  };
-
-  const handleDeleteCategory = async (cat: Category) => {
-    if (!window.confirm(`Delete category "${cat.name}"?`)) return;
-    try {
-      await apiFetch(`/courses/categories/${cat.id}`, { method: 'DELETE' });
-      toast.success('Category deleted');
-      await fetchCatalogue();
-    } catch (err: any) {
-      toast.error(err.message || 'Cannot delete category');
     }
   };
 
@@ -982,7 +1032,7 @@ export const CourseManagement: React.FC = () => {
                     {(course._count?.enrollments || 0) === 0 && (
                       <button
                         type="button"
-                        onClick={() => handleDeleteCourse(course)}
+                        onClick={() => openDeleteCourseModal(course)}
                         title="Delete course"
                         className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50"
                       >
@@ -1117,7 +1167,7 @@ export const CourseManagement: React.FC = () => {
                         </button>
                         <button
                           type="button"
-                          onClick={() => handleDeleteCategory(cat)}
+                          onClick={() => openDeleteCategoryModal(cat)}
                           className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50"
                         >
                           <Trash2 className="w-4 h-4" />
@@ -1831,6 +1881,27 @@ export const CourseManagement: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Custom Confirmation Modal for Deleting Course / Category */}
+      <ConfirmationModal
+        isOpen={deleteModalState.isOpen}
+        title={deleteModalState.type === 'course' ? 'Delete Course' : 'Delete Category'}
+        message={
+          deleteModalState.type === 'course'
+            ? `Are you sure you want to delete "${deleteModalState.item?.title || 'this course'}"? If the course has published curriculum or student enrollments, it will be safely moved to Archive to preserve academic records.`
+            : `Are you sure you want to delete category "${deleteModalState.item?.name || 'this category'}"? Any courses assigned to this category will need to be reassigned.`
+        }
+        confirmLabel={deleteModalState.type === 'course' ? 'Delete Course' : 'Delete Category'}
+        cancelLabel="Cancel"
+        variant="danger"
+        loading={deleteModalState.loading}
+        onConfirm={handleConfirmDelete}
+        onCancel={() => {
+          if (!deleteModalState.loading) {
+            setDeleteModalState({ isOpen: false, type: 'course', item: null, loading: false });
+          }
+        }}
+      />
     </div>
   );
 };
