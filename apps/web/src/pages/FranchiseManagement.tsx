@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { apiFetch } from '../services/api';
 import { Franchise, FranchiseAgreement, FranchiseRoyaltyInstallment } from '../types';
+import { lookupByPostalCode } from '../utils/locationHelper';
+import { isValidEmail, isValidPhone, sanitizePhoneInput } from '../utils/validation';
 import {
   Building2,
   DollarSign,
@@ -73,6 +75,8 @@ export const FranchiseManagement: React.FC = () => {
   // Modals
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [createModalTab, setCreateModalTab] = useState<'profile' | 'model' | 'financials' | 'review'>('profile');
+  const [visitedTabs, setVisitedTabs] = useState<Set<'profile' | 'model' | 'financials' | 'review'>>(new Set(['profile']));
+  const [isLocatingPincode, setIsLocatingPincode] = useState(false);
   const [createdResultModal, setCreatedResultModal] = useState<any>(null);
   const [showCreatedPassword, setShowCreatedPassword] = useState(true);
   const [copiedField, setCopiedField] = useState<string | null>(null);
@@ -480,25 +484,67 @@ export const FranchiseManagement: React.FC = () => {
   // ACTIONS
   // -------------------------------------------------------------
 
+  const handlePostalCodeLookup = async (val: string) => {
+    const clean = val.trim().replace(/\D/g, '');
+    setCreateForm((prev) => ({ ...prev, postalCode: val }));
+    if (clean.length === 6) {
+      setIsLocatingPincode(true);
+      try {
+        const res = await lookupByPostalCode(clean);
+        if (res) {
+          setCreateForm((prev) => ({
+            ...prev,
+            city: res.city || prev.city,
+            state: res.state || prev.state,
+          }));
+        }
+      } catch (err) {
+        console.warn('Pincode lookup error:', err);
+      } finally {
+        setIsLocatingPincode(false);
+      }
+    }
+  };
+
   const validateProfileStep = () => {
     if (!createForm.name?.trim()) {
       showToast('Franchise / Center Name is required', 'error');
+      return false;
+    }
+    if (createForm.name.trim().length < 3) {
+      showToast('Franchise / Center Name must be at least 3 characters', 'error');
       return false;
     }
     if (!createForm.ownerName?.trim()) {
       showToast('Owner Full Name is required', 'error');
       return false;
     }
+    if (createForm.ownerName.trim().length < 2) {
+      showToast('Owner Full Name must be at least 2 characters', 'error');
+      return false;
+    }
     if (!createForm.email?.trim()) {
       showToast('Owner Email Address is required', 'error');
+      return false;
+    }
+    if (!isValidEmail(createForm.email.trim())) {
+      showToast('Please enter a valid email address (e.g. name@domain.com)', 'error');
       return false;
     }
     if (!createForm.phone?.trim()) {
       showToast('Primary Mobile Number is required', 'error');
       return false;
     }
+    if (!isValidPhone(createForm.phone.trim())) {
+      showToast('Please enter a valid 10-digit mobile number', 'error');
+      return false;
+    }
     if (!createForm.address?.trim()) {
       showToast('Full Business Address is required', 'error');
+      return false;
+    }
+    if (createForm.address.trim().length < 5) {
+      showToast('Please provide a complete business address', 'error');
       return false;
     }
     if (!createForm.city?.trim()) {
@@ -509,10 +555,39 @@ export const FranchiseManagement: React.FC = () => {
       showToast('State is required', 'error');
       return false;
     }
-    if (!createForm.postalCode?.trim()) {
+    const cleanPin = (createForm.postalCode || '').trim().replace(/\D/g, '');
+    if (!cleanPin) {
       showToast('Postal / PIN Code is required', 'error');
       return false;
     }
+    if (cleanPin.length !== 6) {
+      showToast('PIN Code must be exactly 6 digits', 'error');
+      return false;
+    }
+
+    // Optional authorized alternate contact validation (if filled)
+    if (createForm.authorizedContact?.email && !isValidEmail(createForm.authorizedContact.email)) {
+      showToast('Please enter a valid email for the authorized contact person', 'error');
+      return false;
+    }
+    if (createForm.authorizedContact?.phone && !isValidPhone(createForm.authorizedContact.phone)) {
+      showToast('Please enter a valid phone number for the authorized contact person', 'error');
+      return false;
+    }
+
+    // New Campus validation if user selected CREATE_NEW
+    if (createForm.branchOption === 'CREATE_NEW') {
+      if (!createForm.newBranch?.name?.trim()) {
+        showToast('Campus / Branch Name is required when creating a new branch', 'error');
+        return false;
+      }
+    } else if (createForm.branchOption === 'LINK_EXISTING') {
+      if (!createForm.linkedInstituteId) {
+        showToast('Please select an institute to link or choose "Skip for now"', 'error');
+        return false;
+      }
+    }
+
     return true;
   };
 
@@ -614,24 +689,36 @@ export const FranchiseManagement: React.FC = () => {
 
   const isProfileStepComplete = Boolean(
     createForm.name?.trim() &&
+    createForm.name.trim().length >= 3 &&
     createForm.ownerName?.trim() &&
+    createForm.ownerName.trim().length >= 2 &&
     createForm.email?.trim() &&
+    isValidEmail(createForm.email.trim()) &&
     !hasBlockingConflict &&
     createForm.phone?.trim() &&
+    isValidPhone(createForm.phone.trim()) &&
     createForm.address?.trim() &&
+    createForm.address.trim().length >= 5 &&
     createForm.city?.trim() &&
     createForm.state?.trim() &&
-    createForm.postalCode?.trim()
+    (createForm.postalCode || '').trim().replace(/\D/g, '').length === 6 &&
+    (!createForm.authorizedContact?.email || isValidEmail(createForm.authorizedContact.email)) &&
+    (!createForm.authorizedContact?.phone || isValidPhone(createForm.authorizedContact.phone)) &&
+    (createForm.branchOption !== 'CREATE_NEW' || Boolean(createForm.newBranch?.name?.trim())) &&
+    (createForm.branchOption !== 'LINK_EXISTING' || Boolean(createForm.linkedInstituteId))
   );
 
+  // A step is only considered complete if the user has reached/validated it, not automatically pre-checked ahead of time
   const isModelStepComplete = Boolean(
     isProfileStepComplete &&
+    visitedTabs.has('model') &&
     createForm.initialAgreement.startDate &&
     createForm.initialAgreement.endDate
   );
 
   const isFinancialsStepComplete = Boolean(
     isModelStepComplete &&
+    visitedTabs.has('financials') &&
     Number(createForm.initialAgreement.digitalGuruRevenuePercentage || 0) +
     Number(createForm.initialAgreement.partnerRevenuePercentage || 0) === 100 &&
     (createForm.initialAgreement.calculationMethod !== 'FIXED_ANNUAL' || Number(createForm.initialAgreement.annualRoyaltyAmount) > 0) &&
@@ -664,6 +751,7 @@ export const FranchiseManagement: React.FC = () => {
     }
 
     setCreateModalTab(targetTab);
+    setVisitedTabs((prev) => new Set([...prev, targetTab]));
     createModalBodyRef.current?.scrollTo({ top: 0, behavior: 'instant' });
   };
 
@@ -1329,6 +1417,8 @@ export const FranchiseManagement: React.FC = () => {
                   }
                 })
                 .catch(() => { });
+              setCreateForm(initialCreateForm);
+              setVisitedTabs(new Set(['profile']));
               setCreateModalTab('profile');
               setShowCreateModal(true);
             }}
@@ -2385,7 +2475,7 @@ export const FranchiseManagement: React.FC = () => {
                             required
                             placeholder="+91 98765 43210"
                             value={createForm.phone}
-                            onChange={(e) => setCreateForm({ ...createForm, phone: e.target.value })}
+                            onChange={(e) => setCreateForm({ ...createForm, phone: sanitizePhoneInput(e.target.value) })}
                             className={`mt-1 w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-[#006FFF] ${duplicateCheckResult.phoneConflict?.isDuplicate ? 'border-rose-400 bg-rose-50/40 text-rose-900' : ''
                               }`}
                           />
@@ -2412,6 +2502,26 @@ export const FranchiseManagement: React.FC = () => {
                         </div>
 
                         <div>
+                          <label className="block text-xs font-medium text-slate-700 flex items-center justify-between">
+                            <span>Postal / PIN Code *</span>
+                            {isLocatingPincode && (
+                              <span className="text-[10px] text-[#006FFF] flex items-center gap-1 font-normal">
+                                <Loader2 className="w-3 h-3 animate-spin" /> Fetching...
+                              </span>
+                            )}
+                          </label>
+                          <input
+                            type="text"
+                            required
+                            maxLength={6}
+                            placeholder="600002"
+                            value={createForm.postalCode}
+                            onChange={(e) => handlePostalCodeLookup(e.target.value)}
+                            className="mt-1 w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-[#006FFF]"
+                          />
+                        </div>
+
+                        <div>
                           <label className="block text-xs font-medium text-slate-700">City *</label>
                           <input
                             type="text"
@@ -2431,18 +2541,6 @@ export const FranchiseManagement: React.FC = () => {
                             placeholder="Tamil Nadu"
                             value={createForm.state}
                             onChange={(e) => setCreateForm({ ...createForm, state: e.target.value })}
-                            className="mt-1 w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-[#006FFF]"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-xs font-medium text-slate-700">Postal / PIN Code *</label>
-                          <input
-                            type="text"
-                            required
-                            placeholder="600002"
-                            value={createForm.postalCode}
-                            onChange={(e) => setCreateForm({ ...createForm, postalCode: e.target.value })}
                             className="mt-1 w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-[#006FFF]"
                           />
                         </div>
@@ -3428,6 +3526,7 @@ export const FranchiseManagement: React.FC = () => {
                       type="button"
                       onClick={() => {
                         if (validateProfileStep()) {
+                          setVisitedTabs((prev) => new Set([...prev, 'model']));
                           setCreateModalTab('model');
                           createModalBodyRef.current?.scrollTo({ top: 0, behavior: 'instant' });
                         }
@@ -3441,6 +3540,7 @@ export const FranchiseManagement: React.FC = () => {
                       type="button"
                       onClick={() => {
                         if (validateModelStep()) {
+                          setVisitedTabs((prev) => new Set([...prev, 'financials']));
                           setCreateModalTab('financials');
                           createModalBodyRef.current?.scrollTo({ top: 0, behavior: 'instant' });
                         }
@@ -3454,6 +3554,7 @@ export const FranchiseManagement: React.FC = () => {
                       type="button"
                       onClick={() => {
                         if (validateFinancialsStep()) {
+                          setVisitedTabs((prev) => new Set([...prev, 'review']));
                           setCreateModalTab('review');
                           createModalBodyRef.current?.scrollTo({ top: 0, behavior: 'instant' });
                         }
