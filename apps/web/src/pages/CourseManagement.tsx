@@ -40,6 +40,7 @@ import {
 } from 'lucide-react';
 import { apiFetch } from '../services/api';
 import { useToast } from '../context/ToastContext';
+import { openMediaResource } from '../utils/mediaHelper';
 import { CourseWizard } from '../components/CourseWizard';
 import { CurriculumManager } from '../components/CurriculumManager';
 import { IconRenderer } from '../components/IconPickerDropdown';
@@ -1771,40 +1772,58 @@ export const CourseManagement: React.FC = () => {
                                   {ch.description && <p className="text-xs text-slate-500 pl-6">{ch.description}</p>}
                                   <div className="flex flex-wrap items-center gap-3 pl-6 text-xs">
                                     {ch.videoUrl ? (
-                                      <a
-                                        href={ch.videoUrl}
-                                        target="_blank"
-                                        rel="noreferrer"
-                                        className="text-[#006FFF] hover:underline font-semibold inline-flex items-center gap-1"
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          openMediaResource({
+                                            url: ch.videoUrl,
+                                            courseId: previewCourse.id,
+                                            type: 'video',
+                                            onError: (msg) => toast.error(msg),
+                                          })
+                                        }
+                                        className="text-[#006FFF] hover:underline font-semibold inline-flex items-center gap-1 cursor-pointer"
                                       >
                                         <ExternalLink className="w-3.5 h-3.5" /> Open Video
-                                      </a>
+                                      </button>
                                     ) : (
                                       <span className="text-slate-400 italic">No video attached</span>
                                     )}
                                     {ch.pdfUrl && (
-                                      <a
-                                        href={ch.pdfUrl}
-                                        target="_blank"
-                                        rel="noreferrer"
-                                        className="text-emerald-700 hover:underline font-semibold inline-flex items-center gap-1"
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          openMediaResource({
+                                            url: ch.pdfUrl,
+                                            courseId: previewCourse.id,
+                                            type: 'pdf',
+                                            onError: (msg) => toast.error(msg),
+                                          })
+                                        }
+                                        className="text-emerald-700 hover:underline font-semibold inline-flex items-center gap-1 cursor-pointer"
                                       >
                                         <FileText className="w-3.5 h-3.5" /> Open PDF
-                                      </a>
+                                      </button>
                                     )}
                                     {Array.isArray(ch.attachments) && ch.attachments.length > 0 && (
                                       <span className="inline-flex flex-wrap items-center gap-2">
                                         {ch.attachments.map((a: any, aIdx: number) => (
-                                          <a
+                                          <button
                                             key={a.id || aIdx}
-                                            href={a.fileUrl}
-                                            target="_blank"
-                                            rel="noreferrer"
-                                            className="text-indigo-700 hover:underline font-semibold inline-flex items-center gap-1"
+                                            type="button"
+                                            onClick={() =>
+                                              openMediaResource({
+                                                url: a.fileUrl,
+                                                courseId: previewCourse.id,
+                                                type: 'attachment',
+                                                onError: (msg) => toast.error(msg),
+                                              })
+                                            }
+                                            className="text-indigo-700 hover:underline font-semibold inline-flex items-center gap-1 cursor-pointer"
                                           >
                                             <Paperclip className="w-3.5 h-3.5" />
                                             {a.title} ({a.fileType})
-                                          </a>
+                                          </button>
                                         ))}
                                       </span>
                                     )}
