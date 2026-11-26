@@ -584,6 +584,20 @@ export const CourseManagement: React.FC = () => {
         <CourseWizard
           initialData={editingCourse}
           categories={categories}
+          onCategoryCreated={(newCat) =>
+            setCategories((prev) => [
+              ...prev,
+              {
+                id: newCat.id,
+                name: newCat.name,
+                slug: newCat.slug,
+                description: newCat.description || null,
+                icon: newCat.icon || null,
+                sortOrder: newCat.sortOrder ?? prev.length,
+                _count: { courses: 0 },
+              },
+            ])
+          }
           onComplete={handleWizardComplete}
           onCreateDraftVersion={handleCreateDraftFromWizard}
           creatingDraftVersion={creatingDraftVersion}
