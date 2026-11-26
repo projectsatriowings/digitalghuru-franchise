@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import {
   BookOpen,
   Users,
@@ -627,8 +628,8 @@ export const FranchiseCourses: React.FC = () => {
       )}
 
       {/* ================= ENROLL STUDENT MODAL ================= */}
-      {showEnrollModal && (
-        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
+      {showEnrollModal && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 !m-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-white rounded-3xl max-w-xl w-full shadow-2xl overflow-hidden">
             <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -794,12 +795,13 @@ export const FranchiseCourses: React.FC = () => {
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* ================= TRANSFER ENROLLMENT MODAL ================= */}
-      {transferEnrollment && (
-        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
+      {transferEnrollment && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 !m-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-white rounded-3xl max-w-lg w-full shadow-2xl overflow-hidden">
             <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -950,7 +952,8 @@ export const FranchiseCourses: React.FC = () => {
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

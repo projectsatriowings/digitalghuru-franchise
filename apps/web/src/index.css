@@ -6,11 +6,17 @@
   body.modal-open, html.modal-open {
     overflow: hidden !important;
   }
+  html:has(.fixed.inset-0),
   body:has(.fixed.inset-0) {
     overflow: hidden !important;
   }
   body:has(.fixed.inset-0) main {
     overflow: hidden !important;
+  }
+  /* Fullscreen fixed overlays (modals, dialogs, drawers, backdrops) must never inherit margins from parent space-y-* / space-x-* container utilities */
+  .fixed.inset-0,
+  [class*="fixed"][class*="inset-0"] {
+    margin: 0 !important;
   }
   :root {
     --font-sans: 'Plus Jakarta Sans', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;

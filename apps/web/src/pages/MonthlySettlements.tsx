@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { apiFetch } from '../services/api';
 import { useToast } from '../context/ToastContext';
 import {
@@ -51,6 +52,7 @@ export const MonthlySettlements: React.FC = () => {
   const [selectedStatus, setSelectedStatus] = useState<string>('ALL');
   const [activeTab, setActiveTab] = useState<'ALL' | 'PENDING' | 'APPROVED' | 'PARTIAL' | 'PAID' | 'HOLD'>('ALL');
   const [franchisesList, setFranchisesList] = useState<any[]>([]);
+  const [loadingFranchises, setLoadingFranchises] = useState<boolean>(false);
 
   // Detailed Audit Modal
   const [activeSettlement, setActiveSettlement] = useState<any>(null);
@@ -92,12 +94,20 @@ export const MonthlySettlements: React.FC = () => {
   // Load franchises for dropdown filter
   const loadFranchises = async () => {
     try {
-      const res = await apiFetch('/franchises');
-      if (res.success && Array.isArray(res.data)) {
-        setFranchisesList(res.data);
+      setLoadingFranchises(true);
+      const res = await apiFetch<any>('/franchises', { skipCache: true });
+      if (res && res.success) {
+        const list = Array.isArray(res.data?.franchises)
+          ? res.data.franchises
+          : Array.isArray(res.data)
+          ? res.data
+          : [];
+        setFranchisesList(list);
       }
     } catch (err) {
-      console.error(err);
+      console.error('Failed to load franchises for settlements:', err);
+    } finally {
+      setLoadingFranchises(false);
     }
   };
 
@@ -386,13 +396,21 @@ export const MonthlySettlements: React.FC = () => {
 
         <div className="flex items-center gap-3">
           <button
-            onClick={() => setShowGenModal(true)}
+            onClick={() => {
+              if (franchisesList.length === 0) {
+                loadFranchises();
+              }
+              setShowGenModal(true);
+            }}
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#006FFF] hover:bg-[#0057CC] text-white font-bold text-sm shadow-md shadow-[#006FFF]/20 transition-all cursor-pointer"
           >
             <Plus className="w-4 h-4" /> Generate Settlements
           </button>
           <button
-            onClick={loadSettlements}
+            onClick={() => {
+              loadSettlements();
+              loadFranchises();
+            }}
             className="p-2.5 rounded-xl border border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition-colors"
             title="Refresh"
           >
@@ -694,8 +712,8 @@ export const MonthlySettlements: React.FC = () => {
       {/* ========================================================================= */}
       {/* DETAILED SETTLEMENT AUDIT MODAL */}
       {/* ========================================================================= */}
-      {showDetailModal && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+      {showDetailModal && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 !m-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-white w-full max-w-5xl rounded-2xl shadow-2xl border border-slate-200 my-8 overflow-hidden flex flex-col max-h-[92vh]">
             {/* Modal Header */}
             <div className="p-6 border-b border-slate-200 flex items-start justify-between bg-slate-50/80">
@@ -1079,14 +1097,15 @@ export const MonthlySettlements: React.FC = () => {
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* ========================================================================= */}
       {/* RECORD MANUAL BANK TRANSFER MODAL */}
       {/* ========================================================================= */}
-      {showManualTransferModal && activeSettlement && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+      {showManualTransferModal && activeSettlement && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 !m-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-white max-w-lg w-full rounded-2xl p-6 shadow-2xl border border-slate-200 space-y-4 text-xs">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div>
@@ -1263,14 +1282,15 @@ export const MonthlySettlements: React.FC = () => {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* ========================================================================= */}
       {/* GENERATE SETTLEMENTS MODAL */}
       {/* ========================================================================= */}
-      {showGenModal && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+      {showGenModal && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 !m-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-white max-w-md w-full rounded-2xl p-6 shadow-2xl border border-slate-200 space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="text-base font-bold text-slate-900 font-display">Generate Monthly Settlements</h3>
@@ -1301,9 +1321,12 @@ export const MonthlySettlements: React.FC = () => {
                   className="w-full px-3 py-2 border border-slate-200 rounded-lg text-slate-800 font-medium"
                 >
                   <option value="ALL">All Active Franchises (Batch Generation)</option>
+                  {loadingFranchises && franchisesList.length === 0 && (
+                    <option disabled value="">Loading franchises...</option>
+                  )}
                   {franchisesList.map((f) => (
                     <option key={f.id} value={f.id}>
-                      {f.code} - {f.name}
+                      {f.code} - {f.name}{f.status && f.status !== 'ACTIVE' ? ` (${f.status})` : ''}
                     </option>
                   ))}
                 </select>
@@ -1329,14 +1352,15 @@ export const MonthlySettlements: React.FC = () => {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* ========================================================================= */}
       {/* AUDITABLE ADJUSTMENT MODAL */}
       {/* ========================================================================= */}
-      {showAdjustmentModal && activeSettlement && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+      {showAdjustmentModal && activeSettlement && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 !m-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-white max-w-md w-full rounded-2xl p-6 shadow-2xl border border-slate-200 space-y-4 text-xs">
             <div className="flex items-center justify-between">
               <h3 className="text-base font-bold text-slate-900">Add Auditable Adjustment</h3>
@@ -1402,14 +1426,15 @@ export const MonthlySettlements: React.FC = () => {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* ========================================================================= */}
       {/* ACTION REASON MODAL (ON_HOLD / REJECTED / CANCELLED) */}
       {/* ========================================================================= */}
-      {showActionModal && activeSettlement && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+      {showActionModal && activeSettlement && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 !m-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-white max-w-md w-full rounded-2xl p-6 shadow-2xl border border-slate-200 space-y-4 text-xs">
             <div className="flex items-center justify-between">
               <h3 className="text-base font-bold text-slate-900">
@@ -1453,7 +1478,8 @@ export const MonthlySettlements: React.FC = () => {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
