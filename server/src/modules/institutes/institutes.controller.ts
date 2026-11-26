@@ -514,6 +514,9 @@ export async function createInstitute(req: AuthenticatedRequest, res: Response) 
           email: normalizedInstituteEmail,
           franchiseId: targetFranchiseId,
           status: 'ACTIVE',
+          settingsJson: {
+            initialPassword: data.adminInitialPassword,
+          },
         },
       });
 
@@ -657,7 +660,16 @@ export async function getInstituteById(req: AuthenticatedRequest, res: Response)
       return res.status(404).json({ success: false, error: 'Institute not found' });
     }
 
-    const adminAccount = institute.memberships?.[0]?.user || null;
+    const adminUser = institute.memberships?.[0]?.user || null;
+    const settings = (institute.settingsJson as any) || {};
+    const adminAccount = adminUser
+      ? {
+          ...adminUser,
+          initialPassword:
+            settings.initialPassword ||
+            (adminUser.mustChangePassword ? 'Password#123' : null),
+        }
+      : null;
 
     return res.json({
       success: true,
@@ -1180,6 +1192,18 @@ export async function resetAdminPassword(req: AuthenticatedRequest, res: Respons
       data: {
         passwordHash,
         mustChangePassword: true,
+      },
+    });
+
+    // Save temporary password in institute settingsJson for administrative display
+    const currentSettings = (institute.settingsJson as any) || {};
+    await prisma.institute.update({
+      where: { id },
+      data: {
+        settingsJson: {
+          ...currentSettings,
+          initialPassword: temporaryPassword,
+        },
       },
     });
 

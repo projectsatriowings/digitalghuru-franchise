@@ -36,6 +36,7 @@ import {
 
 interface AcademicAdminAccount extends User {
   createdAt?: string;
+  initialPassword?: string | null;
 }
 
 interface FranchiseOption {
@@ -145,6 +146,10 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onNavi
   const [showInitialPassword, setShowInitialPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLocating, setIsLocating] = useState(false);
+
+  // Drawer Credentials Display State
+  const [showDrawerPassword, setShowDrawerPassword] = useState(false);
+  const [drawerCopiedKey, setDrawerCopiedKey] = useState<string | null>(null);
 
   // Auto-fill City & State when PIN Code is entered
   const handlePostalCodeChange = async (val: string) => {
@@ -386,6 +391,8 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onNavi
 
   const handleOpenDetails = (id: string) => {
     setSelectedInstituteId(id);
+    setShowDrawerPassword(false);
+    setDrawerCopiedKey(null);
     fetchInstituteDetails(id);
   };
 
@@ -1787,18 +1794,82 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onNavi
                           </div>
                         </div>
 
-                        <div>
-                          <span className="text-[#64748B] block mb-0.5">Password Status</span>
-                          <div>
+                        <div className="col-span-1 sm:col-span-2 p-3.5 rounded-xl bg-slate-50/90 border border-slate-200/90 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-slate-600 font-semibold text-xs">Password Status & Credentials</span>
                             {detailData.adminAccount.mustChangePassword ? (
-                              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-800 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-300">
+                              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-800 bg-amber-50 px-2.5 py-0.5 rounded-full border border-amber-300">
                                 <Clock className="w-3 h-3 text-amber-600" /> Pending Change on Next Login
                               </span>
                             ) : (
-                              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-300">
+                              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-800 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-300">
                                 <Check className="w-3 h-3 text-emerald-600" /> Active Password Set
                               </span>
                             )}
+                          </div>
+
+                          <div className="flex items-center gap-2 pt-0.5">
+                            <div className="flex-1 font-mono text-xs font-bold bg-white px-3 py-2 rounded-lg border border-slate-200 text-slate-800 tracking-wider flex items-center justify-between select-all shadow-xs">
+                              <span>
+                                {showDrawerPassword
+                                  ? (detailData.adminAccount.initialPassword ||
+                                     (detailData.adminAccount.mustChangePassword ? 'digi@123' : '••••••••••••••••'))
+                                  : '••••••••••••••••'}
+                              </span>
+                              <span className="text-[10px] font-sans font-medium text-slate-400 uppercase tracking-normal">
+                                {showDrawerPassword ? 'Visible' : 'Masked'}
+                              </span>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => setShowDrawerPassword(!showDrawerPassword)}
+                              className="p-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 text-slate-600 transition cursor-pointer shadow-xs"
+                              title={showDrawerPassword ? 'Hide password' : 'Show password'}
+                            >
+                              {showDrawerPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const pwd =
+                                  detailData.adminAccount?.initialPassword ||
+                                  (detailData.adminAccount?.mustChangePassword ? 'digi@123' : '');
+                                if (!pwd) {
+                                  showNotification(
+                                    'error',
+                                    'No temporary password stored. Click Change Password above to set a new one.'
+                                  );
+                                  return;
+                                }
+                                navigator.clipboard.writeText(pwd);
+                                setDrawerCopiedKey('inst_drawer_password');
+                                showNotification(
+                                  'success',
+                                  'Institute administrator password copied to clipboard'
+                                );
+                                setTimeout(() => setDrawerCopiedKey(null), 2500);
+                              }}
+                              className={`px-3 py-2 rounded-lg border text-xs font-semibold transition cursor-pointer shadow-xs flex items-center gap-1.5 ${
+                                drawerCopiedKey === 'inst_drawer_password'
+                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
+                                  : 'bg-[#006FFF] hover:bg-[#0058D4] text-white border-blue-600'
+                              }`}
+                              title="Copy password"
+                            >
+                              {drawerCopiedKey === 'inst_drawer_password' ? (
+                                <>
+                                  <Check className="w-3.5 h-3.5 text-emerald-600" />
+                                  <span>Copied!</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Copy className="w-3.5 h-3.5" />
+                                  <span>Copy Password</span>
+                                </>
+                              )}
+                            </button>
                           </div>
                         </div>
 
