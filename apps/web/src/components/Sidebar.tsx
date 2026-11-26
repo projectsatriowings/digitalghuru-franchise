@@ -144,12 +144,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <GraduationCap className="w-5 h-5 shrink-0" /> Students
             </button>
             <button
-              onClick={() => handleSelect('attendance')}
-              className={navItemClass('attendance')}
-            >
-              <Calendar className="w-5 h-5 shrink-0" /> Class Attendance
-            </button>
-            <button
               onClick={() => handleSelect('exams')}
               className={navItemClass('exams')}
             >
