@@ -17,6 +17,33 @@ setInterval(() => {
   }
 }, 5 * 60 * 1000).unref();
 
+function getClientIp(req: Request): string {
+  try {
+    const xForwardedFor = req.headers['x-forwarded-for'];
+    if (typeof xForwardedFor === 'string') {
+      return xForwardedFor.split(',')[0].trim();
+    }
+    if (Array.isArray(xForwardedFor) && xForwardedFor.length > 0) {
+      return xForwardedFor[0].trim();
+    }
+    const xRealIp = req.headers['x-real-ip'];
+    if (typeof xRealIp === 'string') {
+      return xRealIp.trim();
+    }
+    if (req.ip) return req.ip;
+  } catch {
+    // ignore
+  }
+  try {
+    if (req.socket && req.socket.remoteAddress) {
+      return req.socket.remoteAddress;
+    }
+  } catch {
+    // ignore
+  }
+  return 'unknown';
+}
+
 export interface RateLimitOptions {
   windowMs: number;
   max: number;
@@ -41,7 +68,7 @@ export function createRateLimiter(options: RateLimitOptions) {
       return next();
     }
 
-    const ip = req.ip || req.socket.remoteAddress || 'unknown';
+    const ip = getClientIp(req);
     const key = `${req.baseUrl || ''}${req.path}:${ip}`;
     const now = Date.now();
 
