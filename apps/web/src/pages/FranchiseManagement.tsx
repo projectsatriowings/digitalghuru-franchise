@@ -77,6 +77,7 @@ export const FranchiseManagement: React.FC = () => {
   const [createModalTab, setCreateModalTab] = useState<'profile' | 'model' | 'financials' | 'review'>('profile');
   const [visitedTabs, setVisitedTabs] = useState<Set<'profile' | 'model' | 'financials' | 'review'>>(new Set(['profile']));
   const [isLocatingPincode, setIsLocatingPincode] = useState(false);
+  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
   const [createdResultModal, setCreatedResultModal] = useState<any>(null);
   const [showCreatedPassword, setShowCreatedPassword] = useState(true);
   const [copiedField, setCopiedField] = useState<string | null>(null);
@@ -507,85 +508,78 @@ export const FranchiseManagement: React.FC = () => {
   };
 
   const validateProfileStep = () => {
+    const errs: Record<string, string> = {};
+
     if (!createForm.name?.trim()) {
-      showToast('Franchise / Center Name is required', 'error');
-      return false;
+      errs.name = 'Franchise / Center Name is required';
+    } else if (createForm.name.trim().length < 3) {
+      errs.name = 'Franchise / Center Name must be at least 3 characters';
     }
-    if (createForm.name.trim().length < 3) {
-      showToast('Franchise / Center Name must be at least 3 characters', 'error');
-      return false;
-    }
+
     if (!createForm.ownerName?.trim()) {
-      showToast('Owner Full Name is required', 'error');
-      return false;
+      errs.ownerName = 'Owner Full Name is required';
+    } else if (createForm.ownerName.trim().length < 2) {
+      errs.ownerName = 'Owner Full Name must be at least 2 characters';
     }
-    if (createForm.ownerName.trim().length < 2) {
-      showToast('Owner Full Name must be at least 2 characters', 'error');
-      return false;
-    }
+
     if (!createForm.email?.trim()) {
-      showToast('Owner Email Address is required', 'error');
-      return false;
+      errs.email = 'Owner Email Address is required';
+    } else if (!isValidEmail(createForm.email.trim())) {
+      errs.email = 'Please enter a valid email address (e.g. name@domain.com)';
     }
-    if (!isValidEmail(createForm.email.trim())) {
-      showToast('Please enter a valid email address (e.g. name@domain.com)', 'error');
-      return false;
-    }
+
     if (!createForm.phone?.trim()) {
-      showToast('Primary Mobile Number is required', 'error');
-      return false;
+      errs.phone = 'Primary Mobile Number is required';
+    } else if (!isValidPhone(createForm.phone.trim())) {
+      errs.phone = 'Please enter a valid 10-digit mobile number';
     }
-    if (!isValidPhone(createForm.phone.trim())) {
-      showToast('Please enter a valid 10-digit mobile number', 'error');
-      return false;
-    }
+
     if (!createForm.address?.trim()) {
-      showToast('Full Business Address is required', 'error');
-      return false;
+      errs.address = 'Full Business Address is required';
+    } else if (createForm.address.trim().length < 5) {
+      errs.address = 'Please provide a complete business address';
     }
-    if (createForm.address.trim().length < 5) {
-      showToast('Please provide a complete business address', 'error');
-      return false;
-    }
+
     if (!createForm.city?.trim()) {
-      showToast('City is required', 'error');
-      return false;
+      errs.city = 'City is required';
     }
+
     if (!createForm.state?.trim()) {
-      showToast('State is required', 'error');
-      return false;
+      errs.state = 'State is required';
     }
+
     const cleanPin = (createForm.postalCode || '').trim().replace(/\D/g, '');
     if (!cleanPin) {
-      showToast('Postal / PIN Code is required', 'error');
-      return false;
-    }
-    if (cleanPin.length !== 6) {
-      showToast('PIN Code must be exactly 6 digits', 'error');
-      return false;
+      errs.postalCode = 'Postal / PIN Code is required';
+    } else if (cleanPin.length !== 6) {
+      errs.postalCode = 'PIN Code must be exactly 6 digits';
     }
 
     // Optional authorized alternate contact validation (if filled)
     if (createForm.authorizedContact?.email && !isValidEmail(createForm.authorizedContact.email)) {
-      showToast('Please enter a valid email for the authorized contact person', 'error');
-      return false;
+      errs.authEmail = 'Please enter a valid email for the authorized contact person';
     }
     if (createForm.authorizedContact?.phone && !isValidPhone(createForm.authorizedContact.phone)) {
-      showToast('Please enter a valid phone number for the authorized contact person', 'error');
-      return false;
+      errs.authPhone = 'Please enter a valid phone number for the authorized contact person';
     }
 
     // New Campus validation if user selected CREATE_NEW
     if (createForm.branchOption === 'CREATE_NEW') {
       if (!createForm.newBranch?.name?.trim()) {
-        showToast('Campus / Branch Name is required when creating a new branch', 'error');
-        return false;
+        errs.branchName = 'Campus / Branch Name is required when creating a new branch';
       }
     } else if (createForm.branchOption === 'LINK_EXISTING') {
       if (!createForm.linkedInstituteId) {
-        showToast('Please select an institute to link or choose "Skip for now"', 'error');
-        return false;
+        errs.linkedInstitute = 'Please select an institute to link or choose "Skip for now"';
       }
+    }
+
+    setValidationErrors(errs);
+
+    const firstKey = Object.keys(errs)[0];
+    if (firstKey) {
+      showToast(errs[firstKey], 'error');
+      return false;
     }
 
     return true;
@@ -2404,9 +2398,17 @@ export const FranchiseManagement: React.FC = () => {
                             required
                             placeholder="e.g. Digital Guru Chennai Central"
                             value={createForm.name}
-                            onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })}
-                            className="mt-1 w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-[#006FFF]"
+                            onChange={(e) => {
+                              setCreateForm({ ...createForm, name: e.target.value });
+                              if (validationErrors.name) setValidationErrors((prev) => { const cp = { ...prev }; delete cp.name; return cp; });
+                            }}
+                            className={`mt-1 w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-[#006FFF] ${validationErrors.name ? 'border-rose-500 bg-rose-50/50 text-rose-900 ring-1 ring-rose-500' : 'border-slate-200'}`}
                           />
+                          {validationErrors.name && (
+                            <p className="mt-1 text-xs text-rose-600 font-medium flex items-center gap-1">
+                              <AlertTriangle className="w-3.5 h-3.5 shrink-0" /> {validationErrors.name}
+                            </p>
+                          )}
                         </div>
 
                         <div>
@@ -2434,9 +2436,17 @@ export const FranchiseManagement: React.FC = () => {
                             required
                             placeholder="e.g. Rajesh Kannan"
                             value={createForm.ownerName}
-                            onChange={(e) => setCreateForm({ ...createForm, ownerName: e.target.value })}
-                            className="mt-1 w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-[#006FFF]"
+                            onChange={(e) => {
+                              setCreateForm({ ...createForm, ownerName: e.target.value });
+                              if (validationErrors.ownerName) setValidationErrors((prev) => { const cp = { ...prev }; delete cp.ownerName; return cp; });
+                            }}
+                            className={`mt-1 w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-[#006FFF] ${validationErrors.ownerName ? 'border-rose-500 bg-rose-50/50 text-rose-900 ring-1 ring-rose-500' : 'border-slate-200'}`}
                           />
+                          {validationErrors.ownerName && (
+                            <p className="mt-1 text-xs text-rose-600 font-medium flex items-center gap-1">
+                              <AlertTriangle className="w-3.5 h-3.5 shrink-0" /> {validationErrors.ownerName}
+                            </p>
+                          )}
                         </div>
 
                         <div>
@@ -2446,21 +2456,29 @@ export const FranchiseManagement: React.FC = () => {
                             required
                             placeholder="owner@dgchennai.com"
                             value={createForm.email}
-                            onChange={(e) => setCreateForm({ ...createForm, email: e.target.value })}
-                            className={`mt-1 w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-[#006FFF] ${(duplicateFranchiseMatch || (duplicateCheckResult.emailConflict?.isDuplicate && duplicateCheckResult.emailConflict.model === 'Franchise'))
+                            onChange={(e) => {
+                              setCreateForm({ ...createForm, email: e.target.value });
+                              if (validationErrors.email) setValidationErrors((prev) => { const cp = { ...prev }; delete cp.email; return cp; });
+                            }}
+                            className={`mt-1 w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-[#006FFF] ${validationErrors.email ? 'border-rose-500 bg-rose-50/50 text-rose-900 ring-1 ring-rose-500' : (duplicateFranchiseMatch || (duplicateCheckResult.emailConflict?.isDuplicate && duplicateCheckResult.emailConflict.model === 'Franchise'))
                               ? 'border-rose-400 bg-rose-50/40 text-rose-900'
                               : duplicateCheckResult.emailConflict?.isDuplicate && duplicateCheckResult.emailConflict.model === 'User'
                                 ? 'border-blue-400 bg-blue-50/30'
-                                : ''
+                                : 'border-slate-200'
                               }`}
                           />
-                          {(duplicateFranchiseMatch || (duplicateCheckResult.emailConflict?.isDuplicate && duplicateCheckResult.emailConflict.model === 'Franchise')) && (
+                          {validationErrors.email && (
+                            <p className="mt-1 text-xs text-rose-600 font-medium flex items-center gap-1">
+                              <AlertTriangle className="w-3.5 h-3.5 shrink-0" /> {validationErrors.email}
+                            </p>
+                          )}
+                          {!validationErrors.email && (duplicateFranchiseMatch || (duplicateCheckResult.emailConflict?.isDuplicate && duplicateCheckResult.emailConflict.model === 'Franchise')) && (
                             <p className="mt-1 text-xs text-rose-600 font-medium flex items-center gap-1">
                               <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
                               {duplicateCheckResult.emailConflict?.message || `A franchise with this email already exists (${duplicateFranchiseMatch?.name} [${duplicateFranchiseMatch?.code}]).`}
                             </p>
                           )}
-                          {!duplicateFranchiseMatch && duplicateCheckResult.emailConflict?.isDuplicate && duplicateCheckResult.emailConflict.model === 'User' && (
+                          {!validationErrors.email && !duplicateFranchiseMatch && duplicateCheckResult.emailConflict?.isDuplicate && duplicateCheckResult.emailConflict.model === 'User' && (
                             <p className="mt-1 text-xs text-blue-600 font-medium flex items-center gap-1">
                               <Info className="w-3.5 h-3.5 shrink-0" />
                               {duplicateCheckResult.emailConflict.message}
@@ -2475,11 +2493,19 @@ export const FranchiseManagement: React.FC = () => {
                             required
                             placeholder="+91 98765 43210"
                             value={createForm.phone}
-                            onChange={(e) => setCreateForm({ ...createForm, phone: sanitizePhoneInput(e.target.value) })}
-                            className={`mt-1 w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-[#006FFF] ${duplicateCheckResult.phoneConflict?.isDuplicate ? 'border-rose-400 bg-rose-50/40 text-rose-900' : ''
+                            onChange={(e) => {
+                              setCreateForm({ ...createForm, phone: sanitizePhoneInput(e.target.value) });
+                              if (validationErrors.phone) setValidationErrors((prev) => { const cp = { ...prev }; delete cp.phone; return cp; });
+                            }}
+                            className={`mt-1 w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-[#006FFF] ${validationErrors.phone ? 'border-rose-500 bg-rose-50/50 text-rose-900 ring-1 ring-rose-500' : duplicateCheckResult.phoneConflict?.isDuplicate ? 'border-rose-400 bg-rose-50/40 text-rose-900' : 'border-slate-200'
                               }`}
                           />
-                          {duplicateCheckResult.phoneConflict?.isDuplicate && (
+                          {validationErrors.phone && (
+                            <p className="mt-1 text-xs text-rose-600 font-medium flex items-center gap-1">
+                              <AlertTriangle className="w-3.5 h-3.5 shrink-0" /> {validationErrors.phone}
+                            </p>
+                          )}
+                          {!validationErrors.phone && duplicateCheckResult.phoneConflict?.isDuplicate && (
                             <p className="mt-1 text-xs text-rose-600 font-medium flex items-center gap-1">
                               <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
                               {duplicateCheckResult.phoneConflict.message}
@@ -2496,9 +2522,17 @@ export const FranchiseManagement: React.FC = () => {
                             required
                             placeholder="e.g. Suite 402, Anna Salai Commercial Complex"
                             value={createForm.address}
-                            onChange={(e) => setCreateForm({ ...createForm, address: e.target.value })}
-                            className="mt-1 w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-[#006FFF]"
+                            onChange={(e) => {
+                              setCreateForm({ ...createForm, address: e.target.value });
+                              if (validationErrors.address) setValidationErrors((prev) => { const cp = { ...prev }; delete cp.address; return cp; });
+                            }}
+                            className={`mt-1 w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-[#006FFF] ${validationErrors.address ? 'border-rose-500 bg-rose-50/50 text-rose-900 ring-1 ring-rose-500' : 'border-slate-200'}`}
                           />
+                          {validationErrors.address && (
+                            <p className="mt-1 text-xs text-rose-600 font-medium flex items-center gap-1">
+                              <AlertTriangle className="w-3.5 h-3.5 shrink-0" /> {validationErrors.address}
+                            </p>
+                          )}
                         </div>
 
                         <div>
@@ -2516,9 +2550,17 @@ export const FranchiseManagement: React.FC = () => {
                             maxLength={6}
                             placeholder="600002"
                             value={createForm.postalCode}
-                            onChange={(e) => handlePostalCodeLookup(e.target.value)}
-                            className="mt-1 w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-[#006FFF]"
+                            onChange={(e) => {
+                              handlePostalCodeLookup(e.target.value);
+                              if (validationErrors.postalCode) setValidationErrors((prev) => { const cp = { ...prev }; delete cp.postalCode; return cp; });
+                            }}
+                            className={`mt-1 w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-[#006FFF] ${validationErrors.postalCode ? 'border-rose-500 bg-rose-50/50 text-rose-900 ring-1 ring-rose-500' : 'border-slate-200'}`}
                           />
+                          {validationErrors.postalCode && (
+                            <p className="mt-1 text-xs text-rose-600 font-medium flex items-center gap-1">
+                              <AlertTriangle className="w-3.5 h-3.5 shrink-0" /> {validationErrors.postalCode}
+                            </p>
+                          )}
                         </div>
 
                         <div>
@@ -2528,9 +2570,17 @@ export const FranchiseManagement: React.FC = () => {
                             required
                             placeholder="Chennai"
                             value={createForm.city}
-                            onChange={(e) => setCreateForm({ ...createForm, city: e.target.value })}
-                            className="mt-1 w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-[#006FFF]"
+                            onChange={(e) => {
+                              setCreateForm({ ...createForm, city: e.target.value });
+                              if (validationErrors.city) setValidationErrors((prev) => { const cp = { ...prev }; delete cp.city; return cp; });
+                            }}
+                            className={`mt-1 w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-[#006FFF] ${validationErrors.city ? 'border-rose-500 bg-rose-50/50 text-rose-900 ring-1 ring-rose-500' : 'border-slate-200'}`}
                           />
+                          {validationErrors.city && (
+                            <p className="mt-1 text-xs text-rose-600 font-medium flex items-center gap-1">
+                              <AlertTriangle className="w-3.5 h-3.5 shrink-0" /> {validationErrors.city}
+                            </p>
+                          )}
                         </div>
 
                         <div>
@@ -2540,9 +2590,17 @@ export const FranchiseManagement: React.FC = () => {
                             required
                             placeholder="Tamil Nadu"
                             value={createForm.state}
-                            onChange={(e) => setCreateForm({ ...createForm, state: e.target.value })}
-                            className="mt-1 w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-[#006FFF]"
+                            onChange={(e) => {
+                              setCreateForm({ ...createForm, state: e.target.value });
+                              if (validationErrors.state) setValidationErrors((prev) => { const cp = { ...prev }; delete cp.state; return cp; });
+                            }}
+                            className={`mt-1 w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-[#006FFF] ${validationErrors.state ? 'border-rose-500 bg-rose-50/50 text-rose-900 ring-1 ring-rose-500' : 'border-slate-200'}`}
                           />
+                          {validationErrors.state && (
+                            <p className="mt-1 text-xs text-rose-600 font-medium flex items-center gap-1">
+                              <AlertTriangle className="w-3.5 h-3.5 shrink-0" /> {validationErrors.state}
+                            </p>
+                          )}
                         </div>
                       </div>
                     </div>

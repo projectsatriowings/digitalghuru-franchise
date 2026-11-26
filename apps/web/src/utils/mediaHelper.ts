@@ -168,12 +168,17 @@ export async function openMediaResource({
         method: 'POST',
         body: JSON.stringify({ courseId, mediaUrl: targetUrl }),
       });
-      if (res?.data?.mediaUrl) {
-        targetUrl = res.data.mediaUrl;
+      const authorizedUrl = res?.data?.mediaUrl || res?.mediaUrl;
+      if (authorizedUrl) {
+        targetUrl = authorizedUrl;
+      } else {
+        onError?.(res?.message || 'Could not generate media authorization token. Please verify your login.');
+        return false;
       }
     } catch (err: any) {
       console.warn('[mediaHelper] Failed to acquire short-lived media token:', err);
-      // Fallback to attempting original URL
+      onError?.(err?.message || 'Unable to access protected course document.');
+      return false;
     }
   }
 
