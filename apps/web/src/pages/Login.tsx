@@ -517,19 +517,6 @@ export const Login: React.FC = () => {
           </div>
         </div>
       )}
-
-      {/* Footer Branding Bar */}
-      <div className="mt-6 text-center text-xs text-slate-400 flex flex-wrap items-center justify-center gap-4 z-10">
-        <span>&copy; {new Date().getFullYear()} Digital Guru Franchise Operating System</span>
-        <span>&bull;</span>
-        <a href={`tel:${BRANDING.contact.phone}`} className="hover:text-slate-600 transition-colors">
-          {BRANDING.contact.phone}
-        </a>
-        <span>&bull;</span>
-        <a href={`mailto:${BRANDING.contact.email}`} className="hover:text-slate-600 transition-colors">
-          {BRANDING.contact.email}
-        </a>
-      </div>
     </div>
   );
 };

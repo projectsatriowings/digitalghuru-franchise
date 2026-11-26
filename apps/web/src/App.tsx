@@ -4,7 +4,6 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { Navbar } from './components/Navbar';
 import { Sidebar } from './components/Sidebar';
 import { Login } from './pages/Login';
-import { BrandFooter } from './components/BrandFooter';
 import { PageSkeleton } from './components/PageSkeleton';
 import { ToastProvider } from './context/ToastContext';
 
@@ -295,7 +294,6 @@ const AppContent: React.FC = () => {
               </div>
             </Suspense>
           </div>
-          {user.role !== 'SUPER_ADMIN' && <BrandFooter />}
         </main>
       </div>
     </div>
