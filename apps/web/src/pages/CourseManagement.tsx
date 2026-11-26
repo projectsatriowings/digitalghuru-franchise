@@ -318,18 +318,24 @@ export const CourseManagement: React.FC = () => {
     try {
       if (type === 'course') {
         const res = await apiFetch(`/courses/${item.id}`, { method: 'DELETE' });
-        if (res.archived) {
-          toast.info(res.message || 'Course contains published curriculum and was safely moved to Archive.');
-        } else {
-          toast.success(res.message || 'Course deleted successfully.');
-        }
+        setCourses((prev) => prev.filter((c) => c.id !== item.id));
+        toast.success(res.message || 'Course permanently deleted successfully.');
       } else {
         const res = await apiFetch(`/courses/categories/${item.id}`, { method: 'DELETE' });
+        setCategories((prev) => prev.filter((cat) => cat.id !== item.id));
         toast.success(res.message || 'Category deleted successfully.');
       }
       setDeleteModalState({ isOpen: false, type: 'course', item: null, loading: false });
-      await fetchCatalogue();
+      await fetchCatalogue(true);
     } catch (err: any) {
+      const errMsg = err?.data?.message || err?.message || '';
+      if (err?.status === 404 || errMsg.toLowerCase().includes('not found')) {
+        setCourses((prev) => prev.filter((c) => c.id !== item.id));
+        setDeleteModalState({ isOpen: false, type: 'course', item: null, loading: false });
+        toast.info('Course has already been removed.');
+        await fetchCatalogue(true);
+        return;
+      }
       setDeleteModalState((prev) => ({ ...prev, loading: false }));
       toast.error(getHumanErrorMessage(err));
     }
@@ -1888,7 +1894,7 @@ export const CourseManagement: React.FC = () => {
         title={deleteModalState.type === 'course' ? 'Delete Course' : 'Delete Category'}
         message={
           deleteModalState.type === 'course'
-            ? `Are you sure you want to delete "${deleteModalState.item?.title || 'this course'}"? If the course has published curriculum or student enrollments, it will be safely moved to Archive to preserve academic records.`
+            ? `Are you sure you want to permanently delete "${deleteModalState.item?.title || 'this course'}"? This action cannot be undone.`
             : `Are you sure you want to delete category "${deleteModalState.item?.name || 'this category'}"? Any courses assigned to this category will need to be reassigned.`
         }
         confirmLabel={deleteModalState.type === 'course' ? 'Delete Course' : 'Delete Category'}
