@@ -31,6 +31,7 @@ import {
   BookOpen,
   ArrowRight,
   Info,
+  MoreVertical,
 } from 'lucide-react';
 
 interface AcademicAdminAccount extends User {
@@ -71,6 +72,15 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onNavi
     const timer = setTimeout(() => setDebouncedSearch(search), 300);
     return () => clearTimeout(timer);
   }, [search]);
+
+  // Three-dot action menu state
+  const [activeActionMenuId, setActiveActionMenuId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const handleGlobalClick = () => setActiveActionMenuId(null);
+    window.addEventListener('click', handleGlobalClick);
+    return () => window.removeEventListener('click', handleGlobalClick);
+  }, []);
 
   // Global notification banner
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
@@ -855,17 +865,17 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onNavi
         </div>
 
         {/* Table */}
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
+        <div className="w-full overflow-visible">
+          <table className="w-full text-left text-xs table-auto">
             <thead>
-              <tr className="border-b border-[#E2E8F0] text-[#64748B] bg-[#F8FAFC] uppercase tracking-wider">
-                <th className="py-3 px-4 font-bold">Institute</th>
-                <th className="py-3 px-4 font-bold whitespace-nowrap w-32">Code</th>
-                <th className="py-3 px-4 font-bold">Franchise Center</th>
-                <th className="py-3 px-4 font-bold">Location</th>
-                <th className="py-3 px-4 font-bold">Metrics</th>
-                <th className="py-3 px-4 font-bold">Status</th>
-                <th className="py-3 px-4 font-bold text-right">Actions</th>
+              <tr className="border-b border-[#E2E8F0] text-[#64748B] bg-[#F8FAFC] uppercase tracking-wider text-[11px]">
+                <th className="py-3 px-3.5 font-bold">Institute</th>
+                <th className="py-3 px-3 font-bold whitespace-nowrap">Code</th>
+                <th className="py-3 px-3 font-bold">Franchise Center</th>
+                <th className="py-3 px-3 font-bold">Location</th>
+                <th className="py-3 px-3 font-bold">Metrics</th>
+                <th className="py-3 px-3 font-bold">Status</th>
+                <th className="py-3 px-3 font-bold text-center w-14">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#EFEBE9]">
@@ -882,38 +892,38 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onNavi
                   <tr
                     key={inst.id}
                     onClick={() => handleOpenDetails(inst.id)}
-                    className="hover:bg-blue-50/50 cursor-pointer transition-colors group"
+                    className="hover:bg-blue-50/50 cursor-pointer transition-colors group relative"
                     title={`Click to view details for ${inst.name}`}
                   >
-                    <td className="py-3.5 px-4">
+                    <td className="py-3 px-3.5">
                       <div className="font-bold text-[#0F172A] text-sm group-hover:text-[#006FFF] transition-colors flex items-center gap-1.5">
                         <span>{inst.name}</span>
                         <Eye className="w-3.5 h-3.5 text-[#006FFF] opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
                       </div>
-                      {inst.email && <div className="text-[11px] text-[#64748B]">{inst.email}</div>}
+                      {inst.email && <div className="text-[11px] text-[#64748B] truncate max-w-[200px]">{inst.email}</div>}
                     </td>
-                    <td className="py-3.5 px-4 font-mono font-semibold text-[#006FFF] whitespace-nowrap">
-                      <span className="bg-[#F8FAFC] border border-[#E2E8F0] px-2.5 py-1 rounded text-xs whitespace-nowrap inline-block tracking-wide group-hover:border-blue-300 transition-colors">
+                    <td className="py-3 px-3 font-mono font-semibold text-[#006FFF] whitespace-nowrap">
+                      <span className="bg-[#F8FAFC] border border-[#E2E8F0] px-2 py-0.5 rounded text-xs whitespace-nowrap inline-block tracking-wide group-hover:border-blue-300 transition-colors">
                         {inst.code}
                       </span>
                     </td>
-                    <td className="py-3.5 px-4 whitespace-nowrap">
+                    <td className="py-3 px-3">
                       {inst.franchise ? (
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-blue-50 text-[#006FFF] border border-blue-200 group-hover:bg-blue-100/70 transition-colors" title={`Franchise: ${inst.franchise.name} (${inst.franchise.code})`}>
-                          <Building2 className="w-3.5 h-3.5 text-[#006FFF]" />
-                          {inst.franchise.code} - {inst.franchise.name}
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-blue-50 text-[#006FFF] border border-blue-200 group-hover:bg-blue-100/70 transition-colors max-w-[220px] 2xl:max-w-xs" title={`Franchise: ${inst.franchise.name} (${inst.franchise.code})`}>
+                          <Building2 className="w-3.5 h-3.5 text-[#006FFF] shrink-0" />
+                          <span className="truncate">{inst.franchise.code} - {inst.franchise.name}</span>
                         </span>
                       ) : (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium bg-slate-50 text-slate-500 border border-slate-200">
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium bg-slate-50 text-slate-500 border border-slate-200 whitespace-nowrap">
                           Standalone Campus
                         </span>
                       )}
                     </td>
-                    <td className="py-3.5 px-4 text-[#475569]">
+                    <td className="py-3 px-3 text-[#475569] whitespace-nowrap">
                       {inst.city ? `${inst.city}${inst.state ? `, ${inst.state}` : ''}` : '—'}
                     </td>
-                    <td className="py-3.5 px-4 text-[#475569]">
-                      <div className="flex items-center gap-3 text-[11px]">
+                    <td className="py-3 px-3 text-[#475569] whitespace-nowrap">
+                      <div className="flex items-center gap-2 text-[11px]">
                         <span><strong>{inst._count?.students || 0}</strong> Students</span>
                         <span>&bull;</span>
                         <span><strong>{inst._count?.staffProfiles || 0}</strong> Staff</span>
@@ -921,7 +931,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onNavi
                         <span><strong>{inst._count?.batches || 0}</strong> Batches</span>
                       </div>
                     </td>
-                    <td className="py-3.5 px-4">
+                    <td className="py-3 px-3 whitespace-nowrap">
                       {inst.status === 'ACTIVE' ? (
                         <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-800 border border-emerald-300">
                           <CheckCircle className="w-3 h-3 text-emerald-600" /> Active
@@ -932,34 +942,64 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onNavi
                         </span>
                       )}
                     </td>
-                    <td className="py-3.5 px-4 text-right">
-                      <div className="inline-flex items-center gap-2">
-                        {/* View Details Action */}
+                    <td className="py-3 px-3 text-center whitespace-nowrap relative">
+                      <div className="relative inline-block text-left" onClick={(e) => e.stopPropagation()}>
                         <button
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleOpenDetails(inst.id);
+                            setActiveActionMenuId(activeActionMenuId === inst.id ? null : inst.id);
                           }}
-                          className="inline-flex items-center gap-1.5 text-sm font-semibold px-3 py-1.5 rounded-lg border border-[#E2E8F0] text-[#006FFF] hover:bg-[#F8FAFC] transition"
+                          className="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-[#006FFF]/20 transition-colors"
+                          title="Options"
+                          aria-label={`Actions for ${inst.name}`}
                         >
-                          <Eye className="w-4 h-4" /> View
+                          <MoreVertical className="w-4 h-4" />
                         </button>
 
-                        {/* Suspend or Activate Action */}
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setStatusActionTarget(inst);
-                          }}
-                          className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition ${inst.status === 'ACTIVE'
-                              ? 'border-rose-300 text-rose-800 hover:bg-rose-50'
-                              : 'border-emerald-300 text-emerald-800 hover:bg-emerald-50'
-                            }`}
-                        >
-                          {inst.status === 'ACTIVE' ? 'Suspend' : 'Activate'}
-                        </button>
+                        {activeActionMenuId === inst.id && (
+                          <div
+                            className="absolute right-0 top-full mt-1 w-44 bg-white rounded-xl shadow-xl border border-slate-200 py-1.5 z-50 text-left animate-in fade-in zoom-in-95 duration-100"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setActiveActionMenuId(null);
+                                handleOpenDetails(inst.id);
+                              }}
+                              className="w-full flex items-center gap-2 px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-[#006FFF] transition-colors"
+                            >
+                              <Eye className="w-3.5 h-3.5 text-[#006FFF]" />
+                              View Details
+                            </button>
+                            <div className="h-px bg-slate-100 my-1" />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setActiveActionMenuId(null);
+                                setStatusActionTarget(inst);
+                              }}
+                              className={`w-full flex items-center gap-2 px-3.5 py-2 text-xs font-semibold transition-colors ${
+                                inst.status === 'ACTIVE'
+                                  ? 'text-rose-700 hover:bg-rose-50'
+                                  : 'text-emerald-700 hover:bg-emerald-50'
+                              }`}
+                            >
+                              {inst.status === 'ACTIVE' ? (
+                                <>
+                                  <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
+                                  Suspend Campus
+                                </>
+                              ) : (
+                                <>
+                                  <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
+                                  Activate Campus
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </td>
                   </tr>
