@@ -39,7 +39,7 @@ export default defineConfig({
     host: 'localhost',
     proxy: {
       '/api': {
-        target: process.env.VITE_PROXY_TARGET || process.env.BACKEND_URL || (process.env.PORT ? `http://127.0.0.1:${process.env.PORT}` : 'http://127.0.0.1:5001'),
+        target: process.env.VITE_PROXY_TARGET || process.env.BACKEND_URL || (process.env.PORT ? `http://127.0.0.1:${process.env.PORT}` : 'http://127.0.0.1:5000'),
         changeOrigin: true,
       },
     },
