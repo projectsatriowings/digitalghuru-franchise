@@ -720,6 +720,8 @@ export async function createFranchise(req: AuthenticatedRequest, res: Response) 
             status: 'ACTIVE',
             ownerUserId: ownerUser.id,
             notes: data.notes || null,
+            revenueSharePercentage: new Prisma.Decimal(partnerPct),
+            digitalGuruRevenuePercentage: new Prisma.Decimal(dgPct),
           },
           include: {
             ownerUser: { select: { id: true, email: true, fullName: true, phone: true } },
@@ -1142,6 +1144,12 @@ export async function updateFranchise(req: AuthenticatedRequest, res: Response) 
     } = req.body;
 
     const isSuperAdmin = req.user?.role === 'SUPER_ADMIN';
+    const revenueSharePercentage = (isSuperAdmin && req.body.revenueSharePercentage !== undefined)
+      ? Number(req.body.revenueSharePercentage)
+      : undefined;
+    const digitalGuruRevenuePercentage = revenueSharePercentage !== undefined
+      ? Number((100 - revenueSharePercentage).toFixed(2))
+      : undefined;
 
     // 1. Update franchise profile details
     await prisma.franchise.update({
@@ -1158,8 +1166,54 @@ export async function updateFranchise(req: AuthenticatedRequest, res: Response) 
         ...(authorizedContact !== undefined && { authorizedContact }),
         ...(businessDetails !== undefined && { businessDetails }),
         ...(isSuperAdmin && notes !== undefined && { notes }),
+        ...(revenueSharePercentage !== undefined && {
+          revenueSharePercentage: new Prisma.Decimal(revenueSharePercentage),
+          digitalGuruRevenuePercentage: new Prisma.Decimal(digitalGuruRevenuePercentage!),
+        }),
       },
     });
+
+    if (revenueSharePercentage !== undefined) {
+      const activeAgreement = await prisma.franchiseAgreement.findFirst({
+        where: { franchiseId: id, status: 'ACTIVE' },
+        orderBy: { createdAt: 'desc' },
+      });
+      if (activeAgreement) {
+        await prisma.franchiseAgreement.update({
+          where: { id: activeAgreement.id },
+          data: {
+            partnerRevenuePercentage: new Prisma.Decimal(revenueSharePercentage),
+            digitalGuruRevenuePercentage: new Prisma.Decimal(digitalGuruRevenuePercentage!),
+            royaltyPercentage: new Prisma.Decimal(digitalGuruRevenuePercentage!),
+          },
+        });
+      }
+
+      const pendingSettlements = await prisma.franchiseSettlement.findMany({
+        where: {
+          franchiseId: id,
+          status: { in: ['DRAFT', 'PENDING_APPROVAL', 'PENDING_REVIEW'] },
+        },
+      });
+      for (const s of pendingSettlements) {
+        const netCollections = Number(s.totalEligibleCollections);
+        const newFranchiseShare = Math.round(netCollections * (revenueSharePercentage / 100) * 100) / 100;
+        const newDgShare = Math.round((netCollections - newFranchiseShare) * 100) / 100;
+        const totalTransferred = Number(s.totalTransferredAmount || 0);
+        const newRemaining = Math.max(0, Math.round((newFranchiseShare - totalTransferred) * 100) / 100);
+
+        await prisma.franchiseSettlement.update({
+          where: { id: s.id },
+          data: {
+            applicableFranchisePercentage: new Prisma.Decimal(revenueSharePercentage),
+            applicableDigitalGuruPercentage: new Prisma.Decimal(digitalGuruRevenuePercentage!),
+            franchisePayableAmount: new Prisma.Decimal(newFranchiseShare),
+            digitalGuruShareAmount: new Prisma.Decimal(newDgShare),
+            remainingPayableAmount: new Prisma.Decimal(newRemaining),
+          },
+        });
+      }
+    }
 
     // 2. Manage branch associations if Super Admin
     if (isSuperAdmin) {
@@ -2275,6 +2329,15 @@ export async function reviseAgreement(req: AuthenticatedRequest, res: Response) 
         });
       }
 
+      // 4. Keep franchise active revenue share percentage in sync with revised agreement
+      await tx.franchise.update({
+        where: { id: franchiseId },
+        data: {
+          revenueSharePercentage: new Prisma.Decimal(effectivePartnerPct),
+          digitalGuruRevenuePercentage: new Prisma.Decimal(effectiveDgPct),
+        },
+      });
+
       return { newAgreement: createdAgreement, installments: createdInstallments };
     });
 
@@ -2474,6 +2537,15 @@ export async function renewAgreement(req: AuthenticatedRequest, res: Response) {
           prismaClient: tx,
         });
       }
+
+      // 4. Keep franchise active revenue share percentage in sync with renewed agreement
+      await tx.franchise.update({
+        where: { id: franchiseId },
+        data: {
+          revenueSharePercentage: new Prisma.Decimal(effectivePartnerRevenuePct),
+          digitalGuruRevenuePercentage: new Prisma.Decimal(effectiveDgRevenuePct),
+        },
+      });
 
       return { newAgreement: createdAgreement, installments: createdInstallments };
     });
@@ -4479,6 +4551,48 @@ export async function updateRevenueShare(req: AuthenticatedRequest, res: Respons
           digitalGuruRevenuePercentage: new Prisma.Decimal(digitalGuruRevenuePercentage),
         },
       });
+
+      // Update active agreement if one exists so commercial terms stay in sync
+      const activeAgreement = await tx.franchiseAgreement.findFirst({
+        where: { franchiseId: id, status: 'ACTIVE' },
+        orderBy: { createdAt: 'desc' },
+      });
+      if (activeAgreement) {
+        await tx.franchiseAgreement.update({
+          where: { id: activeAgreement.id },
+          data: {
+            partnerRevenuePercentage: new Prisma.Decimal(revenueSharePercentage),
+            digitalGuruRevenuePercentage: new Prisma.Decimal(digitalGuruRevenuePercentage),
+            royaltyPercentage: new Prisma.Decimal(digitalGuruRevenuePercentage),
+          },
+        });
+      }
+
+      // Update pending / draft settlements for immediate consistency
+      const pendingSettlements = await tx.franchiseSettlement.findMany({
+        where: {
+          franchiseId: id,
+          status: { in: ['DRAFT', 'PENDING_APPROVAL', 'PENDING_REVIEW'] },
+        },
+      });
+      for (const s of pendingSettlements) {
+        const netCollections = Number(s.totalEligibleCollections);
+        const newFranchiseShare = Math.round(netCollections * (revenueSharePercentage / 100) * 100) / 100;
+        const newDgShare = Math.round((netCollections - newFranchiseShare) * 100) / 100;
+        const totalTransferred = Number(s.totalTransferredAmount || 0);
+        const newRemaining = Math.max(0, Math.round((newFranchiseShare - totalTransferred) * 100) / 100);
+
+        await tx.franchiseSettlement.update({
+          where: { id: s.id },
+          data: {
+            applicableFranchisePercentage: new Prisma.Decimal(revenueSharePercentage),
+            applicableDigitalGuruPercentage: new Prisma.Decimal(digitalGuruRevenuePercentage),
+            franchisePayableAmount: new Prisma.Decimal(newFranchiseShare),
+            digitalGuruShareAmount: new Prisma.Decimal(newDgShare),
+            remainingPayableAmount: new Prisma.Decimal(newRemaining),
+          },
+        });
+      }
 
       await tx.auditLog.create({
         data: {

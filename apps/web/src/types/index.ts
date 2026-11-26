@@ -22,6 +22,14 @@ export interface Franchise {
   } | null;
   businessDetails?: any;
   notes?: string | null;
+  revenueSharePercentage?: number | string | null;
+  digitalGuruRevenuePercentage?: number | string | null;
+  razorpayAccountId?: string | null;
+  beneficiaryName?: string | null;
+  beneficiaryBankName?: string | null;
+  beneficiaryAccountNumber?: string | null;
+  beneficiaryIfsc?: string | null;
+  beneficiaryStatus?: 'PENDING' | 'VERIFIED' | 'REJECTED';
   status: 'ACTIVE' | 'SUSPENDED' | 'TERMINATED';
   createdAt: string;
   branches?: Institute[];
