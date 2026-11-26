@@ -1513,21 +1513,48 @@ export async function resetFranchiseOwnerPassword(req: AuthenticatedRequest, res
 }
 
 // ============================================================================
-// 2. BRANCH MANAGEMENT (STRICTLY SUPER_ADMIN)
+// 2. BRANCH / INSTITUTE MANAGEMENT (SUPER_ADMIN & FRANCHISE_OWNER)
 // ============================================================================
 
 export async function addBranchToFranchise(req: AuthenticatedRequest, res: Response) {
   try {
-    // Strictly disallow Franchise Owner
-    if (req.user?.role !== 'SUPER_ADMIN') {
-      return res.status(403).json({
-        success: false,
-        error: 'Forbidden: Franchisee Admins cannot create or add branches. Only Super Admin has this privilege.',
-      });
+    let { id: franchiseId } = req.params;
+
+    // If 'my-branches' or franchiseId not specified, find user's franchise
+    if (franchiseId === 'my-branches' || !franchiseId) {
+      if (req.user?.role === 'FRANCHISE_OWNER') {
+        const owned = await prisma.franchise.findFirst({
+          where: { ownerUserId: req.user.userId },
+          select: { id: true, name: true, code: true },
+        });
+        if (!owned) {
+          return res.status(404).json({ success: false, error: 'No franchise found for this user' });
+        }
+        franchiseId = owned.id;
+      }
     }
 
-    const { id: franchiseId } = req.params;
-    const { instituteId, instituteIds, name, code, city, state, address, phone, email, createNew } = req.body;
+    // Role verification: Super Admin can add to any franchise; Franchise Owner can only add to their own
+    if (req.user?.role !== 'SUPER_ADMIN') {
+      if (req.user?.role === 'FRANCHISE_OWNER') {
+        const owned = await prisma.franchise.findFirst({
+          where: { id: franchiseId, ownerUserId: req.user.userId },
+        });
+        if (!owned) {
+          return res.status(403).json({
+            success: false,
+            error: 'Forbidden: You can only add institutes to your own franchise.',
+          });
+        }
+      } else {
+        return res.status(403).json({
+          success: false,
+          error: 'Forbidden: Insufficient privileges to add branches.',
+        });
+      }
+    }
+
+    const { instituteId, instituteIds, name, code, city, state, address, postalCode, legalName, phone, email, createNew } = req.body;
 
     // Verify franchise exists
     const targetFranchise = await prisma.franchise.findUnique({
@@ -1547,6 +1574,7 @@ export async function addBranchToFranchise(req: AuthenticatedRequest, res: Respo
       const updatedBranches = await prisma.institute.findMany({
         where: { id: { in: instituteIds } },
       });
+      serverCache.invalidate();
       return res.status(200).json({
         success: true,
         message: `${updatedBranches.length} branch(es) successfully assigned to ${targetFranchise.name}`,
@@ -1557,32 +1585,63 @@ export async function addBranchToFranchise(req: AuthenticatedRequest, res: Respo
     // Case 2: Create brand new branch and attach
     let branch;
     if (createNew || (!instituteId && name)) {
-      let branchCode = code;
+      let branchCode = code?.trim()?.toUpperCase();
       if (!branchCode) {
-        const count = await prisma.institute.count();
-        branchCode = `BR-${String(count + 1).padStart(3, '0')}`;
-        let exists = await prisma.institute.findUnique({ where: { code: branchCode } });
-        let offset = 1;
-        while (exists) {
-          branchCode = `BR-${String(count + 1 + offset).padStart(3, '0')}`;
-          exists = await prisma.institute.findUnique({ where: { code: branchCode } });
-          offset++;
+        for (let attempt = 0; attempt < 15; attempt++) {
+          const suffix = crypto.randomBytes(3).toString('hex').toUpperCase();
+          const candidate = `INS-${suffix}`;
+          const exists = await prisma.institute.findUnique({ where: { code: candidate } });
+          if (!exists) {
+            branchCode = candidate;
+            break;
+          }
+        }
+        if (!branchCode) {
+          branchCode = `INS-${Date.now().toString(36).toUpperCase()}`;
+        }
+      } else {
+        const existing = await prisma.institute.findUnique({ where: { code: branchCode } });
+        if (existing) {
+          return res.status(409).json({ success: false, error: `An institute with code '${branchCode}' already exists` });
         }
       }
 
       branch = await prisma.institute.create({
         data: {
-          name,
+          name: name.trim(),
+          legalName: legalName?.trim() || null,
           code: branchCode,
-          city,
-          state,
-          address,
-          phone,
+          city: city?.trim() || null,
+          state: state?.trim() || null,
+          address: address?.trim() || null,
+          postalCode: postalCode?.trim() || null,
+          phone: phone?.trim() || null,
           email: email?.trim() ? email.trim().toLowerCase() : null,
           franchiseId,
           status: 'ACTIVE',
         },
       });
+
+      // Grant institute membership to the franchise owner
+      if (req.user?.userId) {
+        await prisma.instituteMembership.upsert({
+          where: {
+            instituteId_userId: {
+              instituteId: branch.id,
+              userId: req.user.userId,
+            },
+          },
+          create: {
+            userId: req.user.userId,
+            instituteId: branch.id,
+            role: 'FRANCHISE_OWNER',
+            isActive: true,
+          },
+          update: {
+            isActive: true,
+          },
+        }).catch(() => { });
+      }
     } else {
       // Case 3: Attach single existing branch
       if (!instituteId) {
@@ -1602,9 +1661,10 @@ export async function addBranchToFranchise(req: AuthenticatedRequest, res: Respo
       });
     }
 
+    serverCache.invalidate();
     return res.status(201).json({
       success: true,
-      message: 'Branch successfully associated with franchise',
+      message: 'Institute successfully created and assigned to franchise',
       data: { branch },
     });
   } catch (err: any) {

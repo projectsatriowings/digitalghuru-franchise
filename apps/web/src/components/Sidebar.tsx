@@ -156,6 +156,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <Award className="w-5 h-5 shrink-0" /> Exams & Marks
             </button>
             <button
+              onClick={() => handleSelect('question_generator')}
+              className={navItemClass('question_generator')}
+            >
+              <FileQuestion className="w-5 h-5 shrink-0 text-amber-300" /> Question Papers
+            </button>
+            <button
+              onClick={() => handleSelect('progress_reviews')}
+              className={navItemClass('progress_reviews')}
+            >
+              <Sparkles className="w-5 h-5 shrink-0" /> Progress Reviews
+            </button>
+            <button
               onClick={() => handleSelect('fees')}
               className={navItemClass('fees')}
             >

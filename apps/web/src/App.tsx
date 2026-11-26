@@ -63,7 +63,7 @@ const isTabAllowedForRole = (tab: string, role?: string): boolean => {
     case 'SUPER_ADMIN':
       return ['super_admin_dashboard', 'franchise_management', 'course_management', 'monthly_settlements', 'staff', 'students', 'academics', 'exams', 'fees'].includes(tab);
     case 'FRANCHISE_OWNER':
-      return ['franchise_owner_dashboard', 'franchise_courses', 'franchise_branches', 'franchise_royalties', 'franchise_agreements', 'monthly_settlements', 'academic_dashboard', 'students', 'staff', 'staff_attendance', 'academics', 'exams', 'fees', 'attendance', 'messaging', 'progress_reviews'].includes(tab) || tab.startsWith('franchise_');
+      return ['franchise_owner_dashboard', 'franchise_courses', 'franchise_branches', 'franchise_royalties', 'franchise_agreements', 'monthly_settlements', 'academic_dashboard', 'students', 'staff', 'staff_attendance', 'academics', 'exams', 'question_generator', 'fees', 'attendance', 'messaging', 'progress_reviews'].includes(tab) || tab.startsWith('franchise_');
     case 'BRANCH_ADMIN':
     case 'ACADEMIC_ADMIN':
       return ['academic_dashboard', 'franchise_courses', 'staff', 'staff_attendance', 'students', 'academics', 'exams', 'question_generator', 'progress_reviews', 'messaging', 'fees'].includes(tab);
@@ -285,7 +285,7 @@ const AppContent: React.FC = () => {
 
                   {currentTab === 'exams' && (user.role === 'ACADEMIC_ADMIN' || user.role === 'BRANCH_ADMIN' || user.role === 'SUPER_ADMIN' || user.role === 'STAFF' || user.role === 'STUDENT' || user.role === 'FRANCHISE_OWNER') && <ExaminationsManagement />}
 
-                  {currentTab === 'question_generator' && (user.role === 'ACADEMIC_ADMIN' || user.role === 'BRANCH_ADMIN') && <QuestionGenerator />}
+                  {currentTab === 'question_generator' && (user.role === 'ACADEMIC_ADMIN' || user.role === 'BRANCH_ADMIN' || user.role === 'FRANCHISE_OWNER') && <QuestionGenerator />}
 
                   {currentTab === 'progress_reviews' && <ProgressReviewsManagement />}
 
