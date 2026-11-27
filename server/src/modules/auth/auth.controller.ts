@@ -401,6 +401,43 @@ export async function getCurrentUser(req: AuthenticatedRequest, res: Response) {
       return res.status(404).json({ success: false, error: 'User profile not found' });
     }
 
+    if (!user.isActive) {
+      return res.status(403).json({
+        success: false,
+        error: 'Your account has been deactivated or suspended. Please contact your administrator.',
+        isDeactivated: true,
+      });
+    }
+
+    if (user.role === 'FRANCHISE_OWNER') {
+      const ownedFranchise = await prisma.franchise.findFirst({
+        where: {
+          OR: [
+            { ownerUserId: user.id },
+            ...(user.email ? [{ email: { equals: user.email.trim(), mode: 'insensitive' as const } }] : []),
+          ],
+        },
+        select: { id: true, status: true, ownerUserId: true },
+      });
+
+      if (ownedFranchise) {
+        if (!ownedFranchise.ownerUserId) {
+          await prisma.franchise.update({
+            where: { id: ownedFranchise.id },
+            data: { ownerUserId: user.id },
+          }).catch(() => {});
+        }
+
+        if (ownedFranchise.status === 'SUSPENDED' || ownedFranchise.status === 'TERMINATED') {
+          return res.status(403).json({
+            success: false,
+            error: 'Your franchise center has been suspended. Please contact Super Admin.',
+            isDeactivated: true,
+          });
+        }
+      }
+    }
+
     const isExemptFromMandatoryChange = user.role === 'STUDENT' || user.role === 'PARENT' || user.role === 'FRANCHISE_OWNER';
     const sanitizedUser = {
       ...user,

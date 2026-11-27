@@ -188,20 +188,12 @@ export const CourseManagement: React.FC = () => {
     setSavingCourse(true);
     try {
       if (editingCourse?.id) {
-        // If all existing curriculum versions are locked, strip modules from PATCH so metadata/marketing fields still save cleanly
-        const hasLockedActive =
-          Array.isArray(editingCourse.curriculumVersions) &&
-          editingCourse.curriculumVersions.length > 0 &&
-          editingCourse.curriculumVersions.every((v: any) => v.isLocked || v.isPublished);
-        const bodyToSend = { ...payload };
-        if (hasLockedActive) {
-          delete bodyToSend.modules;
-        }
+        // Send full payload including modules (backend now seamlessly updates media/videos/attachments in place even for published courses)
         await apiFetch(`/courses/${editingCourse.id}`, {
           method: 'PATCH',
-          body: JSON.stringify(bodyToSend),
+          body: JSON.stringify(payload),
         });
-        toast.success('Course updated successfully');
+        toast.success('Course and lesson resources updated successfully');
       } else {
         await apiFetch('/courses', {
           method: 'POST',

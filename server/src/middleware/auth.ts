@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { verifyAccessToken, TokenPayload } from '../utils/security.js';
 import { prisma } from '../prisma.js';
+import { serverCache } from '../utils/cache.js';
 
 export interface AuthenticatedRequest extends Request {
   user?: TokenPayload;
@@ -8,7 +9,7 @@ export interface AuthenticatedRequest extends Request {
   franchiseId?: string;
 }
 
-export function authenticateToken(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+export async function authenticateToken(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   const authHeader = req.headers['authorization'];
   let token = authHeader && authHeader.startsWith('Bearer ') ? authHeader.split(' ')[1] : null;
 
@@ -32,6 +33,70 @@ export function authenticateToken(req: AuthenticatedRequest, res: Response, next
       error: 'Invalid or expired authentication token',
       timestamp: new Date().toISOString(),
     });
+  }
+
+  // Fast-cached active user validation (auto-invalidated on franchise/user suspension)
+  const userStatusCacheKey = `user:status:${payload.userId}`;
+  let userActive = serverCache.get<boolean>(userStatusCacheKey);
+  if (userActive === undefined) {
+    try {
+      const dbUser = await prisma.user.findUnique({
+        where: { id: payload.userId },
+        select: { isActive: true },
+      });
+      if (!dbUser) {
+        return res.status(401).json({
+          success: false,
+          error: 'User account not found',
+          timestamp: new Date().toISOString(),
+        });
+      }
+      userActive = dbUser.isActive;
+      serverCache.set(userStatusCacheKey, userActive, 10000); // 10s TTL
+    } catch {
+      // In case of transient DB read error, allow payload verification to proceed
+      userActive = true;
+    }
+  }
+
+  if (!userActive) {
+    return res.status(403).json({
+      success: false,
+      error: 'Your account has been deactivated or suspended. Please contact your administrator.',
+      isDeactivated: true,
+      timestamp: new Date().toISOString(),
+    });
+  }
+
+  // If FRANCHISE_OWNER, verify franchise is not suspended
+  if (payload.role === 'FRANCHISE_OWNER') {
+    const frCacheKey = `user:franchise:status:${payload.userId}`;
+    let isFranchiseActive = serverCache.get<boolean>(frCacheKey);
+    if (isFranchiseActive === undefined) {
+      try {
+        const fr = await prisma.franchise.findFirst({
+          where: {
+            OR: [
+              { ownerUserId: payload.userId },
+              ...(payload.email ? [{ email: { equals: payload.email.trim(), mode: 'insensitive' as const } }] : []),
+            ],
+          },
+          select: { id: true, status: true },
+        });
+        isFranchiseActive = !fr || fr.status === 'ACTIVE';
+        serverCache.set(frCacheKey, isFranchiseActive, 10000);
+      } catch {
+        isFranchiseActive = true;
+      }
+    }
+    if (!isFranchiseActive) {
+      return res.status(403).json({
+        success: false,
+        error: 'Forbidden: Your franchise center has been suspended. Please contact Super Admin.',
+        isDeactivated: true,
+        timestamp: new Date().toISOString(),
+      });
+    }
   }
 
   req.user = payload;
@@ -98,7 +163,24 @@ export async function requireInstituteContext(req: AuthenticatedRequest, res: Re
           },
     });
 
-      if (!userFranchise || userFranchise.branches.length === 0) {
+      if (!userFranchise) {
+        return res.status(400).json({
+          success: false,
+          error: 'Institute context required: No campus branches currently assigned to your franchise center',
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      if (userFranchise.status === 'SUSPENDED' || userFranchise.status === 'TERMINATED') {
+        return res.status(403).json({
+          success: false,
+          error: `Forbidden: Your franchise center is currently ${userFranchise.status.toLowerCase()}. Please contact Super Admin.`,
+          isDeactivated: true,
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      if (userFranchise.branches.length === 0) {
         return res.status(400).json({
           success: false,
           error: 'Institute context required: No campus branches currently assigned to your franchise center',

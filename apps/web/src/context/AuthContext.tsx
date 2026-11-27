@@ -73,18 +73,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (res.success && Array.isArray(res.data?.branches)) {
             setAssignedBranches(res.data.branches);
 
-            // If no active institute stored, or previous selection is invalid
-            const savedId = localStorage.getItem('tuition_active_institute_id');
-            if (!savedId) {
-              setActiveInstituteState(ALL_BRANCHES_SELECTION);
-              localStorage.setItem('tuition_active_institute', JSON.stringify(ALL_BRANCHES_SELECTION));
-              localStorage.setItem('tuition_active_institute_id', ALL_BRANCHES_SELECTION.id);
-            } else if (savedId !== 'ALL') {
-              const exists = res.data.branches.find((b: AssignedBranch) => b.id === savedId);
-              if (!exists && res.data.branches.length > 0) {
+            // If the franchise center has exactly 1 branch (single-branch architecture), automatically bind to it
+            if (res.data.branches.length === 1) {
+              const singleBranch = {
+                id: res.data.branches[0].id,
+                name: res.data.branches[0].name,
+                code: res.data.branches[0].code,
+                city: res.data.branches[0].city,
+              };
+              setActiveInstituteState(singleBranch);
+              localStorage.setItem('tuition_active_institute', JSON.stringify(singleBranch));
+              localStorage.setItem('tuition_active_institute_id', singleBranch.id);
+            } else {
+              // If no active institute stored, or previous selection is invalid
+              const savedId = localStorage.getItem('tuition_active_institute_id');
+              if (!savedId) {
                 setActiveInstituteState(ALL_BRANCHES_SELECTION);
                 localStorage.setItem('tuition_active_institute', JSON.stringify(ALL_BRANCHES_SELECTION));
                 localStorage.setItem('tuition_active_institute_id', ALL_BRANCHES_SELECTION.id);
+              } else if (savedId !== 'ALL') {
+                const exists = res.data.branches.find((b: AssignedBranch) => b.id === savedId);
+                if (!exists && res.data.branches.length > 0) {
+                  setActiveInstituteState(ALL_BRANCHES_SELECTION);
+                  localStorage.setItem('tuition_active_institute', JSON.stringify(ALL_BRANCHES_SELECTION));
+                  localStorage.setItem('tuition_active_institute_id', ALL_BRANCHES_SELECTION.id);
+                }
               }
             }
           }
@@ -93,6 +106,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         console.warn('[AuthContext] Failed to load assigned branches:', err);
       }
     }, [token]);
+
+    const logout = useCallback(() => {
+      setUser(null);
+      setToken(null);
+      setAssignedBranches([]);
+      setActiveInstituteState(null);
+      localStorage.removeItem('tuition_token');
+      localStorage.removeItem('tuition_user');
+      localStorage.removeItem('tuition_active_institute');
+      localStorage.removeItem('tuition_active_institute_id');
+      invalidateApiCache();
+    }, []);
+
+    useEffect(() => {
+      const handleAccountSuspended = (e: any) => {
+        logout();
+        const message = e.detail?.message || 'Your account or franchise center has been suspended. Please contact your administrator.';
+        window.history.replaceState({}, '', '/');
+        alert(message);
+      };
+      window.addEventListener('tuitionos:account-suspended', handleAccountSuspended);
+      return () => {
+        window.removeEventListener('tuitionos:account-suspended', handleAccountSuspended);
+      };
+    }, [logout]);
 
     useEffect(() => {
       if (token) {
@@ -119,7 +157,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 }
               }
             })
-          .catch(() => {
+          .catch((err) => {
+            console.warn('[AuthContext] Session invalid or suspended, logging out:', err);
             logout();
           })
           .finally(() => {
@@ -128,9 +167,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } else {
         setLoading(false);
       }
-  }, [token, fetchBranches]);
+  }, [token, fetchBranches, logout]);
 
-    const login = (
+  const login = (
       newToken: string,
       newUser: User,
       institute?: { id: string; name: string; code: string; city?: string | null } | null
@@ -155,18 +194,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           localStorage.setItem('tuition_active_institute', JSON.stringify(institute));
           localStorage.setItem('tuition_active_institute_id', institute.id);
         }
-      };
-
-      const logout = () => {
-        setUser(null);
-        setToken(null);
-        setAssignedBranches([]);
-        setActiveInstituteState(null);
-        localStorage.removeItem('tuition_token');
-        localStorage.removeItem('tuition_user');
-        localStorage.removeItem('tuition_active_institute');
-        localStorage.removeItem('tuition_active_institute_id');
-        invalidateApiCache();
       };
 
         const setActiveInstitute = (institute: { id: string; name: string; code: string; city?: string | null } | null) => {
