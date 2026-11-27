@@ -48,13 +48,18 @@ async function authorizeFranchiseAccess(user: any, targetFranchiseId: string): P
   const userId = user.userId || user.id;
   if (!userId) return { allowed: false, isBranchScoped: false, allowedInstituteIds: [] };
 
+  // Target franchise must be ACTIVE for non-Super Admin users
+  const targetFr = await prisma.franchise.findUnique({
+    where: { id: targetFranchiseId },
+    select: { id: true, status: true, ownerUserId: true },
+  });
+  if (!targetFr || targetFr.status !== 'ACTIVE') {
+    return { allowed: false, isBranchScoped: false, allowedInstituteIds: [] };
+  }
+
   // Franchise owner owns their franchise(s)
   if (user.role === UserRole.FRANCHISE_OWNER) {
-    const owned = await prisma.franchise.findFirst({
-      where: { id: targetFranchiseId, ownerUserId: userId },
-      select: { id: true },
-    });
-    if (owned || user.franchiseId === targetFranchiseId) {
+    if (targetFr.ownerUserId === userId || user.franchiseId === targetFranchiseId) {
       return { allowed: true, isBranchScoped: false, allowedInstituteIds: [] };
     }
   }
@@ -637,13 +642,22 @@ export async function getMyFranchiseCourseContext(req: Request, res: Response) {
       }
     } else if (user.role === UserRole.FRANCHISE_OWNER) {
       const owned = await prisma.franchise.findFirst({
-        where: franchiseId ? { id: franchiseId, ownerUserId: userId } : { ownerUserId: userId },
-        select: { id: true },
+        where: franchiseId
+          ? { id: franchiseId, OR: [{ ownerUserId: userId }, ...(user.email ? [{ email: { equals: user.email.trim(), mode: 'insensitive' as const } }] : [])] }
+          : { OR: [{ ownerUserId: userId }, ...(user.email ? [{ email: { equals: user.email.trim(), mode: 'insensitive' as const } }] : [])] },
+        select: { id: true, status: true },
       });
       if (!owned) {
         return res.json({
           success: true,
           data: { franchise: null, branches: [], students: [], isBranchScoped: false, message: 'No franchise assigned to this account' },
+        });
+      }
+      if (owned.status === 'SUSPENDED' || owned.status === 'TERMINATED') {
+        return res.status(403).json({
+          success: false,
+          error: 'Forbidden: Your franchise center has been suspended. Please contact Super Admin.',
+          isDeactivated: true,
         });
       }
       franchiseId = owned.id;

@@ -68,6 +68,37 @@ export async function authenticateToken(req: AuthenticatedRequest, res: Response
     });
   }
 
+  // If FRANCHISE_OWNER, verify franchise is not suspended
+  if (payload.role === 'FRANCHISE_OWNER') {
+    const frCacheKey = `user:franchise:status:${payload.userId}`;
+    let isFranchiseActive = serverCache.get<boolean>(frCacheKey);
+    if (isFranchiseActive === undefined) {
+      try {
+        const fr = await prisma.franchise.findFirst({
+          where: {
+            OR: [
+              { ownerUserId: payload.userId },
+              ...(payload.email ? [{ email: { equals: payload.email.trim(), mode: 'insensitive' as const } }] : []),
+            ],
+          },
+          select: { id: true, status: true },
+        });
+        isFranchiseActive = !fr || fr.status === 'ACTIVE';
+        serverCache.set(frCacheKey, isFranchiseActive, 10000);
+      } catch {
+        isFranchiseActive = true;
+      }
+    }
+    if (!isFranchiseActive) {
+      return res.status(403).json({
+        success: false,
+        error: 'Forbidden: Your franchise center has been suspended. Please contact Super Admin.',
+        isDeactivated: true,
+        timestamp: new Date().toISOString(),
+      });
+    }
+  }
+
   req.user = payload;
   const headerInst = req.headers['x-institute-id'] as string;
   const queryInst = (req.query.instituteId || req.query.inst) as string;

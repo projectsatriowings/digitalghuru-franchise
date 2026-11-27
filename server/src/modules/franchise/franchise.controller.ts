@@ -1317,13 +1317,34 @@ export async function updateFranchiseStatus(req: AuthenticatedRequest, res: Resp
       include: { ownerUser: true },
     });
 
-    // Update user active status
-    if (franchise.ownerUserId) {
+    // Update owner user active status (resolve via ownerUserId or contact email)
+    let ownerUserId = franchise.ownerUserId;
+    if (!ownerUserId && franchise.email) {
+      const matchedUser = await prisma.user.findFirst({
+        where: { email: { equals: franchise.email.trim(), mode: 'insensitive' } },
+        select: { id: true },
+      });
+      if (matchedUser) {
+        ownerUserId = matchedUser.id;
+        await prisma.franchise.update({
+          where: { id: franchise.id },
+          data: { ownerUserId: matchedUser.id },
+        });
+      }
+    }
+
+    if (ownerUserId) {
       await prisma.user.update({
-        where: { id: franchise.ownerUserId },
+        where: { id: ownerUserId },
         data: { isActive: status === 'ACTIVE' },
       });
     }
+
+    // Cascade status to assigned campus branches so branch access reflects franchise suspension
+    await prisma.institute.updateMany({
+      where: { franchiseId: id },
+      data: { status: status === 'ACTIVE' ? 'ACTIVE' : 'SUSPENDED' },
+    });
 
     serverCache.invalidate();
 

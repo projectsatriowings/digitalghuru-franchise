@@ -107,6 +107,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     }, [token]);
 
+    const logout = useCallback(() => {
+      setUser(null);
+      setToken(null);
+      setAssignedBranches([]);
+      setActiveInstituteState(null);
+      localStorage.removeItem('tuition_token');
+      localStorage.removeItem('tuition_user');
+      localStorage.removeItem('tuition_active_institute');
+      localStorage.removeItem('tuition_active_institute_id');
+      invalidateApiCache();
+    }, []);
+
+    useEffect(() => {
+      const handleAccountSuspended = (e: any) => {
+        logout();
+        const message = e.detail?.message || 'Your account or franchise center has been suspended. Please contact your administrator.';
+        window.history.replaceState({}, '', '/');
+        alert(message);
+      };
+      window.addEventListener('tuitionos:account-suspended', handleAccountSuspended);
+      return () => {
+        window.removeEventListener('tuitionos:account-suspended', handleAccountSuspended);
+      };
+    }, [logout]);
+
     useEffect(() => {
       if (token) {
         apiFetch('/auth/me')
@@ -132,7 +157,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 }
               }
             })
-          .catch(() => {
+          .catch((err) => {
+            console.warn('[AuthContext] Session invalid or suspended, logging out:', err);
             logout();
           })
           .finally(() => {
@@ -141,19 +167,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } else {
         setLoading(false);
       }
-  }, [token, fetchBranches]);
-
-  useEffect(() => {
-    const handleAccountSuspended = (e: any) => {
-      logout();
-      const message = e.detail?.message || 'Your account or franchise center has been suspended. Please contact your administrator.';
-      alert(message);
-    };
-    window.addEventListener('tuitionos:account-suspended', handleAccountSuspended);
-    return () => {
-      window.removeEventListener('tuitionos:account-suspended', handleAccountSuspended);
-    };
-  }, []);
+  }, [token, fetchBranches, logout]);
 
   const login = (
       newToken: string,
@@ -180,18 +194,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           localStorage.setItem('tuition_active_institute', JSON.stringify(institute));
           localStorage.setItem('tuition_active_institute_id', institute.id);
         }
-      };
-
-      const logout = () => {
-        setUser(null);
-        setToken(null);
-        setAssignedBranches([]);
-        setActiveInstituteState(null);
-        localStorage.removeItem('tuition_token');
-        localStorage.removeItem('tuition_user');
-        localStorage.removeItem('tuition_active_institute');
-        localStorage.removeItem('tuition_active_institute_id');
-        invalidateApiCache();
       };
 
         const setActiveInstitute = (institute: { id: string; name: string; code: string; city?: string | null } | null) => {
