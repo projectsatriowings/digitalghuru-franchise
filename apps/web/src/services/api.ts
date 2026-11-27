@@ -164,6 +164,22 @@ export async function apiFetch<T = any>(endpoint: string, options: ApiFetchOptio
     if (!response.ok) {
       console.error(`[apiFetch] Request rejected (HTTP ${response.status}) on ${endpoint}:`, data);
       const errMessage = data?.message || data?.error || `HTTP ${response.status}: Request failed`;
+
+      // Auto-evict suspended or deactivated sessions immediately
+      if (
+        (response.status === 401 || response.status === 403) &&
+        (data?.isDeactivated || /deactivated|suspended/i.test(errMessage)) &&
+        !endpoint.startsWith('/auth/login')
+      ) {
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(
+            new CustomEvent('tuitionos:account-suspended', {
+              detail: { message: errMessage },
+            })
+          );
+        }
+      }
+
       const customErr = new Error(errMessage);
       (customErr as any).status = response.status;
       (customErr as any).data = data;

@@ -1325,6 +1325,8 @@ export async function updateFranchiseStatus(req: AuthenticatedRequest, res: Resp
       });
     }
 
+    serverCache.invalidate();
+
     return res.json({
       success: true,
       message: `Franchise status successfully updated to ${status}`,
@@ -1556,13 +1558,26 @@ export async function addBranchToFranchise(req: AuthenticatedRequest, res: Respo
 
     const { instituteId, instituteIds, name, code, city, state, address, postalCode, legalName, phone, email, createNew, admissionPrefix } = req.body;
 
-    // Verify franchise exists
+    // Verify franchise exists and enforce single branch rule (1:1 relationship)
     const targetFranchise = await prisma.franchise.findUnique({
       where: { id: franchiseId },
-      select: { id: true, name: true, code: true, ownerUserId: true },
+      select: {
+        id: true,
+        name: true,
+        code: true,
+        ownerUserId: true,
+        branches: { select: { id: true, name: true } },
+      },
     });
     if (!targetFranchise) {
       return res.status(404).json({ success: false, error: 'Franchise not found' });
+    }
+
+    if (targetFranchise.branches && targetFranchise.branches.length >= 1) {
+      return res.status(400).json({
+        success: false,
+        error: `Franchise '${targetFranchise.name}' already has an authorized campus branch (${targetFranchise.branches[0].name}). Each franchise can only have one branch.`,
+      });
     }
 
     // Case 1: Bulk assign multiple existing branches

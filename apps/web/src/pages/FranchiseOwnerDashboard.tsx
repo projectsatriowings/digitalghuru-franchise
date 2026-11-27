@@ -70,6 +70,10 @@ export const FranchiseOwnerDashboard: React.FC = () => {
     }
 
     try {
+      if (branches.length >= 1) {
+        setCreateError('Each franchise can only have one authorized campus branch.');
+        return;
+      }
       setCreatingInstitute(true);
       setCreateError(null);
 
@@ -481,13 +485,15 @@ export const FranchiseOwnerDashboard: React.FC = () => {
                 <span className="text-xs font-mono bg-blue-50 text-[#006FFF] font-bold px-3 py-1.5 rounded-lg border border-blue-100">
                   {branchCards.length} Campus{branchCards.length > 1 ? 'es' : ''}
                 </span>
-                <button
-                  type="button"
-                  onClick={() => setShowAddInstituteModal(true)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#006FFF] hover:bg-[#0058D4] text-white font-bold text-xs shadow-sm shadow-[#006FFF]/20 transition-all cursor-pointer active:scale-95"
-                >
-                  <Plus className="w-3.5 h-3.5" /> Add Institute
-                </button>
+                {branchCards.length === 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAddInstituteModal(true)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#006FFF] hover:bg-[#0058D4] text-white font-bold text-xs shadow-sm shadow-[#006FFF]/20 transition-all cursor-pointer active:scale-95"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> Add Institute
+                  </button>
+                )}
               </div>
             </div>
 
@@ -692,15 +698,17 @@ export const FranchiseOwnerDashboard: React.FC = () => {
             </div>
             <div className="flex items-center gap-2.5">
               <span className="text-xs font-mono bg-slate-100 px-3 py-1.5 rounded text-slate-600 font-semibold">
-                {branches.length} Campus(es)
+                {branches.length} Campus{branches.length > 1 ? 'es' : ''}
               </span>
-              <button
-                type="button"
-                onClick={() => setShowAddInstituteModal(true)}
-                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-[#006FFF] hover:bg-[#0058D4] text-white font-bold text-xs shadow-sm shadow-[#006FFF]/20 transition-all cursor-pointer active:scale-95"
-              >
-                <Plus className="w-3.5 h-3.5" /> Add Institute
-              </button>
+              {branches.length === 0 && (
+                <button
+                  type="button"
+                  onClick={() => setShowAddInstituteModal(true)}
+                  className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-[#006FFF] hover:bg-[#0058D4] text-white font-bold text-xs shadow-sm shadow-[#006FFF]/20 transition-all cursor-pointer active:scale-95"
+                >
+                  <Plus className="w-3.5 h-3.5" /> Add Institute
+                </button>
+              )}
             </div>
           </div>
 

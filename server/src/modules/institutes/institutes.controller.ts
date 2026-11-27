@@ -893,6 +893,8 @@ export async function updateInstituteStatus(req: AuthenticatedRequest, res: Resp
       data: { status },
     });
 
+    serverCache.invalidate();
+
     // Record Audit Log
     await prisma.auditLog.create({
       data: {

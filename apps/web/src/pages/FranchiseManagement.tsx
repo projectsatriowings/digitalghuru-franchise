@@ -327,6 +327,27 @@ export const FranchiseManagement: React.FC = () => {
   const [selectedFranchiseForShare, setSelectedFranchiseForShare] = useState<Franchise | null>(null);
   const [franchiseShareInput, setFranchiseShareInput] = useState<number>(50);
   const [isSubmittingShare, setIsSubmittingShare] = useState(false);
+
+  // Status Change Confirmation Modal
+  const [statusModalState, setStatusModalState] = useState<{
+    isOpen: boolean;
+    franchiseId: string;
+    franchiseName: string;
+    franchiseCode?: string;
+    currentStatus: string;
+    targetStatus: string;
+    reason: string;
+    isSubmitting: boolean;
+  }>({
+    isOpen: false,
+    franchiseId: '',
+    franchiseName: '',
+    franchiseCode: '',
+    currentStatus: 'ACTIVE',
+    targetStatus: 'SUSPENDED',
+    reason: 'Administrative update',
+    isSubmitting: false,
+  });
   const [editLinkInstituteId, setEditLinkInstituteId] = useState('');
   const [editNewBranch, setEditNewBranch] = useState({
     name: '',
@@ -1120,22 +1141,43 @@ export const FranchiseManagement: React.FC = () => {
     }
   };
 
-  const handleStatusToggle = async (franchiseId: string, currentStatus: string) => {
+  const handleStatusToggle = (franchiseId: string, currentStatus: string) => {
+    const fr = franchises.find((f) => f.id === franchiseId) || (detailData?.franchise?.id === franchiseId ? detailData.franchise : null);
     const nextStatus = currentStatus === 'ACTIVE' ? 'SUSPENDED' : 'ACTIVE';
-    const reason = prompt(`Enter reason for updating status to ${nextStatus}:`, 'Administrative update');
-    if (reason === null) return;
+    setStatusModalState({
+      isOpen: true,
+      franchiseId,
+      franchiseName: fr?.name || 'Franchise Center',
+      franchiseCode: fr?.code || '',
+      currentStatus,
+      targetStatus: nextStatus,
+      reason: nextStatus === 'SUSPENDED' ? 'Administrative review / contract compliance' : 'Account reactivated by administrator',
+      isSubmitting: false,
+    });
+  };
+
+  const handleConfirmStatusChange = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const { franchiseId, targetStatus, reason } = statusModalState;
+    if (!franchiseId) return;
 
     try {
+      setStatusModalState((prev) => ({ ...prev, isSubmitting: true }));
       const res = await apiFetch(`/franchises/${franchiseId}/status`, {
         method: 'PATCH',
-        body: JSON.stringify({ status: nextStatus, reason }),
+        body: JSON.stringify({ status: targetStatus, reason: reason.trim() || 'Administrative update' }),
       });
       if (res.success) {
-        showToast(`Franchise status updated to ${nextStatus}`, 'success');
-        loadData();
+        showToast(`Franchise status successfully changed to ${targetStatus}`, 'success');
+        setStatusModalState((prev) => ({ ...prev, isOpen: false, isSubmitting: false }));
+        await loadData();
+        if (detailData && detailData.franchise?.id === franchiseId) {
+          await fetchFranchiseDetails(franchiseId);
+        }
       }
     } catch (err: any) {
-      showToast(err.message || 'Failed to update status', 'error');
+      showToast(err.message || 'Failed to update franchise status', 'error');
+      setStatusModalState((prev) => ({ ...prev, isSubmitting: false }));
     }
   };
 
@@ -1215,14 +1257,25 @@ export const FranchiseManagement: React.FC = () => {
   };
 
   const openAddBranchModal = async (fr?: Franchise | null) => {
+    // Enforce 1:1 rule: Each franchise admin can have only one branch
+    if (fr && fr.branches && fr.branches.length >= 1) {
+      showToast(`Franchise '${fr.name}' already has a campus branch (${fr.branches[0].name}). Each franchise can only have one branch.`, 'error');
+      return;
+    }
     // Close current details drawer before opening Add Branch modal
     handleCloseDetails();
     if (fr) {
       setSelectedFranchiseForBranch(fr);
       setSelectedFranchiseIdForBranch(fr.id);
-    } else if (franchises.length > 0) {
-      setSelectedFranchiseForBranch(franchises[0]);
-      setSelectedFranchiseIdForBranch(franchises[0].id);
+    } else {
+      const availableFranchise = franchises.find((f) => !f.branches || f.branches.length === 0);
+      if (availableFranchise) {
+        setSelectedFranchiseForBranch(availableFranchise);
+        setSelectedFranchiseIdForBranch(availableFranchise.id);
+      } else if (franchises.length > 0) {
+        setSelectedFranchiseForBranch(franchises[0]);
+        setSelectedFranchiseIdForBranch(franchises[0].id);
+      }
     }
     setBranchModalMode('new');
     setSelectedExistingBranchId('');
@@ -1497,13 +1550,6 @@ export const FranchiseManagement: React.FC = () => {
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> Refresh
           </button>
           <button
-            type="button"
-            onClick={() => openAddBranchModal(null)}
-            className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-md transition-all text-sm"
-          >
-            <Plus className="w-4 h-4" /> Add Branch
-          </button>
-          <button
             onClick={() => {
               apiFetch('/franchises/unassigned-branches')
                 .then((res) => {
@@ -1704,7 +1750,7 @@ export const FranchiseManagement: React.FC = () => {
                   <th className="py-3 px-3">Franchise Center</th>
                   <th className="py-3 px-3">Owner Contact</th>
                   <th className="py-3 px-3">Location & Address</th>
-                  <th className="py-3 px-3 whitespace-nowrap w-32">Campuses</th>
+                  <th className="py-3 px-3 whitespace-nowrap w-36">Branch / Campus</th>
                   <th className="py-3 px-3 whitespace-nowrap w-28">Royalty Split</th>
                   <th className="py-3 px-3 whitespace-nowrap w-24">Status</th>
                   <th className="py-3 px-3 text-center w-14 whitespace-nowrap">Actions</th>
@@ -1747,19 +1793,26 @@ export const FranchiseManagement: React.FC = () => {
                           <div className="text-[11px] text-slate-400 font-mono">PIN: {fr.postalCode || 'N/A'}</div>
                         </td>
                         <td className="px-3 py-3.5 whitespace-nowrap">
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setExpandedFranchiseId(expandedFranchiseId === fr.id ? null : fr.id);
-                            }}
-                            className="px-2.5 py-1 text-xs font-bold rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 transition-colors inline-flex items-center gap-1.5 border border-slate-200/80"
-                            title="Click to view assigned branches and manage assignments"
-                          >
-                            <Building2 className="w-3.5 h-3.5 text-[#006FFF]" />
-                            {fr.branches?.length || 0} Branch(es)
-                            <span className="text-[10px] text-slate-500">{expandedFranchiseId === fr.id ? '▲' : '▼'}</span>
-                          </button>
+                          {fr.branches && fr.branches.length > 0 ? (
+                            <div className="flex flex-col">
+                              <span className="font-bold text-xs text-slate-900">{fr.branches[0].name}</span>
+                              <span className="text-[11px] font-mono text-[#006FFF]">
+                                {fr.branches[0].code}{fr.branches[0].city ? ` • ${fr.branches[0].city}` : ''}
+                              </span>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openAddBranchModal(fr);
+                              }}
+                              className="px-2.5 py-1 text-xs font-semibold text-[#006FFF] bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg inline-flex items-center gap-1 shadow-xs transition-colors"
+                              title="Set up single campus branch for this franchise"
+                            >
+                              <Plus className="w-3 h-3" /> Link Branch
+                            </button>
+                          )}
                         </td>
                         <td className="px-3 py-3.5 whitespace-nowrap">
                           <button
@@ -1877,21 +1930,17 @@ export const FranchiseManagement: React.FC = () => {
                             <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
                               <div className="flex items-center justify-between mb-3">
                                 <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-2">
-                                  <Building2 className="w-4 h-4 text-[#006FFF]" /> Assigned Campus Branches ({fr.branches?.length || 0})
+                                  <Building2 className="w-4 h-4 text-[#006FFF]" /> Assigned Campus Branch
                                 </h4>
                                 <div className="flex items-center gap-2">
-                                  <button
-                                    onClick={() => openEditFranchiseModal(fr)}
-                                    className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-[#006FFF] text-xs font-bold rounded-lg border border-blue-200 inline-flex items-center gap-1.5 shadow-xs"
-                                  >
-                                    <Edit3 className="w-3.5 h-3.5" /> Edit Branches
-                                  </button>
-                                  <button
-                                    onClick={() => openAddBranchModal(fr)}
-                                    className="px-3.5 py-1.5 bg-[#006FFF] hover:bg-[#0055CC] text-white text-xs font-bold rounded-lg shadow-sm"
-                                  >
-                                    + Add Branch
-                                  </button>
+                                  {(!fr.branches || fr.branches.length === 0) && (
+                                    <button
+                                      onClick={() => openAddBranchModal(fr)}
+                                      className="px-3.5 py-1.5 bg-[#006FFF] hover:bg-[#0055CC] text-white text-xs font-bold rounded-lg shadow-sm"
+                                    >
+                                      + Attach Branch
+                                    </button>
+                                  )}
                                 </div>
                               </div>
 
@@ -5463,6 +5512,122 @@ export const FranchiseManagement: React.FC = () => {
         document.body
       )}
 
+      {/* ============================================================= */}
+      {/* MODAL 11: CONFIRM FRANCHISE STATUS CHANGE (SUSPEND/ACTIVATE)  */}
+      {/* ============================================================= */}
+      {statusModalState.isOpen && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 !m-0 bg-slate-900/60 backdrop-blur-sm z-[80] flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-slate-200 overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-150">
+            {/* Header */}
+            <div className={`px-6 py-4 flex items-center justify-between border-b ${
+              statusModalState.targetStatus === 'SUSPENDED'
+                ? 'bg-gradient-to-r from-rose-900 to-slate-950 text-white border-rose-800/40'
+                : 'bg-gradient-to-r from-emerald-900 to-slate-950 text-white border-emerald-800/40'
+            }`}>
+              <div className="flex items-center gap-2.5">
+                <div className={`w-9 h-9 rounded-xl flex items-center justify-center border ${
+                  statusModalState.targetStatus === 'SUSPENDED'
+                    ? 'bg-rose-500/20 text-rose-300 border-rose-500/30'
+                    : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                }`}>
+                  {statusModalState.targetStatus === 'SUSPENDED' ? (
+                    <AlertTriangle className="w-5 h-5 text-rose-400" />
+                  ) : (
+                    <CheckCircle className="w-5 h-5 text-emerald-400" />
+                  )}
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white flex items-center gap-2">
+                    {statusModalState.targetStatus === 'SUSPENDED' ? 'Suspend Franchise' : 'Reactivate Franchise'}
+                  </h3>
+                  <p className="text-xs text-slate-300 mt-0.5 flex items-center gap-1.5">
+                    <span className="font-semibold text-white">{statusModalState.franchiseName}</span>
+                    {statusModalState.franchiseCode && (
+                      <span className="font-mono text-[10px] px-1.5 py-0.2 rounded bg-white/10 text-slate-200">
+                        {statusModalState.franchiseCode}
+                      </span>
+                    )}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setStatusModalState((prev) => ({ ...prev, isOpen: false }))}
+                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-white/10 transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Body Form */}
+            <form onSubmit={handleConfirmStatusChange} className="p-6 space-y-4">
+              <div className={`p-3.5 rounded-xl border text-xs space-y-1 ${
+                statusModalState.targetStatus === 'SUSPENDED'
+                  ? 'bg-rose-50 border-rose-200 text-rose-900'
+                  : 'bg-emerald-50 border-emerald-200 text-emerald-900'
+              }`}>
+                <div className="font-bold flex items-center gap-1.5">
+                  <ShieldCheck className="w-4 h-4 shrink-0" />
+                  {statusModalState.targetStatus === 'SUSPENDED'
+                    ? 'Center Access Will Be Temporarily Blocked'
+                    : 'Center Operations Will Resume Immediately'}
+                </div>
+                <p className="text-[11px] leading-relaxed opacity-90">
+                  {statusModalState.targetStatus === 'SUSPENDED'
+                    ? 'Franchise owner and campus administrators under this center will be prevented from enrolling new students or accessing operational dashboards until reactivated.'
+                    : 'The franchise center will be restored to active standing. Staff and owner accounts will regain immediate operational access.'}
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                  Administrative Reason / Note <span className="text-rose-500">*</span>
+                </label>
+                <textarea
+                  rows={3}
+                  required
+                  value={statusModalState.reason}
+                  onChange={(e) => setStatusModalState((prev) => ({ ...prev, reason: e.target.value }))}
+                  placeholder={
+                    statusModalState.targetStatus === 'SUSPENDED'
+                      ? 'e.g. Agreement review pending, royalty payment overdue, compliance audit...'
+                      : 'e.g. Terms settled, compliance audit verified, resumed by HQ...'
+                  }
+                  className="w-full px-3 py-2 border rounded-xl text-xs text-slate-900 bg-white focus:ring-2 focus:ring-[#006FFF] focus:border-[#006FFF]"
+                />
+                <span className="text-[10px] text-slate-400 mt-1 block">
+                  This note will be recorded in the franchise center audit log.
+                </span>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex justify-end gap-2.5 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setStatusModalState((prev) => ({ ...prev, isOpen: false }))}
+                  className="px-4 py-2 border border-slate-200 text-slate-700 rounded-xl text-xs font-semibold hover:bg-slate-50 cursor-pointer transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={statusModalState.isSubmitting || !statusModalState.reason.trim()}
+                  className={`px-5 py-2 text-white font-bold rounded-xl text-xs shadow-sm transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50 ${
+                    statusModalState.targetStatus === 'SUSPENDED'
+                      ? 'bg-rose-600 hover:bg-rose-700'
+                      : 'bg-emerald-600 hover:bg-emerald-700'
+                  }`}
+                >
+                  {statusModalState.isSubmitting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  {statusModalState.targetStatus === 'SUSPENDED' ? 'Confirm Suspension' : 'Confirm Activation'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>,
+        document.body
+      )}
+
       {/* ====================================================
           FRANCHISE DETAILS SLIDE-OVER DRAWER
          ==================================================== */}
@@ -5813,20 +5978,22 @@ export const FranchiseManagement: React.FC = () => {
                   <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-4">
                     <div className="text-xs font-bold uppercase tracking-wider text-[#006FFF] flex items-center justify-between pb-3 border-b border-slate-100">
                       <span className="flex items-center gap-1.5">
-                        <Building2 className="w-4 h-4 text-slate-400" /> Associated Branch Campuses ({detailData.franchise.branches?.length || 0})
+                        <Building2 className="w-4 h-4 text-slate-400" /> Authorized Campus Branch
                       </span>
-                      <button
-                        type="button"
-                        onClick={() => openAddBranchModal(detailData.franchise)}
-                        className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-blue-50 text-[#006FFF] hover:bg-blue-100 transition border border-blue-200 cursor-pointer inline-flex items-center gap-1"
-                      >
-                        <Plus className="w-3.5 h-3.5" /> Add Branch
-                      </button>
+                      {(!detailData.franchise.branches || detailData.franchise.branches.length === 0) && (
+                        <button
+                          type="button"
+                          onClick={() => openAddBranchModal(detailData.franchise)}
+                          className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-blue-50 text-[#006FFF] hover:bg-blue-100 transition border border-blue-200 cursor-pointer inline-flex items-center gap-1"
+                        >
+                          <Plus className="w-3.5 h-3.5" /> Attach Branch
+                        </button>
+                      )}
                     </div>
 
                     {!detailData.franchise.branches || detailData.franchise.branches.length === 0 ? (
                       <div className="py-6 text-center text-slate-400 text-xs">
-                        No campuses currently attached to this franchise center. Click &ldquo;+ Add Branch&rdquo; above to create one.
+                        No campus branch currently attached to this franchise center. Click &ldquo;+ Attach Branch&rdquo; above to link one.
                       </div>
                     ) : (
                       <div className="space-y-2">

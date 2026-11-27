@@ -401,6 +401,25 @@ export async function getCurrentUser(req: AuthenticatedRequest, res: Response) {
       return res.status(404).json({ success: false, error: 'User profile not found' });
     }
 
+    if (!user.isActive) {
+      return res.status(403).json({
+        success: false,
+        error: 'Your account has been deactivated or suspended. Please contact your administrator.',
+        isDeactivated: true,
+      });
+    }
+
+    if (user.role === 'FRANCHISE_OWNER' && user.ownedFranchises && user.ownedFranchises.length > 0) {
+      const hasActiveFranchise = user.ownedFranchises.some((f) => f.status === 'ACTIVE');
+      if (!hasActiveFranchise) {
+        return res.status(403).json({
+          success: false,
+          error: 'Your franchise center has been suspended. Please contact Super Admin.',
+          isDeactivated: true,
+        });
+      }
+    }
+
     const isExemptFromMandatoryChange = user.role === 'STUDENT' || user.role === 'PARENT' || user.role === 'FRANCHISE_OWNER';
     const sanitizedUser = {
       ...user,
