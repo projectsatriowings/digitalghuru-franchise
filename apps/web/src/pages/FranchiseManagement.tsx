@@ -341,8 +341,6 @@ export const FranchiseManagement: React.FC = () => {
   const [branchForm, setBranchForm] = useState({
     name: '',
     code: '',
-    admissionPrefix: '',
-    legalName: '',
     phone: '',
     email: '',
     address: '',
@@ -1231,8 +1229,6 @@ export const FranchiseManagement: React.FC = () => {
     setBranchForm({
       name: '',
       code: '',
-      admissionPrefix: '',
-      legalName: '',
       phone: '',
       email: '',
       address: '',
@@ -1320,8 +1316,6 @@ export const FranchiseManagement: React.FC = () => {
           createNew: true,
           name: branchForm.name.trim(),
           code: branchForm.code.trim() || undefined,
-          admissionPrefix: branchForm.admissionPrefix.trim() || undefined,
-          legalName: branchForm.legalName.trim() || undefined,
           phone: branchForm.phone.trim() || undefined,
           email: branchForm.email.trim() ? branchForm.email.trim().toLowerCase() : undefined,
           address: branchForm.address.trim() || undefined,
@@ -1337,8 +1331,6 @@ export const FranchiseManagement: React.FC = () => {
         setBranchForm({
           name: '',
           code: '',
-          admissionPrefix: '',
-          legalName: '',
           phone: '',
           email: '',
           address: '',
@@ -4446,7 +4438,7 @@ export const FranchiseManagement: React.FC = () => {
                     <Building2 className="w-3.5 h-3.5 text-[#006FFF]" /> 1. Campus Identity & Codes
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <div className="sm:col-span-2">
                       <label className="block text-xs font-medium text-slate-700 mb-1">
                         Campus / Branch Name *
@@ -4467,39 +4459,12 @@ export const FranchiseManagement: React.FC = () => {
                       </label>
                       <input
                         type="text"
-                        placeholder="e.g. DG-ANN-01 (Auto if blank)"
+                        placeholder="Auto if blank"
                         value={branchForm.code}
                         onChange={(e) => setBranchForm({ ...branchForm, code: e.target.value.toUpperCase() })}
                         className="w-full px-3 py-2 border rounded-lg text-sm uppercase focus:ring-2 focus:ring-[#006FFF]"
                       />
-                      <p className="text-[10px] text-slate-400 mt-0.5">Unique center identifier</p>
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-medium text-slate-700 mb-1">
-                        Admission Prefix (Optional)
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="e.g. DGA (for student roll nos)"
-                        value={branchForm.admissionPrefix}
-                        onChange={(e) => setBranchForm({ ...branchForm, admissionPrefix: e.target.value.toUpperCase() })}
-                        className="w-full px-3 py-2 border rounded-lg text-sm uppercase focus:ring-2 focus:ring-[#006FFF]"
-                      />
-                      <p className="text-[10px] text-slate-400 mt-0.5">Used for auto student admission IDs (e.g. DGA-001)</p>
-                    </div>
-
-                    <div className="sm:col-span-2">
-                      <label className="block text-xs font-medium text-slate-700 mb-1">
-                        Legal / Registered Entity Name (Optional)
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="e.g. Digital Guru Learning Centers Private Limited"
-                        value={branchForm.legalName}
-                        onChange={(e) => setBranchForm({ ...branchForm, legalName: e.target.value })}
-                        className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-[#006FFF]"
-                      />
+                      <p className="text-[10px] text-slate-400 mt-0.5">e.g. DG-ANN-01</p>
                     </div>
                   </div>
                 </div>
