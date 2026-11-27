@@ -452,12 +452,12 @@ export const CourseManagement: React.FC = () => {
         body: JSON.stringify({
           courseId: franchiseCourse.id,
           isPermitted: nextPermitted,
-          ...(!nextPermitted ? { isEnabled: false } : {}),
+          isEnabled: nextPermitted,
         }),
       });
       toast.success(
         nextPermitted
-          ? 'HQ permission granted — franchise can now offer & enroll students'
+          ? 'HQ permission granted & course activated for franchise'
           : 'HQ permission revoked — course hidden from franchise offerings'
       );
       setFranchiseSelections((prev) => ({
@@ -465,7 +465,7 @@ export const CourseManagement: React.FC = () => {
         [franchiseId]: {
           ...current,
           isPermitted: nextPermitted,
-          isEnabled: nextPermitted ? current.isEnabled : false,
+          isEnabled: nextPermitted,
           loading: false,
         },
       }));
@@ -488,6 +488,7 @@ export const CourseManagement: React.FC = () => {
         body: JSON.stringify({
           allActiveFranchises: true,
           isPermitted: nextPermitted,
+          autoEnable: nextPermitted,
         }),
       });
       toast.success(res.message || 'Updated bulk franchise permissions');

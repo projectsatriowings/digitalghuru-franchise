@@ -927,13 +927,15 @@ export class CoursesService {
       });
     }
 
+    const enableFlag = options?.isEnabled !== undefined ? options.isEnabled : true;
+
     return prisma.franchiseCourseSelection.upsert({
       where: { franchiseId_courseId: { franchiseId, courseId } },
       update: {
         isPermitted: true,
         permittedAt: new Date(),
         permittedById: permittedById || null,
-        ...(options?.isEnabled !== undefined ? { isEnabled: options.isEnabled } : {}),
+        ...(options?.isEnabled !== undefined ? { isEnabled: options.isEnabled } : { isEnabled: true }),
         ...(hasCustomPrice ? { localFeeOverride: feeOverride } : {}),
       },
       create: {
@@ -942,7 +944,7 @@ export class CoursesService {
         isPermitted: true,
         permittedAt: new Date(),
         permittedById: permittedById || null,
-        isEnabled: options?.isEnabled !== undefined ? options.isEnabled : false,
+        isEnabled: enableFlag,
         localFeeOverride: feeOverride,
       },
     });
@@ -977,6 +979,7 @@ export class CoursesService {
     }
 
     const uniqueFranchiseIds = Array.from(new Set(targetFranchiseIds));
+    const shouldAutoEnable = params.autoEnable !== undefined ? params.autoEnable : true;
     const results = await prisma.$transaction(async (tx) => {
       const out = [];
       for (const franchiseId of uniqueFranchiseIds) {
@@ -987,7 +990,7 @@ export class CoursesService {
                 isPermitted: true,
                 permittedAt: new Date(),
                 permittedById: params.permittedById || null,
-                ...(params.autoEnable ? { isEnabled: true } : {}),
+                ...(shouldAutoEnable ? { isEnabled: true } : {}),
               }
             : {
                 isPermitted: false,
@@ -999,7 +1002,7 @@ export class CoursesService {
             isPermitted: params.isPermitted,
             permittedAt: params.isPermitted ? new Date() : null,
             permittedById: params.permittedById || null,
-            isEnabled: params.isPermitted ? Boolean(params.autoEnable) : false,
+            isEnabled: params.isPermitted ? Boolean(shouldAutoEnable) : false,
           },
         });
         out.push(row);
