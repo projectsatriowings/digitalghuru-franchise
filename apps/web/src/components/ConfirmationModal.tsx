@@ -1,4 +1,5 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { AlertTriangle, HelpCircle, X } from 'lucide-react';
 
 interface ConfirmationModalProps {
@@ -37,9 +38,9 @@ export const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
     btnClass = 'bg-amber-600 hover:bg-amber-700 text-white';
   }
 
-  return (
-    <div className="fixed inset-0 z-[9990] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
-      <div className="bg-white border border-[#E2E8F0] rounded-3xl w-full max-w-md p-6 shadow-2xl text-[#0F172A] space-y-4">
+  const modalContent = (
+    <div className="fixed inset-0 !m-0 z-[9990] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in overflow-y-auto">
+      <div className="bg-white border border-[#E2E8F0] rounded-3xl w-full max-w-md p-6 shadow-2xl text-[#0F172A] space-y-4 my-auto">
         <div className="flex items-center justify-between pb-3 border-b border-[#F1F5F9]">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-2xl bg-[#F8FAFC] border border-[#E2E8F0]/60 shrink-0">
@@ -80,4 +81,6 @@ export const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
       </div>
     </div>
   );
+
+  return typeof document !== 'undefined' ? createPortal(modalContent, document.body) : modalContent;
 };

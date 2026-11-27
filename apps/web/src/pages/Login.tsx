@@ -55,16 +55,6 @@ const DEMO_ACCOUNTS: DemoAccount[] = [
     icon: Building2,
   },
   {
-    role: 'ACADEMIC_ADMIN',
-    label: 'Branch Admin',
-    roleBadgeColor: 'text-amber-700',
-    badgeBg: 'bg-amber-50 border-amber-200',
-    identifier: 'admin@apexacademy.com',
-    password: 'Password#123',
-    subtext: 'Campus APEX01 Admin',
-    icon: Briefcase,
-  },
-  {
     role: 'STAFF',
     label: 'Faculty / Staff',
     roleBadgeColor: 'text-emerald-700',
@@ -101,9 +91,9 @@ export const Login: React.FC = () => {
   const { login } = useAuth();
 
   // Sign In States
-  const [selectedRole, setSelectedRole] = useState<UserRole>('ACADEMIC_ADMIN');
-  const [identifier, setIdentifier] = useState('admin@apexacademy.com');
-  const [password, setPassword] = useState('Password#123');
+  const [selectedRole, setSelectedRole] = useState<UserRole>('FRANCHISE_OWNER');
+  const [identifier, setIdentifier] = useState('rajesh.owner@digitalghuru.example.com');
+  const [password, setPassword] = useState('FranchiseOwner#2026');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -443,10 +433,10 @@ export const Login: React.FC = () => {
             <div className="mt-4 space-y-3 text-xs">
               <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200">
                 <div className="font-bold text-[#006FFF] flex items-center gap-1.5 mb-1">
-                  <Building2 className="w-4 h-4" /> Franchisee Admin & Branch Admin
+                  <Building2 className="w-4 h-4" /> Franchisee Admin
                 </div>
                 <p className="text-slate-600">
-                  Your branch login is provisioned by Head Office during onboarding. Check your registered agreement or contact support.
+                  Your franchise administrator credentials are provided by Super Admin during onboarding. Franchisee Admin manages all operating campus branches.
                 </p>
               </div>
 
@@ -455,7 +445,7 @@ export const Login: React.FC = () => {
                   <Users className="w-4 h-4" /> Staff & Faculty
                 </div>
                 <p className="text-slate-600">
-                  Employee codes and credentials are created by your Branch Admin upon profile approval.
+                  Employee codes and credentials are created by your Franchisee Admin upon profile approval.
                 </p>
               </div>
 

@@ -1044,7 +1044,7 @@ export const CourseManagement: React.FC = () => {
       {/* MODAL 1: CATEGORY MANAGER                                         */}
       {/* ================================================================= */}
       {showCategoriesModal && (
-        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="fixed inset-0 !m-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-white rounded-3xl max-w-2xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
             <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
               <div className="flex items-center gap-2.5">
@@ -1179,7 +1179,7 @@ export const CourseManagement: React.FC = () => {
       {/* MODAL 2: CURRICULUM VERSIONS & LESSON VIDEOS                      */}
       {/* ================================================================= */}
       {curriculumCourse && (
-        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="fixed inset-0 !m-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-slate-50 rounded-3xl max-w-4xl w-full max-h-[92vh] flex flex-col shadow-2xl overflow-hidden">
             <div className="px-6 py-4 bg-white border-b border-slate-200 flex items-center justify-between">
               <div>
@@ -1211,7 +1211,7 @@ export const CourseManagement: React.FC = () => {
       {/* MODAL 3: FRANCHISE PERMISSION GOVERNANCE & OFFERINGS              */}
       {/* ================================================================= */}
       {franchiseCourse && (
-        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="fixed inset-0 !m-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-white rounded-3xl max-w-4xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
             <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
               <div>
@@ -1400,7 +1400,7 @@ export const CourseManagement: React.FC = () => {
       {/* MODAL 4: FULL 10-STEP + EXTENSIBLE COURSE PREVIEW                 */}
       {/* ================================================================= */}
       {previewCourse && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="fixed inset-0 !m-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-white rounded-3xl max-w-5xl w-full max-h-[92vh] flex flex-col shadow-2xl overflow-hidden">
             <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
               <div className="flex items-center gap-2">

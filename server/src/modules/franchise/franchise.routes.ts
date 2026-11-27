@@ -46,6 +46,7 @@ router.use(authenticateToken);
 router.get('/dashboard/super-admin', requireRole('SUPER_ADMIN'), getSuperAdminFranchiseDashboard);
 router.get('/dashboard/owner', requireRole('SUPER_ADMIN', 'FRANCHISE_OWNER'), getFranchiseOwnerDashboard);
 router.get('/my-branches', requireRole('SUPER_ADMIN', 'FRANCHISE_OWNER'), getMyAssignedBranches);
+router.post('/my-branches', requireRole('SUPER_ADMIN', 'FRANCHISE_OWNER'), addBranchToFranchise);
 router.get('/unassigned-branches', requireRole('SUPER_ADMIN'), getUnassignedBranches);
 router.get('/agreement-templates', requireRole('SUPER_ADMIN', 'FRANCHISE_OWNER'), getAgreementTemplates);
 
@@ -64,9 +65,9 @@ router.get('/:id/revenue-dashboard', requireRole('SUPER_ADMIN', 'FRANCHISE_OWNER
 router.post('/:id/owner/reset-password', requireRole('SUPER_ADMIN'), resetFranchiseOwnerPassword);
 
 // -------------------------------------------------------------
-// BRANCH MANAGEMENT (Strictly SUPER_ADMIN only)
+// BRANCH MANAGEMENT
 // -------------------------------------------------------------
-router.post('/:id/branches', requireRole('SUPER_ADMIN'), addBranchToFranchise);
+router.post('/:id/branches', requireRole('SUPER_ADMIN', 'FRANCHISE_OWNER'), addBranchToFranchise);
 router.get('/:id/branches', requireRole('SUPER_ADMIN', 'FRANCHISE_OWNER'), listFranchiseBranches);
 router.delete('/:id/branches/:branchId', requireRole('SUPER_ADMIN'), removeBranchFromFranchise);
 

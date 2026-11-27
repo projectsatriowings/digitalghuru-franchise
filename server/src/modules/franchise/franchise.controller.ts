@@ -720,6 +720,8 @@ export async function createFranchise(req: AuthenticatedRequest, res: Response) 
             status: 'ACTIVE',
             ownerUserId: ownerUser.id,
             notes: data.notes || null,
+            revenueSharePercentage: new Prisma.Decimal(partnerPct),
+            digitalGuruRevenuePercentage: new Prisma.Decimal(dgPct),
           },
           include: {
             ownerUser: { select: { id: true, email: true, fullName: true, phone: true } },
@@ -1142,6 +1144,12 @@ export async function updateFranchise(req: AuthenticatedRequest, res: Response) 
     } = req.body;
 
     const isSuperAdmin = req.user?.role === 'SUPER_ADMIN';
+    const revenueSharePercentage = (isSuperAdmin && req.body.revenueSharePercentage !== undefined)
+      ? Number(req.body.revenueSharePercentage)
+      : undefined;
+    const digitalGuruRevenuePercentage = revenueSharePercentage !== undefined
+      ? Number((100 - revenueSharePercentage).toFixed(2))
+      : undefined;
 
     // 1. Update franchise profile details
     await prisma.franchise.update({
@@ -1158,8 +1166,54 @@ export async function updateFranchise(req: AuthenticatedRequest, res: Response) 
         ...(authorizedContact !== undefined && { authorizedContact }),
         ...(businessDetails !== undefined && { businessDetails }),
         ...(isSuperAdmin && notes !== undefined && { notes }),
+        ...(revenueSharePercentage !== undefined && {
+          revenueSharePercentage: new Prisma.Decimal(revenueSharePercentage),
+          digitalGuruRevenuePercentage: new Prisma.Decimal(digitalGuruRevenuePercentage!),
+        }),
       },
     });
+
+    if (revenueSharePercentage !== undefined) {
+      const activeAgreement = await prisma.franchiseAgreement.findFirst({
+        where: { franchiseId: id, status: 'ACTIVE' },
+        orderBy: { createdAt: 'desc' },
+      });
+      if (activeAgreement) {
+        await prisma.franchiseAgreement.update({
+          where: { id: activeAgreement.id },
+          data: {
+            partnerRevenuePercentage: new Prisma.Decimal(revenueSharePercentage),
+            digitalGuruRevenuePercentage: new Prisma.Decimal(digitalGuruRevenuePercentage!),
+            royaltyPercentage: new Prisma.Decimal(digitalGuruRevenuePercentage!),
+          },
+        });
+      }
+
+      const pendingSettlements = await prisma.franchiseSettlement.findMany({
+        where: {
+          franchiseId: id,
+          status: { in: ['DRAFT', 'PENDING_APPROVAL', 'PENDING_REVIEW'] },
+        },
+      });
+      for (const s of pendingSettlements) {
+        const netCollections = Number(s.totalEligibleCollections);
+        const newFranchiseShare = Math.round(netCollections * (revenueSharePercentage / 100) * 100) / 100;
+        const newDgShare = Math.round((netCollections - newFranchiseShare) * 100) / 100;
+        const totalTransferred = Number(s.totalTransferredAmount || 0);
+        const newRemaining = Math.max(0, Math.round((newFranchiseShare - totalTransferred) * 100) / 100);
+
+        await prisma.franchiseSettlement.update({
+          where: { id: s.id },
+          data: {
+            applicableFranchisePercentage: new Prisma.Decimal(revenueSharePercentage),
+            applicableDigitalGuruPercentage: new Prisma.Decimal(digitalGuruRevenuePercentage!),
+            franchisePayableAmount: new Prisma.Decimal(newFranchiseShare),
+            digitalGuruShareAmount: new Prisma.Decimal(newDgShare),
+            remainingPayableAmount: new Prisma.Decimal(newRemaining),
+          },
+        });
+      }
+    }
 
     // 2. Manage branch associations if Super Admin
     if (isSuperAdmin) {
@@ -1459,21 +1513,48 @@ export async function resetFranchiseOwnerPassword(req: AuthenticatedRequest, res
 }
 
 // ============================================================================
-// 2. BRANCH MANAGEMENT (STRICTLY SUPER_ADMIN)
+// 2. BRANCH / INSTITUTE MANAGEMENT (SUPER_ADMIN & FRANCHISE_OWNER)
 // ============================================================================
 
 export async function addBranchToFranchise(req: AuthenticatedRequest, res: Response) {
   try {
-    // Strictly disallow Franchise Owner
-    if (req.user?.role !== 'SUPER_ADMIN') {
-      return res.status(403).json({
-        success: false,
-        error: 'Forbidden: Franchisee Admins cannot create or add branches. Only Super Admin has this privilege.',
-      });
+    let { id: franchiseId } = req.params;
+
+    // If 'my-branches' or franchiseId not specified, find user's franchise
+    if (franchiseId === 'my-branches' || !franchiseId) {
+      if (req.user?.role === 'FRANCHISE_OWNER') {
+        const owned = await prisma.franchise.findFirst({
+          where: { ownerUserId: req.user.userId },
+          select: { id: true, name: true, code: true },
+        });
+        if (!owned) {
+          return res.status(404).json({ success: false, error: 'No franchise found for this user' });
+        }
+        franchiseId = owned.id;
+      }
     }
 
-    const { id: franchiseId } = req.params;
-    const { instituteId, instituteIds, name, code, city, state, address, phone, email, createNew } = req.body;
+    // Role verification: Super Admin can add to any franchise; Franchise Owner can only add to their own
+    if (req.user?.role !== 'SUPER_ADMIN') {
+      if (req.user?.role === 'FRANCHISE_OWNER') {
+        const owned = await prisma.franchise.findFirst({
+          where: { id: franchiseId, ownerUserId: req.user.userId },
+        });
+        if (!owned) {
+          return res.status(403).json({
+            success: false,
+            error: 'Forbidden: You can only add institutes to your own franchise.',
+          });
+        }
+      } else {
+        return res.status(403).json({
+          success: false,
+          error: 'Forbidden: Insufficient privileges to add branches.',
+        });
+      }
+    }
+
+    const { instituteId, instituteIds, name, code, city, state, address, postalCode, legalName, phone, email, createNew } = req.body;
 
     // Verify franchise exists
     const targetFranchise = await prisma.franchise.findUnique({
@@ -1493,6 +1574,7 @@ export async function addBranchToFranchise(req: AuthenticatedRequest, res: Respo
       const updatedBranches = await prisma.institute.findMany({
         where: { id: { in: instituteIds } },
       });
+      serverCache.invalidate();
       return res.status(200).json({
         success: true,
         message: `${updatedBranches.length} branch(es) successfully assigned to ${targetFranchise.name}`,
@@ -1503,32 +1585,63 @@ export async function addBranchToFranchise(req: AuthenticatedRequest, res: Respo
     // Case 2: Create brand new branch and attach
     let branch;
     if (createNew || (!instituteId && name)) {
-      let branchCode = code;
+      let branchCode = code?.trim()?.toUpperCase();
       if (!branchCode) {
-        const count = await prisma.institute.count();
-        branchCode = `BR-${String(count + 1).padStart(3, '0')}`;
-        let exists = await prisma.institute.findUnique({ where: { code: branchCode } });
-        let offset = 1;
-        while (exists) {
-          branchCode = `BR-${String(count + 1 + offset).padStart(3, '0')}`;
-          exists = await prisma.institute.findUnique({ where: { code: branchCode } });
-          offset++;
+        for (let attempt = 0; attempt < 15; attempt++) {
+          const suffix = crypto.randomBytes(3).toString('hex').toUpperCase();
+          const candidate = `INS-${suffix}`;
+          const exists = await prisma.institute.findUnique({ where: { code: candidate } });
+          if (!exists) {
+            branchCode = candidate;
+            break;
+          }
+        }
+        if (!branchCode) {
+          branchCode = `INS-${Date.now().toString(36).toUpperCase()}`;
+        }
+      } else {
+        const existing = await prisma.institute.findUnique({ where: { code: branchCode } });
+        if (existing) {
+          return res.status(409).json({ success: false, error: `An institute with code '${branchCode}' already exists` });
         }
       }
 
       branch = await prisma.institute.create({
         data: {
-          name,
+          name: name.trim(),
+          legalName: legalName?.trim() || null,
           code: branchCode,
-          city,
-          state,
-          address,
-          phone,
+          city: city?.trim() || null,
+          state: state?.trim() || null,
+          address: address?.trim() || null,
+          postalCode: postalCode?.trim() || null,
+          phone: phone?.trim() || null,
           email: email?.trim() ? email.trim().toLowerCase() : null,
           franchiseId,
           status: 'ACTIVE',
         },
       });
+
+      // Grant institute membership to the franchise owner
+      if (req.user?.userId) {
+        await prisma.instituteMembership.upsert({
+          where: {
+            instituteId_userId: {
+              instituteId: branch.id,
+              userId: req.user.userId,
+            },
+          },
+          create: {
+            userId: req.user.userId,
+            instituteId: branch.id,
+            role: 'FRANCHISE_OWNER',
+            isActive: true,
+          },
+          update: {
+            isActive: true,
+          },
+        }).catch(() => { });
+      }
     } else {
       // Case 3: Attach single existing branch
       if (!instituteId) {
@@ -1548,9 +1661,10 @@ export async function addBranchToFranchise(req: AuthenticatedRequest, res: Respo
       });
     }
 
+    serverCache.invalidate();
     return res.status(201).json({
       success: true,
-      message: 'Branch successfully associated with franchise',
+      message: 'Institute successfully created and assigned to franchise',
       data: { branch },
     });
   } catch (err: any) {
@@ -2275,6 +2389,15 @@ export async function reviseAgreement(req: AuthenticatedRequest, res: Response) 
         });
       }
 
+      // 4. Keep franchise active revenue share percentage in sync with revised agreement
+      await tx.franchise.update({
+        where: { id: franchiseId },
+        data: {
+          revenueSharePercentage: new Prisma.Decimal(effectivePartnerPct),
+          digitalGuruRevenuePercentage: new Prisma.Decimal(effectiveDgPct),
+        },
+      });
+
       return { newAgreement: createdAgreement, installments: createdInstallments };
     });
 
@@ -2474,6 +2597,15 @@ export async function renewAgreement(req: AuthenticatedRequest, res: Response) {
           prismaClient: tx,
         });
       }
+
+      // 4. Keep franchise active revenue share percentage in sync with renewed agreement
+      await tx.franchise.update({
+        where: { id: franchiseId },
+        data: {
+          revenueSharePercentage: new Prisma.Decimal(effectivePartnerRevenuePct),
+          digitalGuruRevenuePercentage: new Prisma.Decimal(effectiveDgRevenuePct),
+        },
+      });
 
       return { newAgreement: createdAgreement, installments: createdInstallments };
     });
@@ -4479,6 +4611,48 @@ export async function updateRevenueShare(req: AuthenticatedRequest, res: Respons
           digitalGuruRevenuePercentage: new Prisma.Decimal(digitalGuruRevenuePercentage),
         },
       });
+
+      // Update active agreement if one exists so commercial terms stay in sync
+      const activeAgreement = await tx.franchiseAgreement.findFirst({
+        where: { franchiseId: id, status: 'ACTIVE' },
+        orderBy: { createdAt: 'desc' },
+      });
+      if (activeAgreement) {
+        await tx.franchiseAgreement.update({
+          where: { id: activeAgreement.id },
+          data: {
+            partnerRevenuePercentage: new Prisma.Decimal(revenueSharePercentage),
+            digitalGuruRevenuePercentage: new Prisma.Decimal(digitalGuruRevenuePercentage),
+            royaltyPercentage: new Prisma.Decimal(digitalGuruRevenuePercentage),
+          },
+        });
+      }
+
+      // Update pending / draft settlements for immediate consistency
+      const pendingSettlements = await tx.franchiseSettlement.findMany({
+        where: {
+          franchiseId: id,
+          status: { in: ['DRAFT', 'PENDING_APPROVAL', 'PENDING_REVIEW'] },
+        },
+      });
+      for (const s of pendingSettlements) {
+        const netCollections = Number(s.totalEligibleCollections);
+        const newFranchiseShare = Math.round(netCollections * (revenueSharePercentage / 100) * 100) / 100;
+        const newDgShare = Math.round((netCollections - newFranchiseShare) * 100) / 100;
+        const totalTransferred = Number(s.totalTransferredAmount || 0);
+        const newRemaining = Math.max(0, Math.round((newFranchiseShare - totalTransferred) * 100) / 100);
+
+        await tx.franchiseSettlement.update({
+          where: { id: s.id },
+          data: {
+            applicableFranchisePercentage: new Prisma.Decimal(revenueSharePercentage),
+            applicableDigitalGuruPercentage: new Prisma.Decimal(digitalGuruRevenuePercentage),
+            franchisePayableAmount: new Prisma.Decimal(newFranchiseShare),
+            digitalGuruShareAmount: new Prisma.Decimal(newDgShare),
+            remainingPayableAmount: new Prisma.Decimal(newRemaining),
+          },
+        });
+      }
 
       await tx.auditLog.create({
         data: {
