@@ -349,12 +349,15 @@ export const Login: React.FC = () => {
                 </p>
               </div>
 
-              {/* Transparent PNG Illustration added directly on the blue side */}
-              <div className="relative z-10 my-auto w-full max-w-sm sm:max-w-md flex justify-center items-center py-4">
+              {/* Interactive Vector Illustration Container with Gentle Floating & Hover Zoom */}
+              <div className="relative z-10 my-auto w-full max-w-sm sm:max-w-md flex justify-center items-center py-4 group cursor-pointer">
+                {/* Dynamic radial glow behind the illustration that intensifies on hover */}
+                <div className="absolute inset-0 max-w-[280px] sm:max-w-[320px] max-h-[280px] sm:max-h-[320px] mx-auto my-auto rounded-full bg-gradient-to-tr from-[#FEDC32]/25 via-[#006FFF]/30 to-[#FE4D01]/20 blur-3xl transition-all duration-700 ease-out group-hover:scale-125 group-hover:opacity-100 opacity-60 animate-pulse-glow pointer-events-none" />
+
                 <img
                   src="/images/auth-vector-illustration.png"
                   alt="Digital Guru Franchise & Digital Learning System"
-                  className="w-full h-auto max-h-[300px] sm:max-h-[340px] object-contain drop-shadow-[0_15px_30px_rgba(0,0,0,0.35)]"
+                  className="w-full h-auto max-h-[300px] sm:max-h-[340px] object-contain relative z-10 transition-all duration-500 ease-out transform group-hover:scale-110 group-hover:-translate-y-2 group-active:scale-95 drop-shadow-[0_15px_30px_rgba(0,0,0,0.35)] group-hover:drop-shadow-[0_25px_45px_rgba(0,0,0,0.45)] select-none animate-float-gentle"
                 />
               </div>
 
