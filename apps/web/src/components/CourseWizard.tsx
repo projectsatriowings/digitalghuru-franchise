@@ -2318,7 +2318,7 @@ export const CourseWizard: React.FC<CourseWizardProps> = ({
                           <div className="flex items-center gap-1.5">
                             <LinkIcon className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                             <input
-                              type="url"
+                              type="text"
                               value={lesson.pdfUrl || ''}
                               onChange={(e) => {
                                 const list = [...data.modules];
@@ -2327,9 +2327,34 @@ export const CourseWizard: React.FC<CourseWizardProps> = ({
                                 list[mIdx] = { ...list[mIdx], lessons };
                                 setData({ ...data, modules: list });
                               }}
-                              placeholder="Primary Lesson PDF / Note URL..."
+                              placeholder="Primary Document URL or upload PPT, DOC, PDF..."
                               className="flex-1 px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs"
                             />
+                            <label className="cursor-pointer px-2 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-semibold flex items-center gap-1 shrink-0">
+                              <Upload className="w-3 h-3" />
+                              <span>Upload File</span>
+                              <input
+                                type="file"
+                                className="hidden"
+                                accept=".pdf,.ppt,.pptx,.doc,.docx,.xls,.xlsx,.txt,.csv,.zip,image/*"
+                                onChange={async (e) => {
+                                  const f = e.target.files?.[0];
+                                  if (!f) return;
+                                  try {
+                                    const uploaded = await uploadToCourseMedia(f, 'resources');
+                                    const list = [...data.modules];
+                                    const lessons = [...list[mIdx].lessons];
+                                    lessons[lIdx] = { ...lessons[lIdx], pdfUrl: uploaded.fileUrl };
+                                    list[mIdx] = { ...list[mIdx], lessons };
+                                    setData({ ...data, modules: list });
+                                    toast.success(`"${f.name}" uploaded`);
+                                  } catch (err: any) {
+                                    toast.error(err.message || 'Upload failed');
+                                  }
+                                  e.target.value = '';
+                                }}
+                              />
+                            </label>
                           </div>
                         </div>
 

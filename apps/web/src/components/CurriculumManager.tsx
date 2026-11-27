@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { apiFetch, getAuthToken } from '../services/api';
 import { useToast } from '../context/ToastContext';
+import { openMediaResource, isValidMediaResourceUrl, normalizeMediaUrl, getMediaResourceMeta } from '../utils/mediaHelper';
 
 interface Attachment {
   id?: string;
@@ -238,13 +239,16 @@ export const CurriculumManager: React.FC<CurriculumManagerProps> = ({
           isDownload: a.isDownload !== undefined ? Boolean(a.isDownload) : true,
         }));
 
+      const normalizedVideoUrl = editForm.videoUrl.trim() ? normalizeMediaUrl(editForm.videoUrl.trim()) : null;
+      const normalizedPdfUrl = editForm.pdfUrl.trim() ? normalizeMediaUrl(editForm.pdfUrl.trim()) : null;
+
       await apiFetch(`/courses/chapters/${chapterId}`, {
         method: 'PATCH',
         body: JSON.stringify({
           title: editForm.title.trim(),
           description: editForm.description.trim() || null,
-          videoUrl: editForm.videoUrl.trim() || null,
-          pdfUrl: editForm.pdfUrl.trim() || null,
+          videoUrl: normalizedVideoUrl,
+          pdfUrl: normalizedPdfUrl,
           duration: editForm.duration.trim() || '10:00',
           isFree: Boolean(editForm.isFree),
           attachments: cleanAttachments,
@@ -276,8 +280,8 @@ export const CurriculumManager: React.FC<CurriculumManagerProps> = ({
           chapters: (m.chapters || []).map((c, cIdx) => ({
             title: c.title.trim() || `Lesson ${cIdx + 1}`,
             description: c.description?.trim() || null,
-            videoUrl: c.videoUrl?.trim() || null,
-            pdfUrl: c.pdfUrl?.trim() || null,
+            videoUrl: c.videoUrl?.trim() ? normalizeMediaUrl(c.videoUrl.trim()) : null,
+            pdfUrl: c.pdfUrl?.trim() ? normalizeMediaUrl(c.pdfUrl.trim()) : null,
             duration: c.duration?.trim() || '10:00',
             position: cIdx,
             isFree: Boolean(c.isFree),
@@ -720,32 +724,72 @@ export const CurriculumManager: React.FC<CurriculumManagerProps> = ({
                                     <Clock className="w-3 h-3" /> {ch.duration || '10:00'}
                                   </span>
                                   {ch.videoUrl ? (
-                                    <a
-                                      href={ch.videoUrl}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="text-[#006FFF] hover:underline flex items-center gap-1 max-w-[300px] truncate"
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        openMediaResource({
+                                          url: ch.videoUrl,
+                                          courseId,
+                                          type: 'video',
+                                          onError: (msg) => toast.error(msg),
+                                        })
+                                      }
+                                      className="text-[#006FFF] hover:underline flex items-center gap-1 max-w-[300px] truncate cursor-pointer text-left"
+                                      title={ch.videoUrl}
                                     >
                                       <ExternalLink className="w-3 h-3 shrink-0" />
                                       <span className="truncate">{ch.videoUrl}</span>
-                                    </a>
+                                    </button>
                                   ) : (
                                     <span className="text-amber-600 italic">No video link set</span>
                                   )}
-                                  {ch.pdfUrl && (
-                                    <a
-                                      href={ch.pdfUrl}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="text-emerald-600 hover:underline flex items-center gap-1"
-                                    >
-                                      <FileText className="w-3 h-3" /> Primary PDF
-                                    </a>
-                                  )}
+                                  {ch.pdfUrl && (() => {
+                                    const meta = getMediaResourceMeta(ch.pdfUrl);
+                                    return (
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          openMediaResource({
+                                            url: ch.pdfUrl,
+                                            courseId,
+                                            type: 'document',
+                                            onError: (msg) => toast.error(msg),
+                                          })
+                                        }
+                                        className="text-emerald-600 hover:underline flex items-center gap-1.5 cursor-pointer font-medium"
+                                        title={ch.pdfUrl}
+                                      >
+                                        <FileText className="w-3 h-3" />
+                                        <span>{meta.label}</span>
+                                        <span className="px-1.5 py-0.5 rounded text-[10px] font-extrabold uppercase bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                          {meta.badge}
+                                        </span>
+                                      </button>
+                                    );
+                                  })()}
                                   {attachments.length > 0 && (
-                                    <span className="inline-flex items-center gap-1 text-indigo-600 font-semibold">
-                                      <Paperclip className="w-3 h-3" /> {attachments.length} attachment(s)
-                                    </span>
+                                    <div className="flex flex-wrap items-center gap-1.5 text-indigo-600 font-semibold">
+                                      <Paperclip className="w-3 h-3 shrink-0" />
+                                      {attachments.map((att: any, attIdx: number) => (
+                                        <button
+                                          key={att.id || attIdx}
+                                          type="button"
+                                          onClick={() =>
+                                            openMediaResource({
+                                              url: att.fileUrl,
+                                              courseId,
+                                              type: 'attachment',
+                                              onError: (msg) => toast.error(msg),
+                                            })
+                                          }
+                                          className="hover:underline text-xs cursor-pointer font-medium"
+                                          title={att.title || att.fileUrl}
+                                        >
+                                          {att.title || `Attachment ${attIdx + 1}`}
+                                          {attIdx < attachments.length - 1 ? ',' : ''}
+                                        </button>
+                                      ))}
+                                    </div>
                                   )}
                                 </div>
                               </div>
@@ -821,21 +865,21 @@ export const CurriculumManager: React.FC<CurriculumManagerProps> = ({
                               </div>
                               <div>
                                 <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                                  Primary Lesson PDF / Resource Link
+                                  Primary Lesson Document / Resource Link (PPT, DOC, PDF, Link)
                                 </label>
                                 <div className="flex gap-2">
                                   <input
                                     type="text"
                                     value={editForm.pdfUrl}
                                     onChange={(e) => setEditForm({ ...editForm, pdfUrl: e.target.value })}
-                                    placeholder="/api/courses/media/... or https://..."
+                                    placeholder="Upload file (.ppt, .doc, .pdf) or paste link (https://... or /api/...)"
                                     className="flex-1 text-xs px-3 py-2 rounded-lg border border-slate-300 bg-white focus:outline-none focus:border-[#006FFF]"
                                   />
                                   <label className="px-2.5 py-2 rounded-lg bg-white border border-slate-300 hover:bg-slate-50 text-xs font-bold text-slate-700 cursor-pointer flex items-center gap-1 shrink-0">
-                                    <Upload className="w-3.5 h-3.5" /> PDF
+                                    <Upload className="w-3.5 h-3.5" /> Upload File
                                     <input
                                       type="file"
-                                      accept=".pdf"
+                                      accept=".pdf,.ppt,.pptx,.doc,.docx,.xls,.xlsx,.txt,.csv,.zip,image/*"
                                       className="hidden"
                                       onChange={async (e) => {
                                         const file = e.target.files?.[0];
@@ -843,9 +887,9 @@ export const CurriculumManager: React.FC<CurriculumManagerProps> = ({
                                         try {
                                           const url = await uploadCourseFile(file, 'resources');
                                           setEditForm((prev) => ({ ...prev, pdfUrl: url }));
-                                          toast.success('Primary PDF uploaded');
+                                          toast.success(`"${file.name}" uploaded successfully`);
                                         } catch (err: any) {
-                                          toast.error(err.message || 'PDF upload failed');
+                                          toast.error(err.message || 'File upload failed');
                                         }
                                       }}
                                     />

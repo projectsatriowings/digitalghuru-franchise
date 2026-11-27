@@ -63,7 +63,7 @@ const isTabAllowedForRole = (tab: string, role?: string): boolean => {
     case 'SUPER_ADMIN':
       return ['super_admin_dashboard', 'franchise_management', 'course_management', 'monthly_settlements', 'staff', 'students', 'academics', 'exams', 'fees'].includes(tab);
     case 'FRANCHISE_OWNER':
-      return ['franchise_owner_dashboard', 'franchise_courses', 'franchise_branches', 'franchise_royalties', 'franchise_agreements', 'monthly_settlements', 'academic_dashboard', 'students', 'staff', 'staff_attendance', 'academics', 'exams', 'question_generator', 'fees', 'attendance', 'messaging', 'progress_reviews'].includes(tab) || tab.startsWith('franchise_');
+      return ['franchise_owner_dashboard', 'franchise_courses', 'franchise_branches', 'franchise_royalties', 'franchise_agreements', 'monthly_settlements', 'academic_dashboard', 'students', 'staff', 'staff_attendance', 'academics', 'exams', 'question_generator', 'fees', 'messaging', 'progress_reviews'].includes(tab) || tab.startsWith('franchise_');
     case 'BRANCH_ADMIN':
     case 'ACADEMIC_ADMIN':
       return ['academic_dashboard', 'franchise_courses', 'staff', 'staff_attendance', 'students', 'academics', 'exams', 'question_generator', 'progress_reviews', 'messaging', 'fees'].includes(tab);
@@ -216,81 +216,81 @@ const AppContent: React.FC = () => {
           <div className="p-4 sm:p-6 lg:p-8 max-w-[1440px] w-full mx-auto flex-1">
             <Suspense fallback={<PageSkeleton />}>
               <div key={currentTab} className="animate-in fade-in duration-150">
-                  {currentTab === 'super_admin_dashboard' && user.role === 'SUPER_ADMIN' && (
-                    <SuperAdminDashboard
-                      onNavigateTab={(tab) => {
-                        setCurrentTab(tab);
-                        window.history.pushState({}, '', `/${tab}`);
-                      }}
-                    />
-                  )}
+                {currentTab === 'super_admin_dashboard' && user.role === 'SUPER_ADMIN' && (
+                  <SuperAdminDashboard
+                    onNavigateTab={(tab) => {
+                      setCurrentTab(tab);
+                      window.history.pushState({}, '', `/${tab}`);
+                    }}
+                  />
+                )}
 
-                  {currentTab === 'franchise_management' && user.role === 'SUPER_ADMIN' && (
-                    <FranchiseManagement />
-                  )}
+                {currentTab === 'franchise_management' && user.role === 'SUPER_ADMIN' && (
+                  <FranchiseManagement />
+                )}
 
-                  {currentTab === 'course_management' && user.role === 'SUPER_ADMIN' && (
-                    <CourseManagement />
-                  )}
+                {currentTab === 'course_management' && user.role === 'SUPER_ADMIN' && (
+                  <CourseManagement />
+                )}
 
-                  {currentTab === 'monthly_settlements' && (user.role === 'SUPER_ADMIN' || user.role === 'FRANCHISE_OWNER') && (
-                    <MonthlySettlements />
-                  )}
+                {currentTab === 'monthly_settlements' && (user.role === 'SUPER_ADMIN' || user.role === 'FRANCHISE_OWNER') && (
+                  <MonthlySettlements />
+                )}
 
-                  {currentTab === 'franchise_courses' && (user.role === 'FRANCHISE_OWNER' || user.role === 'ACADEMIC_ADMIN' || user.role === 'BRANCH_ADMIN' || user.role === 'SUPER_ADMIN') && (
-                    <FranchiseCourses />
-                  )}
+                {currentTab === 'franchise_courses' && (user.role === 'FRANCHISE_OWNER' || user.role === 'ACADEMIC_ADMIN' || user.role === 'BRANCH_ADMIN' || user.role === 'SUPER_ADMIN') && (
+                  <FranchiseCourses />
+                )}
 
-                  {(currentTab === 'franchise_owner_dashboard' || (currentTab.startsWith('franchise_') && currentTab !== 'franchise_courses')) && user.role === 'FRANCHISE_OWNER' && (
-                    <FranchiseOwnerDashboard />
-                  )}
+                {(currentTab === 'franchise_owner_dashboard' || (currentTab.startsWith('franchise_') && currentTab !== 'franchise_courses')) && user.role === 'FRANCHISE_OWNER' && (
+                  <FranchiseOwnerDashboard />
+                )}
 
-                  {currentTab === 'academic_dashboard' && (user.role === 'ACADEMIC_ADMIN' || user.role === 'BRANCH_ADMIN' || user.role === 'STAFF' || user.role === 'SUPER_ADMIN' || user.role === 'FRANCHISE_OWNER') && (
-                    <AcademicAdminDashboard onNavigateTab={(tab) => setCurrentTab(tab)} />
-                  )}
+                {currentTab === 'academic_dashboard' && (user.role === 'ACADEMIC_ADMIN' || user.role === 'BRANCH_ADMIN' || user.role === 'STAFF' || user.role === 'SUPER_ADMIN' || user.role === 'FRANCHISE_OWNER') && (
+                  <AcademicAdminDashboard onNavigateTab={(tab) => setCurrentTab(tab)} />
+                )}
 
-                  {currentTab === 'staff' && (user.role === 'ACADEMIC_ADMIN' || user.role === 'BRANCH_ADMIN' || user.role === 'SUPER_ADMIN' || user.role === 'FRANCHISE_OWNER') && <StaffManagement />}
+                {currentTab === 'staff' && (user.role === 'ACADEMIC_ADMIN' || user.role === 'BRANCH_ADMIN' || user.role === 'SUPER_ADMIN' || user.role === 'FRANCHISE_OWNER') && <StaffManagement />}
 
-                    { currentTab === 'staff_attendance' && (user.role === 'ACADEMIC_ADMIN' || user.role === 'BRANCH_ADMIN' || user.role === 'FRANCHISE_OWNER') && (
-                      <StaffAttendanceAdmin onNavigateTab={(tab) => setCurrentTab(tab)} />
-                    )}
+                {currentTab === 'staff_attendance' && (user.role === 'ACADEMIC_ADMIN' || user.role === 'BRANCH_ADMIN' || user.role === 'FRANCHISE_OWNER') && (
+                  <StaffAttendanceAdmin onNavigateTab={(tab) => setCurrentTab(tab)} />
+                )}
 
-                  {currentTab === 'my_attendance' && user.role === 'STAFF' && <StaffMyAttendance />}
+                {currentTab === 'my_attendance' && user.role === 'STAFF' && <StaffMyAttendance />}
 
-                  {currentTab === 'students' && (user.role === 'ACADEMIC_ADMIN' || user.role === 'BRANCH_ADMIN' || user.role === 'SUPER_ADMIN' || user.role === 'STAFF' || user.role === 'FRANCHISE_OWNER') && <StudentManagement />}
+                {currentTab === 'students' && (user.role === 'ACADEMIC_ADMIN' || user.role === 'BRANCH_ADMIN' || user.role === 'SUPER_ADMIN' || user.role === 'STAFF' || user.role === 'FRANCHISE_OWNER') && <StudentManagement />}
 
-                  {currentTab === 'academics' && (user.role === 'ACADEMIC_ADMIN' || user.role === 'BRANCH_ADMIN' || user.role === 'SUPER_ADMIN' || user.role === 'FRANCHISE_OWNER') && (
-                    <AcademicsManagement onNavigateTab={(tab) => setCurrentTab(tab)} />
-                  )}
+                {currentTab === 'academics' && (user.role === 'ACADEMIC_ADMIN' || user.role === 'BRANCH_ADMIN' || user.role === 'SUPER_ADMIN' || user.role === 'FRANCHISE_OWNER') && (
+                  <AcademicsManagement onNavigateTab={(tab) => setCurrentTab(tab)} />
+                )}
 
-                  {currentTab === 'attendance' && (user.role === 'STAFF' || user.role === 'FRANCHISE_OWNER') && <AttendanceManagement />}
+                {currentTab === 'attendance' && user.role === 'STAFF' && <AttendanceManagement />}
 
-                  {(currentTab === 'parent_portal' || currentTab.startsWith('parent_')) && user.role === 'PARENT' && (
-                    <ParentPortal
-                      initialTab={
-                        currentTab === 'parent_portal' || currentTab === 'parent_dashboard'
-                          ? 'dashboard'
-                          : currentTab.replace('parent_', '')
-                      }
-                    />
-                  )}
+                {(currentTab === 'parent_portal' || currentTab.startsWith('parent_')) && user.role === 'PARENT' && (
+                  <ParentPortal
+                    initialTab={
+                      currentTab === 'parent_portal' || currentTab === 'parent_dashboard'
+                        ? 'dashboard'
+                        : currentTab.replace('parent_', '')
+                    }
+                  />
+                )}
 
-                  {(currentTab === 'student_portal' || currentTab === 'student_courses' || currentTab === 'student_fees') && user.role === 'STUDENT' && (
-                    <StudentPortal initialSection={currentTab === 'student_courses' ? 'courses' : currentTab === 'student_fees' ? 'fees' : 'overview'} />
-                  )}
+                {(currentTab === 'student_portal' || currentTab === 'student_courses' || currentTab === 'student_fees') && user.role === 'STUDENT' && (
+                  <StudentPortal initialSection={currentTab === 'student_courses' ? 'courses' : currentTab === 'student_fees' ? 'fees' : 'overview'} />
+                )}
 
-                  {currentTab === 'materials' && (user.role === 'STAFF' || user.role === 'STUDENT' || user.role === 'FRANCHISE_OWNER') && <MaterialsManagement />}
+                {currentTab === 'materials' && (user.role === 'STAFF' || user.role === 'STUDENT' || user.role === 'FRANCHISE_OWNER') && <MaterialsManagement />}
 
-                  {currentTab === 'homework' && (user.role === 'STAFF' || user.role === 'STUDENT' || user.role === 'FRANCHISE_OWNER') && <HomeworkManagement />}
+                {currentTab === 'homework' && (user.role === 'STAFF' || user.role === 'STUDENT' || user.role === 'FRANCHISE_OWNER') && <HomeworkManagement />}
 
-                  {currentTab === 'exams' && (user.role === 'ACADEMIC_ADMIN' || user.role === 'BRANCH_ADMIN' || user.role === 'SUPER_ADMIN' || user.role === 'STAFF' || user.role === 'STUDENT' || user.role === 'FRANCHISE_OWNER') && <ExaminationsManagement />}
+                {currentTab === 'exams' && (user.role === 'ACADEMIC_ADMIN' || user.role === 'BRANCH_ADMIN' || user.role === 'SUPER_ADMIN' || user.role === 'STAFF' || user.role === 'STUDENT' || user.role === 'FRANCHISE_OWNER') && <ExaminationsManagement />}
 
-                  {currentTab === 'question_generator' && (user.role === 'ACADEMIC_ADMIN' || user.role === 'BRANCH_ADMIN' || user.role === 'FRANCHISE_OWNER') && <QuestionGenerator />}
+                {currentTab === 'question_generator' && (user.role === 'ACADEMIC_ADMIN' || user.role === 'BRANCH_ADMIN' || user.role === 'FRANCHISE_OWNER') && <QuestionGenerator />}
 
-                  {currentTab === 'progress_reviews' && <ProgressReviewsManagement />}
+                {currentTab === 'progress_reviews' && <ProgressReviewsManagement />}
 
-                  {currentTab === 'messaging' && (user.role === 'ACADEMIC_ADMIN' || user.role === 'BRANCH_ADMIN' || user.role === 'STAFF' || user.role === 'FRANCHISE_OWNER') && <MessagingInbox />}
-                  {currentTab === 'fees' && (user.role === 'ACADEMIC_ADMIN' || user.role === 'BRANCH_ADMIN' || user.role === 'SUPER_ADMIN' || user.role === 'FRANCHISE_OWNER') && <FeesManagement />}
+                {currentTab === 'messaging' && (user.role === 'ACADEMIC_ADMIN' || user.role === 'BRANCH_ADMIN' || user.role === 'STAFF' || user.role === 'FRANCHISE_OWNER') && <MessagingInbox />}
+                {currentTab === 'fees' && (user.role === 'ACADEMIC_ADMIN' || user.role === 'BRANCH_ADMIN' || user.role === 'SUPER_ADMIN' || user.role === 'FRANCHISE_OWNER') && <FeesManagement />}
               </div>
             </Suspense>
           </div>

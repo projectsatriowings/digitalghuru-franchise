@@ -59,7 +59,7 @@ interface AcademicsManagementProps {
 }
 
 export const AcademicsManagement: React.FC<AcademicsManagementProps> = ({ onNavigateTab }) => {
-  const { activeInstitute } = useAuth();
+  const { activeInstitute, user } = useAuth();
   const { success, error, info } = useToast();
 
   const [batches, setBatches] = useState<Batch[]>([]);
@@ -609,19 +609,21 @@ export const AcademicsManagement: React.FC<AcademicsManagementProps> = ({ onNavi
 
             {/* Quick Actions */}
             <div className="flex items-center gap-2 flex-wrap">
-              <button
-                onClick={() => {
-                  if (onNavigateTab) {
-                    onNavigateTab('attendance');
-                  } else {
-                    info('Navigate to Attendance Management to record attendance for this batch');
-                  }
-                }}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white border border-[#E2E8F0] hover:bg-[#F8FAFC] text-xs font-bold text-[#006FFF] shadow-sm transition"
-              >
-                <Calendar className="w-3.5 h-3.5 text-[#64748B]" />
-                <span>View Attendance</span>
-              </button>
+              {user?.role === 'STAFF' && (
+                <button
+                  onClick={() => {
+                    if (onNavigateTab) {
+                      onNavigateTab('attendance');
+                    } else {
+                      info('Navigate to Attendance Management to record attendance for this batch');
+                    }
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white border border-[#E2E8F0] hover:bg-[#F8FAFC] text-xs font-bold text-[#006FFF] shadow-sm transition"
+                >
+                  <Calendar className="w-3.5 h-3.5 text-[#64748B]" />
+                  <span>View Attendance</span>
+                </button>
+              )}
               <button
                 onClick={() => handleOpenEditBatch(selectedBatchDetails)}
                 className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white border border-[#E2E8F0] hover:bg-[#F8FAFC] text-xs font-bold text-[#006FFF] shadow-sm transition"

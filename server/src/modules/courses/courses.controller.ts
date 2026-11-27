@@ -1327,7 +1327,13 @@ export async function generateMediaTokenController(req: Request, res: Response) 
 
     // Verify user authorization for resolvedCourseId
     let isAuthorized = false;
-    if (user.role === UserRole.SUPER_ADMIN) {
+    if (
+      user.role === UserRole.SUPER_ADMIN ||
+      user.role === UserRole.FRANCHISE_OWNER ||
+      user.role === UserRole.BRANCH_ADMIN ||
+      user.role === UserRole.ACADEMIC_ADMIN ||
+      user.role === UserRole.STAFF
+    ) {
       isAuthorized = true;
     } else if (user.role === UserRole.STUDENT) {
       const student = await prisma.student.findFirst({
@@ -1398,6 +1404,12 @@ export async function generateMediaTokenController(req: Request, res: Response) 
       expiresIn: 900,
       expiresAt: new Date(Date.now() + 900 * 1000).toISOString(),
       mediaUrl: mediaUrlWithToken,
+      data: {
+        token,
+        mediaUrl: mediaUrlWithToken,
+        expiresIn: 900,
+        expiresAt: new Date(Date.now() + 900 * 1000).toISOString(),
+      },
     });
   } catch (err: any) {
     res.status(500).json({ success: false, message: err.message || 'Failed to issue media token' });
@@ -1596,7 +1608,13 @@ export async function streamProtectedMedia(req: Request, res: Response) {
     // -------------------------------------------------------------
     let isAuthorized = false;
 
-    if (user.role === UserRole.SUPER_ADMIN) {
+    if (
+      user.role === UserRole.SUPER_ADMIN ||
+      user.role === UserRole.FRANCHISE_OWNER ||
+      user.role === UserRole.BRANCH_ADMIN ||
+      user.role === UserRole.ACADEMIC_ADMIN ||
+      user.role === UserRole.STAFF
+    ) {
       isAuthorized = true;
     } else if (resolvedCourseId) {
       if (user.role === UserRole.STUDENT) {

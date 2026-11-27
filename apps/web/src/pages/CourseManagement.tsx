@@ -40,6 +40,7 @@ import {
 } from 'lucide-react';
 import { apiFetch } from '../services/api';
 import { useToast } from '../context/ToastContext';
+import { openMediaResource, getMediaResourceMeta } from '../utils/mediaHelper';
 import { CourseWizard } from '../components/CourseWizard';
 import { CurriculumManager } from '../components/CurriculumManager';
 import { IconRenderer } from '../components/IconPickerDropdown';
@@ -540,11 +541,6 @@ export const CourseManagement: React.FC = () => {
   // RENDER WIZARD MODE
   // -----------------------------------------------------------
   if (viewMode === 'wizard') {
-    const isCurriculumLocked = Boolean(
-      Array.isArray(editingCourse?.curriculumVersions) &&
-      editingCourse.curriculumVersions.length > 0 &&
-      editingCourse.curriculumVersions.every((v: any) => v.isLocked || v.isPublished)
-    );
     return (
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -556,29 +552,6 @@ export const CourseManagement: React.FC = () => {
               Complete Course Authoring Studio — governs syllabus, marketing sections, media attachments, and extensible features.
             </p>
           </div>
-          {isCurriculumLocked && editingCourse && (
-            <div className="flex flex-wrap items-center gap-2.5">
-              <button
-                type="button"
-                disabled={creatingDraftVersion}
-                onClick={() => handleCreateDraftFromWizard(editingCourse.id)}
-                className="px-4 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white text-sm font-bold flex items-center gap-2 shadow-sm"
-              >
-                {creatingDraftVersion ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-                Unlock Syllabus for Editing
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setViewMode('catalogue');
-                  openCurriculumDrawer(editingCourse.id);
-                }}
-                className="px-4 py-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-sm font-bold flex items-center gap-2 hover:bg-amber-100"
-              >
-                <Lock className="w-4 h-4" /> Course Versions
-              </button>
-            </div>
-          )}
         </div>
 
         <CourseWizard
@@ -1771,40 +1744,65 @@ export const CourseManagement: React.FC = () => {
                                   {ch.description && <p className="text-xs text-slate-500 pl-6">{ch.description}</p>}
                                   <div className="flex flex-wrap items-center gap-3 pl-6 text-xs">
                                     {ch.videoUrl ? (
-                                      <a
-                                        href={ch.videoUrl}
-                                        target="_blank"
-                                        rel="noreferrer"
-                                        className="text-[#006FFF] hover:underline font-semibold inline-flex items-center gap-1"
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          openMediaResource({
+                                            url: ch.videoUrl,
+                                            courseId: previewCourse.id,
+                                            type: 'video',
+                                            onError: (msg) => toast.error(msg),
+                                          })
+                                        }
+                                        className="text-[#006FFF] hover:underline font-semibold inline-flex items-center gap-1 cursor-pointer"
                                       >
                                         <ExternalLink className="w-3.5 h-3.5" /> Open Video
-                                      </a>
+                                      </button>
                                     ) : (
                                       <span className="text-slate-400 italic">No video attached</span>
                                     )}
-                                    {ch.pdfUrl && (
-                                      <a
-                                        href={ch.pdfUrl}
-                                        target="_blank"
-                                        rel="noreferrer"
-                                        className="text-emerald-700 hover:underline font-semibold inline-flex items-center gap-1"
-                                      >
-                                        <FileText className="w-3.5 h-3.5" /> Open PDF
-                                      </a>
-                                    )}
+                                    {ch.pdfUrl && (() => {
+                                      const meta = getMediaResourceMeta(ch.pdfUrl);
+                                      return (
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            openMediaResource({
+                                              url: ch.pdfUrl,
+                                              courseId: previewCourse.id,
+                                              type: 'document',
+                                              onError: (msg) => toast.error(msg),
+                                            })
+                                          }
+                                          className="text-emerald-700 hover:underline font-semibold inline-flex items-center gap-1.5 cursor-pointer"
+                                        >
+                                          <FileText className="w-3.5 h-3.5" />
+                                          <span>Open {meta.label}</span>
+                                          <span className="px-1.5 py-0.2 rounded text-[10px] font-extrabold uppercase bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                            {meta.badge}
+                                          </span>
+                                        </button>
+                                      );
+                                    })()}
                                     {Array.isArray(ch.attachments) && ch.attachments.length > 0 && (
                                       <span className="inline-flex flex-wrap items-center gap-2">
                                         {ch.attachments.map((a: any, aIdx: number) => (
-                                          <a
+                                          <button
                                             key={a.id || aIdx}
-                                            href={a.fileUrl}
-                                            target="_blank"
-                                            rel="noreferrer"
-                                            className="text-indigo-700 hover:underline font-semibold inline-flex items-center gap-1"
+                                            type="button"
+                                            onClick={() =>
+                                              openMediaResource({
+                                                url: a.fileUrl,
+                                                courseId: previewCourse.id,
+                                                type: 'attachment',
+                                                onError: (msg) => toast.error(msg),
+                                              })
+                                            }
+                                            className="text-indigo-700 hover:underline font-semibold inline-flex items-center gap-1 cursor-pointer"
                                           >
                                             <Paperclip className="w-3.5 h-3.5" />
                                             {a.title} ({a.fileType})
-                                          </a>
+                                          </button>
                                         ))}
                                       </span>
                                     )}

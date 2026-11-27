@@ -22,6 +22,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { apiFetch } from '../services/api';
 import { useToast } from '../context/ToastContext';
+import { openMediaResource } from '../utils/mediaHelper';
 
 /**
  * Requests a short-lived media access token bound to the current user, course, and file.
@@ -149,18 +150,14 @@ export const CoursePlayer: React.FC<CoursePlayerProps> = ({
     return () => clearTimeout(refreshTimer);
   }, [videoMediaUrl, courseId, activeLesson?.videoUrl]);
 
-  const handleOpenResource = async (rawUrl?: string | null) => {
+  const handleOpenResource = async (rawUrl?: string | null, type: 'pdf' | 'video' | 'attachment' = 'pdf') => {
     if (!rawUrl) return;
-    try {
-      if (rawUrl.includes('drive.google.com') || rawUrl.includes('youtube.com') || rawUrl.includes('youtu.be')) {
-        window.open(rawUrl, '_blank', 'noopener,noreferrer');
-        return;
-      }
-      const authorizedUrl = await requestShortLivedMediaUrl(courseId, rawUrl);
-      window.open(authorizedUrl, '_blank', 'noopener,noreferrer');
-    } catch (err: any) {
-      toast.error(err.message || 'Unable to open study resource');
-    }
+    await openMediaResource({
+      url: rawUrl,
+      courseId,
+      type,
+      onError: (msg) => toast.error(msg),
+    });
   };
 
   const loadPlayer = useCallback(async () => {
@@ -706,7 +703,7 @@ export const CoursePlayer: React.FC<CoursePlayerProps> = ({
                     {activeLesson?.pdfUrl && (
                       <button
                         type="button"
-                        onClick={() => handleOpenResource(activeLesson.pdfUrl)}
+                        onClick={() => handleOpenResource(activeLesson.pdfUrl, 'pdf')}
                         className="px-3.5 py-2 rounded-xl bg-blue-50 hover:bg-blue-100 text-[#006FFF] text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer"
                       >
                         <Download className="w-3.5 h-3.5" /> Lesson PDF Guide
@@ -716,7 +713,7 @@ export const CoursePlayer: React.FC<CoursePlayerProps> = ({
                       <button
                         key={att.id}
                         type="button"
-                        onClick={() => handleOpenResource(att.fileUrl)}
+                        onClick={() => handleOpenResource(att.fileUrl, 'attachment')}
                         className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer"
                       >
                         <Download className="w-3.5 h-3.5" /> {att.title}
