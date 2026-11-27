@@ -1554,12 +1554,12 @@ export async function addBranchToFranchise(req: AuthenticatedRequest, res: Respo
       }
     }
 
-    const { instituteId, instituteIds, name, code, city, state, address, postalCode, legalName, phone, email, createNew } = req.body;
+    const { instituteId, instituteIds, name, code, city, state, address, postalCode, legalName, phone, email, createNew, admissionPrefix } = req.body;
 
     // Verify franchise exists
     const targetFranchise = await prisma.franchise.findUnique({
       where: { id: franchiseId },
-      select: { id: true, name: true, code: true },
+      select: { id: true, name: true, code: true, ownerUserId: true },
     });
     if (!targetFranchise) {
       return res.status(404).json({ success: false, error: 'Franchise not found' });
@@ -1574,6 +1574,28 @@ export async function addBranchToFranchise(req: AuthenticatedRequest, res: Respo
       const updatedBranches = await prisma.institute.findMany({
         where: { id: { in: instituteIds } },
       });
+      // Also ensure franchise owner has membership for each linked branch
+      if (targetFranchise.ownerUserId) {
+        for (const b of updatedBranches) {
+          await prisma.instituteMembership.upsert({
+            where: {
+              instituteId_userId: {
+                instituteId: b.id,
+                userId: targetFranchise.ownerUserId,
+              },
+            },
+            create: {
+              userId: targetFranchise.ownerUserId,
+              instituteId: b.id,
+              role: 'FRANCHISE_OWNER',
+              isActive: true,
+            },
+            update: {
+              isActive: true,
+            },
+          }).catch(() => { });
+        }
+      }
       serverCache.invalidate();
       return res.status(200).json({
         success: true,
@@ -1606,11 +1628,20 @@ export async function addBranchToFranchise(req: AuthenticatedRequest, res: Respo
         }
       }
 
+      let cleanAdmissionPrefix = admissionPrefix?.trim()?.toUpperCase() || null;
+      if (cleanAdmissionPrefix) {
+        const existingPrefix = await prisma.institute.findUnique({ where: { admissionPrefix: cleanAdmissionPrefix } });
+        if (existingPrefix) {
+          return res.status(409).json({ success: false, error: `An institute with admission prefix '${cleanAdmissionPrefix}' already exists` });
+        }
+      }
+
       branch = await prisma.institute.create({
         data: {
           name: name.trim(),
           legalName: legalName?.trim() || null,
           code: branchCode,
+          admissionPrefix: cleanAdmissionPrefix,
           city: city?.trim() || null,
           state: state?.trim() || null,
           address: address?.trim() || null,
@@ -1623,16 +1654,17 @@ export async function addBranchToFranchise(req: AuthenticatedRequest, res: Respo
       });
 
       // Grant institute membership to the franchise owner
-      if (req.user?.userId) {
+      const franchiseOwnerId = targetFranchise.ownerUserId || (req.user?.role === 'FRANCHISE_OWNER' ? req.user.userId : null);
+      if (franchiseOwnerId) {
         await prisma.instituteMembership.upsert({
           where: {
             instituteId_userId: {
               instituteId: branch.id,
-              userId: req.user.userId,
+              userId: franchiseOwnerId,
             },
           },
           create: {
-            userId: req.user.userId,
+            userId: franchiseOwnerId,
             instituteId: branch.id,
             role: 'FRANCHISE_OWNER',
             isActive: true,
