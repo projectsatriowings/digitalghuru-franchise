@@ -150,7 +150,7 @@ export const BulkFranchisePermissionSchema = z.object({
   franchiseIds: z.array(z.string().uuid()).optional(),
   allActiveFranchises: z.boolean().optional().default(false),
   isPermitted: z.boolean().default(true),
-  autoEnable: z.boolean().optional().default(false),
+  autoEnable: z.boolean().optional().default(true),
 });
 
 export const FranchiseCourseSelectionSchema = z.object({
