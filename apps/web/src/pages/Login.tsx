@@ -44,56 +44,16 @@ const DEMO_ACCOUNTS: DemoAccount[] = [
     subtext: 'Master Platform Portal',
     icon: ShieldCheck,
   },
-  {
-    role: 'FRANCHISE_OWNER',
-    label: 'Franchisee',
-    roleBadgeColor: 'text-[#006FFF]',
-    badgeBg: 'bg-blue-50 border-blue-200',
-    identifier: 'rajesh.owner@digitalghuru.example.com',
-    password: 'FranchiseOwner#2026',
-    subtext: 'Multi-Branch & Royalties',
-    icon: Building2,
-  },
-  {
-    role: 'STAFF',
-    label: 'Faculty / Staff',
-    roleBadgeColor: 'text-emerald-700',
-    badgeBg: 'bg-emerald-50 border-emerald-200',
-    identifier: 'teacher@apexacademy.com',
-    password: 'Password#123',
-    subtext: 'Attendance & Classes',
-    icon: Users,
-  },
-  {
-    role: 'PARENT',
-    label: 'Parent Portal',
-    roleBadgeColor: 'text-indigo-700',
-    badgeBg: 'bg-indigo-50 border-indigo-200',
-    identifier: '9826444306',
-    password: 'Password#123',
-    subtext: 'Phone: 9826444306',
-    icon: User,
-  },
-  {
-    role: 'STUDENT',
-    label: 'Student Portal',
-    roleBadgeColor: 'text-purple-700',
-    badgeBg: 'bg-purple-50 border-purple-200',
-    identifier: 'student@apexacademy.com',
-    password: 'Password#123',
-    subtext: 'Courses & LMS',
-    icon: GraduationCap,
-  },
 ];
 
 export const Login: React.FC = () => {
   const isDemoModeEnabled = import.meta.env.DEV || import.meta.env.VITE_ENABLE_DEMO_ACCOUNTS === 'true';
   const { login } = useAuth();
 
-  // Sign In States
-  const [selectedRole, setSelectedRole] = useState<UserRole>('FRANCHISE_OWNER');
-  const [identifier, setIdentifier] = useState('rajesh.owner@digitalghuru.example.com');
-  const [password, setPassword] = useState('FranchiseOwner#2026');
+  // Sign In States (Default to Super Admin)
+  const [selectedRole, setSelectedRole] = useState<UserRole>('SUPER_ADMIN');
+  const [identifier, setIdentifier] = useState('superadmin@gmail.com');
+  const [password, setPassword] = useState('admin@123');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -389,12 +349,15 @@ export const Login: React.FC = () => {
                 </p>
               </div>
 
-              {/* Transparent PNG Illustration added directly on the blue side */}
-              <div className="relative z-10 my-auto w-full max-w-sm sm:max-w-md flex justify-center items-center py-4">
+              {/* Interactive Vector Illustration Container with Gentle Floating & Hover Zoom */}
+              <div className="relative z-10 my-auto w-full max-w-sm sm:max-w-md flex justify-center items-center py-4 group cursor-pointer">
+                {/* Dynamic radial glow behind the illustration that intensifies on hover */}
+                <div className="absolute inset-0 max-w-[280px] sm:max-w-[320px] max-h-[280px] sm:max-h-[320px] mx-auto my-auto rounded-full bg-gradient-to-tr from-[#FEDC32]/25 via-[#006FFF]/30 to-[#FE4D01]/20 blur-3xl transition-all duration-700 ease-out group-hover:scale-125 group-hover:opacity-100 opacity-60 animate-pulse-glow pointer-events-none" />
+
                 <img
                   src="/images/auth-vector-illustration.png"
                   alt="Digital Guru Franchise & Digital Learning System"
-                  className="w-full h-auto max-h-[300px] sm:max-h-[340px] object-contain drop-shadow-[0_15px_30px_rgba(0,0,0,0.35)]"
+                  className="w-full h-auto max-h-[300px] sm:max-h-[340px] object-contain relative z-10 transition-all duration-500 ease-out transform group-hover:scale-110 group-hover:-translate-y-2 group-active:scale-95 drop-shadow-[0_15px_30px_rgba(0,0,0,0.35)] group-hover:drop-shadow-[0_25px_45px_rgba(0,0,0,0.45)] select-none animate-float-gentle"
                 />
               </div>
 

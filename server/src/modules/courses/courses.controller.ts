@@ -511,7 +511,9 @@ export async function deleteGlobalCourse(req: Request, res: Response) {
     const course = await prisma.globalCourse.findUnique({
       where: { id },
       include: {
-        curriculumVersions: true,
+        curriculumVersions: {
+          select: { id: true },
+        },
         _count: {
           select: {
             enrollments: true,
@@ -537,31 +539,75 @@ export async function deleteGlobalCourse(req: Request, res: Response) {
       });
     }
 
-    // Permanently delete course with 0 student enrollments cleanly in transaction
-    await prisma.$transaction(async (tx) => {
-      await tx.globalCourse.update({ where: { id }, data: { activeCurriculumVersionId: null } });
-      await tx.franchiseCourseSelection.deleteMany({ where: { courseId: id } });
-      await tx.courseSlugAlias.deleteMany({ where: { courseId: id } });
+    // Collect all version IDs, module IDs, and chapter IDs to batch delete efficiently
+    const versionIds = course.curriculumVersions.map((v) => v.id);
 
-      for (const v of course.curriculumVersions) {
-        const modules = await tx.courseModule.findMany({ where: { curriculumVersionId: v.id } });
-        for (const m of modules) {
-          const chapters = await tx.courseChapter.findMany({ where: { moduleId: m.id } });
-          for (const ch of chapters) {
-            await tx.lessonAttachment.deleteMany({ where: { chapterId: ch.id } });
-          }
-          await tx.courseChapter.deleteMany({ where: { moduleId: m.id } });
+    const modules =
+      versionIds.length > 0
+        ? await prisma.courseModule.findMany({
+            where: { curriculumVersionId: { in: versionIds } },
+            select: { id: true },
+          })
+        : [];
+    const moduleIds = modules.map((m) => m.id);
+
+    const chapters =
+      moduleIds.length > 0
+        ? await prisma.courseChapter.findMany({
+            where: { moduleId: { in: moduleIds } },
+            select: { id: true },
+          })
+        : [];
+    const chapterIds = chapters.map((c) => c.id);
+
+    // Permanently delete course with 0 student enrollments cleanly in an optimized batch transaction
+    await prisma.$transaction(
+      async (tx) => {
+        // 1. Unlink active version pointer on GlobalCourse
+        await tx.globalCourse.update({
+          where: { id },
+          data: { activeCurriculumVersionId: null },
+        });
+
+        // 2. Remove franchise course selections and slug aliases
+        await tx.franchiseCourseSelection.deleteMany({ where: { courseId: id } });
+        await tx.courseSlugAlias.deleteMany({ where: { courseId: id } });
+
+        // 3. Batch delete child curriculum data
+        if (chapterIds.length > 0) {
+          await tx.lessonAttachment.deleteMany({
+            where: { chapterId: { in: chapterIds } },
+          });
+          await tx.courseChapter.deleteMany({
+            where: { id: { in: chapterIds } },
+          });
         }
-        await tx.courseModule.deleteMany({ where: { curriculumVersionId: v.id } });
-      }
-      await tx.courseCurriculumVersion.deleteMany({ where: { courseId: id } });
-      await tx.globalCourse.delete({ where: { id } });
-    });
 
-    return res.json({ success: true, message: `Course "${course.title}" was permanently deleted successfully.` });
+        if (moduleIds.length > 0) {
+          await tx.courseModule.deleteMany({
+            where: { id: { in: moduleIds } },
+          });
+        }
+
+        if (versionIds.length > 0) {
+          await tx.courseCurriculumVersion.deleteMany({
+            where: { id: { in: versionIds } },
+          });
+        }
+
+        // 4. Finally delete the global course record
+        await tx.globalCourse.delete({ where: { id } });
+      },
+      { timeout: 30000, maxWait: 10000 }
+    );
+
+    return res.json({
+      success: true,
+      message: `Course "${course.title}" was permanently deleted successfully.`,
+    });
   } catch (error: any) {
     console.error('[Failed to delete course]', error);
-    let humanMessage = 'This course cannot be deleted because it is linked to active student records. Please archive the course instead.';
+    let humanMessage = error?.message || 'Failed to delete course.';
     if (error?.message?.includes('CourseEnrollment') || error?.message?.includes('student enrollments')) {
       humanMessage = 'This course cannot be deleted because student enrollments exist for it. Please archive it to protect student academic history.';
     }
