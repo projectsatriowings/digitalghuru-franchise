@@ -2109,7 +2109,10 @@ export const CourseWizard: React.FC<CourseWizardProps> = ({
             {data.isCurriculumLocked && (
               <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-amber-900">
                 <div>
-                  This course's active curriculum is published and locked in PostgreSQL so existing student progress &amp; certificates remain intact. Create a new editable draft version to add, reorder, or edit modules, lessons, videos, and downloadable attachments.
+                  <span className="font-bold">Active Curriculum Structure Locked:</span> Module &amp; lesson titles and sequence are protected to preserve student progress &amp; certificates.
+                  <span className="block mt-1 text-emerald-800 font-medium">
+                    ✨ <strong>Media Updates Unlocked:</strong> You can add or update Video URLs, Document/PDF links, learning notes, and downloadable attachments at any time. To add new modules or reorder lessons, create a draft version.
+                  </span>
                 </div>
                 {data.id && onCreateDraftVersion && (
                   <button
@@ -2119,13 +2122,13 @@ export const CourseWizard: React.FC<CourseWizardProps> = ({
                     className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white font-bold flex items-center gap-1.5 shrink-0"
                   >
                     {creatingDraftVersion ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <GitBranch className="w-3.5 h-3.5" />}
-                    Create Draft Version to Edit
+                    Create Draft Version to Reorder/Add
                   </button>
                 )}
               </div>
             )}
 
-            <div className={`space-y-4 ${data.isCurriculumLocked ? 'opacity-70 pointer-events-none' : ''}`}>
+            <div className="space-y-4">
               {(data.modules || []).map((mod: any, mIdx: number) => (
                 <div key={mIdx} className="p-5 rounded-2xl border border-slate-200 bg-slate-50/50 space-y-4">
                   <div className="flex items-center justify-between gap-3">
@@ -2135,6 +2138,7 @@ export const CourseWizard: React.FC<CourseWizardProps> = ({
                       </span>
                       <input
                         type="text"
+                        disabled={data.isCurriculumLocked}
                         value={mod.title}
                         onChange={(e) => {
                           const list = [...data.modules];
@@ -2142,51 +2146,53 @@ export const CourseWizard: React.FC<CourseWizardProps> = ({
                           setData({ ...data, modules: list });
                         }}
                         placeholder="Module Title..."
-                        className="flex-1 px-3 py-2 rounded-xl border border-slate-200 bg-white font-display font-bold text-sm"
+                        className={`flex-1 px-3 py-2 rounded-xl border border-slate-200 bg-white font-display font-bold text-sm ${data.isCurriculumLocked ? 'opacity-80 cursor-not-allowed bg-slate-100 text-slate-700' : ''}`}
                       />
                     </div>
-                    <div className="flex items-center gap-1">
-                      <button
-                        type="button"
-                        disabled={mIdx === 0}
-                        onClick={() => {
-                          if (mIdx === 0) return;
-                          const list = [...data.modules];
-                          [list[mIdx - 1], list[mIdx]] = [list[mIdx], list[mIdx - 1]];
-                          setData({ ...data, modules: list });
-                        }}
-                        title="Move Module Up"
-                        className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-200 disabled:opacity-30"
-                      >
-                        <ArrowUp className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        type="button"
-                        disabled={mIdx === (data.modules?.length || 1) - 1}
-                        onClick={() => {
-                          if (mIdx >= data.modules.length - 1) return;
-                          const list = [...data.modules];
-                          [list[mIdx], list[mIdx + 1]] = [list[mIdx + 1], list[mIdx]];
-                          setData({ ...data, modules: list });
-                        }}
-                        title="Move Module Down"
-                        className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-200 disabled:opacity-30"
-                      >
-                        <ArrowDown className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setData({
-                            ...data,
-                            modules: data.modules.filter((_: any, i: number) => i !== mIdx),
-                          })
-                        }
-                        className="text-rose-500 hover:bg-rose-50 p-2 rounded-lg"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
+                    {!data.isCurriculumLocked && (
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          disabled={mIdx === 0}
+                          onClick={() => {
+                            if (mIdx === 0) return;
+                            const list = [...data.modules];
+                            [list[mIdx - 1], list[mIdx]] = [list[mIdx], list[mIdx - 1]];
+                            setData({ ...data, modules: list });
+                          }}
+                          title="Move Module Up"
+                          className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-200 disabled:opacity-30"
+                        >
+                          <ArrowUp className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          disabled={mIdx === (data.modules?.length || 1) - 1}
+                          onClick={() => {
+                            if (mIdx >= data.modules.length - 1) return;
+                            const list = [...data.modules];
+                            [list[mIdx], list[mIdx + 1]] = [list[mIdx + 1], list[mIdx]];
+                            setData({ ...data, modules: list });
+                          }}
+                          title="Move Module Down"
+                          className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-200 disabled:opacity-30"
+                        >
+                          <ArrowDown className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setData({
+                              ...data,
+                              modules: data.modules.filter((_: any, i: number) => i !== mIdx),
+                            })
+                          }
+                          className="text-rose-500 hover:bg-rose-50 p-2 rounded-lg"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    )}
                   </div>
 
                   {/* Lessons inside Module */}
@@ -2201,6 +2207,7 @@ export const CourseWizard: React.FC<CourseWizardProps> = ({
                             <PlayCircle className="w-4 h-4 text-[#006FFF] shrink-0" />
                             <input
                               type="text"
+                              disabled={data.isCurriculumLocked}
                               value={lesson.title}
                               onChange={(e) => {
                                 const list = [...data.modules];
@@ -2210,11 +2217,12 @@ export const CourseWizard: React.FC<CourseWizardProps> = ({
                                 setData({ ...data, modules: list });
                               }}
                               placeholder={`Lesson ${lIdx + 1} Title...`}
-                              className="flex-1 px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold"
+                              className={`flex-1 px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold ${data.isCurriculumLocked ? 'opacity-80 cursor-not-allowed bg-slate-50 text-slate-700' : ''}`}
                             />
                           </div>
                           <input
                             type="text"
+                            disabled={data.isCurriculumLocked}
                             value={lesson.duration || '10:00'}
                             onChange={(e) => {
                               const list = [...data.modules];
@@ -2224,7 +2232,7 @@ export const CourseWizard: React.FC<CourseWizardProps> = ({
                               setData({ ...data, modules: list });
                             }}
                             placeholder="10:00"
-                            className="w-20 px-2 py-1.5 rounded-lg border border-slate-200 text-xs text-center"
+                            className={`w-20 px-2 py-1.5 rounded-lg border border-slate-200 text-xs text-center ${data.isCurriculumLocked ? 'opacity-80 cursor-not-allowed bg-slate-50 text-slate-700' : ''}`}
                           />
                           <label className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-50 border border-slate-200 text-[11px] font-semibold text-slate-700 cursor-pointer">
                             <input
@@ -2240,48 +2248,50 @@ export const CourseWizard: React.FC<CourseWizardProps> = ({
                             />
                             Free Preview
                           </label>
-                          <div className="flex items-center gap-0.5">
-                            <button
-                              type="button"
-                              disabled={lIdx === 0}
-                              onClick={() => {
-                                const list = [...data.modules];
-                                const lessons = [...list[mIdx].lessons];
-                                [lessons[lIdx - 1], lessons[lIdx]] = [lessons[lIdx], lessons[lIdx - 1]];
-                                list[mIdx] = { ...list[mIdx], lessons };
-                                setData({ ...data, modules: list });
-                              }}
-                              className="p-1 text-slate-400 hover:text-slate-700 disabled:opacity-30"
-                            >
-                              <ArrowUp className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              type="button"
-                              disabled={lIdx === (mod.lessons?.length || 1) - 1}
-                              onClick={() => {
-                                const list = [...data.modules];
-                                const lessons = [...list[mIdx].lessons];
-                                [lessons[lIdx], lessons[lIdx + 1]] = [lessons[lIdx + 1], lessons[lIdx]];
-                                list[mIdx] = { ...list[mIdx], lessons };
-                                setData({ ...data, modules: list });
-                              }}
-                              className="p-1 text-slate-400 hover:text-slate-700 disabled:opacity-30"
-                            >
-                              <ArrowDown className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const list = [...data.modules];
-                                const lessons = list[mIdx].lessons.filter((_: any, j: number) => j !== lIdx);
-                                list[mIdx] = { ...list[mIdx], lessons };
-                                setData({ ...data, modules: list });
-                              }}
-                              className="text-rose-500 p-1"
-                            >
-                              <X className="w-4 h-4" />
-                            </button>
-                          </div>
+                          {!data.isCurriculumLocked && (
+                            <div className="flex items-center gap-0.5">
+                              <button
+                                type="button"
+                                disabled={lIdx === 0}
+                                onClick={() => {
+                                  const list = [...data.modules];
+                                  const lessons = [...list[mIdx].lessons];
+                                  [lessons[lIdx - 1], lessons[lIdx]] = [lessons[lIdx], lessons[lIdx - 1]];
+                                  list[mIdx] = { ...list[mIdx], lessons };
+                                  setData({ ...data, modules: list });
+                                }}
+                                className="p-1 text-slate-400 hover:text-slate-700 disabled:opacity-30"
+                              >
+                                <ArrowUp className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                disabled={lIdx === (mod.lessons?.length || 1) - 1}
+                                onClick={() => {
+                                  const list = [...data.modules];
+                                  const lessons = [...list[mIdx].lessons];
+                                  [lessons[lIdx], lessons[lIdx + 1]] = [lessons[lIdx + 1], lessons[lIdx]];
+                                  list[mIdx] = { ...list[mIdx], lessons };
+                                  setData({ ...data, modules: list });
+                                }}
+                                className="p-1 text-slate-400 hover:text-slate-700 disabled:opacity-30"
+                              >
+                                <ArrowDown className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const list = [...data.modules];
+                                  const lessons = list[mIdx].lessons.filter((_: any, j: number) => j !== lIdx);
+                                  list[mIdx] = { ...list[mIdx], lessons };
+                                  setData({ ...data, modules: list });
+                                }}
+                                className="text-rose-500 p-1"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            </div>
+                          )}
                         </div>
 
                         <input
@@ -2494,43 +2504,47 @@ export const CourseWizard: React.FC<CourseWizardProps> = ({
                       </div>
                       );
                     })}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const list = [...data.modules];
-                        const lessons = [
-                          ...(list[mIdx].lessons || []),
-                          { title: '', description: '', videoUrl: '', pdfUrl: '', duration: '15:00', isFree: false, attachments: [] },
-                        ];
-                        list[mIdx] = { ...list[mIdx], lessons };
-                        setData({ ...data, modules: list });
-                      }}
-                      className="text-xs font-bold text-[#006FFF] hover:underline flex items-center gap-1"
-                    >
-                      <Plus className="w-3.5 h-3.5" /> Add Lesson to Module {mIdx + 1}
-                    </button>
+                    {!data.isCurriculumLocked && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const list = [...data.modules];
+                          const lessons = [
+                            ...(list[mIdx].lessons || []),
+                            { title: '', description: '', videoUrl: '', pdfUrl: '', duration: '15:00', isFree: false, attachments: [] },
+                          ];
+                          list[mIdx] = { ...list[mIdx], lessons };
+                          setData({ ...data, modules: list });
+                        }}
+                        className="text-xs font-bold text-[#006FFF] hover:underline flex items-center gap-1"
+                      >
+                        <Plus className="w-3.5 h-3.5" /> Add Lesson to Module {mIdx + 1}
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}
-              <button
-                type="button"
-                onClick={() =>
-                  setData({
-                    ...data,
-                    modules: [
-                      ...(data.modules || []),
-                      {
-                        title: `Module ${(data.modules?.length || 0) + 1}: New Topic`,
-                        description: '',
-                        lessons: [{ title: 'Lesson 1: Overview', description: '', videoUrl: '', pdfUrl: '', duration: '15:00', isFree: false, attachments: [] }],
-                      },
-                    ],
-                  })
-                }
-                className="px-4 py-2 rounded-xl border border-dashed border-[#006FFF] text-[#006FFF] text-xs font-bold flex items-center gap-1.5 hover:bg-blue-50"
-              >
-                <Plus className="w-4 h-4" /> Add New Module
-              </button>
+              {!data.isCurriculumLocked && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    setData({
+                      ...data,
+                      modules: [
+                        ...(data.modules || []),
+                        {
+                          title: `Module ${(data.modules?.length || 0) + 1}: New Topic`,
+                          description: '',
+                          lessons: [{ title: 'Lesson 1: Overview', description: '', videoUrl: '', pdfUrl: '', duration: '15:00', isFree: false, attachments: [] }],
+                        },
+                      ],
+                    })
+                  }
+                  className="px-4 py-2 rounded-xl border border-dashed border-[#006FFF] text-[#006FFF] text-xs font-bold flex items-center gap-1.5 hover:bg-blue-50"
+                >
+                  <Plus className="w-4 h-4" /> Add New Module
+                </button>
+              )}
             </div>
           </div>
         )}

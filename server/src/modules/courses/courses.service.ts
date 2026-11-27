@@ -447,61 +447,97 @@ export class CoursesService {
         });
       }
 
-      // If modules payload provided, update the unlocked draft curriculum version (if one exists)
+      // If modules payload provided:
+      // If a draft version exists, replace modules/chapters in draft version.
+      // If the curriculum is locked/published, allow in-place media updates (videoUrl, pdfUrl, description, attachments)
+      // on matching chapters without altering curriculum structure!
       if (Array.isArray(data.modules)) {
         const draftVersion = current.curriculumVersions.find((v) => !v.isLocked && !v.isPublished);
-        if (!draftVersion) {
-          throw new Error('Cannot modify modules/lessons on a locked published curriculum. Create a new draft version first.');
-        }
+        if (draftVersion) {
+          // Safely replace modules/chapters/attachments in bottom-up order inside the draft version
+          const existingModules = await tx.courseModule.findMany({
+            where: { curriculumVersionId: draftVersion.id },
+            include: { chapters: { select: { id: true } } }
+          });
+          const existingChapterIds = existingModules.flatMap((m) => m.chapters.map((c) => c.id));
+          if (existingChapterIds.length > 0) {
+            await tx.lessonAttachment.deleteMany({ where: { chapterId: { in: existingChapterIds } } });
+            await tx.courseChapter.deleteMany({ where: { id: { in: existingChapterIds } } });
+          }
+          if (existingModules.length > 0) {
+            await tx.courseModule.deleteMany({ where: { curriculumVersionId: draftVersion.id } });
+          }
 
-        // Safely replace modules/chapters/attachments in bottom-up order inside the draft version
-        const existingModules = await tx.courseModule.findMany({
-          where: { curriculumVersionId: draftVersion.id },
-          include: { chapters: { select: { id: true } } }
-        });
-        const existingChapterIds = existingModules.flatMap((m) => m.chapters.map((c) => c.id));
-        if (existingChapterIds.length > 0) {
-          await tx.lessonAttachment.deleteMany({ where: { chapterId: { in: existingChapterIds } } });
-          await tx.courseChapter.deleteMany({ where: { id: { in: existingChapterIds } } });
-        }
-        if (existingModules.length > 0) {
-          await tx.courseModule.deleteMany({ where: { curriculumVersionId: draftVersion.id } });
-        }
+          for (let mIdx = 0; mIdx < data.modules.length; mIdx++) {
+            const modInput = data.modules[mIdx];
+            const chaptersRaw = Array.isArray(modInput.chapters) ? modInput.chapters : (Array.isArray(modInput.lessons) ? modInput.lessons : []);
+            await tx.courseModule.create({
+              data: {
+                curriculumVersionId: draftVersion.id,
+                title: modInput.title || `Module ${mIdx + 1}`,
+                description: modInput.description || null,
+                position: modInput.position !== undefined ? modInput.position : mIdx,
+                chapters: {
+                  create: chaptersRaw.map((chInput: any, cIdx: number) => {
+                    const attachmentsRaw = Array.isArray(chInput.attachments) ? chInput.attachments : (Array.isArray(chInput.materials) ? chInput.materials : []);
+                    return {
+                      title: chInput.title || `Lesson ${cIdx + 1}`,
+                      description: chInput.description || null,
+                      videoUrl: chInput.videoUrl || null,
+                      pdfUrl: chInput.pdfUrl || null,
+                      duration: chInput.duration || '10:00',
+                      position: chInput.position !== undefined ? chInput.position : cIdx,
+                      isFree: Boolean(chInput.isFree),
+                      attachments: {
+                        create: attachmentsRaw.map((att: any) => ({
+                          title: att.title,
+                          fileUrl: att.fileUrl,
+                          fileType: att.fileType || att.type || 'PDF',
+                          fileSize: att.fileSize || 0,
+                          isDownload: att.isDownload !== undefined ? att.isDownload : (att.isDownloadable !== undefined ? att.isDownloadable : true),
+                        }))
+                      }
+                    };
+                  })
+                }
+              }
+            });
+          }
+        } else {
+          // Locked / published curriculum version: perform in-place media & resource updates
+          // without deleting modules or chapters
+          for (const modInput of data.modules) {
+            const chaptersRaw = Array.isArray(modInput.chapters) ? modInput.chapters : (Array.isArray(modInput.lessons) ? modInput.lessons : []);
+            for (const chInput of chaptersRaw) {
+              if (chInput.id) {
+                await tx.courseChapter.update({
+                  where: { id: chInput.id },
+                  data: {
+                    ...(chInput.videoUrl !== undefined && { videoUrl: chInput.videoUrl || null }),
+                    ...(chInput.pdfUrl !== undefined && { pdfUrl: chInput.pdfUrl || null }),
+                    ...(chInput.description !== undefined && { description: chInput.description || null }),
+                    ...(chInput.isFree !== undefined && { isFree: Boolean(chInput.isFree) }),
+                  },
+                });
 
-        for (let mIdx = 0; mIdx < data.modules.length; mIdx++) {
-          const modInput = data.modules[mIdx];
-          const chaptersRaw = Array.isArray(modInput.chapters) ? modInput.chapters : (Array.isArray(modInput.lessons) ? modInput.lessons : []);
-          await tx.courseModule.create({
-            data: {
-              curriculumVersionId: draftVersion.id,
-              title: modInput.title || `Module ${mIdx + 1}`,
-              description: modInput.description || null,
-              position: modInput.position !== undefined ? modInput.position : mIdx,
-              chapters: {
-                create: chaptersRaw.map((chInput: any, cIdx: number) => {
-                  const attachmentsRaw = Array.isArray(chInput.attachments) ? chInput.attachments : (Array.isArray(chInput.materials) ? chInput.materials : []);
-                  return {
-                    title: chInput.title || `Lesson ${cIdx + 1}`,
-                    description: chInput.description || null,
-                    videoUrl: chInput.videoUrl || null,
-                    pdfUrl: chInput.pdfUrl || null,
-                    duration: chInput.duration || '10:00',
-                    position: chInput.position !== undefined ? chInput.position : cIdx,
-                    isFree: Boolean(chInput.isFree),
-                    attachments: {
-                      create: attachmentsRaw.map((att: any) => ({
-                        title: att.title,
+                if (Array.isArray(chInput.attachments)) {
+                  await tx.lessonAttachment.deleteMany({ where: { chapterId: chInput.id } });
+                  if (chInput.attachments.length > 0) {
+                    await tx.lessonAttachment.createMany({
+                      data: chInput.attachments.map((att: any) => ({
+                        chapterId: chInput.id,
+                        title: att.title || 'Resource',
                         fileUrl: att.fileUrl,
                         fileType: att.fileType || att.type || 'PDF',
                         fileSize: att.fileSize || 0,
                         isDownload: att.isDownload !== undefined ? att.isDownload : (att.isDownloadable !== undefined ? att.isDownloadable : true),
-                      }))
-                    }
-                  };
-                })
+                      })),
+                    });
+                  }
+                }
               }
             }
-          });
+          }
         }
       }
 
@@ -593,8 +629,10 @@ export class CoursesService {
         }
       });
       if (!chapter) throw new Error('Chapter not found');
-      if (chapter.module.curriculumVersion.isLocked || chapter.module.curriculumVersion.isPublished) {
-        throw new Error('Cannot edit lesson in a locked or published curriculum version. Create a new draft version first.');
+      // If version is locked/published, prevent renaming title or changing position, but permit updating media resources (videoUrl, pdfUrl, description, attachments, isFree)
+      const isLockedOrPublished = Boolean(chapter.module?.curriculumVersion?.isLocked || chapter.module?.curriculumVersion?.isPublished);
+      if (isLockedOrPublished && (data.title !== undefined || data.position !== undefined)) {
+        throw new Error('Lesson title and structural sequence are protected in a published curriculum. You can update video, document resources, and notes directly, or create a new draft version for structural changes.');
       }
 
       if (Array.isArray(data.attachments)) {
