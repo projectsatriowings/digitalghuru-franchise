@@ -73,39 +73,53 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (res.success && Array.isArray(res.data?.branches)) {
             setAssignedBranches(res.data.branches);
 
-            // If the franchise center has exactly 1 branch (single-branch architecture), automatically bind to it
-            if (res.data.branches.length === 1) {
-              const singleBranch = {
-                id: res.data.branches[0].id,
-                name: res.data.branches[0].name,
-                code: res.data.branches[0].code,
-                city: res.data.branches[0].city,
-              };
-              setActiveInstituteState(singleBranch);
-              localStorage.setItem('tuition_active_institute', JSON.stringify(singleBranch));
-              localStorage.setItem('tuition_active_institute_id', singleBranch.id);
-            } else if (res.data.branches.length > 1) {
-              // If multiple branches exist, respect user selection or default to All Branches (Consolidated Mode)
-              const savedId = localStorage.getItem('tuition_active_institute_id');
-              if (!savedId || savedId === 'ALL') {
-                setActiveInstituteState(ALL_BRANCHES_SELECTION);
-                localStorage.setItem('tuition_active_institute', JSON.stringify(ALL_BRANCHES_SELECTION));
-                localStorage.setItem('tuition_active_institute_id', ALL_BRANCHES_SELECTION.id);
-              } else {
-                const exists = res.data.branches.find((b: AssignedBranch) => b.id === savedId);
-                if (exists) {
-                  const matched = {
-                    id: exists.id,
-                    name: exists.name,
-                    code: exists.code,
-                    city: exists.city,
-                  };
-                  setActiveInstituteState(matched);
-                  localStorage.setItem('tuition_active_institute', JSON.stringify(matched));
-                } else {
+            // Franchise Admin is strictly 1:1 bound to their single campus branch
+            if (role === 'FRANCHISE_OWNER') {
+              if (res.data.branches.length > 0) {
+                const singleBranch = {
+                  id: res.data.branches[0].id,
+                  name: res.data.branches[0].name,
+                  code: res.data.branches[0].code,
+                  city: res.data.branches[0].city,
+                };
+                setActiveInstituteState(singleBranch);
+                localStorage.setItem('tuition_active_institute', JSON.stringify(singleBranch));
+                localStorage.setItem('tuition_active_institute_id', singleBranch.id);
+              }
+            } else if (role === 'SUPER_ADMIN') {
+              // Super Admin can toggle across branches or use Consolidated (All Branches)
+              if (res.data.branches.length === 1) {
+                const singleBranch = {
+                  id: res.data.branches[0].id,
+                  name: res.data.branches[0].name,
+                  code: res.data.branches[0].code,
+                  city: res.data.branches[0].city,
+                };
+                setActiveInstituteState(singleBranch);
+                localStorage.setItem('tuition_active_institute', JSON.stringify(singleBranch));
+                localStorage.setItem('tuition_active_institute_id', singleBranch.id);
+              } else if (res.data.branches.length > 1) {
+                const savedId = localStorage.getItem('tuition_active_institute_id');
+                if (!savedId || savedId === 'ALL') {
                   setActiveInstituteState(ALL_BRANCHES_SELECTION);
                   localStorage.setItem('tuition_active_institute', JSON.stringify(ALL_BRANCHES_SELECTION));
                   localStorage.setItem('tuition_active_institute_id', ALL_BRANCHES_SELECTION.id);
+                } else {
+                  const exists = res.data.branches.find((b: AssignedBranch) => b.id === savedId);
+                  if (exists) {
+                    const matched = {
+                      id: exists.id,
+                      name: exists.name,
+                      code: exists.code,
+                      city: exists.city,
+                    };
+                    setActiveInstituteState(matched);
+                    localStorage.setItem('tuition_active_institute', JSON.stringify(matched));
+                  } else {
+                    setActiveInstituteState(ALL_BRANCHES_SELECTION);
+                    localStorage.setItem('tuition_active_institute', JSON.stringify(ALL_BRANCHES_SELECTION));
+                    localStorage.setItem('tuition_active_institute_id', ALL_BRANCHES_SELECTION.id);
+                  }
                 }
               }
             }

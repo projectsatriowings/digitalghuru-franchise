@@ -85,7 +85,8 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileSidebar }) => {
     }
   };
 
-  const isFranchiseeOrSuperAdmin = user?.role === 'FRANCHISE_OWNER' || user?.role === 'SUPER_ADMIN';
+  const isSuperAdmin = user?.role === 'SUPER_ADMIN';
+  const isFranchiseeAdmin = user?.role === 'FRANCHISE_OWNER';
 
   const filteredBranches = assignedBranches.filter((b) => {
     if (!searchTerm) return true;
@@ -126,8 +127,8 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileSidebar }) => {
           </div>
         </div>
 
-        {/* TOP NAVIGATION BRANCH SELECTOR FOR FRANCHISEE ADMIN & SUPER ADMIN */}
-        {isFranchiseeOrSuperAdmin && assignedBranches.length > 0 ? (
+        {/* TOP NAVIGATION: Super Admin gets Multi-Branch Selector; Franchisee Admin / Standard Users get Campus Badge */}
+        {isSuperAdmin && assignedBranches.length > 0 ? (
           <div className="relative ml-2 sm:ml-4" ref={dropdownRef}>
             <button
               onClick={() => setDropdownOpen(!dropdownOpen)}
@@ -281,6 +282,26 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileSidebar }) => {
               </div>
             )}
           </div>
+        ) : isFranchiseeAdmin ? (
+          /* Franchisee Admin Dedicated Campus Display (1:1 single campus rule) */
+          (activeInstitute && activeInstitute.id !== 'ALL') || assignedBranches.length > 0 ? (
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-800 shadow-sm ml-2 sm:ml-4">
+              <Building className="w-3.5 h-3.5 text-[#006FFF]" />
+              <span className="font-bold max-w-[160px] sm:max-w-[220px] truncate">
+                {activeInstitute && activeInstitute.id !== 'ALL' ? activeInstitute.name : assignedBranches[0]?.name}
+              </span>
+              {(activeInstitute?.code || assignedBranches[0]?.code) && (
+                <span className="hidden sm:inline-block text-slate-500 font-mono text-[10px]">
+                  ({activeInstitute && activeInstitute.id !== 'ALL' ? activeInstitute.code : assignedBranches[0]?.code})
+                </span>
+              )}
+              {(activeInstitute?.city || assignedBranches[0]?.city) && (
+                <span className="hidden md:inline-flex items-center gap-0.5 text-slate-500 text-[11px]">
+                  • {activeInstitute && activeInstitute.id !== 'ALL' ? activeInstitute.city : assignedBranches[0]?.city}
+                </span>
+              )}
+            </div>
+          ) : null
         ) : (
           activeInstitute && (
             <span className="hidden sm:inline-flex items-center gap-1.5 ml-3 text-xs text-slate-700 bg-slate-50 px-2.5 py-1 rounded-md border border-slate-200 font-medium">

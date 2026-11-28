@@ -46,84 +46,6 @@ export const FranchiseOwnerDashboard: React.FC = () => {
   const [showReceiptModal, setShowReceiptModal] = useState(false);
   const [receiptData, setReceiptData] = useState<any>(null);
 
-  // Add Institute Modal State (Franchisee Admin adds institutes for their franchise)
-  const [showAddInstituteModal, setShowAddInstituteModal] = useState(false);
-  const [creatingInstitute, setCreatingInstitute] = useState(false);
-  const [createError, setCreateError] = useState<string | null>(null);
-  const [instForm, setInstForm] = useState({
-    name: '',
-    code: '',
-    legalName: '',
-    address: '',
-    city: '',
-    state: '',
-    postalCode: '',
-    phone: '',
-    email: '',
-  });
-
-  const handleCreateInstituteSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!instForm.name.trim()) {
-      setCreateError('Institute / Campus name is required');
-      return;
-    }
-
-    try {
-      if (branches.length >= 1) {
-        setCreateError('Each franchise can only have one authorized campus branch.');
-        return;
-      }
-      setCreatingInstitute(true);
-      setCreateError(null);
-
-      const payload = {
-        name: instForm.name.trim(),
-        code: instForm.code.trim() || undefined,
-        legalName: instForm.legalName.trim() || undefined,
-        address: instForm.address.trim() || undefined,
-        city: instForm.city.trim() || undefined,
-        state: instForm.state.trim() || undefined,
-        postalCode: instForm.postalCode.trim() || undefined,
-        phone: instForm.phone.trim() || undefined,
-        email: instForm.email.trim() || undefined,
-        createNew: true,
-      };
-
-      const franchiseId = data?.franchise?.id || 'my-branches';
-      const res = await apiFetch(`/franchises/${franchiseId}/branches`, {
-        method: 'POST',
-        body: JSON.stringify(payload),
-      });
-
-      if (res.success && res.data?.branch) {
-        showToast(`Institute "${res.data.branch.name}" successfully added!`, 'success');
-        setShowAddInstituteModal(false);
-        setInstForm({
-          name: '',
-          code: '',
-          legalName: '',
-          address: '',
-          city: '',
-          state: '',
-          postalCode: '',
-          phone: '',
-          email: '',
-        });
-        await loadDashboard();
-        if (refreshBranches) {
-          await refreshBranches();
-        }
-      } else {
-        setCreateError(res.error || 'Failed to add institute');
-      }
-    } catch (err: any) {
-      setCreateError(err.message || 'Failed to add institute');
-    } finally {
-      setCreatingInstitute(false);
-    }
-  };
-
   const loadDashboard = async () => {
     try {
       setLoading(true);
@@ -265,63 +187,47 @@ export const FranchiseOwnerDashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* BRANCH SCOPE STATUS BAR */}
-      <div className={`p-4 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs ${isConsolidatedMode
-        ? 'bg-gradient-to-r from-blue-50/70 to-indigo-50/70 border-[#006FFF]/30 text-blue-900'
-        : 'bg-white border-slate-200 text-slate-800 shadow-sm'
-        }`}>
-        <div className="flex items-center gap-2.5">
-          {isConsolidatedMode ? (
-            <>
-              <div className="p-1.5 bg-[#006FFF] text-white rounded-lg">
-                <Sparkles className="w-4 h-4" />
-              </div>
-              <div>
-                <span className="font-bold text-slate-900">Consolidated Multi-Branch View Active</span>
-                <p className="text-slate-600 text-[11px]">
-                  Aggregating data from all {branches.length} campus branches assigned to your franchise.
-                </p>
-              </div>
-            </>
-          ) : (
-            <>
-              <div className="p-1.5 bg-[#006FFF] text-white rounded-lg">
-                <Building2 className="w-4 h-4" />
-              </div>
-              <div>
-                <span className="font-bold text-slate-900">
-                  Focused Campus: {selectedBranch?.name} ({selectedBranch?.code})
+      {/* BRANCH / CAMPUS CONTEXT BANNER */}
+      {branches.length > 0 ? (
+        <div className="p-4 rounded-xl border bg-white border-slate-200 text-slate-800 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 bg-blue-50 text-[#006FFF] rounded-xl border border-blue-100">
+              <Building2 className="w-4 h-4" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-slate-900 text-sm">
+                  {branches[0]?.name}
                 </span>
-                <p className="text-slate-600 text-[11px]">
-                  Location: {selectedBranch?.city ? `${selectedBranch.city}, ${selectedBranch.state || ''}` : 'Active Campus'}
-                </p>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-[#006FFF]/10 text-[#006FFF]">
+                  {branches[0]?.code}
+                </span>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                  {branches[0]?.status || 'ACTIVE'}
+                </span>
               </div>
-            </>
-          )}
-        </div>
+              <p className="text-slate-500 text-[11px] mt-0.5">
+                Authorized Campus Branch &bull; {branches[0]?.city ? `${branches[0].city}, ${branches[0].state || ''}` : 'Operational Campus'}
+              </p>
+            </div>
+          </div>
 
-        {!isConsolidatedMode && (
-          <button
-            onClick={() => setActiveInstitute(ALL_BRANCHES_SELECTION)}
-            className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-lg border border-slate-300 flex items-center gap-1.5 transition-all text-xs self-start sm:self-auto"
-          >
-            ← View Consolidated (All Branches)
-          </button>
-        )}
-      </div>
-
-      {/* CONSOLIDATED OVERVIEW KPI CARDS (REQUIREMENT 3A) */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-        {/* Metric 1: Assigned Campuses */}
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-          <div className="text-xs font-semibold text-slate-500 uppercase">Assigned Campuses</div>
-          <div className="text-2xl font-black text-slate-900 mt-1">{branches.length}</div>
-          <div className="text-[11px] text-emerald-600 font-medium mt-1">
-            {metrics.activeBranchesCount || branches.length} Active Branches
+          <div className="text-[11px] text-slate-500 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg">
+            To register or authorize additional campus locations, please contact <strong>Super Admin</strong>.
           </div>
         </div>
+      ) : (
+        <div className="p-4 rounded-xl border bg-amber-50 border-amber-200 text-amber-800 text-xs flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 shrink-0 text-amber-600" />
+            <span>No campus branch is currently assigned to your franchise license. Please contact Super Admin to assign your campus.</span>
+          </div>
+        </div>
+      )}
 
-        {/* Metric 2: Active Students */}
+      {/* CONSOLIDATED OVERVIEW KPI CARDS (REQUIREMENT 3A) */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {/* Metric 1: Active Students */}
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
           <div className="text-xs font-semibold text-slate-500 uppercase">Active Students</div>
           <div className="text-2xl font-black text-[#006FFF] mt-1">{metrics.totalStudents ?? 0}</div>
@@ -330,14 +236,14 @@ export const FranchiseOwnerDashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* Metric 3: Active Staff */}
+        {/* Metric 2: Active Staff */}
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
           <div className="text-xs font-semibold text-slate-500 uppercase">Staff & Faculty</div>
           <div className="text-2xl font-black text-slate-900 mt-1">{metrics.totalStaff ?? 0}</div>
           <div className="text-[11px] text-slate-500 font-medium mt-1">Active Profiles</div>
         </div>
 
-        {/* Metric 4: Today's Student Attendance */}
+        {/* Metric 3: Today's Student Attendance */}
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
           <div className="text-xs font-semibold text-slate-500 uppercase">Today's Attendance</div>
           <div className="text-2xl font-black text-emerald-600 mt-1">
@@ -350,7 +256,7 @@ export const FranchiseOwnerDashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* Metric 5: Monthly Fee Collections */}
+        {/* Metric 4: Monthly Fee Collections */}
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
           <div className="text-xs font-semibold text-slate-500 uppercase">Monthly Collections</div>
           <div className="text-2xl font-black text-emerald-700 mt-1">
@@ -419,7 +325,7 @@ export const FranchiseOwnerDashboard: React.FC = () => {
             : 'border-transparent text-slate-600 hover:text-slate-900'
             }`}
         >
-          <Building2 className="w-4 h-4" /> Assigned Campuses ({branches.length})
+          <Building2 className="w-4 h-4" /> Authorized Campus ({branches.length})
         </button>
 
         <button
@@ -475,25 +381,16 @@ export const FranchiseOwnerDashboard: React.FC = () => {
             <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
               <div>
                 <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                  <Building2 className="w-5 h-5 text-[#006FFF]" /> Assigned Branch Campuses & Performance Cards
+                  <Building2 className="w-5 h-5 text-[#006FFF]" /> Authorized Campus Performance
                 </h3>
                 <p className="text-xs text-slate-500">
-                  Select any campus card to instantly switch the dashboard and operational modules to that branch.
+                  Performance metrics and operational overview for your franchise campus.
                 </p>
               </div>
               <div className="flex items-center gap-2.5">
                 <span className="text-xs font-mono bg-blue-50 text-[#006FFF] font-bold px-3 py-1.5 rounded-lg border border-blue-100">
                   {branchCards.length} Campus{branchCards.length > 1 ? 'es' : ''}
                 </span>
-                {branchCards.length === 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setShowAddInstituteModal(true)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#006FFF] hover:bg-[#0058D4] text-white font-bold text-xs shadow-sm shadow-[#006FFF]/20 transition-all cursor-pointer active:scale-95"
-                  >
-                    <Plus className="w-3.5 h-3.5" /> Add Institute
-                  </button>
-                )}
               </div>
             </div>
 
@@ -691,24 +588,15 @@ export const FranchiseOwnerDashboard: React.FC = () => {
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b pb-4">
             <div>
-              <h3 className="font-bold text-slate-900 text-base">Authorized Campus Locations</h3>
+              <h3 className="font-bold text-slate-900 text-base">Authorized Campus Location</h3>
               <p className="text-xs text-slate-500">
-                Operating campuses authorized under your Digital Guru franchise license. Add and manage all institutes operating under your franchise.
+                Operating campus authorized under your Digital Guru franchise license. To add another branch, please contact Super Admin.
               </p>
             </div>
             <div className="flex items-center gap-2.5">
               <span className="text-xs font-mono bg-slate-100 px-3 py-1.5 rounded text-slate-600 font-semibold">
                 {branches.length} Campus{branches.length > 1 ? 'es' : ''}
               </span>
-              {branches.length === 0 && (
-                <button
-                  type="button"
-                  onClick={() => setShowAddInstituteModal(true)}
-                  className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-[#006FFF] hover:bg-[#0058D4] text-white font-bold text-xs shadow-sm shadow-[#006FFF]/20 transition-all cursor-pointer active:scale-95"
-                >
-                  <Plus className="w-3.5 h-3.5" /> Add Institute
-                </button>
-              )}
             </div>
           </div>
 
@@ -1242,194 +1130,6 @@ export const FranchiseOwnerDashboard: React.FC = () => {
                 Close
               </button>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* ========================================================================= */}
-      {/* ADD INSTITUTE / CAMPUS MODAL (FRANCHISEE ADMIN)                          */}
-      {/* ========================================================================= */}
-      {showAddInstituteModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white border border-[#E2E8F0] rounded-3xl w-full max-w-xl p-6 sm:p-8 max-h-[90vh] overflow-y-auto shadow-2xl text-[#0F172A]">
-            <div className="flex items-center justify-between pb-4 border-b border-[#F1F5F9]">
-              <div className="flex items-center gap-2.5">
-                <div className="w-10 h-10 rounded-2xl bg-blue-50 border border-blue-200 flex items-center justify-center text-[#006FFF]">
-                  <Building2 className="w-5 h-5" />
-                </div>
-                <div>
-                  <h2 className="text-lg font-bold text-[#0F172A]">Add New Institute Campus</h2>
-                  <p className="text-xs text-[#64748B]">Set up an operating branch under your {data?.franchise?.name || 'Digital Guru'} franchise license</p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowAddInstituteModal(false)}
-                className="text-[#94A3B8] hover:text-[#0F172A] p-1.5 rounded-xl hover:bg-[#F8FAFC] transition cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {createError && (
-              <div className="mt-4 p-3.5 rounded-xl bg-rose-50 border border-rose-300 text-rose-800 text-xs flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4 shrink-0" />
-                <span>{createError}</span>
-              </div>
-            )}
-
-            <div className="mt-4 p-3 bg-blue-50/70 border border-blue-200 rounded-xl text-xs text-blue-900 leading-relaxed flex items-start gap-2">
-              <Sparkles className="w-4 h-4 text-[#006FFF] mt-0.5 shrink-0" />
-              <div>
-                <strong>Brand Notice:</strong> This campus will operate under the <strong>Digital Guru</strong> franchise brand. As Franchisee Admin, you have full direct control over courses, batches, staff, students, and fees for this institute.
-              </div>
-            </div>
-
-            <form onSubmit={handleCreateInstituteSubmit} className="space-y-4 mt-5 text-xs">
-              <div>
-                <label className="block text-xs font-semibold text-slate-800 mb-1">
-                  Institute / Campus Name <span className="text-rose-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={instForm.name}
-                  onChange={(e) => setInstForm({ ...instForm, name: e.target.value })}
-                  placeholder="e.g. Digital Guru - Velachery Branch"
-                  className="w-full bg-[#FFFFFF] border border-[#E2E8F0] rounded-xl px-3.5 py-2.5 text-xs text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#006FFF]/20"
-                />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-800 mb-1">
-                    Institute Code (Optional)
-                  </label>
-                  <input
-                    type="text"
-                    value={instForm.code}
-                    onChange={(e) => setInstForm({ ...instForm, code: e.target.value })}
-                    placeholder="Auto-generated if blank (e.g. INS-XXXXXX)"
-                    className="w-full bg-[#FFFFFF] border border-[#E2E8F0] rounded-xl px-3.5 py-2.5 text-xs text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#006FFF]/20 font-mono"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-800 mb-1">
-                    Legal Name (Optional)
-                  </label>
-                  <input
-                    type="text"
-                    value={instForm.legalName}
-                    onChange={(e) => setInstForm({ ...instForm, legalName: e.target.value })}
-                    placeholder="Registered legal entity name"
-                    className="w-full bg-[#FFFFFF] border border-[#E2E8F0] rounded-xl px-3.5 py-2.5 text-xs text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#006FFF]/20"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-800 mb-1">
-                    Contact Phone (Optional)
-                  </label>
-                  <input
-                    type="tel"
-                    value={instForm.phone}
-                    onChange={(e) => setInstForm({ ...instForm, phone: e.target.value })}
-                    placeholder="+91 98765 43210"
-                    className="w-full bg-[#FFFFFF] border border-[#E2E8F0] rounded-xl px-3.5 py-2.5 text-xs text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#006FFF]/20"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-800 mb-1">
-                    Contact Email (Optional)
-                  </label>
-                  <input
-                    type="email"
-                    value={instForm.email}
-                    onChange={(e) => setInstForm({ ...instForm, email: e.target.value })}
-                    placeholder="campus@digitalghuru.com"
-                    className="w-full bg-[#FFFFFF] border border-[#E2E8F0] rounded-xl px-3.5 py-2.5 text-xs text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#006FFF]/20"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-800 mb-1">
-                  Campus Address (Optional)
-                </label>
-                <input
-                  type="text"
-                  value={instForm.address}
-                  onChange={(e) => setInstForm({ ...instForm, address: e.target.value })}
-                  placeholder="Street address, campus building or landmark"
-                  className="w-full bg-[#FFFFFF] border border-[#E2E8F0] rounded-xl px-3.5 py-2.5 text-xs text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#006FFF]/20"
-                />
-              </div>
-
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-800 mb-1">City</label>
-                  <input
-                    type="text"
-                    value={instForm.city}
-                    onChange={(e) => setInstForm({ ...instForm, city: e.target.value })}
-                    placeholder="e.g. Chennai"
-                    className="w-full bg-[#FFFFFF] border border-[#E2E8F0] rounded-xl px-3 py-2 text-xs text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#006FFF]/20"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-800 mb-1">State</label>
-                  <input
-                    type="text"
-                    value={instForm.state}
-                    onChange={(e) => setInstForm({ ...instForm, state: e.target.value })}
-                    placeholder="e.g. Tamil Nadu"
-                    className="w-full bg-[#FFFFFF] border border-[#E2E8F0] rounded-xl px-3 py-2 text-xs text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#006FFF]/20"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-800 mb-1">PIN Code</label>
-                  <input
-                    type="text"
-                    maxLength={6}
-                    value={instForm.postalCode}
-                    onChange={(e) => setInstForm({ ...instForm, postalCode: e.target.value })}
-                    placeholder="e.g. 600042"
-                    className="w-full bg-[#FFFFFF] border border-[#E2E8F0] rounded-xl px-3 py-2 text-xs text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#006FFF]/20"
-                  />
-                </div>
-              </div>
-
-              <div className="pt-4 flex items-center justify-end gap-3 border-t border-[#F1F5F9]">
-                <button
-                  type="button"
-                  onClick={() => setShowAddInstituteModal(false)}
-                  className="px-4 py-2.5 text-xs font-semibold text-[#64748B] hover:text-[#0F172A] transition rounded-xl cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={creatingInstitute || !instForm.name.trim()}
-                  className="bg-[#006FFF] hover:bg-[#0058D4] text-white text-xs font-semibold px-5 py-2.5 rounded-xl shadow-md shadow-[#006FFF]/20 transition disabled:opacity-50 flex items-center gap-2 cursor-pointer active:scale-95"
-                >
-                  {creatingInstitute ? (
-                    <>
-                      <RefreshCw className="w-3.5 h-3.5 animate-spin" /> Adding Campus...
-                    </>
-                  ) : (
-                    <>
-                      <Plus className="w-3.5 h-3.5" /> Add Institute
-                    </>
-                  )}
-                </button>
-              </div>
-            </form>
           </div>
         </div>
       )}

@@ -87,7 +87,8 @@ export const Login: React.FC = () => {
         if (res.data.refreshToken) {
           localStorage.setItem('tuition_refresh_token', res.data.refreshToken);
         }
-        if (res.data.memberships && res.data.memberships.length > 1) {
+        // Franchise owners are 1:1 tied to their single franchise campus/institute, so bypass multi-institute prompt
+        if (res.data.user?.role !== 'FRANCHISE_OWNER' && res.data.memberships && res.data.memberships.length > 1) {
           setPendingAuth({
             token: res.data.accessToken,
             refreshToken: res.data.refreshToken,
