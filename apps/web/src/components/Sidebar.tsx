@@ -19,6 +19,7 @@ import {
   User,
   Compass,
   Laptop,
+  Video,
   X,
 } from 'lucide-react';
 
@@ -120,6 +121,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <BookOpen className="w-5 h-5 shrink-0 text-emerald-400" /> Course Management
             </button>
             <button
+              onClick={() => handleSelect('recorded_sessions')}
+              className={navItemClass('recorded_sessions')}
+            >
+              <Video className="w-5 h-5 shrink-0 text-rose-400" /> Recorded Sessions
+            </button>
+            <button
               onClick={() => handleSelect('academics')}
               className={navItemClass('academics')}
             >
@@ -191,6 +198,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
               className={navItemClass('franchise_courses')}
             >
               <BookOpen className="w-5 h-5 shrink-0 text-emerald-400" /> Course Management
+            </button>
+            <button
+              onClick={() => handleSelect('recorded_sessions')}
+              className={navItemClass('recorded_sessions')}
+            >
+              <Video className="w-5 h-5 shrink-0 text-rose-400" /> Recorded Sessions
             </button>
 
             <button
@@ -323,6 +336,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </button>
 
             <button
+              onClick={() => onSelectTab('parent_recordings')}
+              className={navItemClass('parent_recordings')}
+            >
+              <Video className="w-4 h-4 text-rose-400" /> Recorded Sessions
+            </button>
+
+            <button
               onClick={() => onSelectTab('parent_attendance')}
               className={navItemClass('parent_attendance')}
             >
@@ -395,6 +415,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
               className={navItemClass('student_courses')}
             >
               <Laptop className="w-4 h-4" /> My Courses & Player
+            </button>
+
+            <button
+              onClick={() => onSelectTab('recorded_sessions')}
+              className={navItemClass('recorded_sessions')}
+            >
+              <Video className="w-4 h-4 text-rose-400" /> Recorded Sessions
             </button>
 
             <button

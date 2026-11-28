@@ -886,6 +886,27 @@ export class CoursesService {
       where: { status: CourseStatus.PUBLISHED },
       include: {
         category: true,
+        activeCurriculumVersion: {
+          include: {
+            modules: {
+              orderBy: { position: 'asc' },
+              include: {
+                chapters: {
+                  orderBy: { position: 'asc' },
+                  select: {
+                    id: true,
+                    title: true,
+                    description: true,
+                    videoUrl: true,
+                    duration: true,
+                    position: true,
+                    isFree: true,
+                  },
+                },
+              },
+            },
+          },
+        },
         franchiseSelections: {
           where: { franchiseId }
         },
@@ -1702,7 +1723,15 @@ export class CoursesService {
                     include: {
                       chapters: {
                         orderBy: { position: 'asc' },
-                        select: { id: true, title: true },
+                        select: {
+                          id: true,
+                          title: true,
+                          description: true,
+                          videoUrl: true,
+                          duration: true,
+                          position: true,
+                          isFree: true,
+                        },
                       },
                     },
                   },
@@ -1750,10 +1779,10 @@ export class CoursesService {
 
     const certByCourseId = new Map(certificates.map((c) => [c.courseId, c]));
 
-    const enrichedEnrollments = enrollments.map((enr) => {
-      const chapters = enr.course.activeCurriculumVersion?.modules.flatMap((m) => m.chapters) || [];
+    const enrichedEnrollments = enrollments.map((enr: any) => {
+      const chapters = enr.course?.activeCurriculumVersion?.modules?.flatMap((m: any) => m.chapters) || [];
       const totalLessons = chapters.length;
-      const completedLessons = chapters.filter((ch) => completedSet.has(ch.id)).length;
+      const completedLessons = chapters.filter((ch: any) => completedSet.has(ch.id)).length;
       const progressPercent = totalLessons > 0 ? Math.round((completedLessons / totalLessons) * 100) : enr.progress;
       const isCompleted = enr.status === EnrollmentStatus.COMPLETED || (totalLessons > 0 && completedLessons === totalLessons);
 

@@ -23,6 +23,7 @@ import {
   Loader2,
   Printer,
   CreditCard,
+  Video,
 } from 'lucide-react';
 import { CoursePlayer } from '../components/CoursePlayer';
 import { useToast } from '../context/ToastContext';
@@ -351,9 +352,21 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({ initialSection = '
               Access video lessons, recorded classroom sessions, downloadable guides, XP rewards, and certificates.
             </p>
           </div>
-          <span className="px-3 py-1 rounded-full bg-blue-50 text-[#006FFF] text-xs font-bold">
-            {courseEnrollments.length} Enrolled Course{courseEnrollments.length !== 1 ? 's' : ''}
-          </span>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                window.dispatchEvent(new CustomEvent('tuitionos:navigate-tab', { detail: { tab: 'recorded_sessions' } }));
+              }}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-bold rounded-xl transition shadow-xs"
+            >
+              <Video className="w-3.5 h-3.5 text-rose-600" />
+              <span>Browse Recorded Sessions</span>
+            </button>
+            <span className="px-3 py-1 rounded-full bg-blue-50 text-[#006FFF] text-xs font-bold">
+              {courseEnrollments.length} Enrolled Course{courseEnrollments.length !== 1 ? 's' : ''}
+            </span>
+          </div>
         </div>
 
         {courseEnrollments.length === 0 ? (

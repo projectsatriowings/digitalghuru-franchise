@@ -814,6 +814,27 @@ class CoursesService {
             where: { status: client_1.CourseStatus.PUBLISHED },
             include: {
                 category: true,
+                activeCurriculumVersion: {
+                    include: {
+                        modules: {
+                            orderBy: { position: 'asc' },
+                            include: {
+                                chapters: {
+                                    orderBy: { position: 'asc' },
+                                    select: {
+                                        id: true,
+                                        title: true,
+                                        description: true,
+                                        videoUrl: true,
+                                        duration: true,
+                                        position: true,
+                                        isFree: true,
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
                 franchiseSelections: {
                     where: { franchiseId }
                 },
@@ -1495,7 +1516,15 @@ class CoursesService {
                                         include: {
                                             chapters: {
                                                 orderBy: { position: 'asc' },
-                                                select: { id: true, title: true },
+                                                select: {
+                                                    id: true,
+                                                    title: true,
+                                                    description: true,
+                                                    videoUrl: true,
+                                                    duration: true,
+                                                    position: true,
+                                                    isFree: true,
+                                                },
                                             },
                                         },
                                     },
@@ -1537,7 +1566,7 @@ class CoursesService {
         const nextThreshold = XP_LEVEL_THRESHOLDS[level] ?? null;
         const certByCourseId = new Map(certificates.map((c) => [c.courseId, c]));
         const enrichedEnrollments = enrollments.map((enr) => {
-            const chapters = enr.course.activeCurriculumVersion?.modules.flatMap((m) => m.chapters) || [];
+            const chapters = enr.course?.activeCurriculumVersion?.modules?.flatMap((m) => m.chapters) || [];
             const totalLessons = chapters.length;
             const completedLessons = chapters.filter((ch) => completedSet.has(ch.id)).length;
             const progressPercent = totalLessons > 0 ? Math.round((completedLessons / totalLessons) * 100) : enr.progress;

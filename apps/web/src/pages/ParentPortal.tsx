@@ -11,6 +11,7 @@ import { ParentTestResultsView } from './parent/ParentTestResultsView';
 import { ParentNotificationsView } from './parent/ParentNotificationsView';
 import { ParentProfileView } from './parent/ParentProfileView';
 import { ParentCoursesView } from './parent/ParentCoursesView';
+import { RecordedSessions } from './RecordedSessions';
 
 import {
   GraduationCap,
@@ -26,6 +27,7 @@ import {
   AlertCircle,
   Users,
   Laptop,
+  Video,
 } from 'lucide-react';
 
 interface ParentPortalProps {
@@ -147,6 +149,7 @@ export const ParentPortal: React.FC<ParentPortalProps> = ({ initialTab = 'dashbo
   const tabs = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'courses', label: 'My Courses & Certs', icon: Laptop },
+    { id: 'recordings', label: 'Recorded Sessions', icon: Video },
     { id: 'attendance', label: 'Attendance', icon: Calendar },
     { id: 'communication', label: 'Teacher Chat', icon: MessageSquare },
     { id: 'fees', label: 'Fee Payments', icon: CreditCard },
@@ -328,6 +331,10 @@ export const ParentPortal: React.FC<ParentPortalProps> = ({ initialTab = 'dashbo
 
         {activeTab === 'courses' && (
           <ParentCoursesView student={activeStudent} />
+        )}
+
+        {activeTab === 'recordings' && (
+          <RecordedSessions parentStudentContext={activeStudent} />
         )}
 
         {activeTab === 'attendance' && (

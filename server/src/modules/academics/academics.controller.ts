@@ -19,6 +19,7 @@ export const createBatchSchema = z.object({
   description: z.string().optional(),
   schedule: z.string().optional(),
   isActive: z.boolean().optional(),
+  courseId: z.string().uuid().optional().nullable().or(z.literal('')),
   staffProfileId: z.string().uuid().optional(),
   staffProfileIds: z.array(z.string().uuid()).optional(),
 });
@@ -32,6 +33,7 @@ export const updateBatchSchema = z.object({
   description: z.string().nullable().optional(),
   schedule: z.string().nullable().optional(),
   isActive: z.boolean().optional(),
+  courseId: z.string().uuid().optional().nullable().or(z.literal('')),
 });
 
 export const createSubjectSchema = z.object({
@@ -105,6 +107,24 @@ export async function listBatches(req: AuthenticatedRequest, res: Response) {
       where: batchWhere,
       orderBy: { createdAt: 'desc' },
       include: {
+        course: {
+          select: {
+            id: true,
+            title: true,
+            slug: true,
+            thumbnailUrl: true,
+            format: true,
+          },
+        },
+        staffAssignments: {
+          include: {
+            staffProfile: {
+              include: {
+                user: { select: { fullName: true, email: true, phone: true } },
+              },
+            },
+          },
+        },
         batchSubjects: {
           select: {
             id: true,
@@ -173,6 +193,7 @@ export async function getBatchDetails(req: AuthenticatedRequest, res: Response) 
     let batch = await prisma.batch.findFirst({
       where: { id, instituteId },
       include: {
+        course: true,
         batchSubjects: {
           include: {
             subject: true,
@@ -223,6 +244,7 @@ export async function getBatchDetails(req: AuthenticatedRequest, res: Response) 
       batch = await prisma.batch.findUnique({
         where: { id },
         include: {
+          course: true,
           batchSubjects: {
             include: {
               subject: true,
@@ -343,7 +365,7 @@ export async function createBatch(req: AuthenticatedRequest, res: Response) {
     const parse = createBatchSchema.safeParse(req.body);
     if (!parse.success) return res.status(400).json({ success: false, error: parse.error.errors[0]?.message });
 
-    const { name, code, academicYear, startDate, endDate, description, schedule, isActive, staffProfileId, staffProfileIds } = parse.data;
+    const { name, code, academicYear, startDate, endDate, description, schedule, isActive, staffProfileId, staffProfileIds, courseId } = parse.data;
 
     // Check unique name + academicYear
     const existing = await prisma.batch.findUnique({
@@ -373,6 +395,7 @@ export async function createBatch(req: AuthenticatedRequest, res: Response) {
     const batch = await prisma.batch.create({
       data: {
         instituteId,
+        courseId: courseId?.trim() || null,
         name: name.trim(),
         code: code?.trim() || null,
         academicYear: academicYear.trim(),
@@ -427,6 +450,39 @@ export async function createBatch(req: AuthenticatedRequest, res: Response) {
       }
     }
 
+    // Auto-create or link subject for the course if courseId provided
+    if (courseId) {
+      const globalCourse = await prisma.globalCourse.findUnique({
+        where: { id: courseId.trim() },
+        select: { id: true, title: true },
+      });
+      if (globalCourse) {
+        let subj = await prisma.subject.findFirst({
+          where: { instituteId, name: globalCourse.title },
+        });
+        if (!subj) {
+          subj = await prisma.subject.create({
+            data: {
+              instituteId,
+              name: globalCourse.title,
+              code: code?.trim() || null,
+              description: `Course curriculum for ${globalCourse.title}`,
+            },
+          });
+        }
+        const primaryTrainerId = staffProfileId || (staffProfileIds && staffProfileIds[0]) || (targetStaffIds.size > 0 ? Array.from(targetStaffIds)[0] : null);
+        await prisma.batchSubject.create({
+          data: {
+            batchId: batch.id,
+            subjectId: subj.id,
+            staffProfileId: primaryTrainerId,
+            schedule: schedule?.trim() || null,
+            isActive: true,
+          },
+        }).catch((err: any) => console.warn('[createBatch batchSubject warn]', err.message));
+      }
+    }
+
     serverCache.invalidate();
 
     return res.status(201).json({ success: true, message: 'Batch created successfully', data: { batch } });
@@ -453,7 +509,7 @@ export async function updateBatch(req: AuthenticatedRequest, res: Response) {
       return res.status(404).json({ success: false, error: 'Batch not found in this institute' });
     }
 
-    const { name, code, academicYear, startDate, endDate, description, schedule, isActive } = parse.data;
+    const { name, code, academicYear, startDate, endDate, description, schedule, isActive, courseId } = parse.data;
 
     // Check collision if name or academicYear changed
     if ((name && name.trim() !== existing.name) || (academicYear && academicYear.trim() !== existing.academicYear)) {
@@ -496,6 +552,7 @@ export async function updateBatch(req: AuthenticatedRequest, res: Response) {
         ...(endDate !== undefined ? { endDate: endDate ? new Date(endDate) : null } : {}),
         ...(description !== undefined ? { description: description ? description.trim() : null } : {}),
         ...(schedule !== undefined ? { schedule: schedule ? schedule.trim() : null } : {}),
+        ...(courseId !== undefined ? { courseId: courseId ? courseId.trim() : null } : {}),
         ...(isActive !== undefined ? { isActive } : {}),
       },
     });

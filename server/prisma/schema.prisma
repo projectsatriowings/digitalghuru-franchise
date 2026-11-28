@@ -615,6 +615,7 @@ model Subject {
 model Batch {
   id           String    @id @default(uuid())
   instituteId  String
+  courseId     String?
   name         String // e.g., "Class 10 - Batch A (2026-27)"
   code         String? // Batch code, unique per institute (e.g., "B-10A")
   academicYear String // e.g., "2026-2027"
@@ -627,6 +628,7 @@ model Batch {
   updatedAt    DateTime  @updatedAt
 
   institute         Institute              @relation(fields: [instituteId], references: [id], onDelete: Cascade)
+  course            GlobalCourse?          @relation(fields: [courseId], references: [id], onDelete: SetNull)
   batchSubjects     BatchSubject[]
   staffAssignments  StaffBatchAssignment[]
   enrollments       StudentEnrollment[]
@@ -2036,6 +2038,7 @@ model GlobalCourse {
   slugAliases                CourseSlugAlias[]
   curriculumVersions         CourseCurriculumVersion[]  @relation("CourseVersions")
   franchiseSelections        FranchiseCourseSelection[]
+  batches                    Batch[]
   enrollments                CourseEnrollment[]
   certificates               CourseCertificate[]
   lessonProgress             StudentLessonProgress[]

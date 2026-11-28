@@ -404,6 +404,14 @@ export interface Parent {
 export interface Batch {
   id: string;
   instituteId: string;
+  courseId?: string | null;
+  course?: {
+    id: string;
+    title: string;
+    slug?: string;
+    thumbnailUrl?: string | null;
+    format?: string | null;
+  } | null;
   name: string;
   code?: string | null;
   academicYear: string;

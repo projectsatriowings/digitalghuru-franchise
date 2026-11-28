@@ -34,6 +34,7 @@ exports.createBatchSchema = zod_1.z.object({
     description: zod_1.z.string().optional(),
     schedule: zod_1.z.string().optional(),
     isActive: zod_1.z.boolean().optional(),
+    courseId: zod_1.z.string().uuid().optional().nullable().or(zod_1.z.literal('')),
     staffProfileId: zod_1.z.string().uuid().optional(),
     staffProfileIds: zod_1.z.array(zod_1.z.string().uuid()).optional(),
 });
@@ -46,6 +47,7 @@ exports.updateBatchSchema = zod_1.z.object({
     description: zod_1.z.string().nullable().optional(),
     schedule: zod_1.z.string().nullable().optional(),
     isActive: zod_1.z.boolean().optional(),
+    courseId: zod_1.z.string().uuid().optional().nullable().or(zod_1.z.literal('')),
 });
 exports.createSubjectSchema = zod_1.z.object({
     name: zod_1.z.string().min(2, 'Subject name is required'),
@@ -110,6 +112,24 @@ async function listBatches(req, res) {
             where: batchWhere,
             orderBy: { createdAt: 'desc' },
             include: {
+                course: {
+                    select: {
+                        id: true,
+                        title: true,
+                        slug: true,
+                        thumbnailUrl: true,
+                        format: true,
+                    },
+                },
+                staffAssignments: {
+                    include: {
+                        staffProfile: {
+                            include: {
+                                user: { select: { fullName: true, email: true, phone: true } },
+                            },
+                        },
+                    },
+                },
                 batchSubjects: {
                     select: {
                         id: true,
@@ -171,6 +191,7 @@ async function getBatchDetails(req, res) {
         let batch = await prisma_js_1.prisma.batch.findFirst({
             where: { id, instituteId },
             include: {
+                course: true,
                 batchSubjects: {
                     include: {
                         subject: true,
@@ -220,6 +241,7 @@ async function getBatchDetails(req, res) {
             batch = await prisma_js_1.prisma.batch.findUnique({
                 where: { id },
                 include: {
+                    course: true,
                     batchSubjects: {
                         include: {
                             subject: true,
@@ -333,7 +355,7 @@ async function createBatch(req, res) {
         const parse = exports.createBatchSchema.safeParse(req.body);
         if (!parse.success)
             return res.status(400).json({ success: false, error: parse.error.errors[0]?.message });
-        const { name, code, academicYear, startDate, endDate, description, schedule, isActive, staffProfileId, staffProfileIds } = parse.data;
+        const { name, code, academicYear, startDate, endDate, description, schedule, isActive, staffProfileId, staffProfileIds, courseId } = parse.data;
         // Check unique name + academicYear
         const existing = await prisma_js_1.prisma.batch.findUnique({
             where: {
@@ -359,6 +381,7 @@ async function createBatch(req, res) {
         const batch = await prisma_js_1.prisma.batch.create({
             data: {
                 instituteId,
+                courseId: courseId?.trim() || null,
                 name: name.trim(),
                 code: code?.trim() || null,
                 academicYear: academicYear.trim(),
@@ -409,6 +432,38 @@ async function createBatch(req, res) {
                 }).catch((err) => console.warn('[createBatch staff assignment warn]', err.message));
             }
         }
+        // Auto-create or link subject for the course if courseId provided
+        if (courseId) {
+            const globalCourse = await prisma_js_1.prisma.globalCourse.findUnique({
+                where: { id: courseId.trim() },
+                select: { id: true, title: true },
+            });
+            if (globalCourse) {
+                let subj = await prisma_js_1.prisma.subject.findFirst({
+                    where: { instituteId, name: globalCourse.title },
+                });
+                if (!subj) {
+                    subj = await prisma_js_1.prisma.subject.create({
+                        data: {
+                            instituteId,
+                            name: globalCourse.title,
+                            code: code?.trim() || null,
+                            description: `Course curriculum for ${globalCourse.title}`,
+                        },
+                    });
+                }
+                const primaryTrainerId = staffProfileId || (staffProfileIds && staffProfileIds[0]) || (targetStaffIds.size > 0 ? Array.from(targetStaffIds)[0] : null);
+                await prisma_js_1.prisma.batchSubject.create({
+                    data: {
+                        batchId: batch.id,
+                        subjectId: subj.id,
+                        staffProfileId: primaryTrainerId,
+                        schedule: schedule?.trim() || null,
+                        isActive: true,
+                    },
+                }).catch((err) => console.warn('[createBatch batchSubject warn]', err.message));
+            }
+        }
         cache_js_1.serverCache.invalidate();
         return res.status(201).json({ success: true, message: 'Batch created successfully', data: { batch } });
     }
@@ -433,7 +488,7 @@ async function updateBatch(req, res) {
         if (!existing) {
             return res.status(404).json({ success: false, error: 'Batch not found in this institute' });
         }
-        const { name, code, academicYear, startDate, endDate, description, schedule, isActive } = parse.data;
+        const { name, code, academicYear, startDate, endDate, description, schedule, isActive, courseId } = parse.data;
         // Check collision if name or academicYear changed
         if ((name && name.trim() !== existing.name) || (academicYear && academicYear.trim() !== existing.academicYear)) {
             const checkName = name ? name.trim() : existing.name;
@@ -473,6 +528,7 @@ async function updateBatch(req, res) {
                 ...(endDate !== undefined ? { endDate: endDate ? new Date(endDate) : null } : {}),
                 ...(description !== undefined ? { description: description ? description.trim() : null } : {}),
                 ...(schedule !== undefined ? { schedule: schedule ? schedule.trim() : null } : {}),
+                ...(courseId !== undefined ? { courseId: courseId ? courseId.trim() : null } : {}),
                 ...(isActive !== undefined ? { isActive } : {}),
             },
         });
