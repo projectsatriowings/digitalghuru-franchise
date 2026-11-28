@@ -171,6 +171,11 @@ export async function apiFetch<T = any>(endpoint: string, options: ApiFetchOptio
       ...(options.headers as Record<string, string>),
     };
 
+    if (options.skipCache) {
+      headers['Cache-Control'] = 'no-cache, no-store, must-revalidate';
+      headers['Pragma'] = 'no-cache';
+    }
+
     if (!(options.body instanceof FormData) && !headers['Content-Type']) {
       headers['Content-Type'] = 'application/json';
     }
@@ -188,6 +193,7 @@ export async function apiFetch<T = any>(endpoint: string, options: ApiFetchOptio
     let response: Response;
     try {
       response = await fetch(`${API_BASE}${endpoint}`, {
+        cache: options.skipCache ? 'no-store' : (options.cache || 'default'),
         ...options,
         headers,
       });

@@ -147,9 +147,9 @@ export const AcademicsManagement: React.FC<AcademicsManagementProps> = ({ onNavi
       if (!silent) setLoading(true);
       setIsSyncing(true);
       const [batchesRes, staffRes, studentsRes] = await Promise.all([
-        apiFetch('/academics/batches'),
-        apiFetch('/academics/staff').catch(() => ({ data: { staff: [] } })),
-        apiFetch('/students?status=ACTIVE').catch(() => ({ data: { students: [] } })),
+        apiFetch(`/academics/batches?refresh=true&_t=${Date.now()}`, { skipCache: true }),
+        apiFetch(`/academics/staff?_t=${Date.now()}`, { skipCache: true }).catch(() => ({ data: { staff: [] } })),
+        apiFetch(`/students?status=ACTIVE&_t=${Date.now()}`, { skipCache: true }).catch(() => ({ data: { students: [] } })),
       ]);
 
       setBatches(batchesRes.data?.batches || []);
@@ -186,7 +186,9 @@ export const AcademicsManagement: React.FC<AcademicsManagementProps> = ({ onNavi
   const loadBatchDetails = async (batchId: string) => {
     setBatchDetailLoading(true);
     try {
-      const res = await apiFetch(`/academics/batches/${batchId}`);
+      const res = await apiFetch(`/academics/batches/${batchId}?_t=${Date.now()}`, {
+        skipCache: true,
+      });
       if (res.success && res.data?.batch) {
         setSelectedBatchDetails(res.data.batch);
       }
@@ -357,8 +359,8 @@ export const AcademicsManagement: React.FC<AcademicsManagementProps> = ({ onNavi
           success(`Subject '${subjectForm.name}' updated inside batch`);
           setShowAddSubjectModal(false);
           setEditingBatchSubject(null);
-          loadBatchDetails(selectedBatchDetails.id);
-          fetchData();
+          await loadBatchDetails(selectedBatchDetails.id);
+          fetchData(true);
         }
       } else {
         const res = await apiFetch(`/academics/batches/${selectedBatchDetails.id}/subjects`, {
@@ -383,8 +385,8 @@ export const AcademicsManagement: React.FC<AcademicsManagementProps> = ({ onNavi
             schedule: '',
             isActive: true,
           });
-          loadBatchDetails(selectedBatchDetails.id);
-          fetchData();
+          await loadBatchDetails(selectedBatchDetails.id);
+          fetchData(true);
         }
       }
     } catch (err: any) {
@@ -402,8 +404,8 @@ export const AcademicsManagement: React.FC<AcademicsManagementProps> = ({ onNavi
       if (res.success) {
         success(`Subject '${confirmRemoveSubject.subjectName}' removed from batch`);
         setConfirmRemoveSubject({ isOpen: false, subjectId: '', subjectName: '' });
-        loadBatchDetails(selectedBatchDetails.id);
-        fetchData();
+        await loadBatchDetails(selectedBatchDetails.id);
+        fetchData(true);
       }
     } catch (err: any) {
       error(err.message || 'Failed to remove subject from batch');
@@ -424,8 +426,8 @@ export const AcademicsManagement: React.FC<AcademicsManagementProps> = ({ onNavi
         setShowEnrollModal(false);
         setSelectedStudentToEnroll('');
         setStudentSearchQuery('');
-        loadBatchDetails(selectedBatchDetails.id);
-        fetchData();
+        await loadBatchDetails(selectedBatchDetails.id);
+        fetchData(true);
       }
     } catch (err: any) {
       error(err.message || 'Failed to enroll student');
@@ -441,8 +443,8 @@ export const AcademicsManagement: React.FC<AcademicsManagementProps> = ({ onNavi
       });
       if (res.success) {
         success(`${studentName} removed from batch roster`);
-        loadBatchDetails(selectedBatchDetails.id);
-        fetchData();
+        await loadBatchDetails(selectedBatchDetails.id);
+        fetchData(true);
       }
     } catch (err: any) {
       error(err.message || 'Failed to unenroll student');
@@ -469,7 +471,7 @@ export const AcademicsManagement: React.FC<AcademicsManagementProps> = ({ onNavi
       if (res.success) {
         success(`Subject allocations updated for ${allocatingStudent.firstName} ${allocatingStudent.lastName}`);
         setAllocatingStudent(null);
-        loadBatchDetails(selectedBatchDetails.id);
+        await loadBatchDetails(selectedBatchDetails.id);
       }
     } catch (err: any) {
       error(err.message || 'Failed to save subject allocations');
@@ -482,17 +484,63 @@ export const AcademicsManagement: React.FC<AcademicsManagementProps> = ({ onNavi
   const handleAssignStaff = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedBatchDetails || !selectedStaffToAssign) return;
+    const batchId = selectedBatchDetails.id;
+    const staffId = selectedStaffToAssign;
     try {
-      const res = await apiFetch(`/academics/batches/${selectedBatchDetails.id}/staff`, {
+      const res = await apiFetch(`/academics/batches/${batchId}/staff`, {
         method: 'POST',
-        body: JSON.stringify({ staffProfileId: selectedStaffToAssign }),
+        body: JSON.stringify({ staffProfileId: staffId }),
       });
       if (res.success) {
         success('Staff assigned to batch faculty');
         setShowAssignStaffModal(false);
         setSelectedStaffToAssign('');
-        loadBatchDetails(selectedBatchDetails.id);
-        fetchData();
+
+        // 1. Optimistic state update: update selectedBatchDetails immediately so tab count & list update instantly
+        if (res.data?.batch?.staffAssignments && Array.isArray(res.data.batch.staffAssignments)) {
+          setSelectedBatchDetails((prev) =>
+            prev && prev.id === batchId
+              ? {
+                  ...prev,
+                  staffAssignments: res.data.batch.staffAssignments,
+                }
+              : prev
+          );
+        } else {
+          const staffObj = availableStaff.find((s) => s.staffProfileId === staffId);
+          if (staffObj) {
+            setSelectedBatchDetails((prev) => {
+              if (!prev || prev.id !== batchId) return prev;
+              const existing = prev.staffAssignments || [];
+              if (existing.some((item: any) => item.staffProfileId === staffId)) return prev;
+              return {
+                ...prev,
+                staffAssignments: [
+                  ...existing,
+                  {
+                    id: `temp-${Date.now()}`,
+                    staffProfileId: staffId,
+                    batchId,
+                    staffProfile: {
+                      id: staffId,
+                      user: {
+                        id: staffObj.userId,
+                        fullName: staffObj.fullName,
+                        email: staffObj.email,
+                        phone: staffObj.phone,
+                      },
+                    },
+                  },
+                ],
+              };
+            });
+          }
+        }
+
+        // 2. Fetch fresh detailed batch from server to ensure complete consistency
+        await loadBatchDetails(batchId);
+        // 3. Silently sync the batch list in background so overview count also stays fresh
+        fetchData(true);
       }
     } catch (err: any) {
       error(err.message || 'Failed to assign staff to batch');
@@ -502,17 +550,33 @@ export const AcademicsManagement: React.FC<AcademicsManagementProps> = ({ onNavi
   // Remove Staff from Batch
   const handleRemoveStaff = async (staffProfileId: string, staffName: string) => {
     if (!selectedBatchDetails) return;
+    const batchId = selectedBatchDetails.id;
     try {
-      const res = await apiFetch(`/academics/batches/${selectedBatchDetails.id}/staff/${staffProfileId}`, {
+      // 1. Optimistic state update: remove staff member immediately from UI
+      setSelectedBatchDetails((prev) =>
+        prev && prev.id === batchId
+          ? {
+              ...prev,
+              staffAssignments: (prev.staffAssignments || []).filter(
+                (item: any) => item.staffProfileId !== staffProfileId
+              ),
+            }
+          : prev
+      );
+
+      const res = await apiFetch(`/academics/batches/${batchId}/staff/${staffProfileId}`, {
         method: 'DELETE',
       });
       if (res.success) {
         success(`${staffName} removed from batch faculty`);
-        loadBatchDetails(selectedBatchDetails.id);
-        fetchData();
+        await loadBatchDetails(batchId);
+        fetchData(true);
+      } else {
+        await loadBatchDetails(batchId);
       }
     } catch (err: any) {
       error(err.message || 'Failed to remove staff');
+      await loadBatchDetails(batchId);
     }
   };
 
