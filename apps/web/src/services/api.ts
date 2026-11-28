@@ -142,7 +142,7 @@ export async function apiFetch<T = any>(endpoint: string, options: ApiFetchOptio
         throw netErr;
       }
       console.error(`[apiFetch] Network failure for ${endpoint}:`, netErr);
-      throw new Error('Digital Guru Franchise Backend server is unreachable. Please verify the backend server is running on port 5000 (npm run dev:server).');
+      throw new Error('Digital Ghuru Franchise Backend server is unreachable. Please verify the backend server is running on port 5000 (npm run dev:server).');
     }
 
     let data: any;
@@ -153,8 +153,8 @@ export async function apiFetch<T = any>(endpoint: string, options: ApiFetchOptio
         console.error(`[apiFetch] HTTP ${response.status} 500 Server Error for ${endpoint}`);
         const isLocalDev = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
         const msg = isLocalDev
-          ? 'Digital Guru Franchise Backend is not responding (port 5000 unreachable). Run `npm run dev:server` in terminal.'
-          : 'Digital Guru Franchise Backend service is initializing or unreachable. Please retry in a moment.';
+          ? 'Digital Ghuru Franchise Backend is not responding (port 5000 unreachable). Run `npm run dev:server` in terminal.'
+          : 'Digital Ghuru Franchise Backend service is initializing or unreachable. Please retry in a moment.';
         throw new Error(msg);
       }
       console.error(`[apiFetch] Failed to parse JSON response for ${endpoint} (HTTP ${response.status})`);

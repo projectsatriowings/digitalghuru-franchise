@@ -121,7 +121,7 @@ export const ParentCoursesView: React.FC<ParentCoursesViewProps> = ({ student })
         <div>
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 text-blue-200 text-xs font-semibold border border-white/15 mb-2">
             <Laptop className="w-3.5 h-3.5 text-emerald-300" />
-            Digital Guru Hybrid LMS &bull; Parent Read-Only Monitor
+            Digital Ghuru Hybrid LMS &bull; Parent Read-Only Monitor
           </div>
           <h2 className="text-2xl font-extrabold tracking-tight">
             {student?.firstName} {student?.lastName}&apos;s Global Courses
@@ -361,7 +361,7 @@ export const ParentCoursesView: React.FC<ParentCoursesViewProps> = ({ student })
           <div className="bg-white rounded-3xl max-w-xl w-full shadow-2xl border border-slate-200 overflow-hidden">
             <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
               <div className="flex items-center gap-2 text-sm font-extrabold text-slate-900">
-                <Award className="w-4 h-4 text-emerald-600" /> Digital Guru Verified Certificate
+                <Award className="w-4 h-4 text-emerald-600" /> Digital Ghuru Verified Certificate
               </div>
               <button
                 onClick={() => setSelectedCert(null)}

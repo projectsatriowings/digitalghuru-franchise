@@ -178,7 +178,7 @@ export const StudentProfileScreen: React.FC = () => {
         <Card style={styles.infoCard}>
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>Center Name</Text>
-            <Text style={styles.infoValue}>{profile.institute?.name || 'Digital Guru Learning Center'}</Text>
+            <Text style={styles.infoValue}>{profile.institute?.name || 'Digital Ghuru Learning Center'}</Text>
           </View>
           {profile.institute?.code && (
             <View style={styles.infoRow}>

@@ -356,7 +356,7 @@ export const FranchiseCourses: React.FC = () => {
           <div className="rounded-2xl border border-blue-200 bg-blue-50/70 px-4 py-3 flex items-start gap-3">
             <ShieldCheck className="w-4 h-4 text-[#006FFF] shrink-0 mt-0.5" />
             <p className="text-xs text-slate-700 leading-relaxed">
-              <strong>HQ Catalogue Governance:</strong> Only global Digital Guru courses explicitly permitted to your franchise by Super Admin (HQ) appear below. You can enable/disable offerings and customize local franchise fees, while master syllabus and assets remain centrally governed by Digital Guru HQ.
+              <strong>HQ Catalogue Governance:</strong> Only global Digital Ghuru courses explicitly permitted to your franchise by Super Admin (HQ) appear below. You can enable/disable offerings and customize local franchise fees, while master syllabus and assets remain centrally governed by Digital Ghuru HQ.
             </p>
           </div>
 
@@ -369,7 +369,7 @@ export const FranchiseCourses: React.FC = () => {
               <p className="text-sm text-slate-500 mt-1 max-w-md mx-auto">
                 {!franchise
                   ? 'Your current branch is not connected to a franchise network. Contact your platform administrator to link this branch to a franchise.'
-                  : 'Courses permitted for your franchise by Digital Guru HQ (Super Admin) will appear here for activation.'}
+                  : 'Courses permitted for your franchise by Digital Ghuru HQ (Super Admin) will appear here for activation.'}
               </p>
             </div>
           ) : (
@@ -402,7 +402,7 @@ export const FranchiseCourses: React.FC = () => {
                           {course.isSelected ? 'Enabled for Franchise' : 'Not Offered'}
                         </span>
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 text-[#006FFF] border border-blue-200 text-[11px] font-bold">
-                          <ShieldCheck className="w-3 h-3" /> Permitted by Digital Guru HQ
+                          <ShieldCheck className="w-3 h-3" /> Permitted by Digital Ghuru HQ
                         </span>
                         {course.category && (
                           <span className="px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 text-[11px] font-semibold">
@@ -413,7 +413,7 @@ export const FranchiseCourses: React.FC = () => {
 
                     <h3 className="text-base font-extrabold text-slate-900 line-clamp-1">{course.title}</h3>
                     <p className="text-xs text-slate-500 line-clamp-2 mt-1">
-                      {course.subTitle || course.description || 'Official Digital Guru Global Course'}
+                      {course.subTitle || course.description || 'Official Digital Ghuru Global Course'}
                     </p>
 
                     <div className="flex flex-wrap items-center gap-4 mt-3 text-xs font-semibold text-slate-600">

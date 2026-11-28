@@ -107,7 +107,7 @@ export const Step1Institute: React.FC<Step1Props> = ({ blueprint, onChange }) =>
           <Building2 className="w-4 h-4" />
         </div>
         <div className="text-xs text-[#475569] leading-relaxed">
-          <span className="font-bold text-[#0F172A]">Digital Guru Autofill:</span> Details are preloaded from your active institute session. You can customize them for specific examinations or branches without altering permanent institute records.
+          <span className="font-bold text-[#0F172A]">Digital Ghuru Autofill:</span> Details are preloaded from your active institute session. You can customize them for specific examinations or branches without altering permanent institute records.
         </div>
       </div>
     </div>

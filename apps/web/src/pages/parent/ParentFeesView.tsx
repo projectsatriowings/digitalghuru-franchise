@@ -91,7 +91,7 @@ export const ParentFeesView: React.FC<ParentFeesViewProps> = ({
           key: orderData.keyId,
           amount: Math.round(orderData.amount * 100),
           currency: orderData.currency || 'INR',
-          name: 'Digital Guru Center',
+          name: 'Digital Ghuru Center',
           description: `Fee: ${orderData.feeName} (${orderData.termLabel})`,
           order_id: orderData.orderId,
           handler: async function (response: any) {

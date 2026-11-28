@@ -199,7 +199,7 @@ export function normalizeError(error: any): Error {
     return new Error(error.response.data.message);
   }
   if (error.message === 'Network Error') {
-    return new Error('Cannot connect to Digital Guru server. Please check your internet connection.');
+    return new Error('Cannot connect to Digital Ghuru server. Please check your internet connection.');
   }
   return new Error(error.message || 'An unexpected error occurred');
 }

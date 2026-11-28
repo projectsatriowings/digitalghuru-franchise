@@ -1,5 +1,5 @@
 /**
- * Digital Guru Franchise Enterprise Shared Design System Tokens
+ * Digital Ghuru Franchise Enterprise Shared Design System Tokens
  * Source of truth for Branding, Web (Tailwind/CSS), and Multi-Tenant Franchise Theming.
  */
 export declare const digitalGuruBrand: {

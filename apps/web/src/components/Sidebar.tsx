@@ -436,7 +436,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </div>
 
       <div className="pt-4 border-t border-slate-800 text-[11px] text-slate-400 font-display text-center">
-        Digital Guru Franchise &bull; Enterprise v2.0
+        Digital Ghuru Franchise &bull; Enterprise v2.0
       </div>
     </aside>
   );

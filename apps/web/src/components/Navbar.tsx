@@ -113,7 +113,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileSidebar }) => {
         <div className="flex items-center gap-2.5">
           <img
             src={BRANDING.logo.navbar}
-            alt="Digital Guru"
+            alt="Digital Ghuru"
             className="h-8 w-auto object-contain"
             onError={(e) => {
               (e.currentTarget as HTMLElement).style.display = 'none';
@@ -121,7 +121,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileSidebar }) => {
           />
           <div className="flex flex-col">
             <span className="font-extrabold text-base tracking-tight text-slate-900 leading-tight">
-              Digital Guru <span className="text-[#006FFF] font-semibold text-xs tracking-normal">Franchise</span>
+              Digital Ghuru <span className="text-[#006FFF] font-semibold text-xs tracking-normal">Franchise</span>
             </span>
           </div>
         </div>

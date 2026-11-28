@@ -739,7 +739,7 @@ export const CourseManagement: React.FC = () => {
           <h3 className="text-lg font-bold text-slate-900">No courses found</h3>
           <p className="text-sm text-slate-500 mt-1 mb-5">
             {courses.length === 0
-              ? 'Get started by adding your first Digital Guru course.'
+              ? 'Get started by adding your first Digital Ghuru course.'
               : 'Try adjusting your search or filter criteria.'}
           </p>
           {courses.length === 0 && (

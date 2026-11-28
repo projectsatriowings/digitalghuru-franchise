@@ -312,7 +312,7 @@ export const CoursePlayer: React.FC<CoursePlayerProps> = ({
     return (
       <div className="bg-white rounded-3xl border border-slate-200 p-16 text-center">
         <Loader2 className="w-8 h-8 animate-spin text-[#006FFF] mx-auto mb-3" />
-        <p className="text-sm font-semibold text-slate-600">Loading Digital Guru Course Player...</p>
+        <p className="text-sm font-semibold text-slate-600">Loading Digital Ghuru Course Player...</p>
       </div>
     );
   }

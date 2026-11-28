@@ -1078,7 +1078,7 @@ export class CoursesService {
     const isSuperAdmin = callerRole === 'SUPER_ADMIN';
     if (!isSuperAdmin && (!existing || !existing.isPermitted)) {
       throw new CoursePermissionForbiddenError(
-        'Forbidden: This course has not been permitted for your franchise by Digital Guru HQ (Super Admin).'
+        'Forbidden: This course has not been permitted for your franchise by Digital Ghuru HQ (Super Admin).'
       );
     }
 
@@ -1846,7 +1846,7 @@ export class CoursesService {
         where: { id: studentId },
         include: { user: true }
       });
-      const recipientName = student ? `${student.firstName} ${student.lastName}`.trim() : 'Digital Guru Student';
+      const recipientName = student ? `${student.firstName} ${student.lastName}`.trim() : 'Digital Ghuru Student';
 
       // 5. Atomically allocate sequence number (respecting isolated schema when configured)
       const schemaMatch = (process.env.DATABASE_URL || '').match(/[?&]schema=([a-zA-Z0-9_]+)/);

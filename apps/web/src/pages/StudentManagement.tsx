@@ -236,7 +236,7 @@ export const StudentManagement: React.FC = () => {
     key = 'all'
   ) => {
     const code = instCode || activeInstitute?.code || 'INST';
-    const text = `Digital Guru ${role} Login & Password
+    const text = `Digital Ghuru ${role} Login & Password
 --------------------------------------
 Account Name: ${fullName}
 Role: ${role}
@@ -273,7 +273,7 @@ Important: Please keep these credentials confidential. Password must be changed 
     key = 'student_all'
   ) => {
     const code = instCode || activeInstitute?.code || 'INST';
-    const text = `Digital Guru Student Login & Password
+    const text = `Digital Ghuru Student Login & Password
 --------------------------------------
 Student: ${fullName}
 Role: Student
@@ -296,7 +296,7 @@ Please keep this login and password safe. Use your Admission Number and Institut
     key = 'parent_all'
   ) => {
     const code = instCode || activeInstitute?.code || 'INST';
-    const text = `Digital Guru Parent Login & Password
+    const text = `Digital Ghuru Parent Login & Password
 --------------------------------------
 Parent / Guardian: ${parentName}
 Student: ${studentName}
@@ -3072,7 +3072,7 @@ Please keep this login and password safe. Use your registered mobile number and 
                   const inst = admittedSuccess.instituteCode;
                   const st = admittedSuccess.studentCredentials;
                   const pr = admittedSuccess.parentCredentials;
-                  const text = `Digital Guru Admission Credentials (${admittedSuccess.name})
+                  const text = `Digital Ghuru Admission Credentials (${admittedSuccess.name})
 Institute Code: ${inst}
 Portal: ${window.location.origin}
 ======================================
