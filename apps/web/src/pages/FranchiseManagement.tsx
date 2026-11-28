@@ -79,7 +79,7 @@ export const FranchiseManagement: React.FC = () => {
   // Modals
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [createModalTab, setCreateModalTab] = useState<'profile' | 'model' | 'financials' | 'review'>('profile');
-  const [visitedTabs, setVisitedTabs] = useState<Set<'profile' | 'model' | 'financials' | 'review'>>(new Set(['profile']));
+  const [completedSteps, setCompletedSteps] = useState<Set<'profile' | 'model' | 'financials'>>(new Set());
   const [isLocatingPincode, setIsLocatingPincode] = useState(false);
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
   const [createdResultModal, setCreatedResultModal] = useState<any>(null);
@@ -635,6 +635,21 @@ export const FranchiseManagement: React.FC = () => {
     return true;
   };
 
+  const getRevenueShareTotal = () => {
+    const dg = Number(createForm.initialAgreement.digitalGuruRevenuePercentage ?? 0);
+    const pt = Number(createForm.initialAgreement.partnerRevenuePercentage ?? 0);
+    return {
+      dg,
+      pt,
+      total: Math.round((dg + pt) * 100) / 100,
+    };
+  };
+
+  const isRevenueSplitValid = () => {
+    const { dg, pt, total } = getRevenueShareTotal();
+    return dg >= 0 && pt >= 0 && dg <= 100 && pt <= 100 && total === 100;
+  };
+
   const validateModelStep = () => {
     if (!createForm.initialAgreement.startDate) {
       showToast('Agreement Start Date is required', 'error');
@@ -644,14 +659,18 @@ export const FranchiseManagement: React.FC = () => {
       showToast('Agreement End Date is required', 'error');
       return false;
     }
+    if (!isRevenueSplitValid()) {
+      const { total } = getRevenueShareTotal();
+      showToast(`Revenue share total must equal 100% (currently ${total}%)`, 'error');
+      return false;
+    }
     return true;
   };
 
   const validateFinancialsStep = () => {
-    const dg = Number(createForm.initialAgreement.digitalGuruRevenuePercentage || 0);
-    const pt = Number(createForm.initialAgreement.partnerRevenuePercentage || 0);
-    if (dg + pt !== 100) {
-      showToast(`Revenue share total must equal 100% (currently ${dg + pt}%)`, 'error');
+    if (!isRevenueSplitValid()) {
+      const { total } = getRevenueShareTotal();
+      showToast(`Revenue share total must equal 100% (currently ${total}%)`, 'error');
       return false;
     }
     if (createForm.initialAgreement.calculationMethod === 'FIXED_ANNUAL' && !Number(createForm.initialAgreement.annualRoyaltyAmount)) {
@@ -750,22 +769,158 @@ export const FranchiseManagement: React.FC = () => {
     (!createForm.authorizedContact?.phone || isValidPhone(createForm.authorizedContact.phone))
   );
 
-  // A step is only considered complete if the user has reached/validated it, not automatically pre-checked ahead of time
+  const resetCreateWizard = () => {
+    setCreateForm(initialCreateForm);
+    setCompletedSteps(new Set());
+    setCreateModalTab('profile');
+    setValidationErrors({});
+  };
+
+  const closeCreateModal = () => {
+    setShowCreateModal(false);
+    resetCreateWizard();
+  };
+
+  const invalidateModelAndFinancialSteps = () => {
+    setCompletedSteps((prev) => {
+      if (!prev.has('model') && !prev.has('financials')) return prev;
+      const next = new Set(prev);
+      next.delete('model');
+      next.delete('financials');
+      return next;
+    });
+  };
+
+  const PRESET_SUBTITLES: Record<string, string> = {
+    NEW_CENTRE_JOINT_INVESTMENT: 'Joint Setup • 50:50 Rev • Monthly',
+    EXISTING_CENTRE: 'Existing Infra • 45:55 Rev • Monthly',
+    CUSTOM_AGREEMENT: 'Custom Share & Terms',
+  };
+
+  const getAgreementPresetSubtitle = (tmpl: any) => {
+    if (tmpl.subtitle) return tmpl.subtitle;
+    if (PRESET_SUBTITLES[tmpl.type]) return PRESET_SUBTITLES[tmpl.type];
+    const defs = tmpl.defaults || {};
+    return `${defs.digitalGuruRevenuePercentage ?? 50}:${defs.partnerRevenuePercentage ?? 50} Rev • ${defs.settlementFrequency || 'MONTHLY'}`;
+  };
+
+  const updateCreateRevenueShare = (party: 'digitalGuru' | 'partner', rawValue: string, onAfterChange?: () => void) => {
+    const parsed = rawValue === '' ? 0 : Number(rawValue);
+    if (!Number.isFinite(parsed)) return;
+    const clamped = Math.round(Math.min(100, Math.max(0, parsed)) * 100) / 100;
+    const counterpart = Math.round((100 - clamped) * 100) / 100;
+    const dgPct = party === 'digitalGuru' ? clamped : counterpart;
+    const partnerPct = party === 'partner' ? clamped : counterpart;
+
+    setCreateForm((prev) => ({
+      ...prev,
+      initialAgreement: {
+        ...prev.initialAgreement,
+        digitalGuruRevenuePercentage: dgPct,
+        partnerRevenuePercentage: partnerPct,
+        royaltyPercentage: dgPct,
+      },
+    }));
+    onAfterChange?.();
+  };
+
+  const renderRevenueShareInputs = (options?: { compact?: boolean; onAfterChange?: () => void }) => {
+    const { total } = getRevenueShareTotal();
+    const isCustom = createForm.initialAgreement.agreementType === 'CUSTOM_AGREEMENT';
+    return (
+      <div className="space-y-2.5">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold text-slate-800">Revenue Sharing Split</span>
+            {isCustom && (
+              <span className="px-2 py-0.5 rounded-full bg-blue-50 text-[#006FFF] border border-blue-200 text-[10px] font-bold">
+                Custom Split
+              </span>
+            )}
+          </div>
+          <span
+            className={`px-2 py-0.5 rounded text-[10px] font-bold ${total === 100
+              ? 'bg-emerald-100 text-emerald-800'
+              : 'bg-rose-100 text-rose-800'
+              }`}
+          >
+            Total: {total}% (Must = 100%)
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs font-medium text-slate-700">Digital Ghuru Revenue Share (%) *</label>
+            <input
+              type="number"
+              min="0"
+              max="100"
+              step="any"
+              required
+              value={createForm.initialAgreement.digitalGuruRevenuePercentage}
+              onFocus={(e) => e.target.select()}
+              onChange={(e) => updateCreateRevenueShare('digitalGuru', e.target.value, options?.onAfterChange)}
+              className={`mt-1 w-full px-3 ${options?.compact ? 'py-2' : 'py-1.5'} border rounded-lg text-sm bg-white focus:ring-2 focus:ring-[#006FFF]`}
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-700">Franchise Partner Revenue Share (%) *</label>
+            <input
+              type="number"
+              min="0"
+              max="100"
+              step="any"
+              required
+              value={createForm.initialAgreement.partnerRevenuePercentage}
+              onFocus={(e) => e.target.select()}
+              onChange={(e) => updateCreateRevenueShare('partner', e.target.value, options?.onAfterChange)}
+              className={`mt-1 w-full px-3 ${options?.compact ? 'py-2' : 'py-1.5'} border rounded-lg text-sm bg-white focus:ring-2 focus:ring-[#006FFF]`}
+            />
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Steps with pre-filled defaults are only marked complete after the user explicitly advances past them
   const isModelStepComplete = Boolean(
     isProfileStepComplete &&
-    visitedTabs.has('model') &&
+    completedSteps.has('model') &&
     createForm.initialAgreement.startDate &&
-    createForm.initialAgreement.endDate
+    createForm.initialAgreement.endDate &&
+    isRevenueSplitValid()
   );
 
   const isFinancialsStepComplete = Boolean(
     isModelStepComplete &&
-    visitedTabs.has('financials') &&
-    Number(createForm.initialAgreement.digitalGuruRevenuePercentage || 0) +
-    Number(createForm.initialAgreement.partnerRevenuePercentage || 0) === 100 &&
+    completedSteps.has('financials') &&
+    isRevenueSplitValid() &&
     (createForm.initialAgreement.calculationMethod !== 'FIXED_ANNUAL' || Number(createForm.initialAgreement.annualRoyaltyAmount) > 0) &&
     (createForm.initialAgreement.calculationMethod !== 'PER_STUDENT' || Number(createForm.initialAgreement.perStudentFee) > 0)
   );
+
+  const navigateToCreateTab = (targetTab: 'profile' | 'model' | 'financials' | 'review') => {
+    setCreateModalTab(targetTab);
+    createModalBodyRef.current?.scrollTo({ top: 0, behavior: 'instant' });
+  };
+
+  const handleAdvanceStep = (currentStep: 'profile' | 'model' | 'financials') => {
+    if (currentStep === 'profile') {
+      if (!validateProfileStep()) return;
+      setCompletedSteps((prev) => new Set([...prev, 'profile']));
+      navigateToCreateTab('model');
+      return;
+    }
+    if (currentStep === 'model') {
+      if (!validateModelStep()) return;
+      setCompletedSteps((prev) => new Set([...prev, 'profile', 'model']));
+      navigateToCreateTab('financials');
+      return;
+    }
+    if (!validateFinancialsStep()) return;
+    setCompletedSteps((prev) => new Set([...prev, 'profile', 'model', 'financials']));
+    navigateToCreateTab('review');
+  };
 
   const handleTabClick = (targetTab: 'profile' | 'model' | 'financials' | 'review') => {
     if (targetTab === createModalTab) return;
@@ -776,10 +931,14 @@ export const FranchiseManagement: React.FC = () => {
 
     // Navigating back to an earlier step is always permitted
     if (targetIndex < currentIndex) {
-      setCreateModalTab(targetTab);
-      createModalBodyRef.current?.scrollTo({ top: 0, behavior: 'instant' });
+      navigateToCreateTab(targetTab);
       return;
     }
+
+    // Prevent jumping ahead to locked steps whose prerequisites have not been completed
+    if (targetIndex >= 1 && !isProfileStepComplete) return;
+    if (targetIndex >= 2 && !isModelStepComplete) return;
+    if (targetIndex >= 3 && !isFinancialsStepComplete) return;
 
     // Moving forward requires step-by-step validation
     if (targetIndex >= 1 && !validateProfileStep()) {
@@ -792,9 +951,15 @@ export const FranchiseManagement: React.FC = () => {
       return;
     }
 
-    setCreateModalTab(targetTab);
-    setVisitedTabs((prev) => new Set([...prev, targetTab]));
-    createModalBodyRef.current?.scrollTo({ top: 0, behavior: 'instant' });
+    setCompletedSteps((prev) => {
+      const next = new Set(prev);
+      for (let i = 0; i < targetIndex; i++) {
+        const step = stepOrder[i];
+        if (step !== 'review') next.add(step);
+      }
+      return next;
+    });
+    navigateToCreateTab(targetTab);
   };
 
   const handleCreateFranchise = async (e: React.FormEvent) => {
@@ -817,10 +982,10 @@ export const FranchiseManagement: React.FC = () => {
     setIsSubmittingFrmittingFranchise:
     setIsSubmittingFranchise(true);
     try {
-      const dgPct = Number(createForm.initialAgreement.digitalGuruRevenuePercentage || 50);
+      const dgPct = Number(createForm.initialAgreement.digitalGuruRevenuePercentage ?? 50);
       const partnerPct = createForm.initialAgreement.calculationMethod === 'PERCENTAGE_REVENUE'
-        ? (100 - dgPct)
-        : Number(createForm.initialAgreement.partnerRevenuePercentage || 50);
+        ? Math.round((100 - dgPct) * 100) / 100
+        : Number(createForm.initialAgreement.partnerRevenuePercentage ?? 50);
 
       const payload: any = {
         code: createForm.code?.trim().toUpperCase() || undefined,
@@ -889,9 +1054,8 @@ export const FranchiseManagement: React.FC = () => {
             : 'Franchise, Owner Account, and Monthly Settlement Agreement created successfully!',
           'success'
         );
-        setShowCreateModal(false);
+        closeCreateModal();
         setCreatedResultModal(res.data);
-        setCreateForm(initialCreateForm);
         loadData();
       }
     } catch (err: any) {
@@ -1589,9 +1753,7 @@ export const FranchiseManagement: React.FC = () => {
                   }
                 })
                 .catch(() => { });
-              setCreateForm(initialCreateForm);
-              setVisitedTabs(new Set(['profile']));
-              setCreateModalTab('profile');
+              resetCreateWizard();
               setShowCreateModal(true);
             }}
             className="flex items-center gap-2 px-5 py-2.5 bg-[#FEDC32] hover:bg-[#FEDC32]/90 text-slate-900 font-bold rounded-xl shadow-lg transition-all text-sm"
@@ -2502,7 +2664,7 @@ export const FranchiseManagement: React.FC = () => {
                 </div>
                 <button
                   type="button"
-                  onClick={() => setShowCreateModal(false)}
+                  onClick={closeCreateModal}
                   className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-100 transition-colors"
                   aria-label="Close"
                 >
@@ -2524,6 +2686,7 @@ export const FranchiseManagement: React.FC = () => {
                     <button
                       key={t.id}
                       type="button"
+                      disabled={isLocked}
                       onClick={() => handleTabClick(t.id as any)}
                       title={isLocked ? 'Complete the previous section to unlock this step' : undefined}
                       className={`text-left p-2.5 rounded-xl border transition-all ${isActive
@@ -2867,8 +3030,10 @@ export const FranchiseManagement: React.FC = () => {
                             No agreement templates available on server.
                           </div>
                         ) : (
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
-                            {agreementTemplates.map((tmpl: any) => {
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
+                            {agreementTemplates
+                              .filter((tmpl: any) => tmpl.type !== 'BRAND_AND_COURSE_SUPPORT')
+                              .map((tmpl: any) => {
                               const isSelected = createForm.initialAgreement.agreementType === tmpl.type;
                               const defs = tmpl.defaults || {};
                               return (
@@ -2911,6 +3076,7 @@ export const FranchiseManagement: React.FC = () => {
                                         courseSoftwarePricingNotes: defs.courseSoftwarePricingNotes || '',
                                       },
                                     });
+                                    invalidateModelAndFinancialSteps();
                                   }}
                                   className={`p-3 rounded-xl text-left border text-xs transition-all ${isSelected
                                     ? 'bg-blue-50 border-[#006FFF] text-[#006FFF] font-bold shadow-sm ring-1 ring-[#006FFF]'
@@ -2919,7 +3085,7 @@ export const FranchiseManagement: React.FC = () => {
                                 >
                                   <div className="font-bold text-[12px] leading-tight">{tmpl.label}</div>
                                   <div className="text-[10px] text-slate-500 mt-1">
-                                    {defs.digitalGuruRevenuePercentage ?? 50}:{defs.partnerRevenuePercentage ?? 50} Rev • {defs.settlementFrequency || 'MONTHLY'}
+                                    {getAgreementPresetSubtitle(tmpl)}
                                   </div>
                                 </button>
                               );
@@ -2927,7 +3093,7 @@ export const FranchiseManagement: React.FC = () => {
                           </div>
                         )}
                         <p className="text-[10px] text-slate-400 mt-1.5 italic">
-                          Presets provide illustrative defaults only. All values are independent and fully editable in the next step.
+                          Presets provide starting defaults only. Adjust the revenue share below and fine-tune investment or expenses in the next step.
                         </p>
                       </div>
 
@@ -2939,12 +3105,13 @@ export const FranchiseManagement: React.FC = () => {
                             type="date"
                             required
                             value={createForm.initialAgreement.startDate}
-                            onChange={(e) =>
+                            onChange={(e) => {
                               setCreateForm({
                                 ...createForm,
                                 initialAgreement: { ...createForm.initialAgreement, startDate: e.target.value },
-                              })
-                            }
+                              });
+                              invalidateModelAndFinancialSteps();
+                            }}
                             className="mt-1 w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-[#006FFF]"
                           />
                         </div>
@@ -2955,12 +3122,13 @@ export const FranchiseManagement: React.FC = () => {
                             type="date"
                             required
                             value={createForm.initialAgreement.endDate}
-                            onChange={(e) =>
+                            onChange={(e) => {
                               setCreateForm({
                                 ...createForm,
                                 initialAgreement: { ...createForm.initialAgreement, endDate: e.target.value },
-                              })
-                            }
+                              });
+                              invalidateModelAndFinancialSteps();
+                            }}
                             className="mt-1 w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-[#006FFF]"
                           />
                         </div>
@@ -2969,21 +3137,32 @@ export const FranchiseManagement: React.FC = () => {
                           <label className="block text-xs font-medium text-slate-700">Settlement Frequency *</label>
                           <select
                             value={createForm.initialAgreement.settlementFrequency}
-                            onChange={(e: any) =>
+                            onChange={(e: any) => {
                               setCreateForm({
                                 ...createForm,
                                 initialAgreement: {
                                   ...createForm.initialAgreement,
                                   settlementFrequency: e.target.value,
                                 },
-                              })
-                            }
+                              });
+                              invalidateModelAndFinancialSteps();
+                            }}
                             className="mt-1 w-full px-3 py-2 border rounded-lg text-sm font-medium focus:ring-2 focus:ring-[#006FFF]"
                           >
                             <option value="MONTHLY">Monthly Settlement</option>
                             <option value="YEARLY">Yearly Settlement (2 Equal Installments)</option>
                           </select>
                         </div>
+                      </div>
+
+                      {/* Manual Revenue Share Percentage Configuration */}
+                      <div
+                        className={`p-3.5 rounded-xl border transition-colors ${createForm.initialAgreement.agreementType === 'CUSTOM_AGREEMENT'
+                          ? 'bg-blue-50/40 border-blue-200'
+                          : 'bg-slate-50 border-slate-200'
+                          }`}
+                      >
+                        {renderRevenueShareInputs({ compact: true, onAfterChange: invalidateModelAndFinancialSteps })}
                       </div>
                     </div>
                   </div>
@@ -3098,71 +3277,7 @@ export const FranchiseManagement: React.FC = () => {
 
                     {/* Revenue Sharing & Calculation Basis */}
                     <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-slate-800">Revenue Sharing Configuration</span>
-                        <span
-                          className={`px-2 py-0.5 rounded text-[10px] font-bold ${Number(createForm.initialAgreement.digitalGuruRevenuePercentage) +
-                            Number(createForm.initialAgreement.partnerRevenuePercentage) ===
-                            100
-                            ? 'bg-emerald-100 text-emerald-800'
-                            : 'bg-rose-100 text-rose-800'
-                            }`}
-                        >
-                          Total:{' '}
-                          {Number(createForm.initialAgreement.digitalGuruRevenuePercentage || 0) +
-                            Number(createForm.initialAgreement.partnerRevenuePercentage || 0)}
-                          % (Must = 100%)
-                        </span>
-                      </div>
-
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        <div>
-                          <label className="block text-xs font-medium text-slate-700">Digital Ghuru Revenue Share (%) *</label>
-                          <input
-                            type="number"
-                            min="0"
-                            max="100"
-                            required
-                            value={createForm.initialAgreement.digitalGuruRevenuePercentage}
-                            onChange={(e) => {
-                              const dg = Number(e.target.value);
-                              setCreateForm({
-                                ...createForm,
-                                initialAgreement: {
-                                  ...createForm.initialAgreement,
-                                  digitalGuruRevenuePercentage: dg,
-                                  partnerRevenuePercentage: 100 - dg,
-                                  royaltyPercentage: dg,
-                                },
-                              });
-                            }}
-                            className="mt-1 w-full px-3 py-1.5 border rounded-lg text-sm"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-xs font-medium text-slate-700">Franchise Partner Revenue Share (%) *</label>
-                          <input
-                            type="number"
-                            min="0"
-                            max="100"
-                            required
-                            value={createForm.initialAgreement.partnerRevenuePercentage}
-                            onChange={(e) => {
-                              const pt = Number(e.target.value);
-                              setCreateForm({
-                                ...createForm,
-                                initialAgreement: {
-                                  ...createForm.initialAgreement,
-                                  partnerRevenuePercentage: pt,
-                                  digitalGuruRevenuePercentage: 100 - pt,
-                                  royaltyPercentage: 100 - pt,
-                                },
-                              });
-                            }}
-                            className="mt-1 w-full px-3 py-1.5 border rounded-lg text-sm"
-                          />
-                        </div>
-                      </div>
+                      {renderRevenueShareInputs()}
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         <div>
@@ -3488,7 +3603,7 @@ export const FranchiseManagement: React.FC = () => {
                   {createModalTab === 'profile' ? (
                     <button
                       type="button"
-                      onClick={() => setShowCreateModal(false)}
+                      onClick={closeCreateModal}
                       className="px-4 py-2 border border-slate-300 text-slate-700 rounded-xl text-xs font-semibold hover:bg-white transition cursor-pointer"
                     >
                       Cancel
@@ -3496,10 +3611,7 @@ export const FranchiseManagement: React.FC = () => {
                   ) : createModalTab === 'model' ? (
                     <button
                       type="button"
-                      onClick={() => {
-                        setCreateModalTab('profile');
-                        createModalBodyRef.current?.scrollTo({ top: 0, behavior: 'instant' });
-                      }}
+                      onClick={() => navigateToCreateTab('profile')}
                       className="px-4 py-2 border border-slate-300 text-slate-700 rounded-xl text-xs font-semibold hover:bg-white transition cursor-pointer"
                     >
                       ← Back to Profile
@@ -3507,10 +3619,7 @@ export const FranchiseManagement: React.FC = () => {
                   ) : createModalTab === 'financials' ? (
                     <button
                       type="button"
-                      onClick={() => {
-                        setCreateModalTab('model');
-                        createModalBodyRef.current?.scrollTo({ top: 0, behavior: 'instant' });
-                      }}
+                      onClick={() => navigateToCreateTab('model')}
                       className="px-4 py-2 border border-slate-300 text-slate-700 rounded-xl text-xs font-semibold hover:bg-white transition cursor-pointer"
                     >
                       ← Back to Model
@@ -3518,10 +3627,7 @@ export const FranchiseManagement: React.FC = () => {
                   ) : (
                     <button
                       type="button"
-                      onClick={() => {
-                        setCreateModalTab('financials');
-                        createModalBodyRef.current?.scrollTo({ top: 0, behavior: 'instant' });
-                      }}
+                      onClick={() => navigateToCreateTab('financials')}
                       className="px-4 py-2 border border-slate-300 text-slate-700 rounded-xl text-xs font-semibold hover:bg-white transition cursor-pointer"
                     >
                       ← Back to Financials
@@ -3537,13 +3643,7 @@ export const FranchiseManagement: React.FC = () => {
                   {createModalTab === 'profile' ? (
                     <button
                       type="button"
-                      onClick={() => {
-                        if (validateProfileStep()) {
-                          setVisitedTabs((prev) => new Set([...prev, 'model']));
-                          setCreateModalTab('model');
-                          createModalBodyRef.current?.scrollTo({ top: 0, behavior: 'instant' });
-                        }
-                      }}
+                      onClick={() => handleAdvanceStep('profile')}
                       className="px-5 py-2.5 bg-[#006FFF] hover:bg-[#0058D4] text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm cursor-pointer"
                     >
                       Next: Agreement Model <ChevronRight className="w-4 h-4" />
@@ -3551,13 +3651,7 @@ export const FranchiseManagement: React.FC = () => {
                   ) : createModalTab === 'model' ? (
                     <button
                       type="button"
-                      onClick={() => {
-                        if (validateModelStep()) {
-                          setVisitedTabs((prev) => new Set([...prev, 'financials']));
-                          setCreateModalTab('financials');
-                          createModalBodyRef.current?.scrollTo({ top: 0, behavior: 'instant' });
-                        }
-                      }}
+                      onClick={() => handleAdvanceStep('model')}
                       className="px-5 py-2.5 bg-[#006FFF] hover:bg-[#0058D4] text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm cursor-pointer"
                     >
                       Next: Financial Terms <ChevronRight className="w-4 h-4" />
@@ -3565,13 +3659,7 @@ export const FranchiseManagement: React.FC = () => {
                   ) : createModalTab === 'financials' ? (
                     <button
                       type="button"
-                      onClick={() => {
-                        if (validateFinancialsStep()) {
-                          setVisitedTabs((prev) => new Set([...prev, 'review']));
-                          setCreateModalTab('review');
-                          createModalBodyRef.current?.scrollTo({ top: 0, behavior: 'instant' });
-                        }
-                      }}
+                      onClick={() => handleAdvanceStep('financials')}
                       className="px-5 py-2.5 bg-[#006FFF] hover:bg-[#0058D4] text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm cursor-pointer"
                     >
                       Next: Review Summary <ChevronRight className="w-4 h-4" />
@@ -4686,7 +4774,9 @@ export const FranchiseManagement: React.FC = () => {
                   >
                     <option value="NEW_CENTRE_JOINT_INVESTMENT">New Centre Joint Investment</option>
                     <option value="EXISTING_CENTRE">Existing Centre</option>
-                    <option value="BRAND_AND_COURSE_SUPPORT">Brand & Course Support</option>
+                    {reviseForm.agreementType === 'BRAND_AND_COURSE_SUPPORT' && (
+                      <option value="BRAND_AND_COURSE_SUPPORT">Brand & Course Support</option>
+                    )}
                     <option value="CUSTOM_AGREEMENT">Custom Agreement</option>
                   </select>
                 </div>
