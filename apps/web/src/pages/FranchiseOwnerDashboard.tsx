@@ -150,7 +150,7 @@ export const FranchiseOwnerDashboard: React.FC = () => {
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
                 {franchise.status || 'ACTIVE'}
               </span>
-              <span className="text-xs text-slate-400">Digital Guru Official Franchise Center</span>
+              <span className="text-xs text-slate-400">Digital Ghuru Official Franchise Center</span>
             </div>
 
             <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-white">{franchise.name}</h1>
@@ -590,7 +590,7 @@ export const FranchiseOwnerDashboard: React.FC = () => {
             <div>
               <h3 className="font-bold text-slate-900 text-base">Authorized Campus Location</h3>
               <p className="text-xs text-slate-500">
-                Operating campus authorized under your Digital Guru franchise license. To add another branch, please contact Super Admin.
+                Operating campus authorized under your Digital Ghuru franchise license. To add another branch, please contact Super Admin.
               </p>
             </div>
             <div className="flex items-center gap-2.5">
@@ -902,7 +902,7 @@ export const FranchiseOwnerDashboard: React.FC = () => {
             <div>
               <h3 className="font-bold text-slate-900 text-lg">Master Franchise Agreement</h3>
               <p className="text-xs text-slate-500">
-                Terms and legal conditions established with Digital Guru Platform.
+                Terms and legal conditions established with Digital Ghuru Platform.
               </p>
             </div>
             {activeAgreement && (
@@ -1031,7 +1031,7 @@ export const FranchiseOwnerDashboard: React.FC = () => {
                   2. <strong>Franchise Operation:</strong> The Franchisee Admin is authorized to manage students, admissions, staff, class schedules, exams, and course fees within their authorized campus locations.
                 </p>
                 <p>
-                  3. <strong>Brand & Integrity:</strong> Official Digital Guru materials, badges, and learning systems are licensed for use during the active agreement term.
+                  3. <strong>Brand & Integrity:</strong> Official Digital Ghuru materials, badges, and learning systems are licensed for use during the active agreement term.
                 </p>
               </div>
             </div>
@@ -1051,7 +1051,7 @@ export const FranchiseOwnerDashboard: React.FC = () => {
               {/* Receipt Header */}
               <div className="flex justify-between items-start border-b border-slate-200 pb-4">
                 <div>
-                  <div className="text-xl font-black text-slate-900 tracking-tight">DIGITAL GURU</div>
+                  <div className="text-xl font-black text-slate-900 tracking-tight">DIGITAL GHURU</div>
                   <div className="text-xs text-slate-500 font-semibold">Franchise Enterprise</div>
                   <div className="text-[11px] text-slate-400 mt-0.5">Jaighurudeva Educational Academy Partner</div>
                 </div>

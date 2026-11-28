@@ -420,6 +420,27 @@ exports.StorageManager = {
             acceptRanges: 'bytes',
         };
     },
+    async findPublicMediaStream(options) {
+        const { filename, rangeHeader } = options;
+        if (!filename)
+            return null;
+        for (const folder of exports.PUBLIC_COURSE_FOLDERS) {
+            try {
+                const result = await this.getMediaStream({
+                    scope: 'public',
+                    folder,
+                    filename,
+                    rangeHeader,
+                });
+                if (result)
+                    return result;
+            }
+            catch {
+                // continue searching remaining public folders
+            }
+        }
+        return null;
+    },
     async mediaExists(options) {
         const { scope, folder, filename } = options;
         if (!folder || !filename)

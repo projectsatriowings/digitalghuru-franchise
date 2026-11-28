@@ -15,7 +15,7 @@ export const BrandFooter: React.FC = () => {
               Our Campuses & Branches
             </h4>
             <p className="text-sm text-slate-400 mt-1">
-              Digital Guru Centers with Agency-Style Learning & State-of-the-art Infrastructure
+              Digital Ghuru Centers with Agency-Style Learning & State-of-the-art Infrastructure
             </p>
           </div>
           <div className="mt-4 md:mt-0 flex items-center gap-2">
@@ -65,7 +65,7 @@ export const BrandFooter: React.FC = () => {
             <div className="flex items-center gap-4">
               <img
                 src={BRANDING.logo.full}
-                alt="Digital Guru Logo"
+                alt="Digital Ghuru Logo"
                 className="h-10 w-auto object-contain bg-white/5 p-1 rounded"
               />
               <span className="text-slate-500 font-bold text-sm">✕</span>
@@ -80,7 +80,7 @@ export const BrandFooter: React.FC = () => {
             </div>
 
             <p className="text-xs md:text-sm text-slate-300 leading-relaxed max-w-lg">
-              Digital Guru Franchise Enterprise is proudly built for franchise operators, institutes, faculty, students, and parents. Combining practical digital execution with structured academic excellence.
+              Digital Ghuru Franchise Enterprise is proudly built for franchise operators, institutes, faculty, students, and parents. Combining practical digital execution with structured academic excellence.
             </p>
 
             {/* Social Icons */}
@@ -160,7 +160,7 @@ export const BrandFooter: React.FC = () => {
             <h5 className="font-heading font-semibold text-white text-sm uppercase tracking-wider">
               Platform
             </h5>
-            <p>Digital Guru Franchise Operating System (FOS) v2.0</p>
+            <p>Digital Ghuru Franchise Operating System (FOS) v2.0</p>
             <p>Independent High-Performance Multi-Tenant Architecture</p>
             <div className="pt-2 text-[11px] text-slate-500">
               © {new Date().getFullYear()} Digital Ghuru. All rights reserved.

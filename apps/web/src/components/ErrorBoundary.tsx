@@ -23,7 +23,7 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error('[Digital Guru Franchise ErrorBoundary] Caught an unhandled error:', error, errorInfo);
+    console.error('[Digital Ghuru Franchise ErrorBoundary] Caught an unhandled error:', error, errorInfo);
     this.setState({ error, errorInfo });
   }
 
@@ -48,7 +48,7 @@ export class ErrorBoundary extends Component<Props, State> {
             <div className="space-y-2">
               <h2 className="text-xl font-bold text-slate-900 font-display">Something unexpected happened</h2>
               <p className="text-xs text-slate-500 leading-relaxed">
-                Digital Guru Franchise platform caught an unexpected render issue. You can reload the application or return to the login screen.
+                Digital Ghuru Franchise platform caught an unexpected render issue. You can reload the application or return to the login screen.
               </p>
             </div>
 

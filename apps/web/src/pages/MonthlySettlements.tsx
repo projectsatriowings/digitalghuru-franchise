@@ -1650,7 +1650,7 @@ export const MonthlySettlements: React.FC = () => {
 
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    DigitalGuru Share (%)
+                    Digital Ghuru Share (%)
                   </label>
                   <div className="relative">
                     <input
@@ -1668,7 +1668,7 @@ export const MonthlySettlements: React.FC = () => {
               <div className="space-y-1.5 pt-1">
                 <div className="flex justify-between text-[11px] font-bold">
                   <span className="text-[#006FFF]">Franchise: {Number(franchiseShareInput || 0)}%</span>
-                  <span className="text-slate-600">DigitalGuru: {Number((100 - Number(franchiseShareInput || 0)).toFixed(2))}%</span>
+                  <span className="text-slate-600">Digital Ghuru: {Number((100 - Number(franchiseShareInput || 0)).toFixed(2))}%</span>
                 </div>
                 <div className="w-full h-2.5 bg-slate-200 rounded-full overflow-hidden flex">
                   <div

@@ -298,7 +298,7 @@ export const FranchiseManagement: React.FC = () => {
       royaltyBasis: 'TOTAL_COLLECTIONS',
       perStudentFee: 2000,
       dueDay: 10,
-      terms: 'Standard Digital Guru franchise license terms. Two annual installments due per agreement year.',
+      terms: 'Standard Digital Ghuru franchise license terms. Two annual installments due per agreement year.',
       notes: '',
     },
   };
@@ -1564,7 +1564,7 @@ export const FranchiseManagement: React.FC = () => {
             <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-[#FEDC32]/20 text-[#FEDC32] border border-[#FEDC32]/30">
               Super Admin Control Center
             </span>
-            <span className="text-xs text-slate-400">Digital Guru Franchise Enterprise</span>
+            <span className="text-xs text-slate-400">Digital Ghuru Franchise Enterprise</span>
           </div>
           <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">Franchise & Royalty Management</h1>
           <p className="text-sm text-slate-400 max-w-2xl">
@@ -2395,7 +2395,7 @@ export const FranchiseManagement: React.FC = () => {
                   <th className="px-4 py-3">Collections</th>
                   <th className="px-4 py-3">Calculation Basis</th>
                   <th className="px-4 py-3">Deductible / Net</th>
-                  <th className="px-4 py-3">Digital Guru Share</th>
+                  <th className="px-4 py-3">Digital Ghuru Share</th>
                   <th className="px-4 py-3">Partner Share</th>
                   <th className="px-4 py-3">Due Date</th>
                   <th className="px-4 py-3">Status</th>
@@ -2583,7 +2583,7 @@ export const FranchiseManagement: React.FC = () => {
                           <input
                             type="text"
                             required
-                            placeholder="e.g. Digital Guru Chennai Central"
+                            placeholder="e.g. Digital Ghuru Chennai Central"
                             value={createForm.name}
                             onChange={(e) => {
                               setCreateForm({ ...createForm, name: e.target.value });
@@ -3023,7 +3023,7 @@ export const FranchiseManagement: React.FC = () => {
                           />
                         </div>
                         <div>
-                          <label className="block text-xs font-medium text-slate-700">Digital Guru Investment (%)</label>
+                          <label className="block text-xs font-medium text-slate-700">Digital Ghuru Investment (%)</label>
                           <input
                             type="number"
                             min="0"
@@ -3117,7 +3117,7 @@ export const FranchiseManagement: React.FC = () => {
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         <div>
-                          <label className="block text-xs font-medium text-slate-700">Digital Guru Revenue Share (%) *</label>
+                          <label className="block text-xs font-medium text-slate-700">Digital Ghuru Revenue Share (%) *</label>
                           <input
                             type="number"
                             min="0"
@@ -3294,7 +3294,7 @@ export const FranchiseManagement: React.FC = () => {
                               className="mt-0.5 w-full px-2 py-1 border rounded text-xs bg-white"
                             >
                               <option value="PARTNER">Partner</option>
-                              <option value="DIGITAL_GURU">Digital Guru</option>
+                              <option value="DIGITAL_GURU">Digital Ghuru</option>
                               <option value="SHARED">Shared (50:50)</option>
                               <option value="CUSTOM">Custom</option>
                             </select>
@@ -3323,7 +3323,7 @@ export const FranchiseManagement: React.FC = () => {
                               }
                               className="mt-0.5 w-full px-2 py-1 border rounded text-xs bg-white"
                             >
-                              <option value="DIGITAL_GURU">Digital Guru</option>
+                              <option value="DIGITAL_GURU">Digital Ghuru</option>
                               <option value="PARTNER">Partner</option>
                               <option value="SHARED">Shared</option>
                             </select>
@@ -3406,10 +3406,10 @@ export const FranchiseManagement: React.FC = () => {
                       </div>
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
-                        {/* Digital Guru Column */}
+                        {/* Digital Ghuru Column */}
                         <div className="bg-slate-800/80 p-3 rounded-lg border border-slate-700 space-y-2">
                           <div className="font-bold text-sm text-[#FEDC32] flex items-center justify-between">
-                            <span>Digital Guru (Franchisor)</span>
+                            <span>Digital Ghuru (Franchisor)</span>
                             <span className="text-emerald-400 font-black">{createForm.initialAgreement.digitalGuruRevenuePercentage}% Rev</span>
                           </div>
                           <div className="space-y-1 text-slate-300 text-[11px]">
@@ -3466,7 +3466,7 @@ export const FranchiseManagement: React.FC = () => {
                       <div className="p-2.5 bg-blue-950/70 border border-blue-800 rounded-lg text-[11px] text-blue-200 flex items-start gap-2">
                         <Info className="w-4 h-4 text-blue-400 mt-0.5 flex-shrink-0" />
                         <span>
-                          <strong>DIRECT EXPENSE RULE:</strong> Direct expenses (such as Rent paid by Partner or Trainer Salaries paid by Digital Guru) are borne directly by each party and are <strong>NEVER</strong> automatically deducted from gross revenue collections. Deductions occur only when calculation basis is set to <em>Profit After Expenses</em> with approved deductible receipts.
+                          <strong>DIRECT EXPENSE RULE:</strong> Direct expenses (such as Rent paid by Partner or Trainer Salaries paid by Digital Ghuru) are borne directly by each party and are <strong>NEVER</strong> automatically deducted from gross revenue collections. Deductions occur only when calculation basis is set to <em>Profit After Expenses</em> with approved deductible receipts.
                         </span>
                       </div>
                     </div>
@@ -3765,7 +3765,7 @@ export const FranchiseManagement: React.FC = () => {
                     createdResultModal.ownerCredentials?.temporaryPassword ||
                     '';
                   const creds = [
-                    `🎓 Digital Guru Franchise Center Onboarding`,
+                    `🎓 Digital Ghuru Franchise Center Onboarding`,
                     `=========================================`,
                     `Franchise Center : ${createdResultModal.franchise?.name} (${createdResultModal.franchise?.code})`,
                     `Agreement Number : ${createdResultModal.agreement?.agreementNumber}`,
@@ -3963,7 +3963,7 @@ export const FranchiseManagement: React.FC = () => {
               {/* Receipt Header */}
               <div className="flex justify-between items-start border-b border-slate-200 pb-4">
                 <div>
-                  <div className="text-xl font-black text-slate-900 tracking-tight">DIGITAL GURU</div>
+                  <div className="text-xl font-black text-slate-900 tracking-tight">DIGITAL GHURU</div>
                   <div className="text-xs text-slate-500 font-semibold">Franchise Enterprise</div>
                   <div className="text-[11px] text-slate-400 mt-0.5">Jaighurudeva Educational Academy Partner</div>
                 </div>
@@ -4327,8 +4327,8 @@ export const FranchiseManagement: React.FC = () => {
                     onClick={() => {
                       const pwd = resetResult.permanentPassword || resetResult.password || resetResult.temporaryPassword;
                       const creds = [
-                        `Digital Guru Franchise Login Credentials`,
-                        `Franchise: ${selectedFranchiseForReset?.name || 'Digital Guru Franchise'}`,
+                        `Digital Ghuru Franchise Login Credentials`,
+                        `Franchise: ${selectedFranchiseForReset?.name || 'Digital Ghuru Franchise'}`,
                         `Owner: ${selectedFranchiseForReset?.ownerName || resetResult.fullName}`,
                         `Portal URL: ${window.location.origin}/login`,
                         `Login Email: ${resetResult.email}`,
@@ -4491,7 +4491,7 @@ export const FranchiseManagement: React.FC = () => {
                       <input
                         type="text"
                         required
-                        placeholder="e.g. Digital Guru Anna Nagar Campus"
+                        placeholder="e.g. Digital Ghuru Anna Nagar Campus"
                         value={branchForm.name}
                         onChange={(e) => setBranchForm({ ...branchForm, name: e.target.value })}
                         className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-[#006FFF]"
@@ -4708,7 +4708,7 @@ export const FranchiseManagement: React.FC = () => {
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-medium text-slate-700">Digital Guru Revenue Share (%) *</label>
+                    <label className="block text-xs font-medium text-slate-700">Digital Ghuru Revenue Share (%) *</label>
                     <input
                       type="number"
                       min="0"
@@ -4837,7 +4837,7 @@ export const FranchiseManagement: React.FC = () => {
                         onChange={(e) => setReviseForm({ ...reviseForm, marketingResponsibleParty: e.target.value })}
                         className="mt-0.5 w-full px-2 py-1 border rounded text-xs bg-white"
                       >
-                        <option value="DIGITAL_GURU">Digital Guru</option>
+                        <option value="DIGITAL_GURU">Digital Ghuru</option>
                         <option value="PARTNER">Partner</option>
                         <option value="SHARED">Shared</option>
                       </select>
@@ -4887,7 +4887,7 @@ export const FranchiseManagement: React.FC = () => {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
                   <div className="bg-slate-800/80 p-3 rounded-lg border border-slate-700 space-y-1 text-[11px] text-slate-300">
-                    <div className="font-bold text-sm text-[#FEDC32]">Digital Guru: {reviseForm.digitalGuruRevenuePercentage}% Rev</div>
+                    <div className="font-bold text-sm text-[#FEDC32]">Digital Ghuru: {reviseForm.digitalGuruRevenuePercentage}% Rev</div>
                     <div>Marketing: {reviseForm.marketingSupportDurationMonths || 0} Months Support</div>
                     <div>Software: {reviseForm.courseSoftwareAccessEnabled ? 'Enabled' : 'Disabled'}</div>
                   </div>
@@ -5367,7 +5367,7 @@ export const FranchiseManagement: React.FC = () => {
                         <input
                           type="text"
                           required
-                          placeholder="e.g. Digital Guru T. Nagar Campus"
+                          placeholder="e.g. Digital Ghuru T. Nagar Campus"
                           value={editNewBranch.name}
                           onChange={(e) => setEditNewBranch({ ...editNewBranch, name: e.target.value })}
                           className="w-full px-3 py-1.5 border rounded-lg text-xs bg-white focus:ring-2 focus:ring-[#006FFF]"
@@ -5493,7 +5493,7 @@ export const FranchiseManagement: React.FC = () => {
 
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    DigitalGuru Share (%)
+                    Digital Ghuru Share (%)
                   </label>
                   <div className="relative">
                     <input
@@ -5511,7 +5511,7 @@ export const FranchiseManagement: React.FC = () => {
               <div className="space-y-1.5 pt-1">
                 <div className="flex justify-between text-[11px] font-bold">
                   <span className="text-[#006FFF]">Partner: {Number(franchiseShareInput || 0)}%</span>
-                  <span className="text-slate-600">DigitalGuru: {Number((100 - Number(franchiseShareInput || 0)).toFixed(2))}%</span>
+                  <span className="text-slate-600">Digital Ghuru: {Number((100 - Number(franchiseShareInput || 0)).toFixed(2))}%</span>
                 </div>
                 <div className="w-full h-2.5 bg-slate-200 rounded-full overflow-hidden flex">
                   <div
@@ -6085,7 +6085,7 @@ export const FranchiseManagement: React.FC = () => {
                           Active Contracted Royalty Split
                         </div>
                         <div className="text-sm font-extrabold text-[#006FFF] mt-0.5">
-                          Franchise {Number(detailData.franchise.revenueSharePercentage ?? 50)}% / DigitalGuru {Number(detailData.franchise.digitalGuruRevenuePercentage ?? 50)}%
+                          Franchise {Number(detailData.franchise.revenueSharePercentage ?? 50)}% / Digital Ghuru {Number(detailData.franchise.digitalGuruRevenuePercentage ?? 50)}%
                         </div>
                         <div className="text-[10px] text-blue-600">
                           Applied across monthly settlement calculations and student fee splits
@@ -6174,7 +6174,7 @@ export const FranchiseManagement: React.FC = () => {
             {/* Drawer Footer */}
             <div className="p-4 border-t border-slate-100 bg-white flex items-center justify-between">
               <div className="text-xs text-slate-400">
-                Digital Guru Franchise Management Enterprise v2.0
+                Digital Ghuru Franchise Management Enterprise v2.0
               </div>
               <div className="flex items-center gap-2">
                 {detailData?.franchise && (

@@ -1,10 +1,10 @@
 /**
- * Digital Guru Franchise Enterprise Shared Design System Tokens
+ * Digital Ghuru Franchise Enterprise Shared Design System Tokens
  * Source of truth for Branding, Web (Tailwind/CSS), and Multi-Tenant Franchise Theming.
  */
 
 export const digitalGuruBrand = {
-  name: 'Digital Guru Franchise',
+  name: 'Digital Ghuru Franchise',
   companyName: 'Digital Ghuru',
   tagline: 'Agency-Style Learning & Franchise Enterprise',
   colors: {
@@ -57,7 +57,7 @@ export const digitalGuruBrand = {
 
 export const themeTokens = {
   colors: {
-    // Official Digital Guru Brand Palette
+    // Official Digital Ghuru Brand Palette
     brandBlue: '#006FFF',
     brandGold: '#FEDC32',
     brandOrange: '#FE4D01',

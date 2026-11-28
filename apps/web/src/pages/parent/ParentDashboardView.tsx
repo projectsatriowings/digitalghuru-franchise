@@ -72,7 +72,7 @@ export const ParentDashboardView: React.FC<ParentDashboardViewProps> = ({
         <div className="relative z-10 max-w-2xl">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 border border-white/20 text-xs font-semibold text-[#D7CCC8] mb-3">
             <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-            Verified Parent Portal &bull; Digital Guru
+            Verified Parent Portal &bull; Digital Ghuru
           </div>
           <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
             Welcome back, {parentName}

@@ -89,14 +89,15 @@ exports.studentAdmissionSchema = zod_1.z.object({
     email: zod_1.z.string().email().optional().or(zod_1.z.literal('')),
     studentEmail: zod_1.z.string().email().optional().or(zod_1.z.literal('')),
     phone: zod_1.z.string().optional(),
-    initialPassword: zod_1.z.string().min(8).optional(),
-    studentInitialPassword: zod_1.z.string().min(8).optional(),
+    initialPassword: zod_1.z.string().min(8, 'Student password must be at least 8 characters').optional().or(zod_1.z.literal('')),
+    studentInitialPassword: zod_1.z.string().min(8, 'Student password must be at least 8 characters').optional().or(zod_1.z.literal('')),
     // Parent / Guardian fields during admission (Requirement 3)
     parentFullName: zod_1.z.string().min(2, 'Parent/guardian full name is required').optional(),
     parentRelationship: zod_1.z.enum(['FATHER', 'MOTHER', 'GUARDIAN']).default('GUARDIAN').optional(),
     parentPhone: zod_1.z.string().min(8, 'Parent/guardian phone number is required').optional(),
     parentEmail: zod_1.z.string().email().optional().or(zod_1.z.literal('')).optional(),
-    parentInitialPassword: zod_1.z.string().min(8).optional(),
+    parentInitialPassword: zod_1.z.string().min(8, 'Parent password must be at least 8 characters').optional().or(zod_1.z.literal('')),
+    parentPassword: zod_1.z.string().min(8, 'Parent password must be at least 8 characters').optional().or(zod_1.z.literal('')),
     parentCanReceiveSms: zod_1.z.boolean().default(true).optional(),
     photoUrl: zod_1.z.string().optional(),
 });
@@ -781,7 +782,10 @@ async function admitStudent(req, res) {
                         }
                         else {
                             isExistingParentAccount = false;
-                            parentTempPassword = data.parentInitialPassword?.trim() || `Parent#${(0, security_js_1.generateSecureRandomToken)(4)}2026`;
+                            parentTempPassword =
+                                data.parentInitialPassword?.trim() ||
+                                    data.parentPassword?.trim() ||
+                                    `Parent#${(0, security_js_1.generateSecureRandomToken)(4)}2026`;
                             const parentPasswordHash = await (0, security_js_1.hashPassword)(parentTempPassword);
                             parentUser = await tx.user.create({
                                 data: {

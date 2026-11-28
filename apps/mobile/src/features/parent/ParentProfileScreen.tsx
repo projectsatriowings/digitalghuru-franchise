@@ -131,7 +131,7 @@ export const ParentProfileScreen: React.FC = () => {
             </View>
             <View style={styles.instituteCol}>
               <Text style={styles.instituteName}>
-                {activeInstitute?.name || 'Digital Guru Learning Center'}
+                {activeInstitute?.name || 'Digital Ghuru Learning Center'}
               </Text>
               <Text style={styles.instituteCode}>
                 Campus Code: {activeInstitute?.code || 'MAIN-01'}
@@ -156,7 +156,7 @@ export const ParentProfileScreen: React.FC = () => {
         </TouchableOpacity>
 
         <Text style={styles.versionFooter}>
-          Digital Guru Franchise Mobile • Version 2.0 (Phase 4)
+          Digital Ghuru Franchise Mobile • Version 2.0 (Phase 4)
         </Text>
 
         {/* Custom Red Badge Confirmation Dialog */}

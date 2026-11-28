@@ -1,7 +1,7 @@
 import { digitalGuruBrand } from '@tuition/shared';
 
 export const BRANDING = {
-  appName: 'Digital Guru Franchise',
+  appName: 'Digital Ghuru Franchise',
   companyName: digitalGuruBrand.companyName,
   tagline: digitalGuruBrand.tagline,
   logo: {

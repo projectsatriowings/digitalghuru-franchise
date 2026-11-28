@@ -175,7 +175,7 @@ const AppContent: React.FC = () => {
         <div className="flex flex-col items-center gap-4">
           <img
             src="/logo-navbar.webp"
-            alt="Digital Guru"
+            alt="Digital Ghuru"
             className="h-10 w-auto animate-pulse"
             onError={(e) => {
               (e.currentTarget as HTMLElement).style.display = 'none';
@@ -184,7 +184,7 @@ const AppContent: React.FC = () => {
           <div className="flex items-center gap-3">
             <div className="w-3.5 h-3.5 rounded-full bg-[#006FFF] animate-ping"></div>
             <span className="text-sm font-semibold text-slate-700 font-display">
-              Loading Digital Guru Franchise...
+              Loading Digital Ghuru Franchise...
             </span>
           </div>
         </div>
