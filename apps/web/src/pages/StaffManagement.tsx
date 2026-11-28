@@ -249,15 +249,15 @@ export const StaffManagement: React.FC = () => {
     key: string = 'full'
   ) => {
     const text =
-      `Staff Login Credentials\n` +
-      `------------------------\n` +
-      `Staff Name: ${name}\n` +
+      `Trainer Login Credentials\n` +
+      `--------------------------\n` +
+      `Trainer Name: ${name}\n` +
       (empCode ? `Employee Code: ${empCode}\n` : '') +
       (instCode ? `Institute Code: ${instCode}\n` : '') +
       `Login Email: ${email}\n` +
       `Permanent Password: ${pass}\n` +
       `Portal: ${window.location.origin}\n` +
-      `------------------------\n` +
+      `--------------------------\n` +
       `Keep this password safe. You can log into Digital Ghuru with these credentials.`;
 
     copyToClipboard(text, key);
@@ -356,16 +356,16 @@ export const StaffManagement: React.FC = () => {
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-extrabold text-[#0F172A]">Staff & Faculty Management</h1>
+          <h1 className="text-2xl font-extrabold text-[#0F172A]">Trainer Management</h1>
           <p className="text-sm text-[#64748B] mt-1">
-            Manage teaching faculty, staff profiles, and login credentials
+            Manage trainers, trainer profiles, and login credentials
           </p>
         </div>
         <button
           onClick={() => setShowAddModal(true)}
           className="inline-flex items-center gap-2 bg-[#006FFF] hover:bg-[#0058D4] text-white text-sm font-semibold px-4 py-2.5 rounded-xl shadow-md shadow-[#006FFF]/20 transition-all self-start"
         >
-          <Plus className="w-4 h-4" /> Add New Staff Member
+          <Plus className="w-4 h-4" /> Add New Trainer
         </button>
       </div>
 
@@ -394,7 +394,7 @@ export const StaffManagement: React.FC = () => {
           <table className="w-full text-left text-xs">
             <thead>
               <tr className="border-b border-[#E2E8F0] text-[#64748B] bg-[#F8FAFC] uppercase tracking-wider">
-                <th className="py-3 px-4 font-bold">Faculty / Staff</th>
+                <th className="py-3 px-4 font-bold">Trainer</th>
                 <th className="py-3 px-4 font-bold">Employee Code</th>
                 <th className="py-3 px-4 font-bold">Designation</th>
                 <th className="py-3 px-4 font-bold">Batches Assigned</th>
@@ -406,13 +406,13 @@ export const StaffManagement: React.FC = () => {
               {loading ? (
                 <tr>
                   <td colSpan={6} className="py-8 text-center text-[#64748B]">
-                    Loading staff directory...
+                    Loading trainer directory...
                   </td>
                 </tr>
               ) : staff.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="py-8 text-center text-[#64748B]">
-                    No staff members found.
+                    No trainers found.
                   </td>
                 </tr>
               ) : (
@@ -582,12 +582,12 @@ export const StaffManagement: React.FC = () => {
                               {item.user.isActive ? (
                                 <>
                                   <UserX className="w-4 h-4 text-rose-600" />
-                                  <span>Deactivate Staff</span>
+                                  <span>Deactivate Trainer</span>
                                 </>
                               ) : (
                                 <>
                                   <UserCheck className="w-4 h-4 text-emerald-600" />
-                                  <span>Activate Staff</span>
+                                  <span>Activate Trainer</span>
                                 </>
                               )}
                             </button>
@@ -623,7 +623,7 @@ export const StaffManagement: React.FC = () => {
           <div className="bg-white border border-[#E2E8F0] rounded-3xl w-full max-w-lg p-6 shadow-2xl text-[#0F172A]">
             <div className="flex items-center justify-between pb-4 border-b border-[#F1F5F9]">
               <h2 className="text-lg font-bold text-[#0F172A] flex items-center gap-2">
-                <CheckCircle className="w-5 h-5 text-emerald-600" /> Permanent Staff Login Created
+                <CheckCircle className="w-5 h-5 text-emerald-600" /> Permanent Trainer Login Created
               </h2>
               <button
                 onClick={() => {
@@ -639,12 +639,12 @@ export const StaffManagement: React.FC = () => {
             <div className="my-5 p-5 rounded-2xl bg-emerald-50 border border-emerald-300 text-[#0F172A] space-y-4">
               <p className="text-xs text-[#475569] leading-relaxed">
                 The permanent login account and profile have been created. You can hand over these login
-                details directly to the staff member.
+                details directly to the trainer.
               </p>
 
               <div className="p-4 rounded-xl bg-white border border-emerald-200 text-xs space-y-2.5">
                 <div className="flex justify-between items-center py-1 border-b border-emerald-100">
-                  <span className="text-[#64748B]">Staff Name:</span>
+                  <span className="text-[#64748B]">Trainer Name:</span>
                   <span className="font-bold text-[#0F172A]">{createdCredential.fullName}</span>
                 </div>
                 {createdCredential.employeeCode && (
@@ -1048,12 +1048,12 @@ export const StaffManagement: React.FC = () => {
                         {isBatchSelected && (
                           <div className="mt-3 pt-3 border-t border-[#F1F5F9] pl-6 space-y-2">
                             <div className="text-[11px] font-bold text-[#64748B]">
-                              Subjects taught by this staff member:
+                              Subjects taught by this trainer:
                             </div>
 
                             {batchSubjects.length === 0 ? (
                               <div className="text-[11px] text-[#94A3B8] italic">
-                                No distinct subjects configured in this batch. Staff will have general batch access.
+                                No distinct subjects configured in this batch. Trainer will have general batch access.
                               </div>
                             ) : (
                               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">

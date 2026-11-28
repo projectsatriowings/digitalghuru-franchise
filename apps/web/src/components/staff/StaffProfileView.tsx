@@ -217,7 +217,7 @@ export const StaffProfileView: React.FC<StaffProfileViewProps> = ({
         setStaff(s);
         populateForms(s);
       } else {
-        setError('Staff profile could not be loaded');
+        setError('Trainer profile could not be loaded');
       }
     } catch (err: any) {
       setError(err.message || 'Failed to fetch staff details');
@@ -721,7 +721,7 @@ export const StaffProfileView: React.FC<StaffProfileViewProps> = ({
     return (
       <div className="bg-white border border-[#E2E8F0] rounded-2xl p-12 text-center shadow-sm">
         <RefreshCw className="w-8 h-8 text-[#94A3B8] animate-spin mx-auto mb-3" />
-        <p className="text-sm font-semibold text-[#006FFF]">Loading staff profile...</p>
+        <p className="text-sm font-semibold text-[#006FFF]">Loading trainer profile...</p>
       </div>
     );
   }
@@ -731,12 +731,12 @@ export const StaffProfileView: React.FC<StaffProfileViewProps> = ({
       <div className="bg-white border border-rose-200 rounded-2xl p-8 text-center shadow-sm">
         <AlertTriangle className="w-10 h-10 text-rose-500 mx-auto mb-3" />
         <h3 className="text-lg font-bold text-rose-900 mb-1">Failed to Load Profile</h3>
-        <p className="text-sm text-rose-700 mb-4">{error || 'Staff member not found'}</p>
+        <p className="text-sm text-rose-700 mb-4">{error || 'Trainer not found'}</p>
         <button
           onClick={onBack}
           className="inline-flex items-center gap-2 px-4 py-2 bg-[#006FFF] text-white text-xs font-semibold rounded-xl hover:bg-[#0058D4]"
         >
-          <ArrowLeft className="w-4 h-4" /> Return to Staff Directory
+          <ArrowLeft className="w-4 h-4" /> Return to Trainer Directory
         </button>
       </div>
     );
@@ -753,7 +753,7 @@ export const StaffProfileView: React.FC<StaffProfileViewProps> = ({
           className="inline-flex items-center gap-2 text-xs font-semibold text-[#006FFF] hover:text-[#0F172A] bg-white border border-[#E2E8F0] px-3.5 py-2 rounded-xl hover:bg-[#F8FAFC] transition-colors shadow-sm"
         >
           <ArrowLeft className="w-4 h-4" />
-          <span>Back to Staff Directory</span>
+          <span>Back to Trainer Directory</span>
         </button>
 
         <div className="flex items-center gap-2">
@@ -1173,7 +1173,7 @@ export const StaffProfileView: React.FC<StaffProfileViewProps> = ({
             <div>
               <h3 className="text-base font-bold text-[#0F172A]">Personal & Contact Information</h3>
               <p className="text-xs text-[#64748B] mt-0.5">
-                Staff identity, contact numbers, and residential address details
+                Trainer identity, contact numbers, and residential address details
               </p>
             </div>
             {!editingPersonal && (
@@ -1303,7 +1303,7 @@ export const StaffProfileView: React.FC<StaffProfileViewProps> = ({
                       onChange={(e) =>
                         setPersonalForm({ ...personalForm, personalEmail: e.target.value.trim() })
                       }
-                      placeholder="e.g. faculty@gmail.com"
+                      placeholder="e.g. trainer@gmail.com"
                       className={`w-full bg-[#FAF8F5] border rounded-xl px-3 py-2 text-xs text-[#0F172A] focus:outline-none focus:ring-2 transition-colors ${
                         personalForm.personalEmail.trim() && getEmailValidationError(personalForm.personalEmail)
                           ? 'border-rose-400 focus:ring-rose-200 bg-rose-50/30'
@@ -1819,7 +1819,7 @@ export const StaffProfileView: React.FC<StaffProfileViewProps> = ({
                     onChange={(e) =>
                       setEmploymentForm({ ...employmentForm, designation: e.target.value })
                     }
-                    placeholder="e.g. Senior Physics Faculty"
+                    placeholder="e.g. Senior Physics Trainer"
                     className="w-full bg-[#FAF8F5] border border-[#E2E8F0] rounded-xl px-3 py-2 text-xs text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#006FFF]/20"
                   />
                 </div>
@@ -1854,7 +1854,7 @@ export const StaffProfileView: React.FC<StaffProfileViewProps> = ({
                     <option value="FULL_TIME">Full-time</option>
                     <option value="PART_TIME">Part-time</option>
                     <option value="CONTRACT">Contract</option>
-                    <option value="VISITING">Visiting Faculty</option>
+                    <option value="VISITING">Visiting Trainer</option>
                   </select>
                 </div>
                 <div>
@@ -2013,7 +2013,7 @@ export const StaffProfileView: React.FC<StaffProfileViewProps> = ({
               <div>
                 <h3 className="text-base font-bold text-[#0F172A]">Academic Qualifications</h3>
                 <p className="text-xs text-[#64748B] mt-0.5">
-                  Degrees, diplomas, and certifications earned by this staff member
+                  Degrees, diplomas, and certifications earned by this trainer
                 </p>
               </div>
               <button
@@ -2227,7 +2227,7 @@ export const StaffProfileView: React.FC<StaffProfileViewProps> = ({
                 Assigned Batches & Course Subjects
               </h3>
               <p className="text-xs text-[#64748B] mt-0.5">
-                Real-time active class assignments for this faculty member
+                Real-time active class assignments for this trainer
               </p>
             </div>
             <button
@@ -2300,7 +2300,7 @@ export const StaffProfileView: React.FC<StaffProfileViewProps> = ({
               <BookOpen className="w-8 h-8 text-[#94A3B8] mx-auto mb-2" />
               <p className="text-sm font-bold text-[#006FFF]">No Batches Currently Assigned</p>
               <p className="text-xs text-[#64748B] mt-1 max-w-sm mx-auto">
-                Assign this faculty member to classes and curriculum subjects so they can manage attendance and grades.
+                Assign this trainer to classes and curriculum subjects so they can manage attendance and grades.
               </p>
               <button
                 onClick={() => onOpenBatchAssignments(staff)}
@@ -2318,7 +2318,7 @@ export const StaffProfileView: React.FC<StaffProfileViewProps> = ({
         <div className="bg-white border border-[#E2E8F0] rounded-2xl p-6 shadow-sm space-y-6">
           <div className="flex items-center justify-between pb-4 border-b border-[#F1F5F9]">
             <div>
-              <h3 className="text-base font-bold text-[#0F172A]">Staff Documents & Records</h3>
+              <h3 className="text-base font-bold text-[#0F172A]">Trainer Documents & Records</h3>
               <p className="text-xs text-[#64748B] mt-0.5">
                 Official certificates, ID verification, contracts, and uploaded credentials
               </p>
@@ -2454,11 +2454,11 @@ export const StaffProfileView: React.FC<StaffProfileViewProps> = ({
             <div className="pt-4 border-t border-[#F1F5F9]">
               <div className="p-4 bg-[#FAF8F5] border border-[#E2E8F0] rounded-xl space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-[#006FFF]">Staff Login Coordinates</span>
+                  <span className="text-xs font-bold text-[#006FFF]">Trainer Login Coordinates</span>
                   <button
                     onClick={() =>
                       copyToClipboard(
-                        `Staff Login Portal\nEmail: ${staff.user.email}\nPortal URL: ${window.location.origin}`,
+                        `Trainer Login Portal\nEmail: ${staff.user.email}\nPortal URL: ${window.location.origin}`,
                         'coords'
                       )
                     }
@@ -2491,7 +2491,7 @@ export const StaffProfileView: React.FC<StaffProfileViewProps> = ({
               <Key className="w-5 h-5 text-[#006FFF]" /> Change Permanent Password
             </h3>
             <p className="text-xs text-[#64748B] leading-relaxed">
-              Academic Admin can assign a new permanent password directly to this staff member. You can review and copy it below.
+              Academic Admin can assign a new permanent password directly to this trainer. You can review and copy it below.
             </p>
 
             {resetMsg && (
@@ -2710,7 +2710,7 @@ export const StaffProfileView: React.FC<StaffProfileViewProps> = ({
                   required
                   value={expForm.designation}
                   onChange={(e) => setExpForm({ ...expForm, designation: e.target.value })}
-                  placeholder="e.g. Senior Faculty / Lecturer"
+                  placeholder="e.g. Senior Trainer / Lecturer"
                   className="w-full bg-[#FAF8F5] border border-[#E2E8F0] rounded-xl px-3 py-2 text-xs text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#006FFF]/20"
                 />
               </div>
@@ -2818,7 +2818,7 @@ export const StaffProfileView: React.FC<StaffProfileViewProps> = ({
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl border border-[#E2E8F0] animate-in fade-in zoom-in-95">
             <div className="flex items-center justify-between pb-3 border-b border-[#F1F5F9]">
-              <h3 className="text-base font-bold text-[#0F172A]">Upload Staff Document</h3>
+              <h3 className="text-base font-bold text-[#0F172A]">Upload Trainer Document</h3>
               <button
                 onClick={() => setShowDocModal(false)}
                 className="text-[#94A3B8] hover:text-[#0F172A]"

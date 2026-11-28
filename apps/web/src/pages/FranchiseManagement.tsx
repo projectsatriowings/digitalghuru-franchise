@@ -3269,7 +3269,7 @@ export const FranchiseManagement: React.FC = () => {
                         {[
                           { key: 'rent', label: 'Centre Rent' },
                           { key: 'trainerSalaries', label: 'Trainer Salaries' },
-                          { key: 'staffSalaries', label: 'Staff Salaries' },
+                          { key: 'staffSalaries', label: 'Trainer Salaries' },
                           { key: 'operationalSetup', label: 'Operational Setup' },
                           { key: 'utilities', label: 'Utilities (Electricity/Net)' },
                           { key: 'marketing', label: 'Marketing Campaigns' },
@@ -3451,7 +3451,7 @@ export const FranchiseManagement: React.FC = () => {
                               <span className="text-sky-200">
                                 {Object.entries(createForm.initialAgreement.expenseResponsibilities || {})
                                   .filter(([_, v]) => v === 'PARTNER' || (typeof v === 'object' && (v as any)?.payer === 'PARTNER'))
-                                  .map(([k]) => k === 'rent' ? 'Building Rent' : k === 'staffSalaries' ? 'Staff Salaries' : k === 'utilities' ? 'Utilities' : k)
+                                  .map(([k]) => k === 'rent' ? 'Building Rent' : k === 'staffSalaries' ? 'Trainer Salaries' : k === 'utilities' ? 'Utilities' : k)
                                   .join(', ') || 'Building Rent & Centre Operations'}
                               </span>
                             </div>
@@ -5611,7 +5611,7 @@ export const FranchiseManagement: React.FC = () => {
                 <p className="text-[11px] leading-relaxed opacity-90">
                   {statusModalState.targetStatus === 'SUSPENDED'
                     ? 'Franchise owner and campus administrators under this center will be prevented from enrolling new students or accessing operational dashboards until reactivated.'
-                    : 'The franchise center will be restored to active standing. Staff and owner accounts will regain immediate operational access.'}
+                    : 'The franchise center will be restored to active standing. Trainer and owner accounts will regain immediate operational access.'}
                 </p>
               </div>
 

@@ -209,7 +209,7 @@ export const QuizManager: React.FC<QuizManagerProps> = ({
         setMessage({
           text: isPublished
             ? 'Quiz published to enrolled students!'
-            : 'Quiz saved as draft for faculty review.',
+            : 'Quiz saved as draft for trainer review.',
           type: 'success',
         });
         setShowCreateModal(false);

@@ -996,7 +996,7 @@ export const AttendanceManagement: React.FC = () => {
                   </div>
 
                   <span className="text-xs text-[#94A3B8] font-semibold bg-white px-2.5 py-1 rounded-lg border border-[#E2E8F0]">
-                    Requires Staff Confirmation
+                    Requires Trainer Confirmation
                   </span>
                 </div>
 

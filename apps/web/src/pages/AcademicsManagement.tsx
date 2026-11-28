@@ -32,6 +32,7 @@ import {
   Phone,
   Award,
   RefreshCw,
+  Loader2,
 } from 'lucide-react';
 
 interface StaffOption {
@@ -182,18 +183,28 @@ export const AcademicsManagement: React.FC<AcademicsManagementProps> = ({ onNavi
     };
   }, [fetchData, activeInstitute?.id]);
 
+  const [openingBatchId, setOpeningBatchId] = useState<string | null>(null);
+
   // Load detailed batch with subjects, roster, allocations and faculty
-  const loadBatchDetails = async (batchId: string) => {
+  const loadBatchDetails = async (batchId: string, fallbackBatch?: Batch) => {
+    setOpeningBatchId(batchId);
     setBatchDetailLoading(true);
+    if (fallbackBatch) {
+      setSelectedBatchDetails(fallbackBatch);
+    }
     try {
-      const res = await apiFetch(`/academics/batches/${batchId}`);
+      const res = await apiFetch(`/academics/batches/${batchId}?_t=${Date.now()}`, { skipCache: true });
       if (res.success && res.data?.batch) {
         setSelectedBatchDetails(res.data.batch);
       }
     } catch (err: any) {
-      error(err.message || 'Failed to load batch details');
+      console.error('[loadBatchDetails error]', err);
+      if (!fallbackBatch) {
+        error(err.message || 'Failed to load batch details');
+      }
     } finally {
       setBatchDetailLoading(false);
+      setOpeningBatchId(null);
     }
   };
 
@@ -491,8 +502,19 @@ export const AcademicsManagement: React.FC<AcademicsManagementProps> = ({ onNavi
         success('Staff assigned to batch faculty');
         setShowAssignStaffModal(false);
         setSelectedStaffToAssign('');
-        loadBatchDetails(selectedBatchDetails.id);
-        fetchData();
+        // Optimistically update assigned faculty in selected batch details
+        if (res.data?.batch?.staffAssignments) {
+          setSelectedBatchDetails((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  staffAssignments: res.data.batch.staffAssignments,
+                }
+              : prev
+          );
+        }
+        await loadBatchDetails(selectedBatchDetails.id);
+        await fetchData(true);
       }
     } catch (err: any) {
       error(err.message || 'Failed to assign staff to batch');
@@ -508,8 +530,18 @@ export const AcademicsManagement: React.FC<AcademicsManagementProps> = ({ onNavi
       });
       if (res.success) {
         success(`${staffName} removed from batch faculty`);
-        loadBatchDetails(selectedBatchDetails.id);
-        fetchData();
+        setSelectedBatchDetails((prev) =>
+          prev
+            ? {
+                ...prev,
+                staffAssignments: (prev.staffAssignments || []).filter(
+                  (fa: any) => fa.staffProfileId !== staffProfileId && fa.id !== staffProfileId
+                ),
+              }
+            : prev
+        );
+        await loadBatchDetails(selectedBatchDetails.id);
+        await fetchData(true);
       }
     } catch (err: any) {
       error(err.message || 'Failed to remove staff');
@@ -707,7 +739,7 @@ export const AcademicsManagement: React.FC<AcademicsManagementProps> = ({ onNavi
               }`}
             >
               <Users className="w-3.5 h-3.5" />
-              <span>Assigned Faculty ({facultyAssigned.length})</span>
+              <span>Assigned Trainers ({facultyAssigned.length})</span>
             </button>
           </div>
         </div>
@@ -782,7 +814,7 @@ export const AcademicsManagement: React.FC<AcademicsManagementProps> = ({ onNavi
 
               <div className="bg-white rounded-3xl p-5 border border-[#E8DFD8] shadow-sm flex items-center justify-between">
                 <div>
-                  <span className="text-xs font-semibold text-[#94A3B8]">Assigned Faculty</span>
+                  <span className="text-xs font-semibold text-[#94A3B8]">Assigned Trainers</span>
                   <div className="text-2xl font-black text-[#0F172A] mt-1">{facultyAssigned.length}</div>
                 </div>
                 <div className="w-12 h-12 rounded-2xl bg-[#F8FAFC] text-[#006FFF] flex items-center justify-center">
@@ -800,7 +832,7 @@ export const AcademicsManagement: React.FC<AcademicsManagementProps> = ({ onNavi
               <div>
                 <h3 className="text-base font-bold text-[#0F172A]">Curriculum Subjects</h3>
                 <p className="text-xs text-[#94A3B8]">
-                  Subjects configured directly inside this batch with designated faculty and schedule.
+                  Subjects configured directly inside this batch with designated trainers and schedule.
                 </p>
               </div>
               <button
@@ -847,10 +879,10 @@ export const AcademicsManagement: React.FC<AcademicsManagementProps> = ({ onNavi
                     <div className="flex items-start justify-between gap-2">
                       <div>
                         <div className="flex items-center gap-2">
-                          <h4 className="text-sm font-bold text-[#0F172A]">{bs.subject.name}</h4>
-                          {bs.subject.code && (
+                          <h4 className="text-sm font-bold text-[#0F172A]">{bs.subject?.name || bs.name || 'Subject'}</h4>
+                          {(bs.subject?.code || bs.code) && (
                             <span className="font-mono text-[10px] font-bold px-2 py-0.5 rounded bg-white text-[#006FFF] border border-[#E2E8F0]">
-                              {bs.subject.code}
+                              {bs.subject?.code || bs.code}
                             </span>
                           )}
                           <span
@@ -903,10 +935,10 @@ export const AcademicsManagement: React.FC<AcademicsManagementProps> = ({ onNavi
                     </div>
 
                     <div className="flex items-center justify-between text-xs pt-2 border-t border-[#F1F5F9]">
-                      <span className="text-[#94A3B8]">Faculty:</span>
+                      <span className="text-[#94A3B8]">Trainer:</span>
                       <span className="font-semibold text-[#006FFF] flex items-center gap-1.5">
                         <Users className="w-3.5 h-3.5 text-[#94A3B8]" />
-                        {bs.staffProfile?.user?.fullName || 'Batch Faculty'}
+                        {bs.staffProfile?.user?.fullName || 'Batch Trainer'}
                       </span>
                     </div>
 
@@ -1107,9 +1139,9 @@ export const AcademicsManagement: React.FC<AcademicsManagementProps> = ({ onNavi
           <div className="bg-white rounded-3xl p-6 border border-[#E8DFD8] shadow-sm space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-[#F5F0EB]">
               <div>
-                <h3 className="text-base font-bold text-[#0F172A]">Assigned Faculty & Staff</h3>
+                <h3 className="text-base font-bold text-[#0F172A]">Assigned Trainers</h3>
                 <p className="text-xs text-[#94A3B8]">
-                  Teachers and staff members authorized to teach and view students in this batch.
+                  Trainers authorized to teach and view students in this batch.
                 </p>
               </div>
               <button
@@ -1120,14 +1152,14 @@ export const AcademicsManagement: React.FC<AcademicsManagementProps> = ({ onNavi
                 className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#006FFF] hover:bg-[#0058D4] text-xs font-bold text-white shadow-sm transition"
               >
                 <Plus className="w-4 h-4" />
-                <span>Assign Faculty</span>
+                <span>Assign Trainer</span>
               </button>
             </div>
 
             {facultyAssigned.length === 0 ? (
               <div className="p-8 text-center bg-[#FAF8F5] border border-dashed border-[#E2E8F0] rounded-2xl">
                 <Users className="w-8 h-8 text-[#94A3B8] mx-auto mb-2" />
-                <p className="text-xs text-[#94A3B8]">No staff members assigned to this batch yet.</p>
+                <p className="text-xs text-[#94A3B8]">No trainers assigned to this batch yet.</p>
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
@@ -1152,7 +1184,7 @@ export const AcademicsManagement: React.FC<AcademicsManagementProps> = ({ onNavi
                     <button
                       onClick={() => handleRemoveStaff(fa.staffProfileId, fa.staffProfile?.user?.fullName)}
                       className="p-1 text-rose-600 hover:text-rose-800 hover:bg-rose-50 rounded-lg transition"
-                      title="Remove Staff"
+                      title="Remove Trainer"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
@@ -1349,7 +1381,7 @@ export const AcademicsManagement: React.FC<AcademicsManagementProps> = ({ onNavi
             <div className="bg-white rounded-3xl max-w-md w-full border border-[#E2E8F0] shadow-2xl p-6 space-y-4 animate-scaleUp">
               <div className="flex items-center justify-between border-b border-[#F5F0EB] pb-3">
                 <h3 className="text-base font-black text-[#0F172A]">
-                  Assign Faculty to {selectedBatchDetails.name}
+                  Assign Trainer to {selectedBatchDetails.name}
                 </h3>
                 <button
                   onClick={() => setShowAssignStaffModal(false)}
@@ -1361,17 +1393,17 @@ export const AcademicsManagement: React.FC<AcademicsManagementProps> = ({ onNavi
 
               <form onSubmit={handleAssignStaff} className="space-y-3.5 text-xs">
                 <div>
-                  <label className="block font-bold text-[#006FFF] mb-1">Select Staff Member *</label>
+                  <label className="block font-bold text-[#006FFF] mb-1">Select Trainer *</label>
                   <select
                     required
                     value={selectedStaffToAssign}
                     onChange={(e) => setSelectedStaffToAssign(e.target.value)}
                     className="w-full bg-[#FAF8F5] border border-[#E2E8F0] rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-[#006FFF]/20 focus:outline-none"
                   >
-                    <option value="">-- Choose Faculty / Teacher --</option>
+                    <option value="">-- Choose Trainer --</option>
                     {availableStaff.map((st) => (
                       <option key={st.staffProfileId} value={st.staffProfileId}>
-                        {st.fullName} ({st.designation || 'Staff'})
+                        {st.fullName} ({st.designation || 'Trainer'})
                       </option>
                     ))}
                   </select>
@@ -1390,7 +1422,7 @@ export const AcademicsManagement: React.FC<AcademicsManagementProps> = ({ onNavi
                     disabled={!selectedStaffToAssign}
                     className="px-5 py-2 rounded-xl text-xs font-bold text-white bg-[#006FFF] hover:bg-[#0058D4] shadow-md transition disabled:opacity-50"
                   >
-                    Assign Staff
+                    Assign Trainer
                   </button>
                 </div>
               </form>
@@ -1422,7 +1454,7 @@ export const AcademicsManagement: React.FC<AcademicsManagementProps> = ({ onNavi
         <div>
           <h1 className="text-2xl font-black text-[#0F172A] tracking-tight">Academic Batches & Curriculum</h1>
           <p className="text-xs text-[#64748B] mt-1">
-            Batch-centric academic management: configure classes, add subjects directly inside batches, assign faculty, and allocate students.
+            Batch-centric academic management: configure classes, add subjects directly inside batches, assign trainers, and allocate students.
           </p>
         </div>
 
@@ -1534,7 +1566,11 @@ export const AcademicsManagement: React.FC<AcademicsManagementProps> = ({ onNavi
                   <div className="flex items-start justify-between gap-2">
                     <div>
                       <div className="flex items-center gap-2 flex-wrap">
-                        <h3 className="text-base font-black text-[#0F172A] tracking-tight group-hover:text-[#006FFF] transition">
+                        <h3
+                          onClick={() => loadBatchDetails(b.id, b)}
+                          className="text-base font-black text-[#0F172A] tracking-tight group-hover:text-[#006FFF] transition cursor-pointer"
+                          title="Click to view batch details"
+                        >
                           {b.name}
                         </h3>
                         {b.code && (
@@ -1603,7 +1639,7 @@ export const AcademicsManagement: React.FC<AcademicsManagementProps> = ({ onNavi
                       <span className="font-bold text-[#0F172A]">{studentCount}</span>
                     </div>
                     <div className="p-2 rounded-xl bg-[#FAF8F5]">
-                      <span className="text-[10px] text-[#94A3B8] block">Faculty</span>
+                      <span className="text-[10px] text-[#94A3B8] block">Trainers</span>
                       <span className="font-bold text-[#0F172A]">{facultyCount}</span>
                     </div>
                   </div>
@@ -1611,36 +1647,51 @@ export const AcademicsManagement: React.FC<AcademicsManagementProps> = ({ onNavi
 
                 {/* Card Actions */}
                 <div className="flex items-center justify-between gap-2 pt-3 border-t border-[#F5F0EB]">
-                  <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => handleOpenEditBatch(b)}
-                      className="p-1.5 text-[#64748B] hover:text-[#0F172A] hover:bg-[#F8FAFC] rounded-xl transition"
-                      title="Edit Batch"
-                    >
-                      <Edit2 className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      onClick={() => setConfirmDeactivate({ isOpen: true, batch: b })}
-                      className="p-1.5 text-[#64748B] hover:text-[#0F172A] hover:bg-[#F8FAFC] rounded-xl transition"
-                      title={b.isActive ? 'Deactivate Batch' : 'Activate Batch'}
-                    >
-                      <Power className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      onClick={() => setConfirmDeleteBatch({ isOpen: true, batch: b })}
-                      className="p-1.5 text-rose-600 hover:text-rose-800 hover:bg-rose-50 rounded-xl transition"
-                      title="Delete Batch from Database"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
+                  {user?.role !== 'STAFF' ? (
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => handleOpenEditBatch(b)}
+                        className="p-1.5 text-[#64748B] hover:text-[#0F172A] hover:bg-[#F8FAFC] rounded-xl transition"
+                        title="Edit Batch"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => setConfirmDeactivate({ isOpen: true, batch: b })}
+                        className="p-1.5 text-[#64748B] hover:text-[#0F172A] hover:bg-[#F8FAFC] rounded-xl transition"
+                        title={b.isActive ? 'Deactivate Batch' : 'Activate Batch'}
+                      >
+                        <Power className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => setConfirmDeleteBatch({ isOpen: true, batch: b })}
+                        className="p-1.5 text-rose-600 hover:text-rose-800 hover:bg-rose-50 rounded-xl transition"
+                        title="Delete Batch from Database"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div />
+                  )}
 
                   <button
-                    onClick={() => loadBatchDetails(b.id)}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#006FFF] hover:bg-[#0058D4] text-white text-xs font-bold transition shadow-sm"
+                    type="button"
+                    disabled={openingBatchId === b.id}
+                    onClick={() => loadBatchDetails(b.id, b)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#006FFF] hover:bg-[#0058D4] disabled:opacity-60 text-white text-xs font-bold transition shadow-sm cursor-pointer"
                   >
-                    <span>Open Batch</span>
-                    <ChevronRight className="w-3.5 h-3.5" />
+                    {openingBatchId === b.id ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        <span>Opening...</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>Open Batch</span>
+                        <ChevronRight className="w-3.5 h-3.5" />
+                      </>
+                    )}
                   </button>
                 </div>
               </div>
@@ -1667,7 +1718,7 @@ export const AcademicsManagement: React.FC<AcademicsManagementProps> = ({ onNavi
                 <p className="text-xs text-[#64748B] mt-0.5">
                   {editingBatch
                     ? 'Update batch details and schedule configuration'
-                    : 'Step-by-step batch configuration, weekly schedule, and faculty setup'}
+                    : 'Step-by-step batch configuration, weekly schedule, and trainer setup'}
                 </p>
               </div>
               <button
@@ -1689,7 +1740,7 @@ export const AcademicsManagement: React.FC<AcademicsManagementProps> = ({ onNavi
                   {[
                     { num: 1, label: 'Batch Info' },
                     { num: 2, label: 'Schedule' },
-                    { num: 3, label: 'Faculty' },
+                    { num: 3, label: 'Trainers' },
                   ].map((s, idx) => (
                     <React.Fragment key={s.num}>
                       <div className="flex flex-col items-center">
@@ -1898,16 +1949,16 @@ export const AcademicsManagement: React.FC<AcademicsManagementProps> = ({ onNavi
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-semibold text-[#0F172A]">
-                        Assign Faculty Members (Optional)
+                        Assign Trainers (Optional)
                       </span>
                       <span className="text-[11px] text-[#94A3B8]">
-                        {batchForm.staffProfileIds.length} teacher(s) selected
+                        {batchForm.staffProfileIds.length} trainer(s) selected
                       </span>
                     </div>
 
                     {availableStaff.length === 0 ? (
                       <div className="text-center py-6 text-xs text-[#94A3B8] bg-[#FAF8F5] rounded-xl border border-dashed border-[#E2E8F0]">
-                        No staff members added yet. You can assign faculty anytime inside the batch details.
+                        No trainers added yet. You can assign trainers anytime inside the batch details.
                       </div>
                     ) : (
                       <div className="max-h-48 overflow-y-auto space-y-2 pr-1">
@@ -1945,7 +1996,7 @@ export const AcademicsManagement: React.FC<AcademicsManagementProps> = ({ onNavi
                               <div className="flex-1 flex items-center justify-between">
                                 <div>
                                   <span className="font-bold text-[#0F172A] block">{st.fullName}</span>
-                                  <span className="text-[10px] text-[#94A3B8]">{st.designation || 'Staff'}</span>
+                                  <span className="text-[10px] text-[#94A3B8]">{st.designation || 'Trainer'}</span>
                                 </div>
                                 <span className="text-[10px] text-[#94A3B8] font-mono">{st.email || ''}</span>
                               </div>

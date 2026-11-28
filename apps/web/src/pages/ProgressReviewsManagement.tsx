@@ -493,7 +493,7 @@ export const ProgressReviewsManagement: React.FC = () => {
       });
 
       if (res.success) {
-        toast.success('Thank you! Your private feedback has been delivered to faculty.');
+        toast.success('Thank you! Your private feedback has been delivered to trainers.');
         setInquirySubject('');
         setInquiryMessage('');
         loadData();
@@ -553,8 +553,8 @@ export const ProgressReviewsManagement: React.FC = () => {
           </h1>
           <p className="text-xs text-[#64748B] mt-1">
             {isStudent
-              ? 'Official faculty evaluations, milestone reports, and teacher observations for your academic journey'
-              : 'Teacher observations, student milestone reports, and confidential parent inquiries'}
+              ? 'Official trainer evaluations, milestone reports, and trainer observations for your academic journey'
+              : 'Trainer observations, student milestone reports, and confidential parent inquiries'}
           </p>
         </div>
 
@@ -915,7 +915,7 @@ export const ProgressReviewsManagement: React.FC = () => {
                   {/* Card Footer */}
                   <div className="pt-2 border-t border-[#F1F5F9] flex items-center justify-between text-[11px] text-[#94A3B8]">
                     <span>
-                      Faculty: <strong>{fb.staff?.fullName || 'Assigned Staff'}</strong> &bull;{' '}
+                      Trainer: <strong>{fb.staff?.fullName || 'Assigned Trainer'}</strong> &bull;{' '}
                       {new Date(fb.createdAt).toLocaleDateString()}
                     </span>
 
@@ -1076,7 +1076,7 @@ export const ProgressReviewsManagement: React.FC = () => {
                       <div className="flex items-center justify-between text-[11px] font-bold text-emerald-900 mb-1">
                         <span className="flex items-center gap-1.5">
                           <CheckCircle2 className="w-4 h-4 text-emerald-700" />
-                          Faculty Response {fb.respondedBy?.fullName ? `(${fb.respondedBy.fullName})` : ''}:
+                          Trainer Response {fb.respondedBy?.fullName ? `(${fb.respondedBy.fullName})` : ''}:
                         </span>
                         {fb.respondedAt && (
                           <span className="text-[10px] font-normal text-emerald-700">
@@ -1205,10 +1205,10 @@ export const ProgressReviewsManagement: React.FC = () => {
           {isParent && (
             <div className="p-6 rounded-3xl bg-white border border-[#E2E8F0] shadow-sm space-y-4">
               <h2 className="text-base font-bold text-[#0F172A] flex items-center gap-2">
-                <MessageSquare className="w-5 h-5 text-[#64748B]" /> Send Private Feedback to Faculty
+                <MessageSquare className="w-5 h-5 text-[#64748B]" /> Send Private Feedback to Trainers
               </h2>
               <p className="text-xs text-[#64748B]">
-                Messages submitted here are strictly confidential and shared only with authorized teaching staff and administrators.
+                Messages submitted here are strictly confidential and shared only with authorized trainers and administrators.
               </p>
 
               <form onSubmit={handleSubmitInquiry} className="space-y-3">
@@ -1357,7 +1357,7 @@ export const ProgressReviewsManagement: React.FC = () => {
                     {rev.replyText && (
                       <div className="p-3 rounded-2xl bg-emerald-50/60 border border-emerald-200 text-xs space-y-1">
                         <strong className="text-[10px] uppercase font-bold text-emerald-900 block flex items-center gap-1">
-                          <CheckCircle className="w-3 h-3 text-emerald-700" /> Faculty Response:
+                          <CheckCircle className="w-3 h-3 text-emerald-700" /> Trainer Response:
                         </strong>
                         <p className="text-emerald-950 leading-relaxed">{rev.replyText}</p>
                         {rev.repliedAt && (
@@ -1389,7 +1389,7 @@ markNotificationEntityAsRead('PROGRESS_REPORT', rev.id);
                       <div className="space-y-2 pt-2 border-t border-[#F1F5F9]">
                         <textarea
                           rows={2}
-                          placeholder="Type faculty response..."
+                          placeholder="Type trainer response..."
                           value={replyText}
                           onChange={(e) => setReplyText(e.target.value)}
                           className="w-full bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl p-2.5 text-xs text-[#0F172A] focus:ring-1 focus:ring-[#006FFF]/20"
@@ -1454,7 +1454,7 @@ markNotificationEntityAsRead('PROGRESS_REPORT', rev.id);
                     )}
                   </div>
                   <p className="text-xs text-[#64748B] mt-0.5">
-                    Official faculty evaluation, database-verified student performance aggregates, and actionable recommendations.
+                    Official trainer evaluation, database-verified student performance aggregates, and actionable recommendations.
                   </p>
                 </div>
               </div>

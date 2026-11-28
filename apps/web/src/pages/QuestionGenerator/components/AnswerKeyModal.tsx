@@ -64,7 +64,7 @@ export const AnswerKeyModal: React.FC<AnswerKeyModalProps> = ({
         <div className="p-6 sm:p-10 overflow-y-auto space-y-6 print-container text-black font-sans">
           <div className="text-center border-b-2 border-black pb-4 space-y-1">
             <span className="text-[10px] font-bold tracking-widest uppercase bg-amber-100 text-amber-900 px-3 py-1 rounded-full border border-amber-300">
-              Confidential &bull; Faculty / Evaluator Reference Only
+              Confidential &bull; Trainer / Evaluator Reference Only
             </span>
             <h1 className="text-xl font-black uppercase text-black pt-2">
               {blueprint.instituteName}

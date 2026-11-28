@@ -510,16 +510,16 @@ export const StaffMyAttendance: React.FC = () => {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-2xl bg-[#006FFF] text-white flex items-center justify-center font-bold text-lg shadow-sm">
-              {data?.staff?.name?.charAt(0) || 'S'}
+              {data?.staff?.name?.charAt(0) || 'T'}
             </div>
             <div>
-              <h1 className="text-lg font-bold text-[#0F172A]">{data?.staff?.name || 'Staff Member'}</h1>
+              <h1 className="text-lg font-bold text-[#0F172A]">{data?.staff?.name || 'Trainer'}</h1>
               <div className="flex items-center gap-2 text-xs text-[#94A3B8] font-medium">
                 <span className="font-mono bg-[#FAF8F5] px-1.5 py-0.5 rounded border border-[#E2E8F0]">
-                  {data?.staff?.employeeCode || 'STAFF'}
+                  {data?.staff?.employeeCode || 'TRAINER'}
                 </span>
                 <span>•</span>
-                <span>{data?.staff?.designation || 'Faculty'}</span>
+                <span>{data?.staff?.designation || 'Trainer'}</span>
                 <span>•</span>
                 <span>{institute?.name || 'Course Centre'}</span>
               </div>
@@ -950,7 +950,7 @@ export const StaffMyAttendance: React.FC = () => {
           <div className="py-6 text-center text-xs text-[#94A3B8] bg-[#FAF8F5] rounded-xl border border-[#E2E8F0]/60">
             <BookOpen className="w-6 h-6 mx-auto mb-2 text-[#94A3B8] opacity-60" />
             <p className="font-semibold text-[#0F172A]">No online classes scheduled for today.</p>
-            <p className="text-[11px] text-[#94A3B8] mt-0.5">Classes assigned to your faculty profile will appear here.</p>
+            <p className="text-[11px] text-[#94A3B8] mt-0.5">Classes assigned to your trainer profile will appear here.</p>
           </div>
         ) : (
           <div className="space-y-3">
@@ -1225,7 +1225,7 @@ export const StaffMyAttendance: React.FC = () => {
                   <option value="WEATHER_DISRUPTION">Weather Disruption (Heavy Rain / Cyclone)</option>
                   <option value="ONLINE_CLASSES">Online Classes Scheduled</option>
                   <option value="INSTITUTE_CLOSURE">Institute Closure</option>
-                  <option value="INDIVIDUAL_REQUEST">Individual Faculty Request</option>
+                  <option value="INDIVIDUAL_REQUEST">Individual Trainer Request</option>
                   <option value="MANAGEMENT_APPROVAL">Management Approval</option>
                   <option value="OTHER">Other Reason</option>
                 </select>

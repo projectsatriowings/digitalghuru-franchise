@@ -602,7 +602,7 @@ export const ExaminationsManagement: React.FC = () => {
                       ) : (
                         <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900 flex items-center gap-2">
                           <Clock className="w-3.5 h-3.5 text-amber-700 shrink-0" />
-                          <span>Results not yet published by academic staff.</span>
+                          <span>Results not yet published by academic trainers.</span>
                         </div>
                       )}
                     </div>

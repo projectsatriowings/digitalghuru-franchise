@@ -427,11 +427,11 @@ export const ParentCommunicationView: React.FC<ParentCommunicationViewProps> = (
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-xl font-bold text-[#0F172A] flex items-center gap-2">
-            <MessageSquare className="w-5 h-5 text-[#64748B]" /> Faculty Communication & Feedback
+            <MessageSquare className="w-5 h-5 text-[#64748B]" /> Trainer Communication & Feedback
           </h2>
           <p className="text-xs text-[#64748B] mt-0.5">
             Direct chat and structured feedback channels for{' '}
-            <strong className="text-[#0F172A]">{student?.firstName}'s</strong> teachers
+            <strong className="text-[#0F172A]">{student?.firstName}'s</strong> trainers
           </p>
         </div>
 
@@ -626,7 +626,7 @@ export const ParentCommunicationView: React.FC<ParentCommunicationViewProps> = (
                               <span>{formatMessageTime(m.createdAt)}</span>
                               {isMe && (
                                 m.isReadByRecipient ? (
-                                  <span title="Read by faculty">
+                                  <span title="Read by trainer">
                                     <CheckCheck className="w-3.5 h-3.5 text-blue-300" />
                                   </span>
                                 ) : (
@@ -762,7 +762,7 @@ export const ParentCommunicationView: React.FC<ParentCommunicationViewProps> = (
             ) : (
               <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-[#94A3B8] text-xs space-y-2">
                 <MessageSquare className="w-10 h-10 text-[#D7CCC8]" />
-                <p>Select a faculty teacher from the left directory to view conversations.</p>
+                <p>Select a trainer from the left directory to view conversations.</p>
               </div>
             )}
           </div>
@@ -797,16 +797,16 @@ export const ParentCommunicationView: React.FC<ParentCommunicationViewProps> = (
               </div>
 
               <div>
-                <label className="block font-bold text-[#64748B] mb-1">Target Faculty (Optional)</label>
+                <label className="block font-bold text-[#64748B] mb-1">Target Trainer (Optional)</label>
                 <select
                   value={feedbackTargetStaffId}
                   onChange={(e) => setFeedbackTargetStaffId(e.target.value)}
                   className="w-full px-3.5 py-2.5 rounded-xl border border-[#E2E8F0] text-xs text-[#0F172A] focus:ring-2 focus:ring-[#006FFF]/20"
                 >
-                  <option value="">Any / General Faculty In-charge</option>
+                  <option value="">Any / General Trainer In-charge</option>
                   {teachers.map((t) => (
                     <option key={t.userId} value={t.userId}>
-                      {t.fullName} ({t.designation || 'Faculty'})
+                      {t.fullName} ({t.designation || 'Trainer'})
                     </option>
                   ))}
                 </select>
@@ -840,7 +840,7 @@ export const ParentCommunicationView: React.FC<ParentCommunicationViewProps> = (
             <div className="flex items-center justify-between border-b border-[#F1F5F9] pb-3">
               <div className="flex items-center gap-2">
                 <Clock className="w-4 h-4 text-[#64748B]" />
-                <h3 className="text-sm font-bold text-[#0F172A]">Submitted Feedback & Faculty Responses</h3>
+                <h3 className="text-sm font-bold text-[#0F172A]">Submitted Feedback & Trainer Responses</h3>
               </div>
               <button
                 onClick={loadFeedbacks}
@@ -890,7 +890,7 @@ export const ParentCommunicationView: React.FC<ParentCommunicationViewProps> = (
 
                     {item.staff && (
                       <p className="text-[11px] text-[#64748B]">
-                        Assigned Faculty: <strong>{item.staff.fullName}</strong>
+                        Assigned Trainer: <strong>{item.staff.fullName}</strong>
                       </p>
                     )}
 
@@ -900,7 +900,7 @@ export const ParentCommunicationView: React.FC<ParentCommunicationViewProps> = (
                         <div className="flex items-center justify-between">
                           <span className="text-[11px] font-bold text-[#006FFF] flex items-center gap-1.5">
                             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                            Faculty Response ({item.respondedBy?.fullName || 'Teacher'}):
+                            Trainer Response ({item.respondedBy?.fullName || 'Trainer'}):
                           </span>
                           {item.respondedAt && (
                             <span className="text-[10px] text-[#94A3B8]">
@@ -922,7 +922,7 @@ export const ParentCommunicationView: React.FC<ParentCommunicationViewProps> = (
                       </div>
                     ) : (
                       <div className="text-[11px] text-[#94A3B8] italic">
-                        Awaiting response from faculty in-charge.
+                        Awaiting response from trainer in-charge.
                       </div>
                     )}
                   </div>

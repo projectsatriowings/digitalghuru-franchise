@@ -433,7 +433,7 @@ export const StaffAttendanceAdmin: React.FC<StaffAttendanceAdminProps> = () => {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `Staff_Attendance_${reportYear}_${reportMonth}.csv`;
+      a.download = `Trainer_Attendance_${reportYear}_${reportMonth}.csv`;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -623,7 +623,7 @@ export const StaffAttendanceAdmin: React.FC<StaffAttendanceAdminProps> = () => {
             </span>
           </div>
           <h1 className="text-2xl font-black text-[#0F172A] tracking-tight mt-1.5">
-            Staff Attendance & Geofence Operations
+            Trainer Attendance & Geofence Operations
           </h1>
           <p className="text-xs sm:text-sm text-[#64748B] mt-0.5">
             GPS geofencing, daily biometric/location registers, remote work authorizations & audit trails for{' '}
@@ -725,7 +725,7 @@ export const StaffAttendanceAdmin: React.FC<StaffAttendanceAdminProps> = () => {
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3.5">
               <div className="p-4 sm:p-5 rounded-2xl bg-white border border-[#E2E8F0]/70 shadow-2xs hover:shadow-sm transition-all flex flex-col justify-between">
                 <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-[#94A3B8]">Active Staff</span>
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-[#94A3B8]">Active Trainers</span>
                   <div className="w-8 h-8 rounded-xl bg-[#FAF8F5] border border-[#E2E8F0] flex items-center justify-center text-[#006FFF]">
                     <Users className="w-4 h-4" />
                   </div>
@@ -843,7 +843,7 @@ export const StaffAttendanceAdmin: React.FC<StaffAttendanceAdminProps> = () => {
                   type="text"
                   value={registerSearch}
                   onChange={(e) => setRegisterSearch(e.target.value)}
-                  placeholder="Search staff, code, role..."
+                  placeholder="Search trainers, code, role..."
                   className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-[#E2E8F0] bg-white text-[#0F172A] placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#006FFF]/20/10 focus:border-[#006FFF]"
                 />
               </div>
@@ -880,7 +880,7 @@ export const StaffAttendanceAdmin: React.FC<StaffAttendanceAdminProps> = () => {
               <table className="w-full text-left text-xs text-[#0F172A]">
                 <thead className="bg-[#FAF8F5] text-[11px] font-bold text-[#94A3B8] uppercase tracking-wider border-b border-[#E2E8F0]">
                   <tr>
-                    <th className="py-3.5 px-5">Staff Member</th>
+                    <th className="py-3.5 px-5">Trainer</th>
                     <th className="py-3.5 px-4">Role & Dept</th>
                     <th className="py-3.5 px-4">Status & Mode</th>
                     <th className="py-3.5 px-4">Check-In</th>
@@ -904,9 +904,9 @@ export const StaffAttendanceAdmin: React.FC<StaffAttendanceAdminProps> = () => {
                       <td colSpan={7} className="py-16 text-center text-[#94A3B8]">
                         <div className="max-w-xs mx-auto">
                           <Users className="w-8 h-8 text-[#94A3B8] mx-auto mb-2" />
-                          <p className="text-sm font-bold text-[#0F172A]">No staff records found</p>
+                          <p className="text-sm font-bold text-[#0F172A]">No trainer records found</p>
                           <p className="text-xs mt-1 text-[#94A3B8]">
-                            No staff attendance records match the selected date or search filter.
+                            No trainer attendance records match the selected date or search filter.
                           </p>
                         </div>
                       </td>
@@ -927,7 +927,7 @@ export const StaffAttendanceAdmin: React.FC<StaffAttendanceAdminProps> = () => {
                         </td>
 
                         <td className="py-3.5 px-4">
-                          <div className="text-xs font-semibold text-[#0F172A]">{row.designation || 'Staff'}</div>
+                          <div className="text-xs font-semibold text-[#0F172A]">{row.designation || 'Trainer'}</div>
                           <div className="text-[11px] text-[#94A3B8]">{row.department || 'General'}</div>
                         </td>
 
@@ -1065,7 +1065,7 @@ export const StaffAttendanceAdmin: React.FC<StaffAttendanceAdminProps> = () => {
                 <div className="text-2xl sm:text-3xl font-black text-teal-950 mt-3">
                   {wfhMetrics.authorizedToday}
                 </div>
-                <div className="text-[11px] text-teal-700/80 mt-1 font-medium">Eligible staff</div>
+                <div className="text-[11px] text-teal-700/80 mt-1 font-medium">Eligible trainers</div>
               </div>
 
               <div className="p-4 sm:p-5 rounded-2xl bg-white border border-emerald-200/80 shadow-2xs hover:shadow-sm transition-all flex flex-col justify-between">
@@ -1152,10 +1152,10 @@ export const StaffAttendanceAdmin: React.FC<StaffAttendanceAdminProps> = () => {
                   </div>
                   <div>
                     <h3 className="text-sm font-bold text-amber-950">
-                      Pending Staff WFH Requests Needing Review
+                      Pending Trainer WFH Requests Needing Review
                     </h3>
                     <p className="text-xs text-amber-800 mt-0.5">
-                      Faculty members have submitted remote work requests that require administrative action.
+                      Trainers have submitted remote work requests that require administrative action.
                     </p>
                   </div>
                 </div>
@@ -1168,7 +1168,7 @@ export const StaffAttendanceAdmin: React.FC<StaffAttendanceAdminProps> = () => {
                 <table className="w-full text-left text-xs">
                   <thead className="bg-[#FAF8F5] text-[11px] font-bold text-[#94A3B8] uppercase border-b border-[#E2E8F0]">
                     <tr>
-                      <th className="py-3 px-4">Staff Member</th>
+                      <th className="py-3 px-4">Trainer</th>
                       <th className="py-3 px-4">Requested Dates</th>
                       <th className="py-3 px-4">Category</th>
                       <th className="py-3 px-4">Reason & Justification</th>
@@ -1186,7 +1186,7 @@ export const StaffAttendanceAdmin: React.FC<StaffAttendanceAdminProps> = () => {
                                 {getInitials(req.staff?.user?.fullName)}
                               </div>
                               <div>
-                                <div>{req.staff?.user?.fullName || 'Faculty Member'}</div>
+                                <div>{req.staff?.user?.fullName || 'Trainer'}</div>
                                 <div className="text-[10px] text-[#94A3B8] font-mono">{req.staff?.employeeCode}</div>
                               </div>
                             </div>
@@ -1266,16 +1266,16 @@ export const StaffAttendanceAdmin: React.FC<StaffAttendanceAdminProps> = () => {
                     onChange={(e) => setWfhScope(e.target.value as any)}
                     className="w-full text-xs px-3.5 py-2.5 rounded-xl border border-[#E2E8F0] bg-[#FAF8F5] text-[#0F172A] font-semibold focus:outline-none focus:bg-white focus:ring-2 focus:ring-[#006FFF]/20/10"
                   >
-                    <option value="INSTITUTE_WIDE">🏫 Institute-Wide (All Eligible Staff)</option>
-                    <option value="INDIVIDUAL">👤 Individual Staff Member</option>
-                    <option value="GROUP">👥 Selected Group of Staff</option>
+                    <option value="INSTITUTE_WIDE">🏫 Institute-Wide (All Eligible Trainers)</option>
+                    <option value="INDIVIDUAL">👤 Individual Trainer</option>
+                    <option value="GROUP">👥 Selected Group of Trainers</option>
                   </select>
                   <span className="text-[11px] text-[#94A3B8] mt-1 block">
                     {wfhScope === 'INSTITUTE_WIDE'
-                      ? 'Applies to all active faculty in the academy.'
+                      ? 'Applies to all active trainers in the academy.'
                       : wfhScope === 'INDIVIDUAL'
-                      ? 'Select one specific teacher.'
-                      : 'Choose specific staff members.'}
+                      ? 'Select one specific trainer.'
+                      : 'Choose specific trainers.'}
                   </span>
                 </div>
 
@@ -1372,17 +1372,17 @@ export const StaffAttendanceAdmin: React.FC<StaffAttendanceAdminProps> = () => {
               {wfhScope === 'INDIVIDUAL' && (
                 <div>
                   <label className="block text-xs font-bold text-[#0F172A] mb-1.5">
-                    Select Staff Member *
+                    Select Trainer *
                   </label>
                   <select
                     value={wfhStaffId}
                     onChange={(e) => setWfhStaffId(e.target.value)}
                     className="w-full text-xs px-3.5 py-2.5 rounded-xl border border-[#E2E8F0] bg-[#FAF8F5] text-[#0F172A] font-semibold focus:outline-none focus:bg-white focus:ring-2 focus:ring-[#006FFF]/20/10"
                   >
-                    <option value="">-- Choose Staff Member --</option>
+                    <option value="">-- Choose Trainer --</option>
                     {register.map((s) => (
                       <option key={s.staffId} value={s.staffId}>
-                        {s.fullName} ({s.employeeCode || 'No Code'}) • {s.designation || 'Staff'}
+                        {s.fullName} ({s.employeeCode || 'No Code'}) • {s.designation || 'Trainer'}
                       </option>
                     ))}
                   </select>
@@ -1394,7 +1394,7 @@ export const StaffAttendanceAdmin: React.FC<StaffAttendanceAdminProps> = () => {
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <label className="text-xs font-bold text-[#0F172A]">
-                      Select Staff Members for Group ({wfhSelectedStaffIds.length} selected) *
+                      Select Trainers for Group ({wfhSelectedStaffIds.length} selected) *
                     </label>
                     <div className="flex gap-2 text-xs">
                       <button
@@ -1442,7 +1442,7 @@ export const StaffAttendanceAdmin: React.FC<StaffAttendanceAdminProps> = () => {
                           <div className="truncate">
                             <div className="font-bold truncate">{s.fullName}</div>
                             <div className={`text-[10px] ${isChecked ? 'text-stone-200' : 'text-[#94A3B8]'}`}>
-                              {s.employeeCode || 'Staff'} • {s.designation || 'Faculty'}
+                              {s.employeeCode || 'TRAINER'} • {s.designation || 'Trainer'}
                             </div>
                           </div>
                         </label>
@@ -1463,7 +1463,7 @@ export const StaffAttendanceAdmin: React.FC<StaffAttendanceAdminProps> = () => {
                     <option value="WEATHER_DISRUPTION">🌧️ Heavy Rain / Cyclone / Weather Disruption</option>
                     <option value="ONLINE_CLASSES">💻 Scheduled Online Teaching Day</option>
                     <option value="INSTITUTE_CLOSURE">🏢 Temporary Institute / Campus Closure</option>
-                    <option value="INDIVIDUAL_REQUEST">📝 Approved Individual Faculty Request</option>
+                    <option value="INDIVIDUAL_REQUEST">📝 Approved Individual Trainer Request</option>
                     <option value="MANAGEMENT_APPROVAL">🏛️ Academic Management Administrative Approval</option>
                     <option value="OTHER">⚙️ Other Operational Justification</option>
                   </select>
@@ -1501,11 +1501,11 @@ export const StaffAttendanceAdmin: React.FC<StaffAttendanceAdminProps> = () => {
                       return;
                     }
                     if (wfhScope === 'INDIVIDUAL' && !wfhStaffId) {
-                      alert('Please select an individual staff member.');
+                      alert('Please select an individual trainer.');
                       return;
                     }
                     if (wfhScope === 'GROUP' && wfhSelectedStaffIds.length === 0) {
-                      alert('Please select at least one staff member for the group.');
+                      alert('Please select at least one trainer for the group.');
                       return;
                     }
                     setWfhConfirmModal(true);
@@ -1581,7 +1581,7 @@ export const StaffAttendanceAdmin: React.FC<StaffAttendanceAdminProps> = () => {
               <table className="w-full text-left text-xs text-[#0F172A]">
                 <thead className="bg-[#FAF8F5] text-[11px] font-bold text-[#94A3B8] uppercase tracking-wider border-b border-[#E2E8F0]">
                   <tr>
-                    <th className="py-3.5 px-5">Scope / Staff</th>
+                    <th className="py-3.5 px-5">Scope / Trainer</th>
                     <th className="py-3.5 px-4">Dates</th>
                     <th className="py-3.5 px-4">Category</th>
                     <th className="py-3.5 px-4">Reason & Justification</th>
@@ -1604,12 +1604,12 @@ export const StaffAttendanceAdmin: React.FC<StaffAttendanceAdminProps> = () => {
                           {auth.scope === 'INSTITUTE_WIDE' ? (
                             <span className="font-bold text-[#006FFF] flex items-center gap-1.5">
                               <Users className="w-3.5 h-3.5 text-[#94A3B8]" />
-                              Institute-Wide (All Faculty)
+                              Institute-Wide (All Trainers)
                             </span>
                           ) : auth.scope === 'GROUP' ? (
                             <span className="font-semibold text-stone-800 flex items-center gap-1.5">
                               <Users className="w-3.5 h-3.5 text-stone-600" />
-                              Group ({auth.groupAssignments?.length || 0} Staff)
+                              Group ({auth.groupAssignments?.length || 0} Trainers)
                             </span>
                           ) : (
                             <div className="flex items-center gap-2.5">
@@ -2002,7 +2002,7 @@ export const StaffAttendanceAdmin: React.FC<StaffAttendanceAdminProps> = () => {
                 <thead className="bg-[#FAF8F5] text-[11px] font-bold text-[#94A3B8] uppercase tracking-wider border-b border-[#E2E8F0]">
                   <tr>
                     <th className="py-3.5 px-5">Code</th>
-                    <th className="py-3.5 px-4">Staff Member</th>
+                    <th className="py-3.5 px-4">Trainer</th>
                     <th className="py-3.5 px-4">Department</th>
                     <th className="py-3.5 px-3 text-center">Days Present</th>
                     <th className="py-3.5 px-3 text-center">Late Count</th>
@@ -2025,7 +2025,7 @@ export const StaffAttendanceAdmin: React.FC<StaffAttendanceAdminProps> = () => {
                   ) : monthlyData.length === 0 ? (
                     <tr>
                       <td colSpan={9} className="py-16 text-center text-[#94A3B8]">
-                        No staff records found for this period.
+                        No trainer records found for this period.
                       </td>
                     </tr>
                   ) : (
@@ -2167,7 +2167,7 @@ export const StaffAttendanceAdmin: React.FC<StaffAttendanceAdminProps> = () => {
                   rows={3}
                   value={correctionReason}
                   onChange={(e) => setCorrectionReason(e.target.value)}
-                  placeholder="e.g., Staff experienced GPS hardware glitch on mobile device; verified present in classroom by Academic Coordinator."
+                  placeholder="e.g., Trainer experienced GPS hardware glitch on mobile device; verified present in classroom by Academic Coordinator."
                   className="w-full px-3.5 py-2 text-xs rounded-xl border border-[#E2E8F0] bg-white text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#006FFF]/20/10"
                   required
                 />
@@ -2234,7 +2234,7 @@ export const StaffAttendanceAdmin: React.FC<StaffAttendanceAdminProps> = () => {
               <div className="space-y-4 text-xs">
                 <div className="p-3.5 bg-[#FAF8F5] rounded-xl border border-[#E2E8F0] grid grid-cols-2 gap-2">
                   <div>
-                    <span className="text-[#94A3B8]">Staff:</span>{' '}
+                    <span className="text-[#94A3B8]">Trainer:</span>{' '}
                     <span className="font-bold text-[#0F172A]">{sessionDetails.staff?.user?.fullName}</span>
                   </div>
                   <div>
@@ -2333,10 +2333,10 @@ export const StaffAttendanceAdmin: React.FC<StaffAttendanceAdminProps> = () => {
                   <span className="text-[#94A3B8]">Scope:</span>
                   <span className="font-bold text-[#0F172A]">
                     {wfhScope === 'INSTITUTE_WIDE'
-                      ? `Institute-Wide (${register.length} eligible staff affected)`
+                      ? `Institute-Wide (${register.length} eligible trainers affected)`
                       : wfhScope === 'GROUP'
-                      ? `Group (${wfhSelectedStaffIds.length} staff members)`
-                      : 'Individual Staff Member'}
+                      ? `Group (${wfhSelectedStaffIds.length} trainers)`
+                      : 'Individual Trainer'}
                   </span>
                 </div>
                 <div className="flex justify-between">
@@ -2369,7 +2369,7 @@ export const StaffAttendanceAdmin: React.FC<StaffAttendanceAdminProps> = () => {
 
               {wfhScope === 'INSTITUTE_WIDE' && (
                 <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs">
-                  ⚠️ <strong>Institute-Wide Action:</strong> All {register.length} staff members will be authorized to mark remote attendance for the specified date(s) without geofence enforcement.
+                  ⚠️ <strong>Institute-Wide Action:</strong> All {register.length} trainers will be authorized to mark remote attendance for the specified date(s) without geofence enforcement.
                 </div>
               )}
             </div>

@@ -416,9 +416,9 @@ export const ParentDashboardView: React.FC<ParentDashboardViewProps> = ({
                 <MessageSquare className="w-5 h-5" />
               </div>
               <div className="text-xs">
-                <h4 className="font-bold text-[#0F172A]">Direct Faculty Channel</h4>
+                <h4 className="font-bold text-[#0F172A]">Direct Trainer Channel</h4>
                 <p className="text-[#64748B] mt-0.5">
-                  Have questions about your child's progress, homework, or attendance? Send a direct message to their class and subject teachers.
+                  Have questions about your child's progress, homework, or attendance? Send a direct message to their class trainers.
                 </p>
                 <button
                   onClick={() => onNavigateTab('communication')}
@@ -446,7 +446,7 @@ export const ParentDashboardView: React.FC<ParentDashboardViewProps> = ({
           </div>
 
           <div className="text-[11px] text-[#94A3B8] italic pt-2 border-t border-[#F1F5F9]">
-            Note: All teacher remarks and marks are officially verified by institute faculty.
+            Note: All trainer remarks and marks are officially verified by institute trainers.
           </div>
         </div>
       </div>

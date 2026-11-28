@@ -1240,7 +1240,7 @@ Please keep this login and password safe. Use your registered mobile number and 
         method: 'PATCH',
         body: JSON.stringify({
           status: statusConfirm.newStatus,
-          reason: `Status changed to ${statusConfirm.newStatus} by staff`,
+          reason: `Status changed to ${statusConfirm.newStatus} by trainer`,
         }),
       });
 

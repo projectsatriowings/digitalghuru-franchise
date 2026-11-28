@@ -567,7 +567,25 @@ export async function getAuthorizedStaffAssignments(
         }
 
         const assignments = await getAuthorizedStaffAssignments(req, prismaClient);
-        return assignments.authorizedBatchIds.includes(batchId);
+        if (assignments.authorizedBatchIds.includes(batchId)) {
+          return true;
+        }
+
+        // Direct fallback check in case of institute filter boundary
+        const userId = req.user?.userId || (req.user as any)?.id;
+        if (userId) {
+          const directAssignment = await prismaClient.staffBatchAssignment.findFirst({
+            where: {
+              batchId,
+              staffProfile: { userId },
+            },
+          });
+          if (directAssignment) {
+            return true;
+          }
+        }
+
+        return false;
       }
 
       /**

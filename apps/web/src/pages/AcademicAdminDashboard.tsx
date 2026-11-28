@@ -41,7 +41,7 @@ export const AcademicAdminDashboard: React.FC<AcademicAdminDashboardProps> = ({ 
       <div>
         <h1 className="text-2xl font-extrabold text-[#0F172A]">Institute Dashboard</h1>
         <p className="text-sm text-[#64748B] mt-1">
-          Academic operations, student enrollment, and faculty overview for{' '}
+          Academic operations, student enrollment, and trainer overview for{' '}
           <strong className="text-[#0F172A]">{data?.institute?.name || activeInstitute?.name}</strong>
         </p>
       </div>
@@ -63,7 +63,7 @@ export const AcademicAdminDashboard: React.FC<AcademicAdminDashboardProps> = ({ 
 
         <div className="p-5 rounded-2xl bg-white border border-[#E2E8F0] shadow-sm">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-[#64748B]">Total Staff</span>
+            <span className="text-xs font-bold uppercase tracking-wider text-[#64748B]">Total Trainers</span>
             <div className="w-8 h-8 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-800">
               <Users className="w-4 h-4" />
             </div>
@@ -130,13 +130,13 @@ export const AcademicAdminDashboard: React.FC<AcademicAdminDashboardProps> = ({ 
               <Users className="w-5 h-5" />
             </div>
             <h3 className="font-bold text-[#0F172A] text-base group-hover:text-[#006FFF] transition">
-              Staff & Faculty
+              Trainers
             </h3>
             <p className="text-xs text-[#64748B] mt-1 leading-relaxed">
-              Provision faculty accounts, assign subjects, and configure permissions.
+              Provision trainer accounts, assign subjects, and configure permissions.
             </p>
             <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-800 mt-4">
-              Manage Staff <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition" />
+              Manage Trainers <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition" />
             </span>
           </button>
         )}
@@ -150,10 +150,10 @@ export const AcademicAdminDashboard: React.FC<AcademicAdminDashboardProps> = ({ 
               <Compass className="w-5 h-5" />
             </div>
             <h3 className="font-bold text-[#0F172A] text-base group-hover:text-[#006FFF] transition">
-              Staff Attendance
+              Trainer Attendance
             </h3>
             <p className="text-xs text-[#64748B] mt-1 leading-relaxed">
-              Monitor GPS geofenced check-ins, daily staff register, and geofence radius.
+              Monitor GPS geofenced check-ins, daily trainer register, and geofence radius.
             </p>
             <span className="inline-flex items-center gap-1 text-xs font-bold text-purple-800 mt-4">
               View Register <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition" />
@@ -175,7 +175,7 @@ export const AcademicAdminDashboard: React.FC<AcademicAdminDashboardProps> = ({ 
             <p className="text-xs text-[#64748B] mt-1 leading-relaxed">
               {user?.role === 'STAFF'
                 ? 'View assigned academic batches, subjects, curriculum, and student rosters.'
-                : 'Manage academic batches, assign subjects, faculty, and student rosters.'}
+                : 'Manage academic batches, assign subjects, trainers, and student rosters.'}
             </p>
             <span className="inline-flex items-center gap-1 text-xs font-bold text-amber-800 mt-4">
               {user?.role === 'STAFF' ? 'View Batches' : 'Manage Batches'} <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition" />

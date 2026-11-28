@@ -259,12 +259,31 @@ export async function listStudents(req: AuthenticatedRequest, res: Response) {
     }
 
     if (search) {
+      const searchWords = search.split(/\s+/).filter(Boolean);
+      const searchConditions: any[] = [
+        { admissionNumber: { contains: search, mode: 'insensitive' } },
+        { firstName: { contains: search, mode: 'insensitive' } },
+        { lastName: { contains: search, mode: 'insensitive' } },
+        { phone: { contains: search, mode: 'insensitive' } },
+        { user: { fullName: { contains: search, mode: 'insensitive' } } },
+        { user: { email: { contains: search, mode: 'insensitive' } } },
+      ];
+
+      if (searchWords.length > 1) {
+        searchConditions.push({
+          AND: searchWords.map((word) => ({
+            OR: [
+              { firstName: { contains: word, mode: 'insensitive' } },
+              { lastName: { contains: word, mode: 'insensitive' } },
+              { user: { fullName: { contains: word, mode: 'insensitive' } } },
+              { admissionNumber: { contains: word, mode: 'insensitive' } },
+            ],
+          })),
+        });
+      }
+
       andConditions.push({
-        OR: [
-          { admissionNumber: { contains: search, mode: 'insensitive' } },
-          { firstName: { contains: search, mode: 'insensitive' } },
-          { lastName: { contains: search, mode: 'insensitive' } },
-        ],
+        OR: searchConditions,
       });
     }
 
@@ -2650,19 +2669,36 @@ export async function lookupExistingStudent(req: AuthenticatedRequest, res: Resp
       return res.status(400).json({ success: false, error: 'Search term must be at least 2 characters' });
     }
 
+    const searchWords = search.split(/\s+/).filter(Boolean);
+    const searchConditions: any[] = [
+      { admissionNumber: { contains: search, mode: 'insensitive' } },
+      { firstName: { contains: search, mode: 'insensitive' } },
+      { lastName: { contains: search, mode: 'insensitive' } },
+      { phone: { contains: search, mode: 'insensitive' } },
+      { user: { phone: { contains: search, mode: 'insensitive' } } },
+      { user: { email: { contains: search, mode: 'insensitive' } } },
+      { user: { fullName: { contains: search, mode: 'insensitive' } } },
+    ];
+
+    if (searchWords.length > 1) {
+      searchConditions.push({
+        AND: searchWords.map((word) => ({
+          OR: [
+            { firstName: { contains: word, mode: 'insensitive' } },
+            { lastName: { contains: word, mode: 'insensitive' } },
+            { user: { fullName: { contains: word, mode: 'insensitive' } } },
+            { admissionNumber: { contains: word, mode: 'insensitive' } },
+          ],
+        })),
+      });
+    }
+
     const students = await prisma.student.findMany({
       where: {
         AND: [
           scope.whereClause,
           {
-            OR: [
-              { admissionNumber: { contains: search, mode: 'insensitive' } },
-              { firstName: { contains: search, mode: 'insensitive' } },
-              { lastName: { contains: search, mode: 'insensitive' } },
-              { phone: { contains: search, mode: 'insensitive' } },
-              { user: { phone: { contains: search, mode: 'insensitive' } } },
-              { user: { email: { contains: search, mode: 'insensitive' } } },
-            ],
+            OR: searchConditions,
           },
         ],
       },

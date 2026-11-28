@@ -129,13 +129,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
               onClick={() => handleSelect('staff')}
               className={navItemClass('staff')}
             >
-              <Users className="w-5 h-5 shrink-0" /> Staff Management
+              <Users className="w-5 h-5 shrink-0" /> Trainer Management
             </button>
             <button
               onClick={() => handleSelect('staff_attendance')}
               className={navItemClass('staff_attendance')}
             >
-              <Calendar className="w-5 h-5 shrink-0" /> Staff Attendance
+              <Calendar className="w-5 h-5 shrink-0" /> Trainer Attendance
             </button>
             <button
               onClick={() => handleSelect('students')}
@@ -197,14 +197,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
               onClick={() => handleSelect('staff')}
               className={navItemClass('staff')}
             >
-              <Users className="w-5 h-5 shrink-0" /> Staff Management
+              <Users className="w-5 h-5 shrink-0" /> Trainer Management
             </button>
 
             <button
               onClick={() => handleSelect('staff_attendance')}
               className={navItemClass('staff_attendance')}
             >
-              <Calendar className="w-5 h-5 shrink-0" /> Staff Attendance
+              <Calendar className="w-5 h-5 shrink-0" /> Trainer Attendance
             </button>
 
             <button
@@ -347,7 +347,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               onClick={() => onSelectTab('parent_communication')}
               className={navItemClass('parent_communication')}
             >
-              <MessageSquare className="w-4 h-4" /> Message Teachers
+              <MessageSquare className="w-4 h-4" /> Message Trainers
             </button>
 
             <button

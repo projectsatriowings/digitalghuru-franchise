@@ -236,9 +236,9 @@ export const FranchiseOwnerDashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* Metric 2: Active Staff */}
+        {/* Metric 2: Active Trainers */}
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-          <div className="text-xs font-semibold text-slate-500 uppercase">Staff & Faculty</div>
+          <div className="text-xs font-semibold text-slate-500 uppercase">Trainers</div>
           <div className="text-2xl font-black text-slate-900 mt-1">{metrics.totalStaff ?? 0}</div>
           <div className="text-[11px] text-slate-500 font-medium mt-1">Active Profiles</div>
         </div>
@@ -437,7 +437,7 @@ export const FranchiseOwnerDashboard: React.FC = () => {
                         <div className="text-base font-bold text-slate-900 mt-0.5">{b.activeStudents}</div>
                       </div>
                       <div className="bg-slate-50 p-2 rounded-xl">
-                        <div className="text-[10px] text-slate-500 font-semibold uppercase">Staff</div>
+                        <div className="text-[10px] text-slate-500 font-semibold uppercase">Trainers</div>
                         <div className="text-base font-bold text-slate-900 mt-0.5">{b.staffCount}</div>
                       </div>
                       <div className="bg-slate-50 p-2 rounded-xl">
@@ -944,7 +944,7 @@ export const FranchiseOwnerDashboard: React.FC = () => {
                   1. <strong>Two-Installment Royalty:</strong> Exactly two installments are due per agreement year according to the schedule in the portal.
                 </p>
                 <p>
-                  2. <strong>Franchise Operation:</strong> The Franchisee Admin is authorized to manage students, admissions, staff, class schedules, exams, and course fees within their authorized campus locations.
+                  2. <strong>Franchise Operation:</strong> The Franchisee Admin is authorized to manage students, admissions, trainers, class schedules, exams, and course fees within their authorized campus locations.
                 </p>
                 <p>
                   3. <strong>Brand & Integrity:</strong> Official Digital Ghuru materials, badges, and learning systems are licensed for use during the active agreement term.

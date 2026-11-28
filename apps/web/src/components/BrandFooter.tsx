@@ -80,7 +80,7 @@ export const BrandFooter: React.FC = () => {
             </div>
 
             <p className="text-xs md:text-sm text-slate-300 leading-relaxed max-w-lg">
-              Digital Ghuru Franchise Enterprise is proudly built for franchise operators, institutes, faculty, students, and parents. Combining practical digital execution with structured academic excellence.
+              Digital Ghuru Franchise Enterprise is proudly built for franchise operators, institutes, trainers, students, and parents. Combining practical digital execution with structured academic excellence.
             </p>
 
             {/* Social Icons */}

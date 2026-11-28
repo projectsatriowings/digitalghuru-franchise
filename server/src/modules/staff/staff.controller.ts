@@ -1927,6 +1927,25 @@ export async function getMyStaffStudents(req: AuthenticatedRequest, res: Respons
                 { firstName: { contains: search, mode: 'insensitive' } },
                 { lastName: { contains: search, mode: 'insensitive' } },
                 { admissionNumber: { contains: search, mode: 'insensitive' } },
+                { user: { fullName: { contains: search, mode: 'insensitive' } } },
+                ...(search.trim().split(/\s+/).filter(Boolean).length > 1
+                  ? [
+                      {
+                        AND: search
+                          .trim()
+                          .split(/\s+/)
+                          .filter(Boolean)
+                          .map((w: string) => ({
+                            OR: [
+                              { firstName: { contains: w, mode: 'insensitive' } },
+                              { lastName: { contains: w, mode: 'insensitive' } },
+                              { user: { fullName: { contains: w, mode: 'insensitive' } } },
+                              { admissionNumber: { contains: w, mode: 'insensitive' } },
+                            ],
+                          })),
+                      },
+                    ]
+                  : []),
               ],
             }
           : {}),
