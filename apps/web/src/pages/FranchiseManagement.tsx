@@ -4888,7 +4888,7 @@ export const FranchiseManagement: React.FC = () => {
                 </div>
 
                 <div className="p-2 bg-blue-950/70 border border-blue-800 rounded-lg text-[10px] text-blue-200">
-                  <strong>DIRECT EXPENSE RULE:</strong> Direct expenses (rent, trainers) are not deducted from gross fees unless basis is Profit After Expenses. Historical installments, receipts and payments from v{selectedAgreementForRevise.version || 1} remain permanently preserved.
+                  <strong>DIRECT EXPENSE RULE:</strong> Direct expenses (rent, trainers) are borne directly by each party and are not automatically deducted from course fee collections. Historical installments, receipts and payments from v{selectedAgreementForRevise.version || 1} remain permanently preserved.
                 </div>
               </div>
 

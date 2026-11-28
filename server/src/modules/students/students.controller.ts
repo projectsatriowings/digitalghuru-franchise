@@ -16,6 +16,7 @@ import {
 } from './admission-number.service.js';
 import { resolveStructuredTimetable } from './timetable-resolver.js';
 import { serverCache } from '../../utils/cache.js';
+import { getFranchiseSoftwareAccess, SOFTWARE_ACCESS_DISABLED_ERROR } from '../../utils/software-access.js';
 
 export function formatStudentResponse<T extends { id: string; photoUrl?: string | null; notes?: string | null; updatedAt?: Date | string }>(student: T): T & { credentialsOnRecord?: { studentPassword: string | null; parentPassword: string | null } } {
   if (!student) return student;
@@ -488,6 +489,15 @@ export async function admitStudent(req: AuthenticatedRequest, res: Response) {
         return res.status(400).json({
           success: false,
           error: 'This campus branch must be linked to a franchise to enroll students in Global Courses.',
+        });
+      }
+
+      const swAccess = await getFranchiseSoftwareAccess(resolvedFranchiseId);
+      if (!swAccess.enabled) {
+        return res.status(403).json({
+          success: false,
+          code: 'COURSE_SOFTWARE_DISABLED',
+          error: SOFTWARE_ACCESS_DISABLED_ERROR,
         });
       }
 

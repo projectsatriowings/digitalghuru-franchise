@@ -34,6 +34,7 @@ const security_js_1 = require("../../utils/security.js");
 const admission_number_service_js_1 = require("./admission-number.service.js");
 const timetable_resolver_js_1 = require("./timetable-resolver.js");
 const cache_js_1 = require("../../utils/cache.js");
+const software_access_js_1 = require("../../utils/software-access.js");
 function formatStudentResponse(student) {
     if (!student)
         return student;
@@ -473,6 +474,14 @@ async function admitStudent(req, res) {
                 return res.status(400).json({
                     success: false,
                     error: 'This campus branch must be linked to a franchise to enroll students in Global Courses.',
+                });
+            }
+            const swAccess = await (0, software_access_js_1.getFranchiseSoftwareAccess)(resolvedFranchiseId);
+            if (!swAccess.enabled) {
+                return res.status(403).json({
+                    success: false,
+                    code: 'COURSE_SOFTWARE_DISABLED',
+                    error: software_access_js_1.SOFTWARE_ACCESS_DISABLED_ERROR,
                 });
             }
             const [globalCourse, franchiseSelection] = await Promise.all([

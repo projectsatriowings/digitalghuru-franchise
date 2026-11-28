@@ -151,6 +151,8 @@ export interface User {
   isActive: boolean;
   mustChangePassword: boolean;
   lastLoginAt?: string | null;
+  courseSoftwareAccessEnabled?: boolean;
+  courseSoftwarePricingNotes?: string | null;
 }
 
 export interface Institute {
