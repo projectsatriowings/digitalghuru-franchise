@@ -65,6 +65,19 @@ export const addAdjustmentSchema = z.object({
 // CONTROLLER HANDLERS
 // ============================================================================
 
+const EMPTY_SETTLEMENT_SUMMARY = {
+  count: 0,
+  totalEligibleCollections: 0,
+  totalFranchisePayable: 0,
+  totalDgShare: 0,
+  totalTransferredAmount: 0,
+  totalRemainingBalance: 0,
+  pendingApprovalCount: 0,
+  approvedAmount: 0,
+  partiallyPaidCount: 0,
+  completedAmount: 0,
+};
+
 /**
  * List settlements with filtering and security isolation (Section F)
  */
@@ -94,12 +107,31 @@ export async function listSettlements(req: AuthenticatedRequest, res: Response) 
       if (ownedIds.length === 0) {
         return res.json({
           success: true,
-          data: { settlements: [], summary: { total: 0, payable: 0, pending: 0, completed: 0 } },
+          data: { settlements: [], summary: EMPTY_SETTLEMENT_SUMMARY },
         });
       }
-      where.franchiseId = { in: ownedIds };
+      if (franchiseId && franchiseId !== 'ALL' && ownedIds.includes(franchiseId as string)) {
+        where.franchiseId = franchiseId as string;
+      } else {
+        where.franchiseId = { in: ownedIds };
+      }
+    } else if (userRole === 'BRANCH_ADMIN') {
+      const instituteId = req.user?.instituteId;
+      const branch = instituteId
+        ? await prisma.institute.findFirst({
+            where: { id: String(instituteId) },
+            select: { franchiseId: true },
+          })
+        : null;
+      if (!branch?.franchiseId) {
+        return res.json({
+          success: true,
+          data: { settlements: [], summary: EMPTY_SETTLEMENT_SUMMARY },
+        });
+      }
+      where.franchiseId = branch.franchiseId;
     } else if (userRole === 'SUPER_ADMIN') {
-      if (franchiseId) {
+      if (franchiseId && franchiseId !== 'ALL') {
         where.franchiseId = franchiseId as string;
       }
     } else {
@@ -261,6 +293,18 @@ export async function getSettlementById(req: AuthenticatedRequest, res: Response
     if (userRole === 'FRANCHISE_OWNER' && settlement.franchise.ownerUserId !== userId) {
       return res.status(403).json({ success: false, error: 'Forbidden: Access to other franchise records is denied' });
     }
+    if (userRole === 'BRANCH_ADMIN') {
+      const instituteId = req.user?.instituteId;
+      const branch = instituteId
+        ? await prisma.institute.findFirst({
+            where: { id: String(instituteId) },
+            select: { franchiseId: true },
+          })
+        : null;
+      if (settlement.franchiseId !== branch?.franchiseId) {
+        return res.status(403).json({ success: false, error: 'Forbidden: Access to other franchise records is denied' });
+      }
+    }
 
     return res.json({
       success: true,
@@ -273,7 +317,7 @@ export async function getSettlementById(req: AuthenticatedRequest, res: Response
 }
 
 /**
- * Generate monthly settlement statements (Super Admin Only)
+ * Generate monthly settlement statements (Super Admin, Franchise Owner, Branch Admin)
  */
 export async function generateMonthlySettlements(req: AuthenticatedRequest, res: Response) {
   try {
@@ -283,9 +327,46 @@ export async function generateMonthlySettlements(req: AuthenticatedRequest, res:
     }
 
     const { settlementMonth, franchiseId, autoSubmit } = parse.data;
+    const userRole = req.user!.role;
+    const userId = req.user!.userId;
 
-    if (franchiseId) {
-      const result = await settlementEngineService.generateMonthlyStatement(franchiseId, settlementMonth, {
+    let targetFranchiseId = franchiseId && franchiseId !== 'ALL' ? franchiseId : undefined;
+
+    if (userRole === 'FRANCHISE_OWNER') {
+      const ownedFranchises = await prisma.franchise.findMany({
+        where: { ownerUserId: userId },
+        select: { id: true },
+      });
+      const ownedIds = ownedFranchises.map((f) => f.id);
+      if (ownedIds.length === 0) {
+        return res.status(403).json({ success: false, error: 'Forbidden: No franchise associated with your account' });
+      }
+      if (targetFranchiseId && !ownedIds.includes(targetFranchiseId)) {
+        return res.status(403).json({ success: false, error: 'Forbidden: You can only generate settlements for your own franchise' });
+      }
+      // If batch or no specific franchise selected by franchise owner, default to their primary owned franchise
+      if (!targetFranchiseId) {
+        targetFranchiseId = ownedIds[0];
+      }
+    } else if (userRole === 'BRANCH_ADMIN') {
+      const instituteId = req.user?.instituteId;
+      const branch = instituteId
+        ? await prisma.institute.findFirst({
+            where: { id: String(instituteId) },
+            select: { franchiseId: true },
+          })
+        : null;
+      if (!branch?.franchiseId) {
+        return res.status(403).json({ success: false, error: 'Forbidden: Branch is not associated with any franchise' });
+      }
+      if (targetFranchiseId && targetFranchiseId !== branch.franchiseId) {
+        return res.status(403).json({ success: false, error: 'Forbidden: You can only generate settlements for your assigned franchise' });
+      }
+      targetFranchiseId = branch.franchiseId;
+    }
+
+    if (targetFranchiseId) {
+      const result = await settlementEngineService.generateMonthlyStatement(targetFranchiseId, settlementMonth, {
         persist: true,
         autoSubmit,
       });
@@ -296,8 +377,15 @@ export async function generateMonthlySettlements(req: AuthenticatedRequest, res:
       });
     }
 
+    // Only SUPER_ADMIN can run batch generation across all franchises
+    if (userRole !== 'SUPER_ADMIN') {
+      return res.status(403).json({ success: false, error: 'Forbidden: Batch generation across all franchises requires Super Admin privileges' });
+    }
+
     // Batch generate for all active franchises
-    const batchResults = await settlementEngineService.generateAllMonthlySettlements(settlementMonth);
+    const batchResults = await settlementEngineService.generateAllMonthlySettlements(settlementMonth, {
+      autoSubmit,
+    });
     return res.json({
       success: true,
       message: `Generated monthly settlements for ${batchResults.length} franchises`,

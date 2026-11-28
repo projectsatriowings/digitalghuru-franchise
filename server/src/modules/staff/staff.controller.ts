@@ -60,6 +60,7 @@ export const createStaffSchema = z.object({
   qualification: z.string().optional().nullable(),
   password: z.string().min(6, 'Password must be at least 6 characters').optional(),
   initialPassword: z.string().min(6, 'Password must be at least 6 characters').optional(),
+  temporaryPassword: z.string().min(6, 'Password must be at least 6 characters').optional(),
   permissionsJson: z.record(z.any()).optional().nullable(),
   batchIds: z.array(z.string().uuid()).optional(),
   avatarUrl: z.string().optional().nullable(),
@@ -150,6 +151,8 @@ export const updateStaffStatusSchema = z.object({
 
 export const resetStaffPasswordSchema = z.object({
   password: z.string().min(6, 'Password must be at least 6 characters').optional(),
+  newPassword: z.string().min(6, 'Password must be at least 6 characters').optional(),
+  temporaryPassword: z.string().min(6, 'Password must be at least 6 characters').optional(),
 });
 
 export const qualificationSchema = z.object({
@@ -347,7 +350,11 @@ export async function createStaff(req: AuthenticatedRequest, res: Response) {
       }
     }
 
-    const permanentPassword = data.password?.trim() || data.initialPassword?.trim() || `Staff@${generateSecureRandomToken(4)}2026`;
+    const permanentPassword =
+      data.password?.trim() ||
+      data.initialPassword?.trim() ||
+      data.temporaryPassword?.trim() ||
+      `Staff@${generateSecureRandomToken(4)}2026`;
     const passwordHash = await hashPassword(permanentPassword);
 
     // Address sync logic
@@ -983,7 +990,11 @@ export async function resetStaffPassword(req: AuthenticatedRequest, res: Respons
       });
     }
 
-    const newPassword = parse.data.password?.trim() || `Staff@${generateSecureRandomToken(4)}2026`;
+    const newPassword =
+      parse.data.password?.trim() ||
+      parse.data.newPassword?.trim() ||
+      parse.data.temporaryPassword?.trim() ||
+      `Staff@${generateSecureRandomToken(4)}2026`;
     const passwordHash = await hashPassword(newPassword);
 
     const existingPerms = (staff.permissionsJson as Record<string, any>) || {};

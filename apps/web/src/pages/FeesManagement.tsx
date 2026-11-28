@@ -1225,6 +1225,13 @@ export const FeesManagement: React.FC = () => {
               </div>
             </div>
 
+            {actionError && (
+              <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+                <span>{actionError}</span>
+              </div>
+            )}
+
             <form onSubmit={handleRecordPayment} className="space-y-4 text-xs">
               <div>
                 <label className="block text-[#006FFF] font-medium mb-1">

@@ -81,6 +81,7 @@ exports.createStaffSchema = zod_1.z.object({
     qualification: zod_1.z.string().optional().nullable(),
     password: zod_1.z.string().min(6, 'Password must be at least 6 characters').optional(),
     initialPassword: zod_1.z.string().min(6, 'Password must be at least 6 characters').optional(),
+    temporaryPassword: zod_1.z.string().min(6, 'Password must be at least 6 characters').optional(),
     permissionsJson: zod_1.z.record(zod_1.z.any()).optional().nullable(),
     batchIds: zod_1.z.array(zod_1.z.string().uuid()).optional(),
     avatarUrl: zod_1.z.string().optional().nullable(),
@@ -160,6 +161,8 @@ exports.updateStaffStatusSchema = zod_1.z.object({
 });
 exports.resetStaffPasswordSchema = zod_1.z.object({
     password: zod_1.z.string().min(6, 'Password must be at least 6 characters').optional(),
+    newPassword: zod_1.z.string().min(6, 'Password must be at least 6 characters').optional(),
+    temporaryPassword: zod_1.z.string().min(6, 'Password must be at least 6 characters').optional(),
 });
 exports.qualificationSchema = zod_1.z.object({
     degree: zod_1.z.string().min(1, 'Degree or certification name is required'),
@@ -342,7 +345,10 @@ async function createStaff(req, res) {
                 });
             }
         }
-        const permanentPassword = data.password?.trim() || data.initialPassword?.trim() || `Staff@${(0, security_js_1.generateSecureRandomToken)(4)}2026`;
+        const permanentPassword = data.password?.trim() ||
+            data.initialPassword?.trim() ||
+            data.temporaryPassword?.trim() ||
+            `Staff@${(0, security_js_1.generateSecureRandomToken)(4)}2026`;
         const passwordHash = await (0, security_js_1.hashPassword)(permanentPassword);
         // Address sync logic
         const sameAsCurrent = data.sameAsCurrentAddress ?? false;
@@ -921,7 +927,10 @@ async function resetStaffPassword(req, res) {
                 error: parse.error.errors[0]?.message || 'Validation failed',
             });
         }
-        const newPassword = parse.data.password?.trim() || `Staff@${(0, security_js_1.generateSecureRandomToken)(4)}2026`;
+        const newPassword = parse.data.password?.trim() ||
+            parse.data.newPassword?.trim() ||
+            parse.data.temporaryPassword?.trim() ||
+            `Staff@${(0, security_js_1.generateSecureRandomToken)(4)}2026`;
         const passwordHash = await (0, security_js_1.hashPassword)(newPassword);
         const existingPerms = staff.permissionsJson || {};
         const updatedPerms = {

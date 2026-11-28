@@ -106,6 +106,10 @@ function requireRole(...allowedRoles) {
                 timestamp: new Date().toISOString(),
             });
         }
+        // Super Admin has master access across the entire platform
+        if (req.user.role === 'SUPER_ADMIN') {
+            return next();
+        }
         // BRANCH_ADMIN and FRANCHISE_OWNER inherit ACADEMIC_ADMIN privileges within their assigned franchise branch
         const effectiveRoles = [req.user.role];
         if (req.user.role === 'BRANCH_ADMIN' || req.user.role === 'FRANCHISE_OWNER') {

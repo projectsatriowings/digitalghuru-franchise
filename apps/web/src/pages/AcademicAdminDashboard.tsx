@@ -161,7 +161,7 @@ export const AcademicAdminDashboard: React.FC<AcademicAdminDashboardProps> = ({ 
           </button>
         )}
 
-        {isAdminRole && (
+        {(isAdminRole || user?.role === 'STAFF') && (
           <button
             onClick={() => onNavigateTab('academics')}
             className="p-5 rounded-2xl bg-white border border-[#E2E8F0] hover:border-[#8D6E63] text-left transition-all group shadow-sm hover:shadow-md"
@@ -173,10 +173,12 @@ export const AcademicAdminDashboard: React.FC<AcademicAdminDashboardProps> = ({ 
               Batches & Curriculum
             </h3>
             <p className="text-xs text-[#64748B] mt-1 leading-relaxed">
-              Manage academic batches, assign subjects, faculty, and student rosters.
+              {user?.role === 'STAFF'
+                ? 'View assigned academic batches, subjects, curriculum, and student rosters.'
+                : 'Manage academic batches, assign subjects, faculty, and student rosters.'}
             </p>
             <span className="inline-flex items-center gap-1 text-xs font-bold text-amber-800 mt-4">
-              Manage Batches <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition" />
+              {user?.role === 'STAFF' ? 'View Batches' : 'Manage Batches'} <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition" />
             </span>
           </button>
         )}

@@ -156,21 +156,23 @@ async function login(req, res) {
             });
         }
         const { identifier, password, role, instituteCode } = parseResult.data;
-        const alternateEmail = identifier.toLowerCase().endsWith('@apexacademy.com')
-            ? identifier.toLowerCase().replace('@apexacademy.com', '@apex.example.com')
-            : identifier.toLowerCase().endsWith('@apex.example.com')
-                ? identifier.toLowerCase().replace('@apex.example.com', '@apexacademy.com')
-                : identifier;
-        const alternatePhone = identifier === '9826444306' ? '9876543210' : identifier === '9876543210' ? '9826444306' : identifier;
+        const cleanIdentifier = identifier.trim();
+        const alternateEmail = cleanIdentifier.toLowerCase().endsWith('@apexacademy.com')
+            ? cleanIdentifier.toLowerCase().replace('@apexacademy.com', '@apex.example.com')
+            : cleanIdentifier.toLowerCase().endsWith('@apex.example.com')
+                ? cleanIdentifier.toLowerCase().replace('@apex.example.com', '@apexacademy.com')
+                : cleanIdentifier;
+        const alternatePhone = cleanIdentifier === '9826444306' ? '9876543210' : cleanIdentifier === '9876543210' ? '9826444306' : cleanIdentifier;
         // Search user with automatic reconnection retry for Neon serverless socket resets
         const queryUser = () => prisma_js_1.prisma.user.findFirst({
             where: {
                 OR: [
-                    { email: { equals: identifier, mode: 'insensitive' } },
+                    { email: { equals: cleanIdentifier, mode: 'insensitive' } },
                     { email: { equals: alternateEmail, mode: 'insensitive' } },
-                    { phone: identifier },
+                    { phone: cleanIdentifier },
                     { phone: alternatePhone },
-                    { studentProfile: { admissionNumber: { equals: identifier, mode: 'insensitive' } } },
+                    { studentProfile: { admissionNumber: { equals: cleanIdentifier, mode: 'insensitive' } } },
+                    { staffProfile: { employeeCode: { equals: cleanIdentifier, mode: 'insensitive' } } },
                 ],
             },
             include: {

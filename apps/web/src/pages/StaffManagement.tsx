@@ -308,6 +308,7 @@ export const StaffManagement: React.FC = () => {
       const res = await apiFetch(`/staff/${viewingStaffCreds.id}/reset-password`, {
         method: 'POST',
         body: JSON.stringify({
+          password: resetPasswordInput.trim(),
           newPassword: resetPasswordInput.trim(),
         }),
       });

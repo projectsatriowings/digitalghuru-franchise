@@ -967,6 +967,8 @@ async function recordPayment(req, res) {
         const parse = exports.recordPaymentSchema.safeParse({
             ...req.body,
             feeAssignmentId: rawFeeAssignmentId,
+            amountPaid: req.body.amountPaid !== undefined ? req.body.amountPaid : req.body.amount,
+            method: req.body.method !== undefined ? req.body.method : req.body.paymentMethod,
         });
         if (!parse.success) {
             return res.status(400).json({ success: false, error: 'Validation failed', details: parse.error.errors });

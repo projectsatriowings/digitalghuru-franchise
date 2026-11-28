@@ -136,13 +136,21 @@ class SettlementEngineService {
         }
         // Atomic persistence with payment linking
         const settlement = await prisma_js_1.prisma.$transaction(async (tx) => {
-            let record;
-            if (existing) {
-                const totalTransferred = Number(existing.totalTransferredAmount || 0);
+            let record = existing || (await tx.franchiseSettlement.findFirst({
+                where: {
+                    OR: [
+                        { franchiseId, settlementMonth },
+                        { statementNumber },
+                    ],
+                },
+            }));
+            if (record) {
+                const totalTransferred = Number(record.totalTransferredAmount || 0);
                 const remainingPayable = Math.max(0, shares.franchiseShareAmount - totalTransferred);
                 record = await tx.franchiseSettlement.update({
-                    where: { id: existing.id },
+                    where: { id: record.id },
                     data: {
+                        statementNumber,
                         totalCapturedPayments: new client_1.Prisma.Decimal(agg.totalCapturedAmount),
                         totalEligibleCollections: new client_1.Prisma.Decimal(agg.netEligibleCollections),
                         refundDeductions: new client_1.Prisma.Decimal(agg.totalRefundDeductions),
@@ -154,9 +162,9 @@ class SettlementEngineService {
                         transactionCount: agg.paymentCount,
                         transferEligibility,
                         beneficiarySnapshot,
-                        status: (existing.status === client_1.SettlementStatus.DRAFT || existing.status === client_1.SettlementStatus.PENDING_APPROVAL || existing.status === client_1.SettlementStatus.PENDING_REVIEW)
+                        status: (record.status === client_1.SettlementStatus.DRAFT || record.status === client_1.SettlementStatus.PENDING_APPROVAL || record.status === client_1.SettlementStatus.PENDING_REVIEW)
                             ? initialStatus
-                            : existing.status,
+                            : record.status,
                     },
                 });
             }
@@ -206,33 +214,35 @@ class SettlementEngineService {
     /**
      * Batch generate monthly settlements for ALL active franchises for a calendar month
      */
-    async generateAllMonthlySettlements(settlementMonth) {
+    async generateAllMonthlySettlements(settlementMonth, options = {}) {
         const franchises = await prisma_js_1.prisma.franchise.findMany({
             where: { status: 'ACTIVE' },
             select: { id: true, name: true, code: true },
         });
-        const results = [];
-        for (const franchise of franchises) {
+        const results = await Promise.all(franchises.map(async (franchise) => {
             try {
-                const res = await this.generateMonthlyStatement(franchise.id, settlementMonth, { persist: true });
-                results.push({
+                const res = await this.generateMonthlyStatement(franchise.id, settlementMonth, {
+                    persist: true,
+                    autoSubmit: Boolean(options.autoSubmit),
+                });
+                return {
                     franchiseId: franchise.id,
                     code: franchise.code,
                     name: franchise.name,
                     success: true,
                     settlement: res.settlement,
-                });
+                };
             }
             catch (err) {
-                results.push({
+                return {
                     franchiseId: franchise.id,
                     code: franchise.code,
                     name: franchise.name,
                     success: false,
                     error: err.message,
-                });
+                };
             }
-        }
+        }));
         return results;
     }
     /**
