@@ -69,6 +69,7 @@ export const createStaffSchema = z.object({
   // Personal Details
   dob: z.string().optional().nullable(),
   gender: z.string().optional().nullable(),
+  bloodGroup: z.string().optional().nullable(),
   altPhone: optionalPhoneValidator,
   personalEmail: optionalEmailValidator,
   emergencyContactName: z.string().optional().nullable(),
@@ -113,6 +114,7 @@ export const updateStaffSchema = z.object({
   // Personal Details
   dob: z.string().optional().nullable(),
   gender: z.string().optional().nullable(),
+  bloodGroup: z.string().optional().nullable(),
   altPhone: optionalPhoneValidator,
   personalEmail: optionalEmailValidator,
   emergencyContactName: z.string().optional().nullable(),
@@ -409,6 +411,7 @@ export async function createStaff(req: AuthenticatedRequest, res: Response) {
           // Personal Details
           dob: safeParseDate(data.dob),
           gender: data.gender || null,
+          bloodGroup: data.bloodGroup?.trim() || null,
           altPhone: data.altPhone?.trim() || null,
           personalEmail: data.personalEmail?.trim() || null,
           emergencyContactName: data.emergencyContactName?.trim() || null,
@@ -513,6 +516,7 @@ export async function createStaff(req: AuthenticatedRequest, res: Response) {
           qualification: result.staffProfile.qualification,
           department: result.staffProfile.department,
           employmentType: result.staffProfile.employmentType,
+          permissionsJson: staffPermissions,
           user: result.user,
         },
       },
@@ -717,12 +721,22 @@ export async function updateStaff(req: AuthenticatedRequest, res: Response) {
           ...(data.employeeCode !== undefined && { employeeCode: data.employeeCode?.trim() || null }),
           ...(data.designation && { designation: data.designation.trim() }),
           ...(data.qualification !== undefined && { qualification: data.qualification?.trim() || null }),
-          ...(data.permissionsJson && { permissionsJson: data.permissionsJson }),
+          ...(data.permissionsJson && {
+            permissionsJson: {
+              ...((existing.permissionsJson as Record<string, any>) || {}),
+              ...data.permissionsJson,
+              // Never wipe the stored permanentPassword during general profile updates
+              ...(((existing.permissionsJson as Record<string, any>)?.permanentPassword) && {
+                permanentPassword: (existing.permissionsJson as Record<string, any>).permanentPassword,
+              }),
+            },
+          }),
           ...((data.avatarUrl !== undefined || data.photoUrl !== undefined) && { avatarUrl: data.avatarUrl?.trim() || data.photoUrl?.trim() || null }),
 
           // Personal Details
           ...(data.dob !== undefined && { dob: data.dob ? new Date(data.dob) : null }),
           ...(data.gender !== undefined && { gender: data.gender || null }),
+          ...(data.bloodGroup !== undefined && { bloodGroup: data.bloodGroup?.trim() || null }),
           ...(data.altPhone !== undefined && { altPhone: data.altPhone?.trim() || null }),
           ...(data.personalEmail !== undefined && { personalEmail: data.personalEmail?.trim() || null }),
           ...(data.emergencyContactName !== undefined && { emergencyContactName: data.emergencyContactName?.trim() || null }),

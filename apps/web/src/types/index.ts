@@ -240,6 +240,7 @@ export interface StaffMember {
   // Personal Info
   dob?: string | null;
   gender?: string | null;
+  bloodGroup?: string | null;
   altPhone?: string | null;
   personalEmail?: string | null;
   emergencyContactName?: string | null;

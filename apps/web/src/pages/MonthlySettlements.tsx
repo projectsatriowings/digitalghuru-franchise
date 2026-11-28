@@ -523,7 +523,7 @@ export const MonthlySettlements: React.FC = () => {
         <div className="bg-white p-4 rounded-xl border border-blue-200 bg-blue-50/30 shadow-sm">
           <span className="text-xs font-semibold text-blue-700 block uppercase tracking-wider">Approved Payable</span>
           <span className="text-lg font-black text-blue-900 mt-1 block">
-            ₹{summary.totalRemainingBalance?.toLocaleString('en-IN') || summary.approvedAmount?.toLocaleString('en-IN') || '0'}
+            ₹{(summary.approvedAmount ?? 0).toLocaleString('en-IN')}
           </span>
           <span className="text-[11px] text-blue-600 mt-0.5 block">Ready for bank transfer</span>
         </div>

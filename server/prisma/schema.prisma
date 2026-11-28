@@ -388,6 +388,7 @@ model StaffProfile {
   // Personal Details
   dob                      DateTime?
   gender                   String? // "Male", "Female", "Other", "Prefer not to say"
+  bloodGroup               String?
   altPhone                 String?
   personalEmail            String?
   emergencyContactName     String?

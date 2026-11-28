@@ -2019,13 +2019,21 @@ Please keep this login and password safe. Use your registered mobile number and 
                     </div>
                     <div>
                       <label className="block text-xs font-semibold text-[#006FFF] mb-1">Blood Group</label>
-                      <input
-                        type="text"
+                      <select
                         value={formData.bloodGroup}
-                        onChange={(e) => setFormData({ ...formData, bloodGroup: e.target.value.toUpperCase() })}
-                        placeholder="e.g. O+, B+, A-"
-                        className="w-full bg-[#FAF8F5] border border-[#E2E8F0] rounded-xl px-3.5 py-2.5 text-xs text-[#0F172A] uppercase focus:outline-none focus:ring-2 focus:ring-[#006FFF]/20"
-                      />
+                        onChange={(e) => setFormData({ ...formData, bloodGroup: e.target.value })}
+                        className="w-full bg-[#FAF8F5] border border-[#E2E8F0] rounded-xl px-3.5 py-2.5 text-xs text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#006FFF]/20"
+                      >
+                        <option value="">Select Blood Group (Optional)</option>
+                        <option value="A+">A+</option>
+                        <option value="A-">A-</option>
+                        <option value="B+">B+</option>
+                        <option value="B-">B-</option>
+                        <option value="AB+">AB+</option>
+                        <option value="AB-">AB-</option>
+                        <option value="O+">O+</option>
+                        <option value="O-">O-</option>
+                      </select>
                     </div>
                   </div>
                 </div>

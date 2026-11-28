@@ -84,6 +84,7 @@ export const StaffProfileView: React.FC<StaffProfileViewProps> = ({
     phone: '',
     dob: '',
     gender: '',
+    bloodGroup: '',
     altPhone: '',
     personalEmail: '',
     emergencyContactName: '',
@@ -174,6 +175,7 @@ export const StaffProfileView: React.FC<StaffProfileViewProps> = ({
       phone: s.user?.phone || '',
       dob: s.dob ? s.dob.split('T')[0] : '',
       gender: s.gender || '',
+      bloodGroup: s.bloodGroup || '',
       altPhone: s.altPhone || '',
       personalEmail: s.personalEmail || '',
       emergencyContactName: s.emergencyContactName || '',
@@ -388,6 +390,7 @@ export const StaffProfileView: React.FC<StaffProfileViewProps> = ({
         phone: personalForm.phone.trim() || null,
         dob: personalForm.dob || null,
         gender: personalForm.gender || null,
+        bloodGroup: personalForm.bloodGroup || null,
         altPhone: personalForm.altPhone.trim() || null,
         personalEmail: personalForm.personalEmail.trim() || null,
         emergencyContactName: personalForm.emergencyContactName.trim() || null,
@@ -1200,7 +1203,7 @@ export const StaffProfileView: React.FC<StaffProfileViewProps> = ({
                 <h4 className="text-xs font-bold text-[#006FFF] uppercase tracking-wider mb-3">
                   Basic Identity
                 </h4>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                   <div>
                     <label className="block text-xs font-semibold text-[#0F172A] mb-1">
                       Full Name *
@@ -1236,6 +1239,24 @@ export const StaffProfileView: React.FC<StaffProfileViewProps> = ({
                       <option value="Female">Female</option>
                       <option value="Other">Other</option>
                       <option value="Prefer not to say">Prefer not to say</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-[#0F172A] mb-1">Blood Group</label>
+                    <select
+                      value={personalForm.bloodGroup}
+                      onChange={(e) => setPersonalForm({ ...personalForm, bloodGroup: e.target.value })}
+                      className="w-full bg-[#FAF8F5] border border-[#E2E8F0] rounded-xl px-3 py-2 text-xs text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#006FFF]/20"
+                    >
+                      <option value="">Select Blood Group (Optional)</option>
+                      <option value="A+">A+</option>
+                      <option value="A-">A-</option>
+                      <option value="B+">B+</option>
+                      <option value="B-">B-</option>
+                      <option value="AB+">AB+</option>
+                      <option value="AB-">AB-</option>
+                      <option value="O+">O+</option>
+                      <option value="O-">O-</option>
                     </select>
                   </div>
                 </div>
@@ -1646,6 +1667,12 @@ export const StaffProfileView: React.FC<StaffProfileViewProps> = ({
                     <span className="text-[#94A3B8] text-[11px] block">Gender</span>
                     <span className="font-semibold text-[#0F172A] mt-0.5 block">
                       {staff.gender || 'Not specified'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[#94A3B8] text-[11px] block">Blood Group</span>
+                    <span className="font-semibold text-[#0F172A] mt-0.5 block">
+                      {staff.bloodGroup || 'Not specified'}
                     </span>
                   </div>
                   <div>
@@ -2477,9 +2504,34 @@ export const StaffProfileView: React.FC<StaffProfileViewProps> = ({
                     Username: <span className="font-mono text-[#0F172A]">{staff.user.email}</span>
                   </div>
                   <div>
-                    Institute Code:{' '}
+                    Employee Code:{' '}
                     <span className="font-mono text-[#0F172A]">{staff.employeeCode || 'N/A'}</span>
                   </div>
+                  {(staff.permissionsJson as any)?.permanentPassword && (
+                    <div className="flex items-center gap-2 pt-1 border-t border-[#E2E8F0] mt-1">
+                      <span>Password:</span>
+                      <span className="font-mono font-bold text-[#006FFF] bg-white border border-[#E2E8F0] px-1.5 py-0.5 rounded text-[11px] select-all">
+                        {(staff.permissionsJson as any).permanentPassword}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          copyToClipboard(
+                            (staff.permissionsJson as any).permanentPassword,
+                            'account_pass'
+                          )
+                        }
+                        className="text-[#94A3B8] hover:text-[#006FFF]"
+                        title="Copy password"
+                      >
+                        {copiedKey === 'account_pass' ? (
+                          <Check className="w-3.5 h-3.5 text-emerald-600" />
+                        ) : (
+                          <Copy className="w-3.5 h-3.5" />
+                        )}
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
