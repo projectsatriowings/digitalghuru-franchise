@@ -258,7 +258,7 @@ export const StaffManagement: React.FC = () => {
       `Permanent Password: ${pass}\n` +
       `Portal: ${window.location.origin}\n` +
       `------------------------\n` +
-      `Keep this password safe. You can log into Digital Guru with these credentials.`;
+      `Keep this password safe. You can log into Digital Ghuru with these credentials.`;
 
     copyToClipboard(text, key);
   };

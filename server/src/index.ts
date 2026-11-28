@@ -312,16 +312,16 @@ if (isDirectExecution) {
   validateProductionConfig();
   printStorageDiagnostics();
   const server = app.listen(config.port, config.host, () => {
-    console.log(`[Digital Guru Franchise API Server] listening on http://${config.host}:${config.port}`);
-    console.log(`[Digital Guru Franchise API Server] Health check available at http://${config.host}:${config.port}/api/health`);
+    console.log(`[Digital Ghuru Franchise API Server] listening on http://${config.host}:${config.port}`);
+    console.log(`[Digital Ghuru Franchise API Server] Health check available at http://${config.host}:${config.port}/api/health`);
     NotificationService.startWorker(15000);
   });
 
   const handleShutdown = () => {
-    console.log('[Digital Guru Franchise API Server] Gracefully shutting down...');
+    console.log('[Digital Ghuru Franchise API Server] Gracefully shutting down...');
     NotificationService.stopWorker();
     server.close(() => {
-      console.log('[Digital Guru Franchise API Server] Closed remaining connections.');
+      console.log('[Digital Ghuru Franchise API Server] Closed remaining connections.');
       process.exit(0);
     });
   };

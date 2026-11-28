@@ -260,7 +260,7 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({ initialSection = '
             <span>
               {student.institute
                 ? `${student.institute.name} (${student.institute.code})`
-                : `${student.franchise?.name || 'Digital Guru'} · Online Direct LMS`}
+                : `${student.franchise?.name || 'Digital Ghuru'} · Online Direct LMS`}
             </span>
           </p>
         </div>
@@ -345,7 +345,7 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({ initialSection = '
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div>
             <h2 className="text-lg font-extrabold text-slate-900 flex items-center gap-2">
-              <PlayCircle className="w-5 h-5 text-[#006FFF]" /> My Digital Guru Courses & Recorded Sessions
+              <PlayCircle className="w-5 h-5 text-[#006FFF]" /> My Digital Ghuru Courses & Recorded Sessions
             </h2>
             <p className="text-xs text-slate-500">
               Access video lessons, recorded classroom sessions, downloadable guides, XP rewards, and certificates.
@@ -869,7 +869,7 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({ initialSection = '
           <div className="bg-white rounded-3xl max-w-2xl w-full shadow-2xl overflow-hidden">
             <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between print:hidden">
               <div className="flex items-center gap-2 font-extrabold text-slate-900 text-sm">
-                <Award className="w-5 h-5 text-amber-500" /> Official Digital Guru Certificate
+                <Award className="w-5 h-5 text-amber-500" /> Official Digital Ghuru Certificate
               </div>
               <div className="flex items-center gap-2">
                 <button
@@ -892,7 +892,7 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({ initialSection = '
             <div className="p-8 sm:p-10 bg-gradient-to-br from-slate-50 via-white to-amber-50/40">
               <div className="border-4 border-double border-amber-400 rounded-2xl p-8 text-center space-y-5">
                 <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 text-[#006FFF] text-xs font-extrabold uppercase tracking-widest">
-                  <Sparkles className="w-3.5 h-3.5" /> Digital Guru Certificate of Completion
+                  <Sparkles className="w-3.5 h-3.5" /> Digital Ghuru Certificate of Completion
                 </div>
                 <p className="text-xs uppercase tracking-widest text-slate-500 font-semibold">This is proudly presented to</p>
                 <h2 className="text-3xl font-extrabold text-slate-900 font-display">{activeCertModal.recipientName}</h2>

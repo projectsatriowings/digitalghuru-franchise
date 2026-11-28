@@ -174,7 +174,7 @@ export const StudentDashboardScreen: React.FC = () => {
                 {batch?.name || 'Grade 10 - Science Batch A'}
               </Text>
               <Text style={styles.instituteSubtitle}>
-                {institute?.name || 'Digital Guru Learning Center'}
+                {institute?.name || 'Digital Ghuru Learning Center'}
               </Text>
             </View>
 

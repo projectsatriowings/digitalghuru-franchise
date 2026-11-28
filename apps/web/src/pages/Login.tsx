@@ -200,7 +200,7 @@ export const Login: React.FC = () => {
                 {/* Centered Logo */}
                 <img
                   src={BRANDING.logo.navbar}
-                  alt="Digital Guru"
+                  alt="Digital Ghuru"
                   className="h-14 sm:h-16 w-auto object-contain mx-auto mb-2.5"
                   onError={(e) => {
                     (e.currentTarget as HTMLImageElement).src = BRANDING.logo.login;
@@ -209,7 +209,7 @@ export const Login: React.FC = () => {
 
                 {/* Centered Brand Name */}
                 <div className="font-black text-xl sm:text-2xl tracking-tight text-slate-900 font-display text-center mb-1">
-                  Digital Guru <span className="text-[#006FFF]">Franchise</span>
+                  Digital Ghuru <span className="text-[#006FFF]">Franchise</span>
                 </div>
 
                 {/* Centered Sign in to Account (Reduced font size) */}
@@ -351,7 +351,7 @@ export const Login: React.FC = () => {
                   Welcome Back!
                 </h2>
                 <p className="text-xs sm:text-sm text-blue-100/90 mt-2 font-normal leading-relaxed">
-                  To keep connected with Digital Guru please login with your personal credentials.
+                  To keep connected with Digital Ghuru please login with your personal credentials.
                 </p>
               </div>
 
@@ -362,21 +362,21 @@ export const Login: React.FC = () => {
 
                 <img
                   src="/images/auth-vector-illustration.png"
-                  alt="Digital Guru Franchise & Digital Learning System"
+                  alt="Digital Ghuru Franchise & Digital Learning System"
                   className="w-full h-auto max-h-[300px] sm:max-h-[340px] object-contain relative z-10 transition-all duration-500 ease-out transform group-hover:scale-110 group-hover:-translate-y-2 group-active:scale-95 drop-shadow-[0_15px_30px_rgba(0,0,0,0.35)] group-hover:drop-shadow-[0_25px_45px_rgba(0,0,0,0.45)] select-none animate-float-gentle"
                 />
               </div>
 
               {/* Bottom Subtle Caption */}
               <div className="relative z-10 text-[11px] text-blue-200/70 font-medium">
-                Digital Guru Enterprise LMS & Franchise Management
+                Digital Ghuru Enterprise LMS & Franchise Management
               </div>
             </div>
           </div>
         )}
       </div>
 
-      {/* Credential Guidance Modal with Official Digital Guru Contact Information */}
+      {/* Credential Guidance Modal with Official Digital Ghuru Contact Information */}
       {showHelpModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
           <div className="bg-white border border-slate-200 rounded-3xl w-full max-w-lg p-6 shadow-2xl text-slate-900 max-h-[90vh] overflow-y-auto">
@@ -387,7 +387,7 @@ export const Login: React.FC = () => {
                 </div>
                 <div>
                   <h3 className="text-base font-bold text-slate-900 font-display">Account Access & Support</h3>
-                  <p className="text-xs text-slate-500">Digital Guru Support & Credential Assistance</p>
+                  <p className="text-xs text-slate-500">Digital Ghuru Support & Credential Assistance</p>
                 </div>
               </div>
               <button
@@ -460,7 +460,7 @@ export const Login: React.FC = () => {
               {/* Contact Details */}
               <div className="mt-4 pt-3 border-t border-slate-200 text-slate-500 flex flex-col gap-1 text-[11px]">
                 <div>
-                  <strong>Digital Guru Head Office Support:</strong>{' '}
+                  <strong>Digital Ghuru Head Office Support:</strong>{' '}
                   <a href={`tel:${BRANDING.contact.phone}`} className="text-[#006FFF] hover:underline font-semibold">
                     {BRANDING.contact.phone}
                   </a>

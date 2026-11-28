@@ -863,7 +863,7 @@ async function getParentDashboardSummary(req, res) {
                 }
                 const totalWorkingDays = distinctBatchDays.length;
                 const presentDays = monthEvents.length;
-                const attendancePercentage = totalWorkingDays > 0 ? Math.round((presentDays / totalWorkingDays) * 100) : 100;
+                const attendancePercentage = totalWorkingDays > 0 ? Math.round((presentDays / totalWorkingDays) * 100) : 0;
                 let studentPendingFees = 0;
                 for (const fa of feeAssignments) {
                     const totalPaid = fa.payments.reduce((acc, p) => acc + Number(p.amountPaid), 0);
@@ -1104,7 +1104,7 @@ async function getParentStudentAttendance(req, res) {
             }
         }
         const totalWorkingDays = presentDaysCount + absentDaysCount;
-        const attendancePercentage = totalWorkingDays > 0 ? Math.round((presentDaysCount / totalWorkingDays) * 100) : 100;
+        const attendancePercentage = totalWorkingDays > 0 ? Math.round((presentDaysCount / totalWorkingDays) * 100) : 0;
         return res.json({
             success: true,
             data: {

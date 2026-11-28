@@ -149,11 +149,54 @@ for (const [routePath, router] of apiRoutesMap) {
     app.use(`/api${routePath}`, router);
     app.use(routePath, router);
 }
-// Legacy course media route (/uploads/courses/:folder/:filename)
-app.get(['/api/uploads/courses/:folder/:filename', '/uploads/courses/:folder/:filename'], (req, res) => {
-    const { folder } = req.params;
+// Course media routes (direct file or scoped folder)
+app.get(['/api/uploads/courses/:filename', '/uploads/courses/:filename'], async (req, res) => {
+    try {
+        const filename = req.params.filename;
+        const result = await storage_js_1.StorageManager.findPublicMediaStream({
+            filename,
+            rangeHeader: req.headers.range,
+        });
+        if (!result) {
+            return res.status(404).json({ success: false, message: 'Media not found' });
+        }
+        res.writeHead(result.statusCode, {
+            'Content-Length': result.contentLength,
+            'Content-Type': result.contentType,
+            'Cache-Control': 'public, max-age=86400',
+            'Accept-Ranges': result.acceptRanges,
+            ...(result.contentRange ? { 'Content-Range': result.contentRange } : {}),
+        });
+        result.stream.pipe(res);
+    }
+    catch (err) {
+        res.status(500).json({ success: false, message: err.message || 'Media stream error' });
+    }
+});
+app.get(['/api/uploads/courses/:folder/:filename', '/uploads/courses/:folder/:filename'], async (req, res) => {
+    const { folder, filename } = req.params;
     if ((0, storage_js_1.isPublicCourseFolder)(folder)) {
         return (0, courses_controller_js_1.streamPublicMedia)(req, res);
+    }
+    // If the folder parameter isn't a known public folder keyword, check if the file exists in any public course folder
+    try {
+        const fallbackPublic = await storage_js_1.StorageManager.findPublicMediaStream({
+            filename,
+            rangeHeader: req.headers.range,
+        });
+        if (fallbackPublic) {
+            res.writeHead(fallbackPublic.statusCode, {
+                'Content-Length': fallbackPublic.contentLength,
+                'Content-Type': fallbackPublic.contentType,
+                'Cache-Control': 'public, max-age=86400',
+                'Accept-Ranges': fallbackPublic.acceptRanges,
+                ...(fallbackPublic.contentRange ? { 'Content-Range': fallbackPublic.contentRange } : {}),
+            });
+            return fallbackPublic.stream.pipe(res);
+        }
+    }
+    catch {
+        // Fall through to protected authentication
     }
     return (0, auth_js_1.authenticateToken)(req, res, () => (0, courses_controller_js_1.streamProtectedMedia)(req, res));
 });
@@ -236,15 +279,15 @@ if (isDirectExecution) {
     (0, index_js_1.validateProductionConfig)();
     (0, storage_js_1.printStorageDiagnostics)();
     const server = app.listen(index_js_1.config.port, index_js_1.config.host, () => {
-        console.log(`[Digital Guru Franchise API Server] listening on http://${index_js_1.config.host}:${index_js_1.config.port}`);
-        console.log(`[Digital Guru Franchise API Server] Health check available at http://${index_js_1.config.host}:${index_js_1.config.port}/api/health`);
+        console.log(`[Digital Ghuru Franchise API Server] listening on http://${index_js_1.config.host}:${index_js_1.config.port}`);
+        console.log(`[Digital Ghuru Franchise API Server] Health check available at http://${index_js_1.config.host}:${index_js_1.config.port}/api/health`);
         notification_service_js_1.NotificationService.startWorker(15000);
     });
     const handleShutdown = () => {
-        console.log('[Digital Guru Franchise API Server] Gracefully shutting down...');
+        console.log('[Digital Ghuru Franchise API Server] Gracefully shutting down...');
         notification_service_js_1.NotificationService.stopWorker();
         server.close(() => {
-            console.log('[Digital Guru Franchise API Server] Closed remaining connections.');
+            console.log('[Digital Ghuru Franchise API Server] Closed remaining connections.');
             process.exit(0);
         });
     };

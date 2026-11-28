@@ -638,7 +638,7 @@ export async function createFranchise(req: AuthenticatedRequest, res: Response) 
       if (Math.round((dgPct + partnerPct) * 100) / 100 !== 100) {
         return res.status(400).json({
           success: false,
-          error: `Revenue sharing percentages must total 100% (currently Digital Guru: ${dgPct}%, Partner: ${partnerPct}%)`,
+          error: `Revenue sharing percentages must total 100% (currently Digital Ghuru: ${dgPct}%, Partner: ${partnerPct}%)`,
         });
       }
     }
@@ -1924,7 +1924,7 @@ export async function getAgreementTemplates(req: AuthenticatedRequest, res: Resp
         id: 'NEW_CENTRE_JOINT_INVESTMENT',
         type: 'NEW_CENTRE_JOINT_INVESTMENT',
         label: 'New Centre (Joint Investment)',
-        description: 'Joint establishment of new centre. 50:50 initial setup investment (e.g. ₹1–2 Lakh illustrative default), shared revenue, Digital Guru supplies & pays trainers, initial 3 months marketing support.',
+        description: 'Joint establishment of new centre. 50:50 initial setup investment (e.g. ₹1–2 Lakh illustrative default), shared revenue, Digital Ghuru supplies & pays trainers, initial 3 months marketing support.',
         defaults: {
           title: 'New Centre Joint Investment Master Agreement',
           agreementType: 'NEW_CENTRE_JOINT_INVESTMENT',
@@ -1942,11 +1942,11 @@ export async function getAgreementTemplates(req: AuthenticatedRequest, res: Resp
           settlementFrequency: 'MONTHLY',
           expenseResponsibilities: {
             rent: { payer: 'PARTNER', notes: 'Partner pays building rent & lease deposit directly' },
-            trainerSalaries: { payer: 'DIGITAL_GURU', notes: 'Digital Guru supplies trainers and bears trainer costs directly' },
+            trainerSalaries: { payer: 'DIGITAL_GURU', notes: 'Digital Ghuru supplies trainers and bears trainer costs directly' },
             staffSalaries: { payer: 'PARTNER', notes: 'Partner pays administrative staff salaries directly' },
             operationalSetup: { payer: 'SHARED', sharedDgPercentage: 50, sharedPartnerPercentage: 50, notes: '50:50 shared initial operational setup' },
             utilitiesMaintenance: { payer: 'PARTNER', notes: 'Utilities, power, water, internet borne directly by Partner' },
-            marketingAdvertising: { payer: 'DIGITAL_GURU', notes: 'Digital Guru supports initial 3 months marketing directly' },
+            marketingAdvertising: { payer: 'DIGITAL_GURU', notes: 'Digital Ghuru supports initial 3 months marketing directly' },
             other: { payer: 'PARTNER', notes: 'Local compliance and center operations borne directly by Partner' },
           },
           marketingResponsibleParty: 'DIGITAL_GURU',
@@ -1961,7 +1961,7 @@ export async function getAgreementTemplates(req: AuthenticatedRequest, res: Resp
         id: 'EXISTING_CENTRE',
         type: 'EXISTING_CENTRE',
         label: 'Existing Centre (Conversion)',
-        description: 'Existing centre onboarded with active infrastructure. Digital Guru supplies certified trainers and covers initial 3 months marketing; partner handles premises rent and operations. Revenue share 45:55 or 55:45 (fully editable).',
+        description: 'Existing centre onboarded with active infrastructure. Digital Ghuru supplies certified trainers and covers initial 3 months marketing; partner handles premises rent and operations. Revenue share 45:55 or 55:45 (fully editable).',
         defaults: {
           title: 'Existing Centre Conversion Agreement',
           agreementType: 'EXISTING_CENTRE',
@@ -1979,11 +1979,11 @@ export async function getAgreementTemplates(req: AuthenticatedRequest, res: Resp
           settlementFrequency: 'MONTHLY',
           expenseResponsibilities: {
             rent: { payer: 'PARTNER', notes: 'Partner bears existing building rent directly' },
-            trainerSalaries: { payer: 'DIGITAL_GURU', notes: 'Digital Guru supplies certified course trainers and bears trainer costs directly' },
+            trainerSalaries: { payer: 'DIGITAL_GURU', notes: 'Digital Ghuru supplies certified course trainers and bears trainer costs directly' },
             staffSalaries: { payer: 'PARTNER', notes: 'Partner pays center staff salaries directly' },
             operationalSetup: { payer: 'PARTNER', notes: 'Existing setup utilized' },
             utilitiesMaintenance: { payer: 'PARTNER', notes: 'Partner pays utilities directly' },
-            marketingAdvertising: { payer: 'DIGITAL_GURU', notes: 'Digital Guru supports initial 3 months marketing directly' },
+            marketingAdvertising: { payer: 'DIGITAL_GURU', notes: 'Digital Ghuru supports initial 3 months marketing directly' },
             other: { payer: 'PARTNER' },
           },
           marketingResponsibleParty: 'DIGITAL_GURU',
@@ -2028,7 +2028,7 @@ export async function getAgreementTemplates(req: AuthenticatedRequest, res: Resp
           marketingPostSupportParty: 'PARTNER',
           marketingBudget: 0,
           courseSoftwareAccessEnabled: true,
-          courseSoftwarePricingNotes: 'Digital Guru LMS & Course Management Software license (standard terms apply)',
+          courseSoftwarePricingNotes: 'Digital Ghuru LMS & Course Management Software license (standard terms apply)',
         },
       },
       {
@@ -2153,7 +2153,7 @@ export async function createAgreement(req: AuthenticatedRequest, res: Response) 
       if (Math.round((effectiveDgRevenuePct + effectivePartnerRevenuePct) * 100) / 100 !== 100) {
         return res.status(400).json({
           success: false,
-          error: `Revenue sharing percentages must total 100% (currently Digital Guru: ${effectiveDgRevenuePct}%, Partner: ${effectivePartnerRevenuePct}%)`,
+          error: `Revenue sharing percentages must total 100% (currently Digital Ghuru: ${effectiveDgRevenuePct}%, Partner: ${effectivePartnerRevenuePct}%)`,
         });
       }
     }
@@ -2336,7 +2336,7 @@ export async function reviseAgreement(req: AuthenticatedRequest, res: Response) 
     if (Math.round((effectiveDgPct + effectivePartnerPct) * 100) / 100 !== 100) {
       return res.status(400).json({
         success: false,
-        error: `Revenue sharing percentages must total 100% (currently Digital Guru: ${effectiveDgPct}%, Partner: ${effectivePartnerPct}%)`,
+        error: `Revenue sharing percentages must total 100% (currently Digital Ghuru: ${effectiveDgPct}%, Partner: ${effectivePartnerPct}%)`,
       });
     }
 
@@ -2543,7 +2543,7 @@ export async function renewAgreement(req: AuthenticatedRequest, res: Response) {
       if (Math.round((effectiveDgRevenuePct + effectivePartnerRevenuePct) * 100) / 100 !== 100) {
         return res.status(400).json({
           success: false,
-          error: `Revenue sharing percentages must total 100% (currently Digital Guru: ${effectiveDgRevenuePct}%, Partner: ${effectivePartnerRevenuePct}%)`,
+          error: `Revenue sharing percentages must total 100% (currently Digital Ghuru: ${effectiveDgRevenuePct}%, Partner: ${effectivePartnerRevenuePct}%)`,
         });
       }
     }
@@ -2829,7 +2829,7 @@ export async function getAgreementPdfData(req: AuthenticatedRequest, res: Respon
         agreement,
         company: {
           name: 'Digital Ghuru',
-          brand: 'Digital Guru Franchise Enterprise',
+          brand: 'Digital Ghuru Franchise Enterprise',
           partner: 'Jaighurudeva Educational Academy',
           royaltySplit: `50% Super Admin / 50% Franchise Owner (${agreement.calculationMethod === 'FIXED_ANNUAL' ? `Fixed Annual Royalty: ₹${Number(agreement.annualRoyaltyAmount || 0).toLocaleString('en-IN')}` : `${agreement.royaltyPercentage}% Collections`})`,
         },
@@ -3202,7 +3202,7 @@ export async function getRoyaltyPaymentReceipt(req: AuthenticatedRequest, res: R
           }
           : null,
         issuer: {
-          organization: 'Digital Guru Franchise Enterprise',
+          organization: 'Digital Ghuru Franchise Enterprise',
           partner: 'Jaighurudeva Educational Academy',
           recordedBy: payment.recordedBy?.fullName || 'Super Admin',
           verified: true,

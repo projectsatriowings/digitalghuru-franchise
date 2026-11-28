@@ -127,13 +127,16 @@ function calculateAssignmentFinancials(assignment) {
     let calculatedStatus;
     const now = new Date();
     const dueDate = new Date(assignment.dueDate);
+    // Set dueDate to end-of-day so fees due today are NOT marked overdue until tomorrow
+    const dueEndOfDay = new Date(dueDate);
+    dueEndOfDay.setHours(23, 59, 59, 999);
     if (netPaid.greaterThanOrEqualTo(finalAmount)) {
         calculatedStatus = client_1.PaymentStatus.PAID;
     }
     else if (netPaid.greaterThan(0)) {
         calculatedStatus = client_1.PaymentStatus.PARTIALLY_PAID;
     }
-    else if (dueDate < now) {
+    else if (dueEndOfDay < now) {
         calculatedStatus = client_1.PaymentStatus.OVERDUE;
     }
     else {
@@ -1438,13 +1441,15 @@ async function processRefund(req, res) {
             const dueDate = new Date(assignment.dueDate);
             const now = new Date();
             let newStatus;
+            const dueEndOfDay = new Date(dueDate);
+            dueEndOfDay.setHours(23, 59, 59, 999);
             if (newNetPaid.greaterThanOrEqualTo(finalAmount)) {
                 newStatus = client_1.PaymentStatus.PAID;
             }
             else if (newNetPaid.greaterThan(0)) {
                 newStatus = client_1.PaymentStatus.PARTIALLY_PAID;
             }
-            else if (dueDate < now) {
+            else if (dueEndOfDay < now) {
                 newStatus = client_1.PaymentStatus.OVERDUE;
             }
             else {
@@ -1543,13 +1548,15 @@ async function createFeeAdjustment(req, res) {
             const financials = calculateAssignmentFinancials(assignment);
             const netPaid = new client_1.Prisma.Decimal(financials.netPaid);
             let newStatus;
+            const dueEndOfDay = new Date(assignment.dueDate);
+            dueEndOfDay.setHours(23, 59, 59, 999);
             if (netPaid.greaterThanOrEqualTo(newFinalAmount)) {
                 newStatus = client_1.PaymentStatus.PAID;
             }
             else if (netPaid.greaterThan(0)) {
                 newStatus = client_1.PaymentStatus.PARTIALLY_PAID;
             }
-            else if (new Date(assignment.dueDate) < new Date()) {
+            else if (dueEndOfDay < new Date()) {
                 newStatus = client_1.PaymentStatus.OVERDUE;
             }
             else {

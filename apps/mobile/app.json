@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Digital Guru Franchise",
+    "name": "Digital Ghuru Franchise",
     "slug": "digital-guru-franchise",
     "version": "1.0.2",
     "orientation": "portrait",
@@ -17,10 +17,10 @@
       "buildNumber": "3",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
-        "NSCameraUsageDescription": "Digital Guru requires camera access for homework submission and document scanning.",
-        "NSPhotoLibraryUsageDescription": "Digital Guru requires photo library access to upload assignments and receipts.",
-        "NSLocationWhenInUseUsageDescription": "Digital Guru requires location access to verify staff attendance inside campus geofence.",
-        "NSMicrophoneUsageDescription": "Digital Guru requires microphone access for voice-assisted attendance marking."
+        "NSCameraUsageDescription": "Digital Ghuru requires camera access for homework submission and document scanning.",
+        "NSPhotoLibraryUsageDescription": "Digital Ghuru requires photo library access to upload assignments and receipts.",
+        "NSLocationWhenInUseUsageDescription": "Digital Ghuru requires location access to verify staff attendance inside campus geofence.",
+        "NSMicrophoneUsageDescription": "Digital Ghuru requires microphone access for voice-assisted attendance marking."
       }
     },
     "android": {
