@@ -495,6 +495,35 @@ export const StorageManager = {
     };
   },
 
+  async findPublicMediaStream(options: {
+    filename: string;
+    rangeHeader?: string;
+  }): Promise<{
+    stream: NodeJS.ReadableStream;
+    statusCode: 200 | 206;
+    contentType: string;
+    contentLength: number;
+    contentRange?: string;
+    acceptRanges: string;
+  } | null> {
+    const { filename, rangeHeader } = options;
+    if (!filename) return null;
+    for (const folder of PUBLIC_COURSE_FOLDERS) {
+      try {
+        const result = await this.getMediaStream({
+          scope: 'public',
+          folder,
+          filename,
+          rangeHeader,
+        });
+        if (result) return result;
+      } catch {
+        // continue searching remaining public folders
+      }
+    }
+    return null;
+  },
+
   async mediaExists(options: {
     scope: 'public' | 'protected';
     folder: string;

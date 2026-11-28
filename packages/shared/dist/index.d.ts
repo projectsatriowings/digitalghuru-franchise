@@ -168,11 +168,13 @@ export interface StudentAdmissionPayload {
     email?: string;
     phone?: string;
     initialPassword?: string;
+    studentInitialPassword?: string;
     parentFullName?: string;
     parentRelationship?: 'FATHER' | 'MOTHER' | 'GUARDIAN';
     parentPhone?: string;
     parentEmail?: string;
     parentInitialPassword?: string;
+    parentPassword?: string;
     parentCanReceiveSms?: boolean;
 }
 export interface ApiResponse<T = any> {
@@ -188,6 +190,16 @@ export declare const AttendanceMethod: {
     readonly VOICE_CONFIRMED: "VOICE_CONFIRMED";
 };
 export type AttendanceMethod = (typeof AttendanceMethod)[keyof typeof AttendanceMethod];
+/**
+ * Standard Platform Currency Formatter (Option 1: ₹ 5,000)
+ * Formats any amount consistently with the Rupee symbol and Indian number grouping (en-IN).
+ * Avoids browser auto-conversion to localized ISO codes (like LKR) and ensures
+ * whole numbers display without redundant '.00' unless fractional amounts exist.
+ */
+export declare function formatCurrency(val: number | string | undefined | null, options?: {
+    showDecimals?: boolean;
+    space?: boolean;
+}): string;
 export * from './theme.js';
 export * from './voiceMatching.js';
 //# sourceMappingURL=index.d.ts.map

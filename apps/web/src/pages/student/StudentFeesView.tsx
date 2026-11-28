@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { apiFetch } from '../../services/api';
 import { useToast } from '../../context/ToastContext';
+import { formatCurrency } from '@tuition/shared';
 import {
   CreditCard,
   Receipt,
@@ -165,11 +166,6 @@ export const StudentFeesView: React.FC = () => {
     } finally {
       setVerifying(false);
     }
-  };
-
-  const formatCurrency = (val: number | string | undefined) => {
-    const num = Number(val || 0);
-    return `₹${num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
 
   if (loading && !feeData) {

@@ -29,7 +29,7 @@ import franchiseRoutes from './modules/franchise/franchise.routes.js';
 import coursesRoutes from './modules/courses/courses.routes.js';
 import settlementRoutes from './modules/settlements/settlement.routes.js';
 import { handleRazorpayWebhook } from './modules/payments/webhook.controller.js';
-import { isPublicCourseFolder, printStorageDiagnostics } from './utils/storage.js';
+import { isPublicCourseFolder, printStorageDiagnostics, StorageManager } from './utils/storage.js';
 import { streamPublicMedia, streamProtectedMedia } from './modules/courses/courses.controller.js';
 import { authenticateToken } from './middleware/auth.js';
 import { NotificationService } from './modules/notifications/notification.service.js';
@@ -166,11 +166,53 @@ for (const [routePath, router] of apiRoutesMap) {
   app.use(routePath, router);
 }
 
-// Legacy course media route (/uploads/courses/:folder/:filename)
-app.get(['/api/uploads/courses/:folder/:filename', '/uploads/courses/:folder/:filename'], (req: Request, res: Response) => {
-  const { folder } = req.params;
+// Course media routes (direct file or scoped folder)
+app.get(['/api/uploads/courses/:filename', '/uploads/courses/:filename'], async (req: Request, res: Response) => {
+  try {
+    const filename = req.params.filename;
+    const result = await StorageManager.findPublicMediaStream({
+      filename,
+      rangeHeader: req.headers.range,
+    });
+    if (!result) {
+      return res.status(404).json({ success: false, message: 'Media not found' });
+    }
+    res.writeHead(result.statusCode, {
+      'Content-Length': result.contentLength,
+      'Content-Type': result.contentType,
+      'Cache-Control': 'public, max-age=86400',
+      'Accept-Ranges': result.acceptRanges,
+      ...(result.contentRange ? { 'Content-Range': result.contentRange } : {}),
+    });
+    result.stream.pipe(res);
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message || 'Media stream error' });
+  }
+});
+
+app.get(['/api/uploads/courses/:folder/:filename', '/uploads/courses/:folder/:filename'], async (req: Request, res: Response) => {
+  const { folder, filename } = req.params;
   if (isPublicCourseFolder(folder)) {
     return streamPublicMedia(req, res);
+  }
+  // If the folder parameter isn't a known public folder keyword, check if the file exists in any public course folder
+  try {
+    const fallbackPublic = await StorageManager.findPublicMediaStream({
+      filename,
+      rangeHeader: req.headers.range,
+    });
+    if (fallbackPublic) {
+      res.writeHead(fallbackPublic.statusCode, {
+        'Content-Length': fallbackPublic.contentLength,
+        'Content-Type': fallbackPublic.contentType,
+        'Cache-Control': 'public, max-age=86400',
+        'Accept-Ranges': fallbackPublic.acceptRanges,
+        ...(fallbackPublic.contentRange ? { 'Content-Range': fallbackPublic.contentRange } : {}),
+      });
+      return fallbackPublic.stream.pipe(res);
+    }
+  } catch {
+    // Fall through to protected authentication
   }
   return authenticateToken(req as any, res, () => streamProtectedMedia(req, res));
 });

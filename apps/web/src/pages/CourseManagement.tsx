@@ -46,6 +46,7 @@ import { CurriculumManager } from '../components/CurriculumManager';
 import { IconRenderer } from '../components/IconPickerDropdown';
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 import { ConfirmationModal } from '../components/ConfirmationModal';
+import { formatCurrency } from '@tuition/shared';
 
 interface Category {
   id: string;
@@ -76,6 +77,7 @@ export const CourseManagement: React.FC = () => {
   const [wizardLoading, setWizardLoading] = useState(false);
   const [savingCourse, setSavingCourse] = useState(false);
   const [creatingDraftVersion, setCreatingDraftVersion] = useState(false);
+  const [statusActionCourseId, setStatusActionCourseId] = useState<string | null>(null);
 
   // Modals / Drawers
   const [showCategoriesModal, setShowCategoriesModal] = useState(false);
@@ -251,6 +253,7 @@ export const CourseManagement: React.FC = () => {
   // STATUS & DELETE ACTIONS
   // -----------------------------------------------------------
   const handleStatusAction = async (course: any, nextStatus: 'PUBLISHED' | 'DRAFT' | 'ARCHIVED') => {
+    setStatusActionCourseId(course.id);
     try {
       if (nextStatus === 'PUBLISHED') {
         await apiFetch(`/courses/${course.id}/publish`, { method: 'POST' });
@@ -265,6 +268,8 @@ export const CourseManagement: React.FC = () => {
       await fetchCatalogue();
     } catch (err: any) {
       toast.error(err.message || 'Failed to update course status');
+    } finally {
+      setStatusActionCourseId(null);
     }
   };
 
@@ -804,7 +809,7 @@ export const CourseManagement: React.FC = () => {
                         <div className="text-xs text-slate-500">{lessonsCount} Lessons</div>
                       </td>
                       <td className="px-4 py-4 font-bold text-slate-900 whitespace-nowrap">
-                        {Number(course.price) > 0 ? `₹${Number(course.price).toLocaleString('en-IN')}` : 'Custom Fee'}
+                        {Number(course.price) > 0 ? formatCurrency(course.price) : 'Custom Fee'}
                       </td>
                       <td className="px-4 py-4 whitespace-nowrap text-xs">
                         <div className="font-semibold text-slate-800">
@@ -882,12 +887,18 @@ export const CourseManagement: React.FC = () => {
               >
                 <div className="p-5 flex gap-4">
                   {/* Thumbnail */}
-                  <div className="w-28 h-24 rounded-xl bg-slate-100 border border-slate-200 overflow-hidden shrink-0 flex items-center justify-center">
+                  <div className="w-28 h-24 rounded-xl bg-slate-100 border border-slate-200 overflow-hidden shrink-0 flex items-center justify-center relative">
                     {course.thumbnailUrl ? (
-                      <img src={course.thumbnailUrl} alt={course.title} className="w-full h-full object-cover" />
-                    ) : (
-                      <BookOpen className="w-8 h-8 text-slate-300" />
-                    )}
+                      <img
+                        src={course.thumbnailUrl}
+                        alt={course.title}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none';
+                        }}
+                      />
+                    ) : null}
+                    <BookOpen className="w-8 h-8 text-slate-300 absolute -z-0 pointer-events-none" />
                   </div>
 
                   {/* Metadata */}
@@ -917,7 +928,7 @@ export const CourseManagement: React.FC = () => {
 
                       <div className="text-right shrink-0">
                         <div className="text-base font-extrabold text-slate-900 tabular-nums">
-                          {Number(course.price) > 0 ? `₹${Number(course.price).toLocaleString('en-IN')}` : 'Custom Fee'}
+                          {Number(course.price) > 0 ? formatCurrency(course.price) : 'Custom Fee'}
                         </div>
                         {course.duration && (
                           <div className="text-xs text-slate-500">{course.duration}</div>
@@ -980,30 +991,48 @@ export const CourseManagement: React.FC = () => {
                     {course.status !== 'PUBLISHED' && (
                       <button
                         type="button"
+                        disabled={statusActionCourseId === course.id}
                         onClick={() => handleStatusAction(course, 'PUBLISHED')}
-                        className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1"
+                        className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-bold flex items-center gap-1 cursor-pointer"
                       >
-                        <CheckCircle2 className="w-3.5 h-3.5" /> Publish
+                        {statusActionCourseId === course.id ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                        )}
+                        Publish
                       </button>
                     )}
                     {course.status === 'PUBLISHED' && (
                       <button
                         type="button"
+                        disabled={statusActionCourseId === course.id}
                         onClick={() => handleStatusAction(course, 'DRAFT')}
                         title="Move course back to Draft"
-                        className="px-3 py-1.5 rounded-lg bg-white border border-amber-200 hover:bg-amber-50 text-amber-800 text-xs font-bold flex items-center gap-1"
+                        className="px-3 py-1.5 rounded-lg bg-white border border-amber-200 hover:bg-amber-50 disabled:opacity-50 text-amber-800 text-xs font-bold flex items-center gap-1 cursor-pointer"
                       >
-                        <PauseCircle className="w-3.5 h-3.5" /> Move to Draft
+                        {statusActionCourseId === course.id ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <PauseCircle className="w-3.5 h-3.5" />
+                        )}
+                        Move to Draft
                       </button>
                     )}
                     {course.status !== 'ARCHIVED' && (
                       <button
                         type="button"
+                        disabled={statusActionCourseId === course.id}
                         onClick={() => handleStatusAction(course, 'ARCHIVED')}
                         title="Archive course (preserves student history)"
-                        className="px-3 py-1.5 rounded-lg bg-white border border-slate-200 hover:bg-amber-50 hover:text-amber-700 text-xs font-bold text-slate-600 flex items-center gap-1"
+                        className="px-3 py-1.5 rounded-lg bg-white border border-slate-200 hover:bg-amber-50 hover:text-amber-700 disabled:opacity-50 text-xs font-bold text-slate-600 flex items-center gap-1 cursor-pointer"
                       >
-                        <Archive className="w-3.5 h-3.5" /> Archive
+                        {statusActionCourseId === course.id ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Archive className="w-3.5 h-3.5" />
+                        )}
+                        Archive
                       </button>
                     )}
                     {course.status === 'ARCHIVED' && (
@@ -1417,6 +1446,9 @@ export const CourseManagement: React.FC = () => {
                     src={previewCourse.bannerUrl}
                     alt={previewCourse.title}
                     className="w-full h-48 object-cover rounded-xl mb-5 opacity-95"
+                    onError={(e) => {
+                      e.currentTarget.style.display = 'none';
+                    }}
                   />
                 )}
                 <div className="flex flex-col md:flex-row gap-5 items-start">
@@ -1425,6 +1457,9 @@ export const CourseManagement: React.FC = () => {
                       src={previewCourse.thumbnailUrl}
                       alt={`${previewCourse.title} card`}
                       className="w-28 h-24 rounded-xl object-cover border border-white/20 shrink-0"
+                      onError={(e) => {
+                        e.currentTarget.style.display = 'none';
+                      }}
                     />
                   )}
                   <div className="flex-1 min-w-0">
@@ -1452,7 +1487,7 @@ export const CourseManagement: React.FC = () => {
                     <div className="text-[11px] uppercase tracking-wider text-slate-300 font-bold">Program Fee</div>
                     <div className="text-xl font-extrabold text-white mt-0.5">
                       {previewCourse.overviewJson?.discountedPrice ||
-                        (Number(previewCourse.price) > 0 ? `₹${Number(previewCourse.price).toLocaleString('en-IN')}` : 'Custom Fee')}
+                        (Number(previewCourse.price) > 0 ? formatCurrency(previewCourse.price) : 'Custom Fee')}
                     </div>
                     {previewCourse.overviewJson?.originalPrice && (
                       <div className="text-xs text-slate-400 line-through">

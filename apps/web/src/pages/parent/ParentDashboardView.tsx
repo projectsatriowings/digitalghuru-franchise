@@ -143,25 +143,35 @@ export const ParentDashboardView: React.FC<ParentDashboardViewProps> = ({
             </div>
             <div className="mt-3 flex items-baseline gap-2">
               <span className="text-3xl font-black text-[#0F172A]">
-                {monthlyAtt?.percentage ?? 100}%
+                {monthlyAtt?.totalWorkingDays > 0 ? `${monthlyAtt.percentage}%` : 'N/A'}
               </span>
-              <span className="text-xs text-[#94A3B8]">present</span>
+              <span className="text-xs text-[#94A3B8]">
+                {monthlyAtt?.totalWorkingDays > 0 ? 'present' : 'no sessions yet'}
+              </span>
             </div>
             <div className="w-full bg-[#F1F5F9] rounded-full h-2 mt-2 overflow-hidden">
               <div
                 className={`h-full rounded-full transition-all duration-500 ${
-                  (monthlyAtt?.percentage ?? 100) >= 80
+                  monthlyAtt?.totalWorkingDays === 0
+                    ? 'bg-slate-300'
+                    : (monthlyAtt?.percentage ?? 0) >= 80
                     ? 'bg-emerald-600'
-                    : (monthlyAtt?.percentage ?? 100) >= 60
+                    : (monthlyAtt?.percentage ?? 0) >= 60
                     ? 'bg-amber-500'
                     : 'bg-rose-500'
                 }`}
-                style={{ width: `${Math.min(100, monthlyAtt?.percentage ?? 100)}%` }}
+                style={{ width: `${monthlyAtt?.totalWorkingDays > 0 ? Math.min(100, monthlyAtt?.percentage ?? 0) : 0}%` }}
               ></div>
             </div>
             <p className="text-xs text-[#64748B] mt-2">
-              Attended <strong className="text-[#0F172A]">{monthlyAtt?.presentDays || 0}</strong> of{' '}
-              <strong className="text-[#0F172A]">{monthlyAtt?.totalWorkingDays || 0}</strong> working sessions.
+              {monthlyAtt?.totalWorkingDays > 0 ? (
+                <>
+                  Attended <strong className="text-[#0F172A]">{monthlyAtt?.presentDays || 0}</strong> of{' '}
+                  <strong className="text-[#0F172A]">{monthlyAtt?.totalWorkingDays || 0}</strong> working sessions.
+                </>
+              ) : (
+                <span>No attendance sessions recorded for this month yet.</span>
+              )}
             </p>
           </div>
           <button

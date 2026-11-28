@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { apiFetch } from '../services/api';
+import { useAuth } from '../context/AuthContext';
 import { Franchise, FranchiseAgreement, FranchiseRoyaltyInstallment } from '../types';
 import { lookupByPostalCode } from '../utils/locationHelper';
 import { isValidEmail, isValidPhone, sanitizePhoneInput } from '../utils/validation';
@@ -48,6 +49,7 @@ import { useToast } from '../context/ToastContext';
 
 export const FranchiseManagement: React.FC = () => {
   const { showToast } = useToast();
+  const { refreshBranches } = useAuth();
   const [activeTab, setActiveTab] = useState<'franchises' | 'agreements' | 'installments' | 'monthly_settlements'>('franchises');
   const [loading, setLoading] = useState(true);
 
@@ -349,6 +351,10 @@ export const FranchiseManagement: React.FC = () => {
     isSubmitting: false,
   });
   const [editLinkInstituteId, setEditLinkInstituteId] = useState('');
+  const [isSubmittingBranchInEdit, setIsSubmittingBranchInEdit] = useState(false);
+  const [isLinkingBranchInEdit, setIsLinkingBranchInEdit] = useState(false);
+  const [isAddingBranch, setIsAddingBranch] = useState(false);
+  const [isAssigningExistingBranch, setIsAssigningExistingBranch] = useState(false);
   const [editNewBranch, setEditNewBranch] = useState({
     name: '',
     code: '',
@@ -999,7 +1005,8 @@ export const FranchiseManagement: React.FC = () => {
   };
 
   const handleLinkBranchInEdit = async () => {
-    if (!selectedFranchiseForEdit || !editLinkInstituteId) return;
+    if (!selectedFranchiseForEdit || !editLinkInstituteId || isLinkingBranchInEdit) return;
+    setIsLinkingBranchInEdit(true);
     try {
       const res = await apiFetch(`/franchises/${selectedFranchiseForEdit.id}/branches`, {
         method: 'POST',
@@ -1016,16 +1023,21 @@ export const FranchiseManagement: React.FC = () => {
         if (unassigned.success && Array.isArray(unassigned.data?.branches)) {
           setUnassignedBranches(unassigned.data.branches);
         }
+        refreshBranches();
+        window.dispatchEvent(new CustomEvent('tuitionos:branches-updated'));
         loadData();
       }
     } catch (err: any) {
       showToast(err.message || 'Failed to link branch', 'error');
+    } finally {
+      setIsLinkingBranchInEdit(false);
     }
   };
 
   const handleCreateBranchInEdit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedFranchiseForEdit || !editNewBranch.name.trim()) return;
+    if (!selectedFranchiseForEdit || !editNewBranch.name.trim() || isSubmittingBranchInEdit) return;
+    setIsSubmittingBranchInEdit(true);
     try {
       const res = await apiFetch(`/franchises/${selectedFranchiseForEdit.id}/branches`, {
         method: 'POST',
@@ -1055,10 +1067,14 @@ export const FranchiseManagement: React.FC = () => {
         if (refreshed.success && refreshed.data?.franchise) {
           setSelectedFranchiseForEdit(refreshed.data.franchise);
         }
+        refreshBranches();
+        window.dispatchEvent(new CustomEvent('tuitionos:branches-updated'));
         loadData();
       }
     } catch (err: any) {
       showToast(err.message || 'Failed to create branch', 'error');
+    } finally {
+      setIsSubmittingBranchInEdit(false);
     }
   };
 
@@ -1085,6 +1101,8 @@ export const FranchiseManagement: React.FC = () => {
         if (unassigned.success && Array.isArray(unassigned.data?.branches)) {
           setUnassignedBranches(unassigned.data.branches);
         }
+        refreshBranches();
+        window.dispatchEvent(new CustomEvent('tuitionos:branches-updated'));
         loadData();
       }
     } catch (err: any) {
@@ -1303,7 +1321,8 @@ export const FranchiseManagement: React.FC = () => {
   const handleAssignExistingBranch = async (e: React.FormEvent) => {
     e.preventDefault();
     const targetFranchiseId = selectedFranchiseForBranch?.id || selectedFranchiseIdForBranch;
-    if (!targetFranchiseId || !selectedExistingBranchId) return;
+    if (!targetFranchiseId || !selectedExistingBranchId || isAssigningExistingBranch) return;
+    setIsAssigningExistingBranch(true);
     try {
       const res = await apiFetch(`/franchises/${targetFranchiseId}/branches`, {
         method: 'POST',
@@ -1313,10 +1332,14 @@ export const FranchiseManagement: React.FC = () => {
         showToast('Existing campus branch successfully assigned to franchise!', 'success');
         setShowAddBranchModal(false);
         setSelectedExistingBranchId('');
+        refreshBranches();
+        window.dispatchEvent(new CustomEvent('tuitionos:branches-updated'));
         loadData();
       }
     } catch (err: any) {
       showToast(err.message || 'Failed to assign branch', 'error');
+    } finally {
+      setIsAssigningExistingBranch(false);
     }
   };
 
@@ -1334,6 +1357,8 @@ export const FranchiseManagement: React.FC = () => {
       });
       if (res.success) {
         showToast(`Campus "${branchName}" detached successfully`, 'success');
+        refreshBranches();
+        window.dispatchEvent(new CustomEvent('tuitionos:branches-updated'));
         loadData();
       }
     } catch (err: any) {
@@ -1362,6 +1387,8 @@ export const FranchiseManagement: React.FC = () => {
       return;
     }
 
+    if (isAddingBranch) return;
+    setIsAddingBranch(true);
     try {
       const res = await apiFetch(`/franchises/${targetFranchiseId}/branches`, {
         method: 'POST',
@@ -1391,12 +1418,16 @@ export const FranchiseManagement: React.FC = () => {
           state: '',
           postalCode: '',
         });
+        refreshBranches();
+        window.dispatchEvent(new CustomEvent('tuitionos:branches-updated'));
         loadData();
       } else {
         showToast(res.error || 'Failed to add branch', 'error');
       }
     } catch (err: any) {
       showToast(err.message || 'Failed to attach branch', 'error');
+    } finally {
+      setIsAddingBranch(false);
     }
   };
 
@@ -4436,9 +4467,10 @@ export const FranchiseManagement: React.FC = () => {
                   </button>
                   <button
                     type="submit"
-                    disabled={!selectedExistingBranchId}
-                    className="px-6 py-2 bg-[#006FFF] hover:bg-[#0055CC] disabled:opacity-50 text-white font-bold rounded-lg text-sm shadow"
+                    disabled={!selectedExistingBranchId || isAssigningExistingBranch}
+                    className="px-6 py-2 bg-[#006FFF] hover:bg-[#0055CC] disabled:opacity-50 text-white font-bold rounded-lg text-sm shadow flex items-center gap-2 cursor-pointer"
                   >
+                    {isAssigningExistingBranch && <Loader2 className="w-4 h-4 animate-spin" />}
                     Assign Branch to Franchise
                   </button>
                 </div>
@@ -4597,9 +4629,11 @@ export const FranchiseManagement: React.FC = () => {
                   </button>
                   <button
                     type="submit"
-                    className="px-6 py-2 bg-[#006FFF] hover:bg-[#0055CC] text-white font-bold rounded-lg text-sm shadow transition-colors inline-flex items-center gap-2"
+                    disabled={isAddingBranch}
+                    className="px-6 py-2 bg-[#006FFF] hover:bg-[#0055CC] disabled:opacity-50 text-white font-bold rounded-lg text-sm shadow transition-colors inline-flex items-center gap-2 cursor-pointer"
                   >
-                    <Plus className="w-4 h-4" /> Create & Attach Campus
+                    {isAddingBranch ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                    Create & Attach Campus
                   </button>
                 </div>
               </form>
@@ -5303,10 +5337,11 @@ export const FranchiseManagement: React.FC = () => {
                         </select>
                         <button
                           type="button"
-                          disabled={!editLinkInstituteId}
+                          disabled={!editLinkInstituteId || isLinkingBranchInEdit}
                           onClick={handleLinkBranchInEdit}
-                          className="px-4 py-2 bg-[#006FFF] hover:bg-[#0055CC] disabled:opacity-50 text-white font-bold text-xs rounded-xl shadow-xs transition"
+                          className="px-4 py-2 bg-[#006FFF] hover:bg-[#0055CC] disabled:opacity-50 text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer"
                         >
+                          {isLinkingBranchInEdit && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                           + Link Institute
                         </button>
                       </div>
@@ -5375,9 +5410,10 @@ export const FranchiseManagement: React.FC = () => {
                     <div className="flex justify-end pt-2">
                       <button
                         type="submit"
-                        disabled={!editNewBranch.name.trim()}
-                        className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold text-xs rounded-xl shadow-xs transition"
+                        disabled={!editNewBranch.name.trim() || isSubmittingBranchInEdit}
+                        className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer"
                       >
+                        {isSubmittingBranchInEdit && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                         + Create & Link Campus
                       </button>
                     </div>

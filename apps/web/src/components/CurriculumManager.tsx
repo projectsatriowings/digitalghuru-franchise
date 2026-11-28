@@ -358,6 +358,8 @@ export const CurriculumManager: React.FC<CurriculumManagerProps> = ({
           <div className="flex items-center gap-2 flex-wrap">
             {versions.map((v) => {
               const active = v.id === selectedVersion?.id;
+              const isActiveLive = activeCurriculumVersionId === v.id;
+              const isHistorical = v.isPublished && !isActiveLive;
               return (
                 <button
                   key={v.id}
@@ -377,7 +379,7 @@ export const CurriculumManager: React.FC<CurriculumManagerProps> = ({
                   ) : (
                     <Unlock className="w-3 h-3" />
                   )}
-                  v{v.version}.0 {v.isPublished ? '(Live)' : '(Draft)'}
+                  v{v.version}.0 {isActiveLive ? '(Live)' : isHistorical ? '(Archived)' : '(Draft)'}
                 </button>
               );
             })}
@@ -425,15 +427,15 @@ export const CurriculumManager: React.FC<CurriculumManagerProps> = ({
         </div>
       </div>
 
-      {/* Immutability Notice Banner */}
+      {/* Immutability & Media In-Place Update Notice Banner */}
       {isVersionLocked && (
         <div className="bg-amber-50/80 border border-amber-200 rounded-xl p-3.5 flex items-start gap-3">
           <Lock className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
           <div className="text-xs text-amber-900 leading-relaxed">
-            <strong>Immutable Published Version:</strong> Curriculum v{selectedVersion?.version}.0 is published and cryptographically locked at the database level so existing student progress &amp; certificates are never broken.{' '}
-            {hasUnlockedDraft
-              ? 'Switch to your unlocked Draft tab above to edit modules & lessons.'
-              : 'Click "Create Draft Version to Edit" to clone this curriculum into an editable draft.'}
+            <strong>Active Curriculum Structure Locked:</strong> Curriculum v{selectedVersion?.version}.0 module and lesson titles/ordering are locked so student certificates &amp; progress remain valid.{' '}
+            <span className="text-emerald-800 font-semibold block mt-1">
+              ✨ <strong>Direct Media Updates Allowed:</strong> You can edit Video URLs, PDF documents, learning notes, and attachments directly on any lesson below without creating a new draft! To reorder, add, or delete lessons/modules, click &ldquo;Create Draft Version to Edit&rdquo;.
+            </span>
           </div>
         </div>
       )}

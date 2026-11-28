@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { apiFetch } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { formatCurrency } from '@tuition/shared';
 import { ParentDashboardView } from './parent/ParentDashboardView';
 import { ParentAttendanceView } from './parent/ParentAttendanceView';
 import { ParentCommunicationView } from './parent/ParentCommunicationView';
@@ -142,11 +143,6 @@ export const ParentPortal: React.FC<ParentPortalProps> = ({ initialTab = 'dashbo
       setFeeStatement(null);
     }
   }, [selectedStudentId, activeChildRelation?.student?.instituteId]);
-
-  const formatCurrency = (val: number | string | undefined) => {
-    const num = Number(val || 0);
-    return `₹${num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-  };
 
   const tabs = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },

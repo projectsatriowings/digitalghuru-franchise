@@ -64,6 +64,7 @@ export const Login: React.FC = () => {
   // Multi-Institute Selection State
   const [pendingAuth, setPendingAuth] = useState<{
     token: string;
+    refreshToken?: string;
     user: any;
     memberships: Array<{ id: string; role: string; institute: { id: string; name: string; code: string } }>;
   } | null>(null);
@@ -83,14 +84,18 @@ export const Login: React.FC = () => {
       });
 
       if (res.success && res.data?.accessToken) {
+        if (res.data.refreshToken) {
+          localStorage.setItem('tuition_refresh_token', res.data.refreshToken);
+        }
         if (res.data.memberships && res.data.memberships.length > 1) {
           setPendingAuth({
             token: res.data.accessToken,
+            refreshToken: res.data.refreshToken,
             user: res.data.user,
             memberships: res.data.memberships,
           });
         } else {
-          login(res.data.accessToken, res.data.user, res.data.institute);
+          login(res.data.accessToken, res.data.user, res.data.institute, res.data.refreshToken);
         }
       } else {
         setError(res.error || 'Authentication failed. Please verify your credentials.');
@@ -155,7 +160,7 @@ export const Login: React.FC = () => {
                   key={m.id}
                   type="button"
                   onClick={() => {
-                    login(pendingAuth.token, pendingAuth.user, m.institute);
+                    login(pendingAuth.token, pendingAuth.user, m.institute, pendingAuth.refreshToken);
                     setPendingAuth(null);
                   }}
                   className="w-full p-4 rounded-2xl bg-slate-50 hover:bg-blue-50/70 border border-slate-200 hover:border-[#006FFF]/50 text-left transition-all flex items-center justify-between group shadow-sm hover:shadow"

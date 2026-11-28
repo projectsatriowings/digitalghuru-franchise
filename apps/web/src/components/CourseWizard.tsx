@@ -2321,7 +2321,8 @@ export const CourseWizard: React.FC<CourseWizardProps> = ({
                                 list[mIdx] = { ...list[mIdx], lessons };
                                 setData({ ...data, modules: list });
                               }}
-                              placeholder="Google Drive, YouTube, or MP4 URL..."
+                              placeholder="YouTube, Google Drive, Vimeo, Loom, or direct MP4/WebM URL..."
+                              title="Supports YouTube (watch, shorts, embed), Google Drive, Vimeo, Loom, Dropbox, and direct MP4/WebM video streams"
                               className="flex-1 px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs"
                             />
                           </div>

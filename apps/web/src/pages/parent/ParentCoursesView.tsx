@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { apiFetch } from '../../services/api';
+import { formatCurrency } from '@tuition/shared';
 import {
   Award,
   BookOpen,
@@ -226,6 +227,9 @@ export const ParentCoursesView: React.FC<ParentCoursesViewProps> = ({ student })
                       <h4 className="text-base font-extrabold text-[#0F172A] truncate">
                         {enr.course?.title}
                       </h4>
+                      {enr.course?.price !== undefined && Number(enr.course.price) > 0 && (
+                        <span className="text-xs font-bold text-slate-700 block mt-0.5">Course Fee: {formatCurrency(enr.course.price)}</span>
+                      )}
 
                       <div className="flex items-center gap-3 pt-1">
                         <div className="flex-1 max-w-xs h-2 bg-slate-200 rounded-full overflow-hidden">

@@ -24,6 +24,7 @@ import { apiFetch } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
+import { formatCurrency } from '@tuition/shared';
 
 export const FranchiseCourses: React.FC = () => {
   const { user, activeInstitute } = useAuth();
@@ -417,7 +418,7 @@ export const FranchiseCourses: React.FC = () => {
                     </p>
 
                     <div className="flex flex-wrap items-center gap-4 mt-3 text-xs font-semibold text-slate-600">
-                      <span>Standard Fee: ₹{Number(course.price || 0).toLocaleString('en-IN')}</span>
+                      <span>Standard Fee: {formatCurrency(course.price)}</span>
                       {course.duration && <span>· {course.duration}</span>}
                       <span className="text-[#006FFF]">· {course.activeEnrollmentsCount || 0} Active Enrolled</span>
                     </div>

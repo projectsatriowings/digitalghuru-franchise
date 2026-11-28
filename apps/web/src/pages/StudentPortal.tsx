@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { apiFetch } from '../services/api';
+import { formatCurrency } from '@tuition/shared';
 import {
   GraduationCap,
   Calendar,
@@ -396,6 +397,9 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({ initialSection = '
 
                     <h3 className="text-base font-extrabold text-slate-900 line-clamp-1">{enr.course?.title}</h3>
                     <p className="text-xs text-slate-500 line-clamp-1 mt-0.5">{enr.course?.subTitle || enr.franchise?.name}</p>
+                    {enr.course?.price !== undefined && Number(enr.course.price) > 0 && (
+                      <span className="text-xs font-bold text-slate-700 block mt-1">Course Fee: {formatCurrency(enr.course.price)}</span>
+                    )}
 
                     <div className="mt-3">
                       <div className="flex justify-between text-[11px] font-bold text-slate-600 mb-1">

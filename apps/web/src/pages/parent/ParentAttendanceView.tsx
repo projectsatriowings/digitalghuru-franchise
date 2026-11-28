@@ -90,7 +90,7 @@ export const ParentAttendanceView: React.FC<ParentAttendanceViewProps> = ({ stud
     presentDays: 0,
     absentDays: 0,
     lateDays: 0,
-    attendancePercentage: 100,
+    attendancePercentage: 0,
   };
 
   return (
