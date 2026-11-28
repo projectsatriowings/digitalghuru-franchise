@@ -1109,7 +1109,7 @@ export async function completeLesson(req: Request, res: Response) {
       parse.data.timeSpentSec
     );
 
-    serverCache.delete(`student:dashboard:${studentId}`);
+    serverCache.invalidate(`student:dashboard:${studentId}`);
 
     res.json({
       success: true,

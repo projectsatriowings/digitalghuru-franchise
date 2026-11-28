@@ -77,8 +77,8 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({ initialSection = '
     try {
       setLoading(true);
       const [profRes, lmsRes, matRes, hwRes, quizRes] = await Promise.allSettled([
-        apiFetch('/students/my/profile', { skipCache: true }),
-        apiFetch('/courses/learning/my-dashboard', { skipCache: true }),
+        apiFetch('/students/my/profile'),
+        apiFetch('/courses/learning/my-dashboard'),
         apiFetch('/materials'),
         apiFetch('/homework'),
         apiFetch('/quizzes'),

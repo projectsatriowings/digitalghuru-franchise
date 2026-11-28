@@ -177,17 +177,30 @@ async function login(req, res) {
             },
             include: {
                 memberships: {
-                    include: {
-                        institute: true,
+                    select: {
+                        id: true,
+                        role: true,
+                        isActive: true,
+                        institute: {
+                            select: {
+                                id: true,
+                                code: true,
+                                name: true,
+                                status: true,
+                            },
+                        },
                     },
                 },
-                staffProfile: true,
-                parentProfile: true,
-                studentProfile: true,
-                ownedFranchises: {
-                    include: {
-                        branches: true,
+                parentProfile: {
+                    select: {
+                        id: true,
                     },
+                },
+                ownedFranchises: {
+                    select: {
+                        id: true,
+                    },
+                    take: 1,
                 },
             },
         });

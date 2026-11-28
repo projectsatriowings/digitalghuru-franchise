@@ -8,6 +8,7 @@ const express_1 = __importDefault(require("express"));
 const cors_1 = __importDefault(require("cors"));
 const helmet_1 = __importDefault(require("helmet"));
 const compression_1 = __importDefault(require("compression"));
+const prisma_js_1 = require("./prisma.js");
 const index_js_1 = require("./config/index.js");
 const db_js_1 = require("./config/db.js");
 const auth_routes_js_1 = __importDefault(require("./modules/auth/auth.routes.js"));
@@ -283,8 +284,18 @@ if (isDirectExecution) {
         console.log(`[Digital Ghuru Franchise API Server] Health check available at http://${index_js_1.config.host}:${index_js_1.config.port}/api/health`);
         notification_service_js_1.NotificationService.startWorker(15000);
     });
+    // Database keep-alive ping to prevent Neon serverless cold-start sleep during active dev/prod sessions
+    const dbKeepAliveInterval = setInterval(async () => {
+        try {
+            await prisma_js_1.prisma.$queryRaw `SELECT 1`;
+        }
+        catch {
+            // Silently swallow keep-alive errors
+        }
+    }, 3 * 60 * 1000);
     const handleShutdown = () => {
         console.log('[Digital Ghuru Franchise API Server] Gracefully shutting down...');
+        clearInterval(dbKeepAliveInterval);
         notification_service_js_1.NotificationService.stopWorker();
         server.close(() => {
             console.log('[Digital Ghuru Franchise API Server] Closed remaining connections.');

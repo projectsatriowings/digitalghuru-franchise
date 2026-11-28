@@ -69,6 +69,7 @@ export const AcademicsManagement: React.FC<AcademicsManagementProps> = ({ onNavi
   const [instituteStudents, setInstituteStudents] = useState<StudentOption[]>([]);
   const [franchiseCourses, setFranchiseCourses] = useState<any[]>([]);
   const [showAddTrainerModal, setShowAddTrainerModal] = useState(false);
+  const [noBranchContext, setNoBranchContext] = useState(false);
   const [loading, setLoading] = useState(true);
 
   // Search & Filter state for batches
@@ -151,6 +152,7 @@ export const AcademicsManagement: React.FC<AcademicsManagementProps> = ({ onNavi
     try {
       if (!silent) setLoading(true);
       setIsSyncing(true);
+      setNoBranchContext(false);
       const [batchesRes, staffRes, studentsRes] = await Promise.all([
         apiFetch('/academics/batches'),
         apiFetch('/academics/staff').catch(() => ({ data: { staff: [] } })),
@@ -177,7 +179,12 @@ export const AcademicsManagement: React.FC<AcademicsManagementProps> = ({ onNavi
         console.warn('Could not load franchise courses for academics:', e);
       }
     } catch (err: any) {
-      if (!silent) error(err.message || 'Failed to load academics data');
+      if (err.message && err.message.toLowerCase().includes('no campus branches currently assigned')) {
+        setNoBranchContext(true);
+        setBatches([]);
+      } else {
+        if (!silent) error(err.message || 'Failed to load academics data');
+      }
     } finally {
       if (!silent) setLoading(false);
       setIsSyncing(false);
@@ -1484,6 +1491,7 @@ export const AcademicsManagement: React.FC<AcademicsManagementProps> = ({ onNavi
         <div className="flex items-center gap-2">
           {/* Create Batch Action */}
           <button
+            disabled={noBranchContext}
             onClick={() => {
               setEditingBatch(null);
               setBatchStep(1);
@@ -1502,7 +1510,11 @@ export const AcademicsManagement: React.FC<AcademicsManagementProps> = ({ onNavi
               });
               setShowBatchModal(true);
             }}
-            className="inline-flex items-center gap-1.5 text-xs font-bold bg-[#006FFF] hover:bg-[#0058D4] text-white px-4 py-2.5 rounded-xl shadow-md transition"
+            className={`inline-flex items-center gap-1.5 text-xs font-bold px-4 py-2.5 rounded-xl shadow-md transition ${
+              noBranchContext
+                ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                : 'bg-[#006FFF] hover:bg-[#0058D4] text-white cursor-pointer'
+            }`}
           >
             <Plus className="w-4 h-4" />
             <span>Create New Batch</span>
@@ -1556,6 +1568,24 @@ export const AcademicsManagement: React.FC<AcademicsManagementProps> = ({ onNavi
         <div className="p-12 text-center text-xs text-[#94A3B8]">
           <div className="w-5 h-5 rounded-full bg-[#006FFF] animate-ping mx-auto mb-3" />
           Loading batches and curriculum...
+        </div>
+      ) : noBranchContext ? (
+        <div className="p-12 text-center bg-white border border-amber-200 rounded-3xl space-y-4 shadow-sm">
+          <div className="w-14 h-14 rounded-2xl bg-amber-50 border border-amber-200 text-amber-600 flex items-center justify-center mx-auto">
+            <Layers className="w-7 h-7" />
+          </div>
+          <h3 className="text-lg font-bold text-slate-900">Campus Branch Required</h3>
+          <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
+            No campus branches are currently assigned to your franchise center. Academic batches, courses, and trainers require at least one operational campus branch.
+          </p>
+          <div className="pt-2 flex items-center justify-center gap-3">
+            <button
+              onClick={() => onNavigateTab?.('franchise_management')}
+              className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-[#006FFF] hover:bg-[#0058D4] text-white text-xs font-bold transition shadow-sm cursor-pointer"
+            >
+              Open Franchise Management &rarr;
+            </button>
+          </div>
         </div>
       ) : filteredBatches.length === 0 ? (
         <div className="p-12 text-center bg-white border border-dashed border-[#E2E8F0] rounded-3xl space-y-3">

@@ -3,6 +3,7 @@ import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import compression from 'compression';
+import { prisma } from './prisma.js';
 import { config, validateProductionConfig } from './config/index.js';
 import { checkDatabaseHealth } from './config/db.js';
 

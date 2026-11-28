@@ -3645,6 +3645,7 @@ async function getSuperAdminFranchiseDashboard(req, res) {
                     take: 10,
                 }),
                 prisma_js_1.prisma.franchiseRoyaltyInstallment.findMany({
+                    take: 200,
                     select: {
                         id: true,
                         installmentNumber: true,
@@ -3705,7 +3706,7 @@ async function getSuperAdminFranchiseDashboard(req, res) {
             success: true,
             data,
         };
-        cache_js_1.serverCache.set(cacheKey, responsePayload, 15000);
+        cache_js_1.serverCache.set(cacheKey, responsePayload, 60000);
         return res.json(responsePayload);
     }
     catch (err) {
