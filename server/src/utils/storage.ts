@@ -686,6 +686,7 @@ export function resolveAbsolutePath(storageKey: string): string | null {
   const cleanKey = storageKey
     .split('?')[0]
     .replace(/^(\/api\/courses\/media\/(public|protected)\/)/, 'courses/$2/')
+    .replace(/^(\/api\/students\/photo-raw\/)/, '')
     .replace(/^\/?(uploads\/)/, '')
     .replace(/^[/\\]+/, '');
 
@@ -697,14 +698,32 @@ export function resolveAbsolutePath(storageKey: string): string | null {
 
   // Strict containment check: must never escape active storage directory
   if (
-    !resolvedPath.startsWith(resolvedBase + path.sep) &&
-    resolvedPath !== resolvedBase
+    resolvedPath.startsWith(resolvedBase + path.sep) ||
+    resolvedPath === resolvedBase
   ) {
-    return null;
+    if (fs.existsSync(resolvedPath)) {
+      return resolvedPath;
+    }
   }
 
-  if (fs.existsSync(resolvedPath)) {
-    return resolvedPath;
+  // Cross-check alternative storage locations (e.g. server/uploads vs uploads)
+  const altDirs = [
+    path.resolve(process.cwd(), 'server', 'uploads'),
+    path.resolve(process.cwd(), 'uploads'),
+    path.resolve(process.cwd(), '..', 'server', 'uploads'),
+    path.resolve(process.cwd(), '..', 'uploads'),
+  ];
+
+  for (const altDir of altDirs) {
+    if (fs.existsSync(altDir)) {
+      const candidate = path.resolve(altDir, normalizedKey);
+      if (
+        (candidate.startsWith(altDir + path.sep) || candidate === altDir) &&
+        fs.existsSync(candidate)
+      ) {
+        return candidate;
+      }
+    }
   }
 
   return null;

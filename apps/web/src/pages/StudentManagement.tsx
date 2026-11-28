@@ -463,7 +463,7 @@ Please keep this login and password safe. Use your registered mobile number and 
   const handleOpenEditStudentModal = (student: Student) => {
     setEditingStudent(student);
     setEditPhotoFile(null);
-    setEditPhotoPreview(student.photoUrl || null);
+    setEditPhotoPreview(null);
     setEditError(null);
 
     // Parse userNotes out of student.notes if it was stored as JSON credentials
@@ -3933,7 +3933,7 @@ Please keep credentials safe. Passwords must be changed upon first login.`;
               {/* Student Photo */}
               <div className="p-4 rounded-2xl bg-[#FFFFFF] border border-[#E2E8F0] flex items-center gap-4">
                 <div className="relative shrink-0">
-                  {editPhotoPreview ? (
+                  {editPhotoFile && editPhotoPreview ? (
                     <img
                       src={editPhotoPreview}
                       alt="Student"

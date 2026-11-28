@@ -1795,7 +1795,13 @@ export async function updateStudent(req: AuthenticatedRequest, res: Response) {
     if (data.studentPhone !== undefined) updateData.phone = data.studentPhone?.trim() || null;
     if (data.gender !== undefined) updateData.gender = data.gender;
     if (data.bloodGroup !== undefined) updateData.bloodGroup = data.bloodGroup?.trim() || null;
-    if (data.photoUrl !== undefined) updateData.photoUrl = data.photoUrl?.trim() || null;
+    if (data.photoUrl !== undefined) {
+      if (data.photoUrl && (data.photoUrl.startsWith('/api/students/') || data.photoUrl.startsWith('api/students/'))) {
+        // Do not overwrite underlying storage key with API route URL
+      } else {
+        updateData.photoUrl = data.photoUrl?.trim() || null;
+      }
+    }
     if (data.dob !== undefined) {
       updateData.dob = data.dob && data.dob.trim() ? new Date(data.dob) : null;
     }
@@ -2329,7 +2335,13 @@ export async function getStudentPhoto(req: AuthenticatedRequest, res: Response) 
       return res.status(404).json({ success: false, error: 'No photograph on file for this student' });
     }
 
-    if (targetInstituteId && student.instituteId !== targetInstituteId && req.user?.role !== 'SUPER_ADMIN') {
+    if (
+      targetInstituteId &&
+      student.instituteId &&
+      student.instituteId !== targetInstituteId &&
+      req.user?.role !== 'SUPER_ADMIN' &&
+      req.user?.role !== 'FRANCHISE_OWNER'
+    ) {
       return res.status(403).json({ success: false, error: 'Forbidden: Cross-institute photograph access rejected' });
     }
 
