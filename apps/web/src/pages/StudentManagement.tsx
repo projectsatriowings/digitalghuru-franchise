@@ -770,23 +770,23 @@ Please keep this login and password safe. Use your registered mobile number and 
 
   // Load franchise & enabled Global LMS Courses
   const loadFranchiseCourses = async () => {
-    if (!user || !['SUPER_ADMIN', 'FRANCHISE_OWNER', 'BRANCH_ADMIN', 'ACADEMIC_ADMIN'].includes(user.role)) {
-      return;
-    }
     try {
-      const ctxRes = await apiFetch('/courses/my-franchise-context');
+      let uniqueCourses: any[] = [];
+      const ctxRes = await apiFetch('/courses/my-franchise-context').catch(() => null);
       const fr = ctxRes?.data?.franchise || null;
       setFranchiseContext(fr);
       if (fr?.id) {
-        const fcRes = await apiFetch(`/courses/franchise/${fr.id}`);
+        const fcRes = await apiFetch(`/courses/franchise/${fr.id}`).catch(() => null);
         const allCourses = fcRes?.data || [];
-        const uniqueCourses = Array.from(
+        uniqueCourses = Array.from(
           new Map(allCourses.filter((c: any) => c.isSelected || c.isPermitted).map((c: any) => [c.id, c])).values()
         );
-        setEnabledGlobalCourses(uniqueCourses);
-      } else {
-        setEnabledGlobalCourses([]);
       }
+      if (uniqueCourses.length === 0) {
+        const gRes = await apiFetch('/courses').catch(() => null);
+        uniqueCourses = gRes?.data?.courses || (Array.isArray(gRes?.data) ? gRes.data : []);
+      }
+      setEnabledGlobalCourses(uniqueCourses);
     } catch {
       setEnabledGlobalCourses([]);
     }
@@ -2109,12 +2109,12 @@ Please keep this login and password safe. Use your registered mobile number and 
                     </div>
                   )}
 
-                  {/* Global LMS Course Enrollment (Optional) */}
+                  {/* Course Selection */}
                   <div className="p-4 bg-[#FAF8F5] border border-[#E2E8F0] rounded-2xl space-y-3">
                     <div className="flex items-center justify-between">
                       <label className="block text-xs font-bold text-[#006FFF] flex items-center gap-1.5">
                         <BookOpen className="w-3.5 h-3.5" />
-                        <span>Global LMS Course (Optional)</span>
+                        <span>Select Course *</span>
                       </label>
                       {franchiseContext?.name && (
                         <span className="text-[10px] font-semibold text-[#64748B] bg-white border border-[#E2E8F0] px-2 py-0.5 rounded-full">
@@ -2125,20 +2125,15 @@ Please keep this login and password safe. Use your registered mobile number and 
                     <select
                       value={formData.globalCourseId}
                       onChange={(e) => setFormData({ ...formData, globalCourseId: e.target.value })}
-                      className="w-full bg-white border border-[#E2E8F0] rounded-xl px-3.5 py-2.5 text-xs text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#006FFF]/20"
+                      className="w-full bg-white border border-[#E2E8F0] rounded-xl px-3.5 py-2.5 text-xs text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#006FFF]/20 font-medium"
                     >
-                      <option value="">-- Skip Global Course Enrollment (or enroll later) --</option>
+                      <option value="">-- Select Course --</option>
                       {enabledGlobalCourses.map((c: any) => (
                         <option key={c.id} value={c.id}>
                           {c.title}{c.duration ? ` (${c.duration})` : ''}{c.format ? ` • ${c.format}` : ''}
                         </option>
                       ))}
                     </select>
-                    {enabledGlobalCourses.length === 0 && (
-                      <p className="text-[11px] text-[#94A3B8]">
-                        No published Global Courses are currently enabled for this franchise in Franchise Offerings.
-                      </p>
-                    )}
 
                     {formData.globalCourseId && !formData.onlineDirect && (
                       <div className="grid grid-cols-2 gap-2 pt-1">
@@ -2203,7 +2198,12 @@ Please keep this login and password safe. Use your registered mobile number and 
                             <div className="space-y-2.5">
                               <select
                                 value={formData.batchId}
-                                onChange={(e) => setFormData({ ...formData, batchId: e.target.value, subjectIds: [] })}
+                                onChange={(e) => {
+                                  const bId = e.target.value;
+                                  const b = batches.find((x) => x.id === bId);
+                                  const subIds = b?.batchSubjects?.map((bs: any) => bs.subject?.id || bs.subjectId).filter(Boolean) || [];
+                                  setFormData({ ...formData, batchId: bId, subjectIds: subIds });
+                                }}
                                 className="w-full bg-white border border-[#E2E8F0] rounded-xl px-3.5 py-2.5 text-xs text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#006FFF]/20 font-medium"
                               >
                                 <option value="">Select Class Batch (Optional)</option>
@@ -2260,63 +2260,6 @@ Please keep this login and password safe. Use your registered mobile number and 
                           Assigning a batch now enables instant attendance tracking and syllabus scheduling.
                         </p>
                       </div>
-
-                      {/* Batch Subject Selection (if batch selected and subjects exist) */}
-                      {(() => {
-                        const selectedBatch = batches.find((b) => b.id === formData.batchId);
-                        const subjects = selectedBatch?.batchSubjects || [];
-                        if (!formData.batchId) {
-                          return (
-                            <div className="p-3 bg-white border border-dashed border-[#E2E8F0] rounded-xl text-center text-xs text-[#94A3B8]">
-                              Select a class batch above to view and allocate curriculum subjects.
-                            </div>
-                          );
-                        }
-                        if (subjects.length === 0) {
-                          return (
-                            <div className="p-3 bg-white border border-[#E2E8F0] rounded-xl text-xs text-[#94A3B8]">
-                              No specific subjects configured for this batch yet. The student will be enrolled in the general batch curriculum.
-                            </div>
-                          );
-                        }
-                        return (
-                          <div className="bg-white border border-[#E2E8F0] rounded-xl p-3.5 space-y-2">
-                            <div className="flex items-center justify-between">
-                              <label className="block text-xs font-bold text-[#006FFF]">
-                                Select Subjects to Allocate
-                              </label>
-                              <span className="text-[10px] font-semibold text-[#94A3B8] bg-[#FAF8F5] px-2 py-0.5 rounded-full border border-[#E2E8F0]">
-                                {formData.subjectIds.length} of {subjects.length} selected
-                              </span>
-                            </div>
-                            <div className="flex flex-wrap gap-2 pt-1">
-                              {subjects.map((bs: any) => {
-                                const isSelected = formData.subjectIds.includes(bs.subject.id);
-                                return (
-                                  <button
-                                    key={bs.subject.id}
-                                    type="button"
-                                    onClick={() => {
-                                      const next = isSelected
-                                        ? formData.subjectIds.filter((id) => id !== bs.subject.id)
-                                        : [...formData.subjectIds, bs.subject.id];
-                                      setFormData({ ...formData, subjectIds: next });
-                                    }}
-                                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition ${
-                                      isSelected
-                                        ? 'bg-[#006FFF] text-white shadow-sm'
-                                        : 'bg-[#FAF8F5] border border-[#E2E8F0] text-[#475569] hover:bg-[#F8FAFC]'
-                                    }`}
-                                  >
-                                    {isSelected && <Check className="w-3.5 h-3.5" />}
-                                    <span>{bs.subject.name} {bs.subject.code ? `(${bs.subject.code})` : ''}</span>
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        );
-                      })()}
                     </div>
                   )}
 

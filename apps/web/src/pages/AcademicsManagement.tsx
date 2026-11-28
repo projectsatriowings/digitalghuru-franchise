@@ -163,18 +163,23 @@ export const AcademicsManagement: React.FC<AcademicsManagementProps> = ({ onNavi
       setAvailableStaff(staffRes.data?.staff || []);
       setInstituteStudents(studentsRes.data?.students || []);
 
-      // Load franchise courses assigned to this franchise
+      // Load franchise courses assigned to this franchise with fallback to all published courses
       try {
-        const ctxRes = await apiFetch('/courses/my-franchise-context');
+        let frCourses: any[] = [];
+        const ctxRes = await apiFetch('/courses/my-franchise-context').catch(() => null);
         const fr = ctxRes?.data?.franchise || null;
         if (fr?.id) {
-          const fcRes = await apiFetch(`/courses/franchise/${fr.id}`);
+          const fcRes = await apiFetch(`/courses/franchise/${fr.id}`).catch(() => null);
           const allCourses = fcRes?.data || [];
-          const uniqueCourses = Array.from(
+          frCourses = Array.from(
             new Map(allCourses.filter((c: any) => c.isSelected || c.isPermitted).map((c: any) => [c.id, c])).values()
           );
-          setFranchiseCourses(uniqueCourses);
         }
+        if (frCourses.length === 0) {
+          const gRes = await apiFetch('/courses').catch(() => null);
+          frCourses = gRes?.data?.courses || (Array.isArray(gRes?.data) ? gRes.data : []);
+        }
+        setFranchiseCourses(frCourses);
       } catch (e) {
         console.warn('Could not load franchise courses for academics:', e);
       }
@@ -258,6 +263,10 @@ export const AcademicsManagement: React.FC<AcademicsManagementProps> = ({ onNavi
   // Save Batch (Create or Edit)
   const handleSaveBatch = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!editingBatch && batchStep !== 3) {
+      // Must not create batch until step 3 is reached and user explicitly confirms
+      return;
+    }
     try {
       if (editingBatch) {
         const res = await apiFetch(`/academics/batches/${editingBatch.id}`, {
@@ -715,7 +724,7 @@ export const AcademicsManagement: React.FC<AcademicsManagementProps> = ({ onNavi
                 className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#006FFF] hover:bg-[#0058D4] text-xs font-bold text-white shadow-sm transition"
               >
                 <Plus className="w-4 h-4" />
-                <span>Add Subject</span>
+                <span>Add Curriculum Unit</span>
               </button>
             </div>
           </div>
@@ -740,7 +749,7 @@ export const AcademicsManagement: React.FC<AcademicsManagementProps> = ({ onNavi
                 }`}
             >
               <BookOpen className="w-3.5 h-3.5" />
-              <span>Subjects ({subjectsInBatch.length})</span>
+              <span>Curriculum ({subjectsInBatch.length})</span>
             </button>
             <button
               onClick={() => setBatchDetailTab('students')}
@@ -1652,41 +1661,18 @@ export const AcademicsManagement: React.FC<AcademicsManagementProps> = ({ onNavi
                   )}
 
                   {/* Course & Curriculum Binding */}
-                  {b.course ? (
-                    <div className="flex items-center gap-2 p-2.5 rounded-xl bg-blue-50/70 border border-blue-100 text-xs">
-                      <BookOpen className="w-4 h-4 text-[#006FFF] shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <span className="text-[10px] font-bold text-[#006FFF] uppercase tracking-wider block">Course</span>
-                        <span className="font-bold text-[#0F172A] truncate block">{b.course.title}</span>
-                      </div>
-                      {b.course.format && (
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-white text-[#006FFF] border border-blue-200 shrink-0">
-                          {b.course.format}
-                        </span>
-                      )}
+                  <div className="flex items-center gap-2 p-2.5 rounded-xl bg-blue-50/70 border border-blue-100 text-xs">
+                    <BookOpen className="w-4 h-4 text-[#006FFF] shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <span className="text-[10px] font-bold text-[#006FFF] uppercase tracking-wider block">Course</span>
+                      <span className="font-bold text-[#0F172A] truncate block">{b.course?.title || b.name}</span>
                     </div>
-                  ) : b.batchSubjects && b.batchSubjects.length > 0 ? (
-                    <div className="space-y-1">
-                      <span className="text-[10px] font-bold text-[#94A3B8] uppercase tracking-wider block">
-                        Subjects in Batch:
+                    {b.course?.format && (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-white text-[#006FFF] border border-blue-200 shrink-0">
+                        {b.course.format}
                       </span>
-                      <div className="flex flex-wrap gap-1">
-                        {b.batchSubjects.slice(0, 4).map((bs: any) => (
-                          <span
-                            key={bs.id || bs.subjectId}
-                            className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-[#F8FAFC] text-[#006FFF] border border-[#E8DFD8]"
-                          >
-                            {bs.subject?.name}
-                          </span>
-                        ))}
-                        {b.batchSubjects.length > 4 && (
-                          <span className="text-[10px] font-bold px-1.5 py-0.5 text-[#94A3B8]">
-                            +{b.batchSubjects.length - 4} more
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  ) : null}
+                    )}
+                  </div>
 
                   {/* Assigned Trainer */}
                   {b.staffAssignments && b.staffAssignments.length > 0 && (
@@ -1704,11 +1690,7 @@ export const AcademicsManagement: React.FC<AcademicsManagementProps> = ({ onNavi
                   )}
 
                   {/* Metrics Row */}
-                  <div className="grid grid-cols-3 gap-2 text-center text-xs pt-2 border-t border-[#F5F0EB]">
-                    <div className="p-2 rounded-xl bg-[#FAF8F5]">
-                      <span className="text-[10px] text-[#94A3B8] block">Subjects</span>
-                      <span className="font-bold text-[#0F172A]">{subjectCount}</span>
-                    </div>
+                  <div className="grid grid-cols-2 gap-2 text-center text-xs pt-2 border-t border-[#F5F0EB]">
                     <div className="p-2 rounded-xl bg-[#FAF8F5]">
                       <span className="text-[10px] text-[#94A3B8] block">Students</span>
                       <span className="font-bold text-[#0F172A]">{studentCount}</span>
@@ -1840,55 +1822,69 @@ export const AcademicsManagement: React.FC<AcademicsManagementProps> = ({ onNavi
               </div>
             )}
 
-            <form onSubmit={handleSaveBatch} className="space-y-4 text-xs">
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (editingBatch || batchStep === 3) {
+                  handleSaveBatch(e);
+                }
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  if (!editingBatch && batchStep === 1) {
+                    if (franchiseCourses.length > 0 && !batchForm.courseId) {
+                      setBatchModalError('Please select a course for this batch');
+                      return;
+                    }
+                    if (!batchForm.name.trim()) {
+                      setBatchModalError('Batch name is required');
+                      return;
+                    }
+                    if (!batchForm.academicYear.trim()) {
+                      setBatchModalError('Academic year is required');
+                      return;
+                    }
+                    setBatchModalError(null);
+                    setBatchStep(2);
+                  } else if (!editingBatch && batchStep === 2) {
+                    setBatchModalError(null);
+                    setBatchStep(3);
+                  }
+                }
+              }}
+              className="space-y-4 text-xs"
+            >
               {/* STEP 1: BATCH DETAILS (or when editing) */}
               {(batchStep === 1 || editingBatch) && (
                 <div className="space-y-4">
                   {/* Franchise Course Selection */}
                   <div>
                     <label className="block text-xs font-semibold text-[#0F172A] mb-1">
-                      Assigned Course * <span className="font-normal text-[#94A3B8]">(Select from courses assigned to your franchise)</span>
+                      Assigned Course * <span className="font-normal text-[#94A3B8]">(Select course for this batch)</span>
                     </label>
-                    {franchiseCourses.length > 0 ? (
-                      <select
-                        value={batchForm.courseId}
-                        onChange={(e) => {
-                          const selectedId = e.target.value;
-                          const selectedCourse = franchiseCourses.find((c) => c.id === selectedId);
-                          setBatchForm((prev) => ({
-                            ...prev,
-                            courseId: selectedId,
-                            name: !prev.name || franchiseCourses.some((fc) => prev.name.startsWith(fc.title))
-                              ? selectedCourse ? `${selectedCourse.title} - Batch 1` : ''
-                              : prev.name,
-                          }));
-                        }}
-                        className="w-full bg-[#FAF8F5] border border-[#E2E8F0] rounded-xl px-3.5 py-2.5 text-xs text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#006FFF]/20 font-medium"
-                      >
-                        <option value="">-- Select Course for this Batch --</option>
-                        {franchiseCourses.map((c) => (
-                          <option key={c.id} value={c.id}>
-                            {c.title} {c.format ? `(${c.format})` : ''} {c.duration ? `• ${c.duration}` : ''}
-                          </option>
-                        ))}
-                      </select>
-                    ) : (
-                      <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-xs flex items-center justify-between">
-                        <span>No courses assigned to this franchise yet in Course Offerings.</span>
-                        {onNavigateTab && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setShowBatchModal(false);
-                              onNavigateTab('courses');
-                            }}
-                            className="text-xs font-bold text-[#006FFF] underline ml-2"
-                          >
-                            Go to Offerings
-                          </button>
-                        )}
-                      </div>
-                    )}
+                    <select
+                      value={batchForm.courseId}
+                      onChange={(e) => {
+                        const selectedId = e.target.value;
+                        const selectedCourse = franchiseCourses.find((c) => c.id === selectedId);
+                        setBatchForm((prev) => ({
+                          ...prev,
+                          courseId: selectedId,
+                          name: !prev.name || franchiseCourses.some((fc) => prev.name.startsWith(fc.title))
+                            ? selectedCourse ? `${selectedCourse.title} - Batch 1` : ''
+                            : prev.name,
+                        }));
+                      }}
+                      className="w-full bg-[#FAF8F5] border border-[#E2E8F0] rounded-xl px-3.5 py-2.5 text-xs text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#006FFF]/20 font-medium"
+                    >
+                      <option value="">-- Select Course --</option>
+                      {franchiseCourses.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.title} {c.format ? `(${c.format})` : ''} {c.duration ? `• ${c.duration}` : ''}
+                        </option>
+                      ))}
+                    </select>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
