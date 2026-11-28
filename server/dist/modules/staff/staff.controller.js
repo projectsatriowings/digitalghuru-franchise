@@ -394,7 +394,7 @@ async function createStaff(req, res) {
                     employeeCode,
                     designation: data.designation.trim(),
                     qualification: data.qualification?.trim() || null,
-                    permissionsJson: result.staffProfile.permissionsJson,
+                    permissionsJson: staffPermissions,
                     avatarUrl: data.avatarUrl?.trim() || data.photoUrl?.trim() || null,
                     // Personal Details
                     dob: safeParseDate(data.dob),
