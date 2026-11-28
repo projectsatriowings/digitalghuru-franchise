@@ -368,7 +368,7 @@ export async function createStaff(req: AuthenticatedRequest, res: Response) {
     const permPostal = sameAsCurrent ? data.currentPostalCode : data.permanentPostalCode;
     const permCountry = sameAsCurrent ? (data.currentCountry || 'India') : (data.permanentCountry || 'India');
 
-    const result = await prisma.$transaction(async (tx) => {
+    const result: any = await prisma.$transaction(async (tx: any): Promise<any> => {
       // 1. Create User
       const user = await tx.user.create({
         data: {
@@ -516,7 +516,7 @@ export async function createStaff(req: AuthenticatedRequest, res: Response) {
           qualification: result.staffProfile.qualification,
           department: result.staffProfile.department,
           employmentType: result.staffProfile.employmentType,
-          permissionsJson: staffPermissions,
+          permissionsJson: result.staffProfile.permissionsJson,
           user: result.user,
         },
       },
