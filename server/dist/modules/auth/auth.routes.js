@@ -6,6 +6,7 @@ const auth_js_1 = require("../../middleware/auth.js");
 const rate_limiter_js_1 = require("../../middleware/rate-limiter.js");
 const router = (0, express_1.Router)();
 router.post('/login', rate_limiter_js_1.authRateLimiter, auth_controller_js_1.login);
+router.post('/register', rate_limiter_js_1.authRateLimiter, auth_controller_js_1.register);
 router.post('/refresh', rate_limiter_js_1.authRateLimiter, auth_controller_js_1.refreshToken);
 router.get('/me', auth_js_1.authenticateToken, auth_controller_js_1.getCurrentUser);
 router.post('/change-password', auth_js_1.authenticateToken, auth_controller_js_1.changePassword);

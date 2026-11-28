@@ -112,6 +112,7 @@ export const FeesManagement: React.FC = () => {
     transactionReference: '',
     remarks: '',
   });
+  const [recordingPayment, setRecordingPayment] = useState<boolean>(false);
 
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
@@ -400,13 +401,18 @@ export const FeesManagement: React.FC = () => {
 
   const handleRecordPayment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedAssignmentForPayment) return;
+    if (!selectedAssignmentForPayment || recordingPayment) return;
     setActionError(null);
+    setRecordingPayment(true);
 
     try {
+      const payload = {
+        ...newPayment,
+        feeAssignmentId: selectedAssignmentForPayment.id,
+      };
       const res = await apiFetch(`/fees/assignments/${selectedAssignmentForPayment.id}/payments`, {
         method: 'POST',
-        body: JSON.stringify(newPayment),
+        body: JSON.stringify(payload),
       });
 
       if (res.success) {
@@ -417,14 +423,17 @@ export const FeesManagement: React.FC = () => {
         loadPayments();
         loadDashboardData();
 
-        if (res.data?.payment?.id) {
-          openReceipt(res.data.payment.id);
+        const paymentId = res.data?.payment?.id || res.data?.receiptNumber;
+        if (paymentId) {
+          openReceipt(paymentId);
         }
       } else {
         setActionError(res.error || 'Failed to record payment');
       }
     } catch (err: any) {
       setActionError(err.message || 'Error recording payment');
+    } finally {
+      setRecordingPayment(false);
     }
   };
 
@@ -1284,9 +1293,10 @@ export const FeesManagement: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2.5 rounded-xl font-bold bg-[#006FFF] hover:bg-[#0058D4] text-white shadow-sm flex items-center gap-1.5"
+                  disabled={recordingPayment}
+                  className="px-5 py-2.5 rounded-xl font-bold bg-[#006FFF] hover:bg-[#0058D4] text-white shadow-sm flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Confirm & Generate Receipt
+                  {recordingPayment ? 'Recording...' : 'Confirm & Generate Receipt'}
                 </button>
               </div>
             </form>

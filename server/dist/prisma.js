@@ -70,4 +70,19 @@ exports.prisma.$transaction = (async (arg, options) => {
 if (process.env.NODE_ENV !== 'production') {
     global.__tuition_prisma__ = exports.prisma;
 }
+// Keep-alive heartbeat: Prevents Neon serverless database compute from suspending
+// (Neon auto-suspends after 5 minutes of idle, causing 3-7s cold-start delays on subsequent queries)
+if (process.env.DATABASE_URL && !process.env.CI) {
+    const keepAliveTimer = setInterval(async () => {
+        try {
+            await exports.prisma.$queryRaw `SELECT 1`;
+        }
+        catch {
+            // Ignore background keepalive failures
+        }
+    }, 1000 * 60 * 3.5); // Ping every 3.5 minutes
+    if (keepAliveTimer.unref) {
+        keepAliveTimer.unref();
+    }
+}
 exports.default = exports.prisma;

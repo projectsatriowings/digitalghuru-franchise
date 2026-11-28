@@ -16,6 +16,7 @@ const zod_1 = require("zod");
 const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
 const storage_js_1 = require("../../utils/storage.js");
+const cache_js_1 = require("../../utils/cache.js");
 const student_authorization_service_js_1 = require("../students/student-authorization.service.js");
 const inapp_notification_service_js_1 = require("../notifications/inapp-notification.service.js");
 /**
@@ -210,6 +211,13 @@ async function listHomework(req, res) {
         if (!instituteId) {
             return res.status(400).json({ success: false, error: 'Institute context required' });
         }
+        const cacheKey = `hw:${instituteId}:${req.user?.userId || 'all'}:${req.query.batchId || ''}:${req.query.subjectId || ''}:${req.query.status || ''}`;
+        if (req.query.refresh !== 'true') {
+            const cached = cache_js_1.serverCache.get(cacheKey);
+            if (cached) {
+                return res.json(cached);
+            }
+        }
         const batchId = req.query.batchId;
         const subjectId = req.query.subjectId;
         const status = req.query.status; // 'PUBLISHED' | 'DRAFT' | 'ALL'
@@ -377,10 +385,12 @@ async function listHomework(req, res) {
                 },
             };
         });
-        return res.json({
+        const responsePayload = {
             success: true,
             data: { homework: formatted },
-        });
+        };
+        cache_js_1.serverCache.set(cacheKey, responsePayload, 20000);
+        return res.json(responsePayload);
     }
     catch (err) {
         console.error('[List Homework Error]', err);

@@ -1,5 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.register = register;
 exports.login = login;
 exports.getCurrentUser = getCurrentUser;
 exports.changePassword = changePassword;
@@ -13,10 +14,138 @@ const loginSchema = zod_1.z.object({
     role: zod_1.z.enum(['SUPER_ADMIN', 'FRANCHISE_OWNER', 'BRANCH_ADMIN', 'ACADEMIC_ADMIN', 'STAFF', 'PARENT', 'STUDENT']).optional(),
     instituteCode: zod_1.z.string().optional(),
 });
+const registerSchema = zod_1.z.object({
+    fullName: zod_1.z.string().min(2, 'Full name is required (minimum 2 characters)'),
+    email: zod_1.z.string().email('A valid email address is required'),
+    password: zod_1.z.string().min(6, 'Password must be at least 6 characters long'),
+    phone: zod_1.z.string().optional(),
+    role: zod_1.z.enum(['STUDENT', 'PARENT', 'FRANCHISE_OWNER']).default('STUDENT'),
+});
 const changePasswordSchema = zod_1.z.object({
     currentPassword: zod_1.z.string().min(1, 'Current password is required'),
     newPassword: zod_1.z.string().min(8, 'New password must be at least 8 characters long'),
 });
+async function register(req, res) {
+    try {
+        const parseResult = registerSchema.safeParse(req.body);
+        if (!parseResult.success) {
+            return res.status(400).json({
+                success: false,
+                error: parseResult.error.errors[0]?.message || 'Invalid registration data',
+            });
+        }
+        const { fullName, email, password, phone, role } = parseResult.data;
+        const cleanEmail = email.toLowerCase().trim();
+        const cleanPhone = phone?.trim() || null;
+        // Check if email already in use
+        const existing = await prisma_js_1.prisma.user.findFirst({
+            where: {
+                OR: [
+                    { email: cleanEmail },
+                    cleanPhone ? { phone: cleanPhone } : {},
+                ],
+            },
+        });
+        if (existing) {
+            return res.status(409).json({
+                success: false,
+                error: 'An account with this email or phone number already exists',
+            });
+        }
+        const passwordHash = await (0, security_js_1.hashPassword)(password);
+        // Find default demo institute (APEX01) to link initial student/parent/franchise membership
+        const defaultInstitute = await prisma_js_1.prisma.institute.findFirst({
+            where: { status: 'ACTIVE' },
+            orderBy: { createdAt: 'asc' },
+        });
+        const newUser = await prisma_js_1.prisma.user.create({
+            data: {
+                email: cleanEmail,
+                fullName: fullName.trim(),
+                phone: cleanPhone,
+                passwordHash,
+                role,
+                isActive: true,
+                mustChangePassword: false,
+            },
+        });
+        let activeInstitute = defaultInstitute;
+        if (role === 'STUDENT' && defaultInstitute) {
+            const admissionNum = `ADM-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
+            await prisma_js_1.prisma.student.create({
+                data: {
+                    instituteId: defaultInstitute.id,
+                    userId: newUser.id,
+                    admissionNumber: admissionNum,
+                    firstName: fullName.trim().split(' ')[0] || fullName.trim(),
+                    lastName: fullName.trim().split(' ').slice(1).join(' ') || '',
+                    status: 'ACTIVE',
+                },
+            });
+            await prisma_js_1.prisma.instituteMembership.create({
+                data: {
+                    userId: newUser.id,
+                    instituteId: defaultInstitute.id,
+                    role: 'STUDENT',
+                    isActive: true,
+                },
+            });
+        }
+        else if (role === 'PARENT' && defaultInstitute) {
+            await prisma_js_1.prisma.parentProfile.create({
+                data: {
+                    userId: newUser.id,
+                    isPhoneVerified: true,
+                },
+            });
+            await prisma_js_1.prisma.instituteMembership.create({
+                data: {
+                    userId: newUser.id,
+                    instituteId: defaultInstitute.id,
+                    role: 'PARENT',
+                    isActive: true,
+                },
+            });
+        }
+        const tokenPayload = {
+            userId: newUser.id,
+            email: newUser.email,
+            role: newUser.role,
+            instituteId: activeInstitute?.id,
+            instituteCode: activeInstitute?.code,
+        };
+        const accessToken = (0, security_js_1.generateAccessToken)(tokenPayload);
+        const refreshTokenValue = (0, security_js_1.generateRefreshToken)(tokenPayload);
+        return res.status(201).json({
+            success: true,
+            message: 'Account created successfully',
+            data: {
+                accessToken,
+                refreshToken: refreshTokenValue,
+                user: {
+                    id: newUser.id,
+                    fullName: newUser.fullName,
+                    email: newUser.email,
+                    phone: newUser.phone,
+                    role: newUser.role,
+                    mustChangePassword: false,
+                },
+                institute: activeInstitute ? {
+                    id: activeInstitute.id,
+                    code: activeInstitute.code,
+                    name: activeInstitute.name,
+                } : null,
+            },
+        });
+    }
+    catch (err) {
+        console.error('[Register Error]', err);
+        return res.status(500).json({
+            success: false,
+            error: err.message || 'An unexpected error occurred during registration',
+        });
+    }
+}
 async function login(req, res) {
     try {
         const parseResult = loginSchema.safeParse(req.body);
@@ -235,6 +364,39 @@ async function getCurrentUser(req, res) {
         });
         if (!user) {
             return res.status(404).json({ success: false, error: 'User profile not found' });
+        }
+        if (!user.isActive) {
+            return res.status(403).json({
+                success: false,
+                error: 'Your account has been deactivated or suspended. Please contact your administrator.',
+                isDeactivated: true,
+            });
+        }
+        if (user.role === 'FRANCHISE_OWNER') {
+            const ownedFranchise = await prisma_js_1.prisma.franchise.findFirst({
+                where: {
+                    OR: [
+                        { ownerUserId: user.id },
+                        ...(user.email ? [{ email: { equals: user.email.trim(), mode: 'insensitive' } }] : []),
+                    ],
+                },
+                select: { id: true, status: true, ownerUserId: true },
+            });
+            if (ownedFranchise) {
+                if (!ownedFranchise.ownerUserId) {
+                    await prisma_js_1.prisma.franchise.update({
+                        where: { id: ownedFranchise.id },
+                        data: { ownerUserId: user.id },
+                    }).catch(() => { });
+                }
+                if (ownedFranchise.status === 'SUSPENDED' || ownedFranchise.status === 'TERMINATED') {
+                    return res.status(403).json({
+                        success: false,
+                        error: 'Your franchise center has been suspended. Please contact Super Admin.',
+                        isDeactivated: true,
+                    });
+                }
+            }
         }
         const isExemptFromMandatoryChange = user.role === 'STUDENT' || user.role === 'PARENT' || user.role === 'FRANCHISE_OWNER';
         const sanitizedUser = {

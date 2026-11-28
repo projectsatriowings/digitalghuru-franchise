@@ -78,9 +78,20 @@ class SettlementEngineService {
         // 3. Aggregate collections across all branches belonging to this franchise
         const agg = await revenue_engine_service_js_1.revenueEngineService.aggregateFranchiseCollections(franchiseId, startDate, endDate, prisma_js_1.prisma);
         // 4. Resolve applicable franchise percentage
-        const applicableFranchisePercentage = franchise.revenueSharePercentage !== null
+        let applicableFranchisePercentage = franchise.revenueSharePercentage !== null
             ? Number(franchise.revenueSharePercentage)
             : 50.00;
+        // Fallback: If still at default 50%, check if active agreement specified a contracted share
+        const activeAgreement = await prisma_js_1.prisma.franchiseAgreement.findFirst({
+            where: { franchiseId, status: 'ACTIVE' },
+            orderBy: { createdAt: 'desc' },
+        });
+        if (activeAgreement && activeAgreement.partnerRevenuePercentage !== null && activeAgreement.partnerRevenuePercentage !== undefined) {
+            const agrPartnerPct = Number(activeAgreement.partnerRevenuePercentage);
+            if (agrPartnerPct !== 50 && applicableFranchisePercentage === 50) {
+                applicableFranchisePercentage = agrPartnerPct;
+            }
+        }
         const applicableDigitalGuruPercentage = Number((100 - applicableFranchisePercentage).toFixed(2));
         // 5. Calculate payable amounts (in integer paise)
         const netEligibleRupees = agg.netEligibleCollections;

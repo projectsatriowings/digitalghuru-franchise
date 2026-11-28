@@ -463,6 +463,9 @@ async function createInstitute(req, res) {
                     email: normalizedInstituteEmail,
                     franchiseId: targetFranchiseId,
                     status: 'ACTIVE',
+                    settingsJson: {
+                        initialPassword: data.adminInitialPassword,
+                    },
                 },
             });
             const passwordHash = await (0, security_js_1.hashPassword)(data.adminInitialPassword);
@@ -596,7 +599,15 @@ async function getInstituteById(req, res) {
         if (!institute) {
             return res.status(404).json({ success: false, error: 'Institute not found' });
         }
-        const adminAccount = institute.memberships?.[0]?.user || null;
+        const adminUser = institute.memberships?.[0]?.user || null;
+        const settings = institute.settingsJson || {};
+        const adminAccount = adminUser
+            ? {
+                ...adminUser,
+                initialPassword: settings.initialPassword ||
+                    (adminUser.mustChangePassword ? 'Password#123' : null),
+            }
+            : null;
         return res.json({
             success: true,
             data: {
@@ -798,6 +809,7 @@ async function updateInstituteStatus(req, res) {
             where: { id },
             data: { status },
         });
+        cache_js_1.serverCache.invalidate();
         // Record Audit Log
         await prisma_js_1.prisma.auditLog.create({
             data: {
@@ -1061,6 +1073,17 @@ async function resetAdminPassword(req, res) {
             data: {
                 passwordHash,
                 mustChangePassword: true,
+            },
+        });
+        // Save temporary password in institute settingsJson for administrative display
+        const currentSettings = institute.settingsJson || {};
+        await prisma_js_1.prisma.institute.update({
+            where: { id },
+            data: {
+                settingsJson: {
+                    ...currentSettings,
+                    initialPassword: temporaryPassword,
+                },
             },
         });
         // Invalidate any existing password reset tokens

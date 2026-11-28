@@ -20,7 +20,9 @@ const prisma_js_1 = require("../../prisma.js");
 const zod_1 = require("zod");
 const crypto_1 = __importDefault(require("crypto"));
 const index_js_1 = require("../../config/index.js");
+const notification_service_js_1 = require("../notifications/notification.service.js");
 const inapp_notification_service_js_1 = require("../notifications/inapp-notification.service.js");
+const cache_js_1 = require("../../utils/cache.js");
 const student_authorization_service_js_1 = require("../students/student-authorization.service.js");
 // Helper: Get local Date (YYYY-MM-DD) in Asia/Kolkata timezone
 function getInstituteLocalDate(date = new Date(), timeZone = 'Asia/Kolkata') {
@@ -246,7 +248,7 @@ async function recordCheckIn(req, res) {
                 batch: { select: { id: true, name: true } },
             },
         });
-        // Queue SMS notification for guardians safely outside transaction
+        // Queue In-App notification & SMS notification for guardians safely outside transaction
         // (Preserves successful attendance record even if telephony provider or template fails)
         let smsNotifications = [];
         try {
@@ -257,6 +259,14 @@ async function recordCheckIn(req, res) {
                 eventType: 'CHECK_IN',
                 eventTime: serverNow,
             });
+            smsNotifications = await notification_service_js_1.NotificationService.queueAttendanceNotification({
+                attendanceEventId: event.id,
+                studentId,
+                instituteId,
+                eventType: 'CHECK_IN',
+                eventTime: serverNow,
+            });
+            cache_js_1.serverCache.invalidate('dashboard:');
         }
         catch (smsErr) {
             console.error('[NotificationService] Non-blocking SMS enqueue warning:', smsErr.message);
@@ -283,8 +293,7 @@ async function recordCheckIn(req, res) {
                 },
                 smsNotification: smsNotifications.length > 0
                     ? {
-                        queued: false,
-                        reason: 'In-app notification sent',
+                        queued: true,
                         count: smsNotifications.length,
                         status: smsNotifications[0].status,
                         recipient: smsNotifications[0].phoneNumber.replace(/(\d{2})\d+(\d{2})/, '$1******$2'),
@@ -655,6 +664,21 @@ async function recordCheckOut(req, res) {
             });
             return createdEvent;
         }, { timeout: 15000, maxWait: 10000 });
+        // Queue SMS notification for guardians safely outside transaction
+        let checkoutSmsNotifications = [];
+        try {
+            checkoutSmsNotifications = await notification_service_js_1.NotificationService.queueAttendanceNotification({
+                attendanceEventId: event.id,
+                studentId,
+                instituteId,
+                eventType: 'CHECK_OUT',
+                eventTime: serverNow,
+            });
+            cache_js_1.serverCache.invalidate('dashboard:');
+        }
+        catch (smsErr) {
+            console.error('[NotificationService] Non-blocking checkout SMS enqueue warning:', smsErr.message);
+        }
         const checkOutTimeFormatted = new Intl.DateTimeFormat('en-IN', {
             timeZone: 'Asia/Kolkata',
             hour: '2-digit',
@@ -674,11 +698,19 @@ async function recordCheckOut(req, res) {
                     photoUrl: student.photoUrl,
                     checkOutTimeFormatted,
                 },
-                smsNotification: {
-                    queued: false,
-                    reason: 'In-app notification sent',
-                    eventType: 'CHECK_OUT',
-                },
+                smsNotification: checkoutSmsNotifications.length > 0
+                    ? {
+                        queued: true,
+                        count: checkoutSmsNotifications.length,
+                        status: checkoutSmsNotifications[0].status,
+                        recipient: checkoutSmsNotifications[0].phoneNumber.replace(/(\d{2})\d+(\d{2})/, '$1******$2'),
+                        eventType: 'CHECK_OUT',
+                    }
+                    : {
+                        queued: false,
+                        reason: 'No linked guardian with SMS permission enabled',
+                        eventType: 'CHECK_OUT',
+                    },
             },
         });
     }
