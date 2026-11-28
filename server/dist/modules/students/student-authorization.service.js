@@ -487,7 +487,23 @@ async function isStaffAssignedToBatch(req, batchId, prismaClient = prisma_js_1.p
         return false;
     }
     const assignments = await getAuthorizedStaffAssignments(req, prismaClient);
-    return assignments.authorizedBatchIds.includes(batchId);
+    if (assignments.authorizedBatchIds.includes(batchId)) {
+        return true;
+    }
+    // Direct fallback check in case of institute filter boundary
+    const userId = req.user?.userId || req.user?.id;
+    if (userId) {
+        const directAssignment = await prismaClient.staffBatchAssignment.findFirst({
+            where: {
+                batchId,
+                staffProfile: { userId },
+            },
+        });
+        if (directAssignment) {
+            return true;
+        }
+    }
+    return false;
 }
 /**
  * Check if a staff member is assigned to a specific subject within a batch

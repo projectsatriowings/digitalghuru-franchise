@@ -168,7 +168,7 @@ async function getBatchDetails(req, res) {
                 return res.status(403).json({ success: false, error: 'Forbidden: You are not assigned to this batch' });
             }
         }
-        const batch = await prisma_js_1.prisma.batch.findFirst({
+        let batch = await prisma_js_1.prisma.batch.findFirst({
             where: { id, instituteId },
             include: {
                 batchSubjects: {
@@ -216,6 +216,56 @@ async function getBatchDetails(req, res) {
                 },
             },
         });
+        if (!batch && req.user?.role === 'STAFF') {
+            batch = await prisma_js_1.prisma.batch.findUnique({
+                where: { id },
+                include: {
+                    batchSubjects: {
+                        include: {
+                            subject: true,
+                            staffProfile: {
+                                include: {
+                                    user: {
+                                        select: { id: true, fullName: true, email: true, phone: true },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                    staffAssignments: {
+                        include: {
+                            staffProfile: {
+                                include: {
+                                    user: {
+                                        select: { id: true, fullName: true, email: true, phone: true },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                    enrollments: {
+                        where: { isActive: true },
+                        include: {
+                            student: {
+                                select: {
+                                    id: true,
+                                    admissionNumber: true,
+                                    firstName: true,
+                                    lastName: true,
+                                    phone: true,
+                                    status: true,
+                                    photoUrl: true,
+                                },
+                            },
+                            subject: {
+                                select: { id: true, name: true, code: true },
+                            },
+                        },
+                        orderBy: { enrolledAt: 'desc' },
+                    },
+                },
+            });
+        }
         if (!batch) {
             return res.status(404).json({ success: false, error: 'Batch not found in this institute' });
         }
@@ -234,14 +284,16 @@ async function getBatchDetails(req, res) {
                 // Staff only sees students enrolled in their assigned subjects
                 filteredBatchSubjects = batch.batchSubjects.filter((bs) => staffSubjectIds.has(bs.subjectId));
                 const authorizedStudentIds = new Set(batch.enrollments
-                    .filter((e) => e.subjectId && staffSubjectIds.has(e.subjectId))
+                    .filter((e) => e.subjectId && staffSubjectIds.has(e.subjectId) && e.student)
                     .map((e) => e.student.id));
-                filteredEnrollments = batch.enrollments.filter((e) => authorizedStudentIds.has(e.student.id));
+                filteredEnrollments = batch.enrollments.filter((e) => e.student && authorizedStudentIds.has(e.student.id));
             }
         }
         // Build consolidated enrolled students map with their allocated subjects
         const enrolledStudentsMap = new Map();
         for (const enr of filteredEnrollments) {
+            if (!enr.student)
+                continue;
             if (!enrolledStudentsMap.has(enr.student.id)) {
                 enrolledStudentsMap.set(enr.student.id, {
                     ...enr.student,
@@ -357,6 +409,7 @@ async function createBatch(req, res) {
                 }).catch((err) => console.warn('[createBatch staff assignment warn]', err.message));
             }
         }
+        cache_js_1.serverCache.invalidate();
         return res.status(201).json({ success: true, message: 'Batch created successfully', data: { batch } });
     }
     catch (err) {
@@ -1111,13 +1164,14 @@ async function assignStaffToBatch(req, res) {
                     include: {
                         staffProfile: {
                             include: {
-                                user: { select: { fullName: true, email: true } },
+                                user: { select: { id: true, fullName: true, email: true, phone: true } },
                             },
                         },
                     },
                 },
             },
         });
+        cache_js_1.serverCache.invalidate();
         return res.json({
             success: true,
             message: 'Staff assigned to batch successfully',
@@ -1148,6 +1202,7 @@ async function removeStaffFromBatch(req, res) {
                 staffProfileId,
             },
         });
+        cache_js_1.serverCache.invalidate();
         return res.json({ success: true, message: 'Staff removed from batch successfully' });
     }
     catch (err) {

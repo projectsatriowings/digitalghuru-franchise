@@ -1911,45 +1911,44 @@ export async function getMyStaffStudents(req: AuthenticatedRequest, res: Respons
     const serverNow = new Date();
     const eventDate = getInstituteLocalDate(serverNow);
 
-    const students = await prisma.student.findMany({
-      where: {
-        instituteId,
-        status: 'ACTIVE',
-        enrollments: {
-          some: {
-            batchId: { in: targetBatchIds },
-            isActive: true,
-          },
+    const studentWhere: any = {
+      instituteId,
+      status: 'ACTIVE',
+      enrollments: {
+        some: {
+          batchId: { in: targetBatchIds },
+          isActive: true,
         },
-        ...(search
-          ? {
-              OR: [
-                { firstName: { contains: search, mode: 'insensitive' } },
-                { lastName: { contains: search, mode: 'insensitive' } },
-                { admissionNumber: { contains: search, mode: 'insensitive' } },
-                { user: { fullName: { contains: search, mode: 'insensitive' } } },
-                ...(search.trim().split(/\s+/).filter(Boolean).length > 1
-                  ? [
-                      {
-                        AND: search
-                          .trim()
-                          .split(/\s+/)
-                          .filter(Boolean)
-                          .map((w: string) => ({
-                            OR: [
-                              { firstName: { contains: w, mode: 'insensitive' } },
-                              { lastName: { contains: w, mode: 'insensitive' } },
-                              { user: { fullName: { contains: w, mode: 'insensitive' } } },
-                              { admissionNumber: { contains: w, mode: 'insensitive' } },
-                            ],
-                          })),
-                      },
-                    ]
-                  : []),
-              ],
-            }
-          : {}),
       },
+    };
+
+    if (search) {
+      const searchWords = search.trim().split(/\s+/).filter(Boolean);
+      const searchConditions: any[] = [
+        { firstName: { contains: search, mode: 'insensitive' } },
+        { lastName: { contains: search, mode: 'insensitive' } },
+        { admissionNumber: { contains: search, mode: 'insensitive' } },
+        { user: { fullName: { contains: search, mode: 'insensitive' } } },
+      ];
+
+      if (searchWords.length > 1) {
+        searchConditions.push({
+          AND: searchWords.map((w: string) => ({
+            OR: [
+              { firstName: { contains: w, mode: 'insensitive' } },
+              { lastName: { contains: w, mode: 'insensitive' } },
+              { user: { fullName: { contains: w, mode: 'insensitive' } } },
+              { admissionNumber: { contains: w, mode: 'insensitive' } },
+            ],
+          })),
+        });
+      }
+
+      studentWhere.OR = searchConditions;
+    }
+
+    const students: any[] = await prisma.student.findMany({
+      where: studentWhere,
       include: {
         enrollments: {
           where: { isActive: true, batchId: { in: targetBatchIds } },
@@ -1985,9 +1984,9 @@ export async function getMyStaffStudents(req: AuthenticatedRequest, res: Respons
       hour12: true,
     });
 
-    const mapped = students.map((s) => {
-      const latestCheckIn = s.attendanceEvents.find((e) => e.eventType === 'CHECK_IN');
-      const latestCheckOut = s.attendanceEvents.find((e) => e.eventType === 'CHECK_OUT');
+    const mapped = students.map((s: any) => {
+      const latestCheckIn = s.attendanceEvents?.find((e: any) => e.eventType === 'CHECK_IN');
+      const latestCheckOut = s.attendanceEvents?.find((e: any) => e.eventType === 'CHECK_OUT');
 
       const isCheckedIn = !!(
         latestCheckIn &&
