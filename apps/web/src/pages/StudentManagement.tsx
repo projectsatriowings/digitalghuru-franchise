@@ -47,7 +47,7 @@ import {
 
 export const StudentManagement: React.FC = () => {
   const { showToast } = useToast();
-  const { user, activeInstitute } = useAuth();
+  const { user, activeInstitute, assignedBranches } = useAuth();
   const [students, setStudents] = useState<Student[]>([]);
   const [batches, setBatches] = useState<Batch[]>([]);
   const [franchiseContext, setFranchiseContext] = useState<{ id: string; name: string; code: string } | null>(null);
@@ -682,7 +682,10 @@ Please keep this login and password safe. Use your registered mobile number and 
   };
 
   // Form State
-  const isConsolidatedView = user?.role === 'FRANCHISE_OWNER' && (!activeInstitute?.id || activeInstitute?.id === 'ALL');
+  const isConsolidatedView =
+    user?.role === 'FRANCHISE_OWNER' &&
+    (!activeInstitute?.id || activeInstitute?.id === 'ALL') &&
+    (assignedBranches?.length || 0) > 1;
   const initialFormData = {
     firstName: '',
     lastName: '',
@@ -751,7 +754,12 @@ Please keep this login and password safe. Use your registered mobile number and 
   // Load batches once per institute context
   const loadBatches = async () => {
     try {
-      const res = await apiFetch('/academics/batches');
+      const effectiveInstId =
+        activeInstitute && activeInstitute.id !== 'ALL'
+          ? activeInstitute.id
+          : assignedBranches?.[0]?.id;
+      const url = effectiveInstId ? `/academics/batches?instituteId=${effectiveInstId}` : '/academics/batches';
+      const res = await apiFetch(url);
       setBatches(res.data?.batches || []);
     } catch (err: any) {
       console.warn('[StudentManagement] Failed to load batches:', err.message);
@@ -818,7 +826,7 @@ Please keep this login and password safe. Use your registered mobile number and 
   useEffect(() => {
     loadBatches();
     loadFranchiseCourses();
-  }, [activeInstitute?.id, user?.role]);
+  }, [activeInstitute?.id, assignedBranches, user?.role]);
 
   useEffect(() => {
     fetchData();
