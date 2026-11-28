@@ -1859,7 +1859,15 @@ Please keep this login and password safe. Use your registered mobile number and 
               </div>
             )}
 
-            <form onSubmit={handleAdmitSubmit} className="space-y-4">
+            <form
+              onSubmit={handleAdmitSubmit}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && (e.target as HTMLElement).tagName === 'INPUT') {
+                  e.preventDefault();
+                }
+              }}
+              className="space-y-4"
+            >
               {/* STEP 1: Student Identity & Photo */}
               {admitStep === 1 && (
                 <div className="space-y-4">
@@ -2486,9 +2494,16 @@ Please keep this login and password safe. Use your registered mobile number and 
                     <div className="relative">
                       <Key className="w-3.5 h-3.5 text-[#94A3B8] absolute left-3.5 top-3" />
                       <input
+                        id="studentInitialPasswordInput"
                         type={showStudentPassword ? 'text' : 'password'}
                         value={formData.studentInitialPassword}
                         onChange={(e) => setFormData({ ...formData, studentInitialPassword: e.target.value })}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            document.getElementById('parentInitialPasswordInput')?.focus();
+                          }
+                        }}
                         placeholder="Leave blank to auto-generate password (min 8 characters)"
                         minLength={8}
                         className={`w-full bg-[#FAF8F5] border rounded-xl pl-9 pr-10 py-2.5 text-xs font-mono text-[#0F172A] focus:outline-none focus:ring-2 transition-colors ${
@@ -2544,9 +2559,15 @@ Please keep this login and password safe. Use your registered mobile number and 
                         <div className="relative">
                           <Key className="w-3.5 h-3.5 text-[#94A3B8] absolute left-3.5 top-3" />
                           <input
+                            id="parentInitialPasswordInput"
                             type={showParentPassword ? 'text' : 'password'}
                             value={formData.parentInitialPassword}
                             onChange={(e) => setFormData({ ...formData, parentInitialPassword: e.target.value })}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                              }
+                            }}
                             placeholder="Leave blank to auto-generate password (min 8 characters)"
                             minLength={8}
                             className={`w-full bg-[#FAF8F5] border rounded-xl pl-9 pr-10 py-2.5 text-xs font-mono text-[#0F172A] focus:outline-none focus:ring-2 transition-colors ${
@@ -2622,10 +2643,10 @@ Please keep this login and password safe. Use your registered mobile number and 
                   <button
                     type="submit"
                     disabled={admitLoading}
-                    className="inline-flex items-center gap-2 px-6 py-2.5 bg-[#006FFF] hover:bg-[#0058D4] text-white text-xs font-semibold rounded-xl shadow-md shadow-[#006FFF]/20 transition-all disabled:opacity-50"
+                    className="inline-flex items-center gap-2 px-6 py-2.5 bg-[#006FFF] hover:bg-[#0058D4] text-white text-xs font-semibold rounded-xl shadow-md shadow-[#006FFF]/20 transition-all disabled:opacity-50 cursor-pointer"
                   >
                     {admitLoading && <Loader2 className="w-4 h-4 animate-spin" />}
-                    <span>Complete Admission</span>
+                    <span>{admitLoading ? 'Completing Admission...' : 'Complete Admission'}</span>
                   </button>
                 )}
               </div>
