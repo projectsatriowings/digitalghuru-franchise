@@ -78,9 +78,20 @@ class SettlementEngineService {
         // 3. Aggregate collections across all branches belonging to this franchise
         const agg = await revenue_engine_service_js_1.revenueEngineService.aggregateFranchiseCollections(franchiseId, startDate, endDate, prisma_js_1.prisma);
         // 4. Resolve applicable franchise percentage
-        const applicableFranchisePercentage = franchise.revenueSharePercentage !== null
+        let applicableFranchisePercentage = franchise.revenueSharePercentage !== null
             ? Number(franchise.revenueSharePercentage)
             : 50.00;
+        // Fallback: If still at default 50%, check if active agreement specified a contracted share
+        const activeAgreement = await prisma_js_1.prisma.franchiseAgreement.findFirst({
+            where: { franchiseId, status: 'ACTIVE' },
+            orderBy: { createdAt: 'desc' },
+        });
+        if (activeAgreement && activeAgreement.partnerRevenuePercentage !== null && activeAgreement.partnerRevenuePercentage !== undefined) {
+            const agrPartnerPct = Number(activeAgreement.partnerRevenuePercentage);
+            if (agrPartnerPct !== 50 && applicableFranchisePercentage === 50) {
+                applicableFranchisePercentage = agrPartnerPct;
+            }
+        }
         const applicableDigitalGuruPercentage = Number((100 - applicableFranchisePercentage).toFixed(2));
         // 5. Calculate payable amounts (in integer paise)
         const netEligibleRupees = agg.netEligibleCollections;
@@ -125,13 +136,21 @@ class SettlementEngineService {
         }
         // Atomic persistence with payment linking
         const settlement = await prisma_js_1.prisma.$transaction(async (tx) => {
-            let record;
-            if (existing) {
-                const totalTransferred = Number(existing.totalTransferredAmount || 0);
+            let record = existing || (await tx.franchiseSettlement.findFirst({
+                where: {
+                    OR: [
+                        { franchiseId, settlementMonth },
+                        { statementNumber },
+                    ],
+                },
+            }));
+            if (record) {
+                const totalTransferred = Number(record.totalTransferredAmount || 0);
                 const remainingPayable = Math.max(0, shares.franchiseShareAmount - totalTransferred);
                 record = await tx.franchiseSettlement.update({
-                    where: { id: existing.id },
+                    where: { id: record.id },
                     data: {
+                        statementNumber,
                         totalCapturedPayments: new client_1.Prisma.Decimal(agg.totalCapturedAmount),
                         totalEligibleCollections: new client_1.Prisma.Decimal(agg.netEligibleCollections),
                         refundDeductions: new client_1.Prisma.Decimal(agg.totalRefundDeductions),
@@ -143,9 +162,9 @@ class SettlementEngineService {
                         transactionCount: agg.paymentCount,
                         transferEligibility,
                         beneficiarySnapshot,
-                        status: (existing.status === client_1.SettlementStatus.DRAFT || existing.status === client_1.SettlementStatus.PENDING_APPROVAL || existing.status === client_1.SettlementStatus.PENDING_REVIEW)
+                        status: (record.status === client_1.SettlementStatus.DRAFT || record.status === client_1.SettlementStatus.PENDING_APPROVAL || record.status === client_1.SettlementStatus.PENDING_REVIEW)
                             ? initialStatus
-                            : existing.status,
+                            : record.status,
                     },
                 });
             }
@@ -195,33 +214,35 @@ class SettlementEngineService {
     /**
      * Batch generate monthly settlements for ALL active franchises for a calendar month
      */
-    async generateAllMonthlySettlements(settlementMonth) {
+    async generateAllMonthlySettlements(settlementMonth, options = {}) {
         const franchises = await prisma_js_1.prisma.franchise.findMany({
             where: { status: 'ACTIVE' },
             select: { id: true, name: true, code: true },
         });
-        const results = [];
-        for (const franchise of franchises) {
+        const results = await Promise.all(franchises.map(async (franchise) => {
             try {
-                const res = await this.generateMonthlyStatement(franchise.id, settlementMonth, { persist: true });
-                results.push({
+                const res = await this.generateMonthlyStatement(franchise.id, settlementMonth, {
+                    persist: true,
+                    autoSubmit: Boolean(options.autoSubmit),
+                });
+                return {
                     franchiseId: franchise.id,
                     code: franchise.code,
                     name: franchise.name,
                     success: true,
                     settlement: res.settlement,
-                });
+                };
             }
             catch (err) {
-                results.push({
+                return {
                     franchiseId: franchise.id,
                     code: franchise.code,
                     name: franchise.name,
                     success: false,
                     error: err.message,
-                });
+                };
             }
-        }
+        }));
         return results;
     }
     /**

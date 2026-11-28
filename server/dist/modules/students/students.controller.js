@@ -33,6 +33,7 @@ const client_1 = require("@prisma/client");
 const security_js_1 = require("../../utils/security.js");
 const admission_number_service_js_1 = require("./admission-number.service.js");
 const timetable_resolver_js_1 = require("./timetable-resolver.js");
+const cache_js_1 = require("../../utils/cache.js");
 function formatStudentResponse(student) {
     if (!student)
         return student;
@@ -1125,6 +1126,14 @@ async function getMyStudentDashboard(req, res) {
         if (!req.user || req.user.role !== 'STUDENT') {
             return res.status(403).json({ success: false, error: 'Only student accounts can access this dashboard' });
         }
+        const cacheKey = `student:dashboard:${req.user.userId}`;
+        const isRefresh = req.query.refresh === 'true';
+        if (!isRefresh) {
+            const cached = cache_js_1.serverCache.get(cacheKey);
+            if (cached) {
+                return res.json(cached);
+            }
+        }
         const student = await prisma_js_1.prisma.student.findFirst({
             where: { userId: req.user.userId },
             include: {
@@ -1285,7 +1294,7 @@ async function getMyStudentDashboard(req, res) {
         });
         // Resolve today's timetable
         const timetable = (0, timetable_resolver_js_1.resolveStructuredTimetable)(activeBatch);
-        return res.json({
+        const responsePayload = {
             success: true,
             data: {
                 student: {
@@ -1349,7 +1358,9 @@ async function getMyStudentDashboard(req, res) {
                     recent: recentNotifs,
                 },
             },
-        });
+        };
+        cache_js_1.serverCache.set(cacheKey, responsePayload, 20000);
+        return res.json(responsePayload);
     }
     catch (err) {
         console.error('[Student Dashboard Error]', err);

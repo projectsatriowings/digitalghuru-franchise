@@ -276,6 +276,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </button>
 
             <button
+              onClick={() => onSelectTab('academics')}
+              className={navItemClass('academics')}
+            >
+              <Layers className="w-4 h-4" /> Batches & Subjects
+            </button>
+
+            <button
               onClick={() => onSelectTab('academic_dashboard')}
               className={navItemClass('academic_dashboard')}
             >

@@ -173,13 +173,22 @@ export class SettlementEngineService {
 
     // Atomic persistence with payment linking
     const settlement = await prisma.$transaction(async (tx) => {
-      let record;
-      if (existing) {
-        const totalTransferred = Number(existing.totalTransferredAmount || 0);
+      let record = existing || (await tx.franchiseSettlement.findFirst({
+        where: {
+          OR: [
+            { franchiseId, settlementMonth },
+            { statementNumber },
+          ],
+        },
+      }));
+
+      if (record) {
+        const totalTransferred = Number(record.totalTransferredAmount || 0);
         const remainingPayable = Math.max(0, shares.franchiseShareAmount - totalTransferred);
         record = await tx.franchiseSettlement.update({
-          where: { id: existing.id },
+          where: { id: record.id },
           data: {
+            statementNumber,
             totalCapturedPayments: new Prisma.Decimal(agg.totalCapturedAmount),
             totalEligibleCollections: new Prisma.Decimal(agg.netEligibleCollections),
             refundDeductions: new Prisma.Decimal(agg.totalRefundDeductions),
@@ -191,9 +200,9 @@ export class SettlementEngineService {
             transactionCount: agg.paymentCount,
             transferEligibility,
             beneficiarySnapshot,
-            status: (existing.status === SettlementStatus.DRAFT || existing.status === SettlementStatus.PENDING_APPROVAL || existing.status === SettlementStatus.PENDING_REVIEW)
+            status: (record.status === SettlementStatus.DRAFT || record.status === SettlementStatus.PENDING_APPROVAL || record.status === SettlementStatus.PENDING_REVIEW)
               ? initialStatus
-              : existing.status,
+              : record.status,
           },
         });
       } else {
@@ -246,33 +255,40 @@ export class SettlementEngineService {
   /**
    * Batch generate monthly settlements for ALL active franchises for a calendar month
    */
-  public async generateAllMonthlySettlements(settlementMonth: string) {
+  public async generateAllMonthlySettlements(
+    settlementMonth: string,
+    options: { autoSubmit?: boolean } = {}
+  ) {
     const franchises = await prisma.franchise.findMany({
       where: { status: 'ACTIVE' },
       select: { id: true, name: true, code: true },
     });
 
-    const results: any[] = [];
-    for (const franchise of franchises) {
-      try {
-        const res = await this.generateMonthlyStatement(franchise.id, settlementMonth, { persist: true });
-        results.push({
-          franchiseId: franchise.id,
-          code: franchise.code,
-          name: franchise.name,
-          success: true,
-          settlement: res.settlement,
-        });
-      } catch (err: any) {
-        results.push({
-          franchiseId: franchise.id,
-          code: franchise.code,
-          name: franchise.name,
-          success: false,
-          error: err.message,
-        });
-      }
-    }
+    const results = await Promise.all(
+      franchises.map(async (franchise) => {
+        try {
+          const res = await this.generateMonthlyStatement(franchise.id, settlementMonth, {
+            persist: true,
+            autoSubmit: Boolean(options.autoSubmit),
+          });
+          return {
+            franchiseId: franchise.id,
+            code: franchise.code,
+            name: franchise.name,
+            success: true,
+            settlement: res.settlement,
+          };
+        } catch (err: any) {
+          return {
+            franchiseId: franchise.id,
+            code: franchise.code,
+            name: franchise.name,
+            success: false,
+            error: err.message,
+          };
+        }
+      })
+    );
 
     return results;
   }

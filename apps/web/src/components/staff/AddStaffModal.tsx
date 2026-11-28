@@ -301,7 +301,9 @@ export const AddStaffModal: React.FC<AddStaffModalProps> = ({
         phone: phone.trim() || null,
         employeeCode: employeeCode.trim() || null,
         designation: designation.trim(),
-        temporaryPassword: password,
+        password: password.trim(),
+        initialPassword: password.trim(),
+        temporaryPassword: password.trim(),
         avatarUrl: uploadedPhotoKey,
 
         // Personal Details
@@ -380,10 +382,15 @@ export const AddStaffModal: React.FC<AddStaffModalProps> = ({
           }
         }
 
+        const resolvedPassword =
+          res.data?.permanentPassword ||
+          res.data?.temporaryPassword ||
+          password;
+
         onSuccess(createdStaff, {
           fullName: createdStaff.user.fullName,
           email: createdStaff.user.email || loginEmail,
-          permanentPassword: password,
+          permanentPassword: resolvedPassword,
           employeeCode: createdStaff.employeeCode || employeeCode,
           instituteCode: activeInstituteCode,
         });

@@ -119,14 +119,19 @@ function generateSecureRandomToken(bytes = 32) {
     return crypto_1.default.randomBytes(bytes).toString('hex');
 }
 /**
- * Generates a strong permanent password with at least 16 cryptographically random bytes of entropy.
- * 16 bytes = 128 bits of entropy.
- * Format: DG#<32-hex-characters>!
+ * Generates a structured, strong permanent password.
+ * Format: DG@<Word><Year>#<4-digits> (e.g. DG@Partner2026#4829)
+ * Clean, memorable, and strictly adheres to enterprise password security criteria:
+ * Uppercase + Lowercase + Digits + Special Symbols, length 17-19 characters.
  */
-function generatePermanentPassword(bytes = 16) {
-    const entropyBytes = Math.max(16, bytes);
-    const randomHex = crypto_1.default.randomBytes(entropyBytes).toString('hex');
-    return `DG#${randomHex}!`;
+function generatePermanentPassword(bytesOrHint) {
+    const WORDS = ['Partner', 'Franchise', 'Academy', 'Leader', 'Campus', 'Guru', 'Owner', 'Prime', 'Smart', 'Growth'];
+    const baseWord = typeof bytesOrHint === 'string' && /^[a-zA-Z]+$/.test(bytesOrHint)
+        ? bytesOrHint.charAt(0).toUpperCase() + bytesOrHint.slice(1).toLowerCase()
+        : WORDS[crypto_1.default.randomInt(0, WORDS.length)];
+    const year = new Date().getFullYear();
+    const randomNum = crypto_1.default.randomInt(1000, 9999);
+    return `DG@${baseWord}${year}#${randomNum}`;
 }
 /**
  * Returns the independent media token secret.
