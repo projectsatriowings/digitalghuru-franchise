@@ -673,14 +673,6 @@ export const FranchiseManagement: React.FC = () => {
       showToast(`Revenue share total must equal 100% (currently ${total}%)`, 'error');
       return false;
     }
-    if (createForm.initialAgreement.calculationMethod === 'FIXED_ANNUAL' && !Number(createForm.initialAgreement.annualRoyaltyAmount)) {
-      showToast('Please specify the agreed Annual Commercial Fee', 'error');
-      return false;
-    }
-    if (createForm.initialAgreement.calculationMethod === 'PER_STUDENT' && !Number(createForm.initialAgreement.perStudentFee)) {
-      showToast('Please specify the fee per active student', 'error');
-      return false;
-    }
     return true;
   };
 
@@ -891,12 +883,38 @@ export const FranchiseManagement: React.FC = () => {
     isRevenueSplitValid()
   );
 
+  const formatDirectExpensesForParty = (party: 'DIGITAL_GURU' | 'PARTNER', fallback: string) => {
+    const labels: Record<string, string> = {
+      rent: 'Building Rent',
+      trainerSalaries: 'Certified Trainers',
+      staffSalaries: 'Staff Salaries',
+      operationalSetup: 'Operational Setup',
+      utilities: 'Utilities',
+      utilitiesMaintenance: 'Utilities',
+      marketing: 'Initial Marketing',
+      marketingAdvertising: 'Initial Marketing',
+      other: 'Other Operations',
+    };
+    const items = Object.entries(createForm.initialAgreement.expenseResponsibilities || {})
+      .filter(([, v]) => v === party || (typeof v === 'object' && (v as any)?.payer === party))
+      .map(([k]) => labels[k] || k);
+    return items.length > 0 ? items.join(', ') : fallback;
+  };
+
+  const renderCalculationBasisOptions = (legacyCurrentValue?: string) => (
+    <>
+      <option value="GROSS_COURSE_FEES">Gross Course Fees Collected</option>
+      <option value="NET_COURSE_REVENUE">Net Course Revenue (After Refunds/Adjustments)</option>
+      {legacyCurrentValue === 'PROFIT_AFTER_EXPENSES' && (
+        <option value="PROFIT_AFTER_EXPENSES">Profit After Deductible Operating Expenses</option>
+      )}
+    </>
+  );
+
   const isFinancialsStepComplete = Boolean(
     isModelStepComplete &&
     completedSteps.has('financials') &&
-    isRevenueSplitValid() &&
-    (createForm.initialAgreement.calculationMethod !== 'FIXED_ANNUAL' || Number(createForm.initialAgreement.annualRoyaltyAmount) > 0) &&
-    (createForm.initialAgreement.calculationMethod !== 'PER_STUDENT' || Number(createForm.initialAgreement.perStudentFee) > 0)
+    isRevenueSplitValid()
   );
 
   const navigateToCreateTab = (targetTab: 'profile' | 'model' | 'financials' | 'review') => {
@@ -3279,142 +3297,26 @@ export const FranchiseManagement: React.FC = () => {
                     <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
                       {renderRevenueShareInputs()}
 
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        <div>
-                          <label className="block text-xs font-medium text-slate-700">Commercial Model *</label>
-                          <select
-                            value={createForm.initialAgreement.calculationMethod}
-                            onChange={(e: any) =>
-                              setCreateForm({
-                                ...createForm,
-                                initialAgreement: {
-                                  ...createForm.initialAgreement,
-                                  calculationMethod: e.target.value,
-                                },
-                              })
-                            }
-                            className="mt-1 w-full px-3 py-1.5 border rounded-lg text-sm font-medium"
-                          >
-                            <option value="PERCENTAGE_REVENUE">Percentage of Revenue Collections</option>
-                            <option value="FIXED_ANNUAL">Fixed Annual Commercial Fee</option>
-                            <option value="PER_STUDENT">Per Enrolled Student Fee</option>
-                          </select>
-                        </div>
-
-                        <div>
-                          <label className="block text-xs font-medium text-slate-700">Revenue Calculation Basis *</label>
-                          <select
-                            value={createForm.initialAgreement.revenueCalculationBasis}
-                            onChange={(e: any) =>
-                              setCreateForm({
-                                ...createForm,
-                                initialAgreement: {
-                                  ...createForm.initialAgreement,
-                                  revenueCalculationBasis: e.target.value,
-                                },
-                              })
-                            }
-                            className="mt-1 w-full px-3 py-1.5 border rounded-lg text-sm font-medium"
-                          >
-                            <option value="GROSS_COURSE_FEES">Gross Course Fees Collected</option>
-                            <option value="NET_COURSE_REVENUE">Net Course Revenue (After Refunds/Adjustments)</option>
-                            <option value="PROFIT_AFTER_EXPENSES">Profit After Deductible Operating Expenses</option>
-                          </select>
-                        </div>
-
-                        {createForm.initialAgreement.calculationMethod === 'FIXED_ANNUAL' && (
-                          <div className="md:col-span-2">
-                            <label className="block text-xs font-medium text-slate-700">
-                              Annual Agreed Commercial Fee (₹) *
-                              <span className="text-[10px] text-slate-500 font-normal ml-1">
-                                (Generates 2 equal H1/H2 installments of ₹{Math.round(Number(createForm.initialAgreement.annualRoyaltyAmount || 0) / 2).toLocaleString('en-IN')} each when Yearly settlement is active)
-                              </span>
-                            </label>
-                            <input
-                              type="number"
-                              min="0"
-                              required
-                              value={createForm.initialAgreement.annualRoyaltyAmount || ''}
-                              onChange={(e) =>
-                                setCreateForm({
-                                  ...createForm,
-                                  initialAgreement: {
-                                    ...createForm.initialAgreement,
-                                    annualRoyaltyAmount: Number(e.target.value),
-                                  },
-                                })
-                              }
-                              className="mt-1 w-full px-3 py-1.5 border rounded-lg text-sm font-semibold text-slate-900 bg-white"
-                              placeholder="e.g. 200000"
-                            />
-                          </div>
-                        )}
-
-                        {createForm.initialAgreement.calculationMethod === 'PER_STUDENT' && (
-                          <div className="md:col-span-2">
-                            <label className="block text-xs font-medium text-slate-700">
-                              Fee Per Active Enrolled Student (₹) *
-                            </label>
-                            <input
-                              type="number"
-                              min="0"
-                              required
-                              value={createForm.initialAgreement.perStudentFee || ''}
-                              onChange={(e) =>
-                                setCreateForm({
-                                  ...createForm,
-                                  initialAgreement: {
-                                    ...createForm.initialAgreement,
-                                    perStudentFee: Number(e.target.value),
-                                  },
-                                })
-                              }
-                              className="mt-1 w-full px-3 py-1.5 border rounded-lg text-sm font-semibold text-slate-900 bg-white"
-                              placeholder="e.g. 2000"
-                            />
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Operational Expense Responsibilities */}
-                    <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
-                      <div className="text-xs font-bold text-slate-800">Operational Expense Responsibilities</div>
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                        {[
-                          { key: 'rent', label: 'Centre Rent' },
-                          { key: 'trainerSalaries', label: 'Trainer Salaries' },
-                          { key: 'staffSalaries', label: 'Staff Salaries' },
-                          { key: 'operationalSetup', label: 'Operational Setup' },
-                          { key: 'utilities', label: 'Utilities (Electricity/Net)' },
-                          { key: 'marketing', label: 'Marketing Campaigns' },
-                          { key: 'other', label: 'Other Sundry Expenses' },
-                        ].map(({ key, label }) => (
-                          <div key={key}>
-                            <label className="block text-[11px] font-medium text-slate-600">{label}</label>
-                            <select
-                              value={createForm.initialAgreement.expenseResponsibilities[key] || 'PARTNER'}
-                              onChange={(e) =>
-                                setCreateForm({
-                                  ...createForm,
-                                  initialAgreement: {
-                                    ...createForm.initialAgreement,
-                                    expenseResponsibilities: {
-                                      ...createForm.initialAgreement.expenseResponsibilities,
-                                      [key]: e.target.value,
-                                    },
-                                  },
-                                })
-                              }
-                              className="mt-0.5 w-full px-2 py-1 border rounded text-xs bg-white"
-                            >
-                              <option value="PARTNER">Partner</option>
-                              <option value="DIGITAL_GURU">Digital Ghuru</option>
-                              <option value="SHARED">Shared (50:50)</option>
-                              <option value="CUSTOM">Custom</option>
-                            </select>
-                          </div>
-                        ))}
+                      <div>
+                        <label className="block text-xs font-medium text-slate-700">Revenue Calculation Basis *</label>
+                        <select
+                          value={createForm.initialAgreement.revenueCalculationBasis}
+                          onChange={(e: any) =>
+                            setCreateForm({
+                              ...createForm,
+                              initialAgreement: {
+                                ...createForm.initialAgreement,
+                                revenueCalculationBasis: e.target.value,
+                              },
+                            })
+                          }
+                          className="mt-1 w-full px-3 py-1.5 border rounded-lg text-sm font-medium bg-white"
+                        >
+                          {renderCalculationBasisOptions()}
+                        </select>
+                        <p className="text-[11px] text-slate-500 mt-1">
+                          Choose whether the percentage split applies to total collected fees (Gross) or fees remaining after student refunds (Net).
+                        </p>
                       </div>
                     </div>
 
@@ -3516,7 +3418,10 @@ export const FranchiseManagement: React.FC = () => {
                           <span className="font-bold text-xs uppercase tracking-wider text-[#FEDC32]">Commercial Agreement Summary (Pre-Submission Review)</span>
                         </div>
                         <span className="text-[10px] px-2 py-0.5 rounded bg-blue-900 text-blue-200 font-mono font-semibold">
-                          {createForm.initialAgreement.settlementFrequency} • {createForm.initialAgreement.revenueCalculationBasis}
+                          {createForm.initialAgreement.settlementFrequency} •{' '}
+                          {createForm.initialAgreement.revenueCalculationBasis === 'NET_COURSE_REVENUE'
+                            ? 'Net Course Revenue'
+                            : 'Gross Course Fees'}
                         </span>
                       </div>
 
@@ -3535,10 +3440,7 @@ export const FranchiseManagement: React.FC = () => {
                             <div>
                               <span className="text-slate-400">Direct Expenses Paid:</span>{' '}
                               <span className="text-amber-200">
-                                {Object.entries(createForm.initialAgreement.expenseResponsibilities || {})
-                                  .filter(([_, v]) => v === 'DIGITAL_GURU' || (typeof v === 'object' && (v as any)?.payer === 'DIGITAL_GURU'))
-                                  .map(([k]) => k === 'trainerSalaries' ? 'Certified Trainers' : k === 'marketing' ? 'Initial Marketing' : k)
-                                  .join(', ') || 'Direct Trainer Salaries & Marketing'}
+                                {formatDirectExpensesForParty('DIGITAL_GURU', 'Direct Trainer Salaries & Marketing')}
                               </span>
                             </div>
                             <div>
@@ -3564,10 +3466,7 @@ export const FranchiseManagement: React.FC = () => {
                             <div>
                               <span className="text-slate-400">Direct Expenses Paid:</span>{' '}
                               <span className="text-sky-200">
-                                {Object.entries(createForm.initialAgreement.expenseResponsibilities || {})
-                                  .filter(([_, v]) => v === 'PARTNER' || (typeof v === 'object' && (v as any)?.payer === 'PARTNER'))
-                                  .map(([k]) => k === 'rent' ? 'Building Rent' : k === 'staffSalaries' ? 'Staff Salaries' : k === 'utilities' ? 'Utilities' : k)
-                                  .join(', ') || 'Building Rent & Centre Operations'}
+                                {formatDirectExpensesForParty('PARTNER', 'Building Rent & Centre Operations')}
                               </span>
                             </div>
                             <div>
@@ -3581,7 +3480,7 @@ export const FranchiseManagement: React.FC = () => {
                       <div className="p-2.5 bg-blue-950/70 border border-blue-800 rounded-lg text-[11px] text-blue-200 flex items-start gap-2">
                         <Info className="w-4 h-4 text-blue-400 mt-0.5 flex-shrink-0" />
                         <span>
-                          <strong>DIRECT EXPENSE RULE:</strong> Direct expenses (such as Rent paid by Partner or Trainer Salaries paid by Digital Ghuru) are borne directly by each party and are <strong>NEVER</strong> automatically deducted from gross revenue collections. Deductions occur only when calculation basis is set to <em>Profit After Expenses</em> with approved deductible receipts.
+                          <strong>DIRECT EXPENSE RULE:</strong> Direct expenses (such as Rent paid by Partner or Trainer Salaries paid by Digital Ghuru) are borne directly by each party and are <strong>NEVER</strong> automatically deducted from course fee collections.
                         </span>
                       </div>
                     </div>
@@ -4839,29 +4738,29 @@ export const FranchiseManagement: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {reviseForm.calculationMethod !== 'PERCENTAGE_REVENUE' && (
+                    <div className="md:col-span-2">
+                      <label className="block text-xs font-medium text-slate-700">Commercial Model *</label>
+                      <select
+                        value={reviseForm.calculationMethod}
+                        onChange={(e: any) => setReviseForm({ ...reviseForm, calculationMethod: e.target.value })}
+                        className="mt-1 w-full px-3 py-1.5 border rounded-lg text-sm font-medium bg-white"
+                      >
+                        <option value="PERCENTAGE_REVENUE">Percentage of Revenue Collections</option>
+                        <option value="FIXED_ANNUAL">Fixed Annual Commercial Fee</option>
+                        <option value="PER_STUDENT">Per Enrolled Student Fee</option>
+                      </select>
+                    </div>
+                  )}
                   <div>
-                    <label className="block text-xs font-medium text-slate-700">Commercial Model *</label>
-                    <select
-                      value={reviseForm.calculationMethod}
-                      onChange={(e: any) => setReviseForm({ ...reviseForm, calculationMethod: e.target.value })}
-                      className="mt-1 w-full px-3 py-1.5 border rounded-lg text-sm font-medium"
-                    >
-                      <option value="PERCENTAGE_REVENUE">Percentage of Revenue Collections</option>
-                      <option value="FIXED_ANNUAL">Fixed Annual Commercial Fee</option>
-                      <option value="PER_STUDENT">Per Enrolled Student Fee</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-slate-700">Calculation Basis *</label>
+                    <label className="block text-xs font-medium text-slate-700">Revenue Calculation Basis *</label>
                     <select
                       value={reviseForm.revenueCalculationBasis}
                       onChange={(e: any) => setReviseForm({ ...reviseForm, revenueCalculationBasis: e.target.value })}
-                      className="mt-1 w-full px-3 py-1.5 border rounded-lg text-sm font-medium"
+                      className="mt-1 w-full px-3 py-1.5 border rounded-lg text-sm font-medium bg-white"
                     >
-                      <option value="GROSS_COURSE_FEES">Gross Course Fees Collected</option>
-                      <option value="NET_COURSE_REVENUE">Net Course Revenue</option>
-                      <option value="PROFIT_AFTER_EXPENSES">Profit After Deductible Expenses</option>
+                      {renderCalculationBasisOptions(reviseForm.revenueCalculationBasis)}
                     </select>
                   </div>
                   <div>
@@ -4869,7 +4768,7 @@ export const FranchiseManagement: React.FC = () => {
                     <select
                       value={reviseForm.settlementFrequency}
                       onChange={(e: any) => setReviseForm({ ...reviseForm, settlementFrequency: e.target.value })}
-                      className="mt-1 w-full px-3 py-1.5 border rounded-lg text-sm font-medium"
+                      className="mt-1 w-full px-3 py-1.5 border rounded-lg text-sm font-medium bg-white"
                     >
                       <option value="MONTHLY">Monthly</option>
                       <option value="YEARLY">Yearly (2 Equal Installments)</option>
@@ -4877,7 +4776,7 @@ export const FranchiseManagement: React.FC = () => {
                   </div>
 
                   {reviseForm.calculationMethod === 'FIXED_ANNUAL' && (
-                    <div className="md:col-span-3">
+                    <div className="md:col-span-2">
                       <label className="block text-xs font-medium text-slate-700">
                         Annual Commercial Fee (₹) *
                         <span className="text-[10px] text-slate-500 font-normal ml-1">
@@ -4897,7 +4796,7 @@ export const FranchiseManagement: React.FC = () => {
                   )}
 
                   {reviseForm.calculationMethod === 'PER_STUDENT' && (
-                    <div className="md:col-span-3">
+                    <div className="md:col-span-2">
                       <label className="block text-xs font-medium text-slate-700">
                         Fee Per Active Enrolled Student (₹) *
                       </label>
@@ -5090,28 +4989,9 @@ export const FranchiseManagement: React.FC = () => {
                   onChange={(e) => setCalculateForm({ ...calculateForm, revenueCalculationBasis: e.target.value })}
                   className="w-full px-3 py-2 border rounded-lg text-sm bg-white"
                 >
-                  <option value="GROSS_COURSE_FEES">Gross Course Fees Collected</option>
-                  <option value="NET_COURSE_REVENUE">Net Course Revenue (After Refunds/Adjustments)</option>
-                  <option value="PROFIT_AFTER_EXPENSES">Profit After Deductible Expenses</option>
+                  {renderCalculationBasisOptions()}
                 </select>
               </div>
-
-              {calculateForm.revenueCalculationBasis === 'PROFIT_AFTER_EXPENSES' && (
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Approved Deductible Expenses (₹)</label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={calculateForm.deductibleExpenses}
-                    onChange={(e) => setCalculateForm({ ...calculateForm, deductibleExpenses: Number(e.target.value) })}
-                    className="w-full px-3 py-1.5 border rounded-lg text-sm"
-                    placeholder="e.g. 25000"
-                  />
-                  <div className="text-[11px] text-amber-700 mt-1">
-                    Note: Direct payer commitments (rent paid by partner, trainers paid by DG) are NOT deductible from gross collections unless contractually shared.
-                  </div>
-                </div>
-              )}
 
               {calculateForm.revenueCalculationBasis === 'NET_COURSE_REVENUE' && (
                 <div>
