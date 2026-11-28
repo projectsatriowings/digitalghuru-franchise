@@ -950,7 +950,7 @@ export const FranchiseOwnerDashboard: React.FC = () => {
               </div>
 
               {/* Revenue & Settlement Terms */}
-              <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 grid grid-cols-2 md:grid-cols-3 gap-4">
+              <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <div className="text-slate-400 font-semibold uppercase">Revenue Split:</div>
                   <div className="font-bold text-slate-900 mt-0.5">
@@ -961,14 +961,6 @@ export const FranchiseOwnerDashboard: React.FC = () => {
                   <div className="text-slate-400 font-semibold uppercase">Settlement Frequency:</div>
                   <div className="font-bold text-indigo-600 mt-0.5">
                     {activeAgreement.settlementFrequency || 'YEARLY'}
-                  </div>
-                </div>
-                <div>
-                  <div className="text-slate-400 font-semibold uppercase">Course Software Access:</div>
-                  <div className="mt-0.5">
-                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${activeAgreement.courseSoftwareAccessEnabled !== false ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}`}>
-                      {activeAgreement.courseSoftwareAccessEnabled !== false ? 'Licensed / Enabled' : 'Disabled'}
-                    </span>
                   </div>
                 </div>
               </div>

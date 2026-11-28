@@ -1325,7 +1325,7 @@ export const FranchiseManagement: React.FC = () => {
           marketingBudget: Number(reviseForm.marketingBudget || 0),
           marketingEffectiveStartDate: reviseForm.marketingEffectiveStartDate || undefined,
           marketingNotes: reviseForm.marketingNotes,
-          courseSoftwareAccessEnabled: Boolean(reviseForm.courseSoftwareAccessEnabled),
+          courseSoftwareAccessEnabled: true,
           courseSoftwarePricingNotes: reviseForm.courseSoftwarePricingNotes,
           terms: reviseForm.terms,
           notes: reviseForm.notes,
@@ -3320,86 +3320,48 @@ export const FranchiseManagement: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* Marketing & Course Software Access */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
-                        <div className="text-xs font-bold text-slate-800">Marketing Support</div>
-                        <div className="grid grid-cols-2 gap-2">
-                          <div>
-                            <label className="block text-[11px] font-medium text-slate-600">Responsible Party</label>
-                            <select
-                              value={createForm.initialAgreement.marketingResponsibleParty}
-                              onChange={(e) =>
-                                setCreateForm({
-                                  ...createForm,
-                                  initialAgreement: {
-                                    ...createForm.initialAgreement,
-                                    marketingResponsibleParty: e.target.value,
-                                  },
-                                })
-                              }
-                              className="mt-0.5 w-full px-2 py-1 border rounded text-xs bg-white"
-                            >
-                              <option value="DIGITAL_GURU">Digital Ghuru</option>
-                              <option value="PARTNER">Partner</option>
-                              <option value="SHARED">Shared</option>
-                            </select>
-                          </div>
-                          <div>
-                            <label className="block text-[11px] font-medium text-slate-600">Duration (Months)</label>
-                            <input
-                              type="number"
-                              min="0"
-                              value={createForm.initialAgreement.marketingSupportDurationMonths}
-                              onChange={(e) =>
-                                setCreateForm({
-                                  ...createForm,
-                                  initialAgreement: {
-                                    ...createForm.initialAgreement,
-                                    marketingSupportDurationMonths: Number(e.target.value),
-                                  },
-                                })
-                              }
-                              className="mt-0.5 w-full px-2 py-1 border rounded text-xs"
-                            />
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
-                        <div className="text-xs font-bold text-slate-800">Course Software Access</div>
-                        <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer pt-1">
-                          <input
-                            type="checkbox"
-                            checked={createForm.initialAgreement.courseSoftwareAccessEnabled}
+                    {/* Marketing Support */}
+                    <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                      <div className="text-xs font-bold text-slate-800">Marketing Support</div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[11px] font-medium text-slate-600">Responsible Party</label>
+                          <select
+                            value={createForm.initialAgreement.marketingResponsibleParty}
                             onChange={(e) =>
                               setCreateForm({
                                 ...createForm,
                                 initialAgreement: {
                                   ...createForm.initialAgreement,
-                                  courseSoftwareAccessEnabled: e.target.checked,
+                                  marketingResponsibleParty: e.target.value,
                                 },
                               })
                             }
-                            className="rounded text-[#006FFF] focus:ring-[#006FFF] w-4 h-4"
+                            className="mt-0.5 w-full px-2.5 py-1.5 border rounded-lg text-xs bg-white"
+                          >
+                            <option value="DIGITAL_GURU">Digital Ghuru</option>
+                            <option value="PARTNER">Partner</option>
+                            <option value="SHARED">Shared</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-medium text-slate-600">Duration (Months)</label>
+                          <input
+                            type="number"
+                            min="0"
+                            value={createForm.initialAgreement.marketingSupportDurationMonths}
+                            onChange={(e) =>
+                              setCreateForm({
+                                ...createForm,
+                                initialAgreement: {
+                                  ...createForm.initialAgreement,
+                                  marketingSupportDurationMonths: Number(e.target.value),
+                                },
+                              })
+                            }
+                            className="mt-0.5 w-full px-2.5 py-1.5 border rounded-lg text-xs bg-white"
                           />
-                          <span className="font-semibold">Course Software Access Enabled</span>
-                        </label>
-                        <input
-                          type="text"
-                          placeholder="Software pricing notes / terms"
-                          value={createForm.initialAgreement.courseSoftwarePricingNotes}
-                          onChange={(e) =>
-                            setCreateForm({
-                              ...createForm,
-                              initialAgreement: {
-                                ...createForm.initialAgreement,
-                                courseSoftwarePricingNotes: e.target.value,
-                              },
-                            })
-                          }
-                          className="mt-1 w-full px-2 py-1 border rounded text-xs"
-                        />
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -3446,7 +3408,7 @@ export const FranchiseManagement: React.FC = () => {
                             <div>
                               <span className="text-slate-400">Support Responsibilities:</span>{' '}
                               <span className="text-white">
-                                {createForm.initialAgreement.marketingSupportDurationMonths || 0} Mos Marketing Support (₹{Number(createForm.initialAgreement.marketingBudget || 0).toLocaleString('en-IN')}), Certified Course Trainers, Software Access ({createForm.initialAgreement.courseSoftwareAccessEnabled ? 'Enabled' : 'Disabled'})
+                                {createForm.initialAgreement.marketingSupportDurationMonths || 0} Mos Marketing Support (₹{Number(createForm.initialAgreement.marketingBudget || 0).toLocaleString('en-IN')}), Certified Course Trainers
                               </span>
                             </div>
                           </div>
@@ -4814,54 +4776,32 @@ export const FranchiseManagement: React.FC = () => {
                 </div>
               </div>
 
-              {/* Marketing & Software Entitlement */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
-                  <div className="text-xs font-bold text-slate-800">Marketing Support</div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="block text-[11px] font-medium text-slate-600">Responsible</label>
-                      <select
-                        value={reviseForm.marketingResponsibleParty}
-                        onChange={(e) => setReviseForm({ ...reviseForm, marketingResponsibleParty: e.target.value })}
-                        className="mt-0.5 w-full px-2 py-1 border rounded text-xs bg-white"
-                      >
-                        <option value="DIGITAL_GURU">Digital Ghuru</option>
-                        <option value="PARTNER">Partner</option>
-                        <option value="SHARED">Shared</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-[11px] font-medium text-slate-600">Months</label>
-                      <input
-                        type="number"
-                        min="0"
-                        value={reviseForm.marketingSupportDurationMonths}
-                        onChange={(e) => setReviseForm({ ...reviseForm, marketingSupportDurationMonths: Number(e.target.value) })}
-                        className="mt-0.5 w-full px-2 py-1 border rounded text-xs"
-                      />
-                    </div>
+              {/* Marketing Support */}
+              <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                <div className="text-xs font-bold text-slate-800">Marketing Support</div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-medium text-slate-600">Responsible</label>
+                    <select
+                      value={reviseForm.marketingResponsibleParty}
+                      onChange={(e) => setReviseForm({ ...reviseForm, marketingResponsibleParty: e.target.value })}
+                      className="mt-0.5 w-full px-2.5 py-1.5 border rounded-lg text-xs bg-white"
+                    >
+                      <option value="DIGITAL_GURU">Digital Ghuru</option>
+                      <option value="PARTNER">Partner</option>
+                      <option value="SHARED">Shared</option>
+                    </select>
                   </div>
-                </div>
-
-                <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
-                  <div className="text-xs font-bold text-slate-800">Course Software Access</div>
-                  <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer pt-1">
+                  <div>
+                    <label className="block text-[11px] font-medium text-slate-600">Months</label>
                     <input
-                      type="checkbox"
-                      checked={reviseForm.courseSoftwareAccessEnabled}
-                      onChange={(e) => setReviseForm({ ...reviseForm, courseSoftwareAccessEnabled: e.target.checked })}
-                      className="rounded text-[#006FFF] w-4 h-4"
+                      type="number"
+                      min="0"
+                      value={reviseForm.marketingSupportDurationMonths}
+                      onChange={(e) => setReviseForm({ ...reviseForm, marketingSupportDurationMonths: Number(e.target.value) })}
+                      className="mt-0.5 w-full px-2.5 py-1.5 border rounded-lg text-xs bg-white"
                     />
-                    <span className="font-semibold">Software Access Enabled</span>
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Pricing notes"
-                    value={reviseForm.courseSoftwarePricingNotes}
-                    onChange={(e) => setReviseForm({ ...reviseForm, courseSoftwarePricingNotes: e.target.value })}
-                    className="mt-1 w-full px-2 py-1 border rounded text-xs"
-                  />
+                  </div>
                 </div>
               </div>
 
@@ -4870,7 +4810,10 @@ export const FranchiseManagement: React.FC = () => {
                 <div className="flex items-center justify-between border-b border-slate-800 pb-2">
                   <span className="font-bold text-xs uppercase tracking-wider text-[#FEDC32]">Revision Commercial Summary (v{(selectedAgreementForRevise.version || 1) + 1})</span>
                   <span className="text-[10px] px-2 py-0.5 rounded bg-blue-900 text-blue-200 font-mono font-semibold">
-                    {reviseForm.settlementFrequency} • {reviseForm.revenueCalculationBasis}
+                    {reviseForm.settlementFrequency} •{' '}
+                    {reviseForm.revenueCalculationBasis === 'NET_COURSE_REVENUE'
+                      ? 'Net Course Revenue'
+                      : 'Gross Course Fees'}
                   </span>
                 </div>
 
@@ -4878,7 +4821,6 @@ export const FranchiseManagement: React.FC = () => {
                   <div className="bg-slate-800/80 p-3 rounded-lg border border-slate-700 space-y-1 text-[11px] text-slate-300">
                     <div className="font-bold text-sm text-[#FEDC32]">Digital Ghuru: {reviseForm.digitalGuruRevenuePercentage}% Rev</div>
                     <div>Marketing: {reviseForm.marketingSupportDurationMonths || 0} Months Support</div>
-                    <div>Software: {reviseForm.courseSoftwareAccessEnabled ? 'Enabled' : 'Disabled'}</div>
                   </div>
                   <div className="bg-slate-800/80 p-3 rounded-lg border border-slate-700 space-y-1 text-[11px] text-slate-300">
                     <div className="font-bold text-sm text-sky-400">Partner: {reviseForm.partnerRevenuePercentage}% Rev</div>
