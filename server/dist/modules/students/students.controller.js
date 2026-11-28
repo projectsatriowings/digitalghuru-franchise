@@ -89,15 +89,20 @@ exports.studentAdmissionSchema = zod_1.z.object({
     email: zod_1.z.string().email().optional().or(zod_1.z.literal('')),
     studentEmail: zod_1.z.string().email().optional().or(zod_1.z.literal('')),
     phone: zod_1.z.string().optional(),
-    initialPassword: zod_1.z.string().min(8, 'Student password must be at least 8 characters').optional().or(zod_1.z.literal('')),
-    studentInitialPassword: zod_1.z.string().min(8, 'Student password must be at least 8 characters').optional().or(zod_1.z.literal('')),
+    initialPassword: zod_1.z.preprocess((v) => (typeof v === 'string' && v.trim() === '' ? undefined : v), zod_1.z.string().min(6, 'Student password must be at least 6 characters').optional()),
+    studentInitialPassword: zod_1.z.preprocess((v) => (typeof v === 'string' && v.trim() === '' ? undefined : v), zod_1.z.string().min(6, 'Student password must be at least 6 characters').optional()),
+    studentPassword: zod_1.z.preprocess((v) => (typeof v === 'string' && v.trim() === '' ? undefined : v), zod_1.z.string().min(6, 'Student password must be at least 6 characters').optional()),
+    password: zod_1.z.preprocess((v) => (typeof v === 'string' && v.trim() === '' ? undefined : v), zod_1.z.string().min(6, 'Student password must be at least 6 characters').optional()),
+    temporaryPassword: zod_1.z.preprocess((v) => (typeof v === 'string' && v.trim() === '' ? undefined : v), zod_1.z.string().min(6, 'Student password must be at least 6 characters').optional()),
     // Parent / Guardian fields during admission (Requirement 3)
     parentFullName: zod_1.z.string().min(2, 'Parent/guardian full name is required').optional(),
     parentRelationship: zod_1.z.enum(['FATHER', 'MOTHER', 'GUARDIAN']).default('GUARDIAN').optional(),
     parentPhone: zod_1.z.string().min(8, 'Parent/guardian phone number is required').optional(),
     parentEmail: zod_1.z.string().email().optional().or(zod_1.z.literal('')).optional(),
-    parentInitialPassword: zod_1.z.string().min(8, 'Parent password must be at least 8 characters').optional().or(zod_1.z.literal('')),
-    parentPassword: zod_1.z.string().min(8, 'Parent password must be at least 8 characters').optional().or(zod_1.z.literal('')),
+    parentInitialPassword: zod_1.z.preprocess((v) => (typeof v === 'string' && v.trim() === '' ? undefined : v), zod_1.z.string().min(6, 'Parent password must be at least 6 characters').optional()),
+    parentPassword: zod_1.z.preprocess((v) => (typeof v === 'string' && v.trim() === '' ? undefined : v), zod_1.z.string().min(6, 'Parent password must be at least 6 characters').optional()),
+    initialParentPassword: zod_1.z.preprocess((v) => (typeof v === 'string' && v.trim() === '' ? undefined : v), zod_1.z.string().min(6, 'Parent password must be at least 6 characters').optional()),
+    parentTemporaryPassword: zod_1.z.preprocess((v) => (typeof v === 'string' && v.trim() === '' ? undefined : v), zod_1.z.string().min(6, 'Parent password must be at least 6 characters').optional()),
     parentCanReceiveSms: zod_1.z.boolean().default(true).optional(),
     photoUrl: zod_1.z.string().optional(),
 });
@@ -123,8 +128,9 @@ exports.updateStudentStatusSchema = zod_1.z.object({
     reason: zod_1.z.string().optional(),
 });
 exports.resetStudentPasswordSchema = zod_1.z.object({
-    password: zod_1.z.string().min(8, 'Password must be at least 8 characters').optional(),
-    newPassword: zod_1.z.string().min(8, 'Password must be at least 8 characters').optional(),
+    password: zod_1.z.preprocess((v) => (typeof v === 'string' && v.trim() === '' ? undefined : v), zod_1.z.string().min(6, 'Password must be at least 6 characters').optional()),
+    newPassword: zod_1.z.preprocess((v) => (typeof v === 'string' && v.trim() === '' ? undefined : v), zod_1.z.string().min(6, 'Password must be at least 6 characters').optional()),
+    temporaryPassword: zod_1.z.preprocess((v) => (typeof v === 'string' && v.trim() === '' ? undefined : v), zod_1.z.string().min(6, 'Password must be at least 6 characters').optional()),
 });
 exports.updateStudentIdentifierSchema = zod_1.z.object({
     email: zod_1.z.string().email('Invalid email address').optional().or(zod_1.z.literal('')),
@@ -496,12 +502,6 @@ async function admitStudent(req, res) {
                     error: 'Selected Global Course is not permitted for this franchise by Super Admin.',
                 });
             }
-            if (!franchiseSelection.isEnabled) {
-                return res.status(400).json({
-                    success: false,
-                    error: 'Selected Global Course is not enabled for this franchise. Enable it in Franchise Offerings first.',
-                });
-            }
             verifiedGlobalCourse = {
                 id: globalCourse.id,
                 title: globalCourse.title,
@@ -629,7 +629,10 @@ async function admitStudent(req, res) {
                         }
                         tempPassword =
                             data.studentInitialPassword?.trim() ||
+                                data.studentPassword?.trim() ||
                                 data.initialPassword?.trim() ||
+                                data.password?.trim() ||
+                                data.temporaryPassword?.trim() ||
                                 `Student#${(0, security_js_1.generateSecureRandomToken)(4)}2026`;
                         const passwordHash = await (0, security_js_1.hashPassword)(tempPassword);
                         studentUser = await tx.user.create({
@@ -785,6 +788,8 @@ async function admitStudent(req, res) {
                             parentTempPassword =
                                 data.parentInitialPassword?.trim() ||
                                     data.parentPassword?.trim() ||
+                                    data.initialParentPassword?.trim() ||
+                                    data.parentTemporaryPassword?.trim() ||
                                     `Parent#${(0, security_js_1.generateSecureRandomToken)(4)}2026`;
                             const parentPasswordHash = await (0, security_js_1.hashPassword)(parentTempPassword);
                             parentUser = await tx.user.create({

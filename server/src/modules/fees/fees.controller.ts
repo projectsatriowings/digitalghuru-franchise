@@ -42,7 +42,7 @@ export const assignFeeSchema = z.object({
   academicYear: z.string().max(20).optional().nullable().transform((v) => (v && v.trim() ? v.trim() : undefined)),
   baseAmount: z.number().positive('Base amount must be greater than zero').optional(),
   discountAmount: z.number().min(0, 'Discount cannot be negative').default(0),
-  dueDate: z.string().min(1, 'Due date is required'),
+  dueDate: z.string().optional().nullable().transform((v) => (v && v.trim() ? v.trim() : undefined)),
   midCourseDueDate: z.string().optional().nullable(),
 });
 
@@ -51,7 +51,7 @@ export const batchAssignFeeSchema = z.object({
   feeStructureId: z.string().uuid(),
   termLabel: z.string().max(100).optional().nullable().transform((v) => (v && v.trim() ? v.trim() : undefined)),
   academicYear: z.string().max(20).optional().nullable().transform((v) => (v && v.trim() ? v.trim() : undefined)),
-  dueDate: z.string().min(1, 'Due date is required'),
+  dueDate: z.string().optional().nullable().transform((v) => (v && v.trim() ? v.trim() : undefined)),
   midCourseDueDate: z.string().optional().nullable(),
   defaultDiscount: z.number().min(0).default(0),
 });
@@ -76,8 +76,90 @@ export const adjustFeeSchema = z.object({
   reason: z.string().min(3, 'Adjustment reason is required'),
 });
 
+export const DEFAULT_FEE_TIMEZONE = 'Asia/Kolkata';
+export const DEFAULT_FEE_GRACE_DAYS = 7;
+export const DEFAULT_MID_COURSE_DAYS = 45;
+
+function getLocalDateStr(date: Date, timeZone = DEFAULT_FEE_TIMEZONE): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(date);
+}
+
+/**
+ * Returns today's calendar date in the institute timezone normalized to UTC midnight
+ * for safe comparison and storage in Prisma @db.Date columns.
+ */
+export function getInstituteTodayUtcMidnight(now = new Date(), timeZone = DEFAULT_FEE_TIMEZONE): Date {
+  return new Date(`${getLocalDateStr(now, timeZone)}T00:00:00.000Z`);
+}
+
+/**
+ * Normalizes a Date or date string to UTC midnight preserving explicit YYYY-MM-DD
+ * or UTC-midnight ISO inputs while converting non-midnight timestamps via institute timezone.
+ */
+export function normalizeToUtcMidnight(input: Date | string, timeZone = DEFAULT_FEE_TIMEZONE): Date | null {
+  if (input instanceof Date) {
+    if (isNaN(input.getTime())) return null;
+    const iso = input.toISOString();
+    if (iso.endsWith('T00:00:00.000Z')) {
+      return new Date(iso);
+    }
+    return getInstituteTodayUtcMidnight(input, timeZone);
+  }
+  const trimmed = String(input).trim();
+  if (!trimmed) return null;
+  const dateOnlyMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})(?:T00:00:00(?:\.000)?Z)?$/);
+  if (dateOnlyMatch) {
+    const [, y, m, d] = dateOnlyMatch;
+    const candidate = new Date(`${y}-${m}-${d}T00:00:00.000Z`);
+    if (isNaN(candidate.getTime()) || candidate.toISOString().slice(0, 10) !== `${y}-${m}-${d}`) {
+      return null;
+    }
+    return candidate;
+  }
+  const parsed = new Date(trimmed);
+  if (isNaN(parsed.getTime())) return null;
+  return getInstituteTodayUtcMidnight(parsed, timeZone);
+}
+
+export function addUtcDays(date: Date, days: number): Date {
+  return new Date(date.getTime() + days * 86400000);
+}
+
+/**
+ * Returns true only after the due date's calendar day has passed in the institute timezone.
+ */
+export function isFeeDueDatePast(dueDate: Date | string, now = new Date()): boolean {
+  const dueMidnight = normalizeToUtcMidnight(dueDate);
+  if (!dueMidnight) return false;
+  const todayMidnight = getInstituteTodayUtcMidnight(now);
+  return dueMidnight.getTime() < todayMidnight.getTime();
+}
+
+export function determineAssignmentStatus(
+  netPaid: Prisma.Decimal,
+  finalAmount: Prisma.Decimal,
+  dueDate: Date | string,
+  now = new Date()
+): PaymentStatus {
+  if (netPaid.greaterThanOrEqualTo(finalAmount)) {
+    return PaymentStatus.PAID;
+  }
+  if (netPaid.greaterThan(0)) {
+    return PaymentStatus.PARTIALLY_PAID;
+  }
+  if (isFeeDueDatePast(dueDate, now)) {
+    return PaymentStatus.OVERDUE;
+  }
+  return PaymentStatus.PENDING;
+}
+
 // Helper: Calculate net paid and balance for an assignment
-function calculateAssignmentFinancials(assignment: any) {
+export function calculateAssignmentFinancials(assignment: any, now = new Date()) {
   const finalAmount = new Prisma.Decimal(assignment.finalAmount);
   let totalPayments = new Prisma.Decimal(0);
   let totalRefunds = new Prisma.Decimal(0);
@@ -108,23 +190,7 @@ function calculateAssignmentFinancials(assignment: any) {
 
   const netPaid = totalPayments.minus(totalRefunds);
   const remainingBalance = finalAmount.minus(netPaid);
-
-  let calculatedStatus: PaymentStatus;
-  const now = new Date();
-  const dueDate = new Date(assignment.dueDate);
-  // Set dueDate to end-of-day so fees due today are NOT marked overdue until tomorrow
-  const dueEndOfDay = new Date(dueDate);
-  dueEndOfDay.setHours(23, 59, 59, 999);
-
-  if (netPaid.greaterThanOrEqualTo(finalAmount)) {
-    calculatedStatus = PaymentStatus.PAID;
-  } else if (netPaid.greaterThan(0)) {
-    calculatedStatus = PaymentStatus.PARTIALLY_PAID;
-  } else if (dueEndOfDay < now) {
-    calculatedStatus = PaymentStatus.OVERDUE;
-  } else {
-    calculatedStatus = PaymentStatus.PENDING;
-  }
+  const calculatedStatus = determineAssignmentStatus(netPaid, finalAmount, assignment.dueDate, now);
 
   return {
     finalAmount: Number(finalAmount.toFixed(2)),
@@ -215,7 +281,7 @@ export async function autoSyncInstituteFeeStructures(instituteId: string) {
         franchise: {
           include: {
             courseSelections: {
-              where: { isEnabled: true },
+              where: { isPermitted: true },
               include: { course: true },
             },
           },
@@ -232,10 +298,8 @@ export async function autoSyncInstituteFeeStructures(instituteId: string) {
     let standardCourseFee = 30000;
     const enabledCourse = institute.franchise?.courseSelections?.[0];
     if (enabledCourse) {
-      const local = enabledCourse.localFeeOverride ? Number(enabledCourse.localFeeOverride) : null;
       const global = enabledCourse.course?.price ? Number(enabledCourse.course.price) : null;
-      if (local && local > 0) standardCourseFee = local;
-      else if (global && global > 0) standardCourseFee = global;
+      if (global && global > 0) standardCourseFee = global;
     }
 
     const courseTitle = enabledCourse?.course?.title || 'Course';
@@ -409,6 +473,7 @@ export function calculateCourseFeeMilestones(
     customDueDate?: string;
     customMidCourseDueDate?: string | null;
     customTermLabel?: string;
+    now?: Date;
   }
 ) {
   const totalBase = options?.customBaseAmount !== undefined
@@ -420,12 +485,19 @@ export function calculateCourseFeeMilestones(
     throw new Error('Discount amount cannot exceed base fee amount');
   }
 
-  const preCourseDueDate = options?.customDueDate
-    ? new Date(options.customDueDate)
-    : (batch?.startDate ? new Date(batch.startDate) : new Date());
+  const todayUtc = getInstituteTodayUtcMidnight(options?.now ?? new Date());
+  const minGraceDueDate = addUtcDays(todayUtc, DEFAULT_FEE_GRACE_DAYS);
 
-  if (isNaN(preCourseDueDate.getTime())) {
-    throw new Error('Invalid initial due date');
+  let preCourseDueDate: Date;
+  if (options?.customDueDate) {
+    const parsed = normalizeToUtcMidnight(options.customDueDate);
+    if (!parsed) {
+      throw new Error('Invalid initial due date');
+    }
+    preCourseDueDate = parsed;
+  } else {
+    const batchStart = batch?.startDate ? normalizeToUtcMidnight(batch.startDate) : null;
+    preCourseDueDate = batchStart && batchStart >= minGraceDueDate ? batchStart : minGraceDueDate;
   }
 
   // 1. Two Installments (50% Upfront + 50% Mid-Course)
@@ -436,22 +508,28 @@ export function calculateCourseFeeMilestones(
     const halfDiscount = new Prisma.Decimal((Number(totalDiscount) / 2).toFixed(2));
     const remDiscount = totalDiscount.minus(halfDiscount);
 
+    const midDays = feeStructure.midCourseDueDays && feeStructure.midCourseDueDays > 0
+      ? feeStructure.midCourseDueDays
+      : DEFAULT_MID_COURSE_DAYS;
+
     let midCourseDueDate: Date;
     if (options?.customMidCourseDueDate) {
-      midCourseDueDate = new Date(options.customMidCourseDueDate);
+      const parsedMid = normalizeToUtcMidnight(options.customMidCourseDueDate);
+      midCourseDueDate = parsedMid || addUtcDays(preCourseDueDate, midDays);
     } else if (batch?.startDate && batch?.endDate) {
-      const startMs = new Date(batch.startDate).getTime();
-      const endMs = new Date(batch.endDate).getTime();
-      const midMs = startMs + Math.max(0, (endMs - startMs) / 2);
-      midCourseDueDate = new Date(midMs);
-    } else if (feeStructure.midCourseDueDays) {
-      midCourseDueDate = new Date(preCourseDueDate.getTime() + feeStructure.midCourseDueDays * 86400000);
+      const batchStart = normalizeToUtcMidnight(batch.startDate);
+      const batchEnd = normalizeToUtcMidnight(batch.endDate);
+      if (batchStart && batchEnd && batchEnd > batchStart) {
+        const midMs = batchStart.getTime() + (batchEnd.getTime() - batchStart.getTime()) / 2;
+        const candidateMid = normalizeToUtcMidnight(new Date(midMs));
+        midCourseDueDate = candidateMid && candidateMid > preCourseDueDate
+          ? candidateMid
+          : addUtcDays(preCourseDueDate, midDays);
+      } else {
+        midCourseDueDate = addUtcDays(preCourseDueDate, midDays);
+      }
     } else {
-      midCourseDueDate = new Date(preCourseDueDate.getTime() + 45 * 86400000); // 45 days default
-    }
-
-    if (isNaN(midCourseDueDate.getTime())) {
-      midCourseDueDate = new Date(preCourseDueDate.getTime() + 45 * 86400000);
+      midCourseDueDate = addUtcDays(preCourseDueDate, midDays);
     }
 
     const basePrefix = options?.customTermLabel?.trim();
@@ -1567,22 +1645,7 @@ export async function processRefund(req: AuthenticatedRequest, res: Response) {
       // Deduct this new refund
       const newNetPaid = new Prisma.Decimal(currentFinancials.netPaid).minus(refundAmountDecimal);
       const finalAmount = new Prisma.Decimal(assignment.finalAmount);
-      const dueDate = new Date(assignment.dueDate);
-      const now = new Date();
-
-      let newStatus: PaymentStatus;
-      const dueEndOfDay = new Date(dueDate);
-      dueEndOfDay.setHours(23, 59, 59, 999);
-
-      if (newNetPaid.greaterThanOrEqualTo(finalAmount)) {
-        newStatus = PaymentStatus.PAID;
-      } else if (newNetPaid.greaterThan(0)) {
-        newStatus = PaymentStatus.PARTIALLY_PAID;
-      } else if (dueEndOfDay < now) {
-        newStatus = PaymentStatus.OVERDUE;
-      } else {
-        newStatus = PaymentStatus.PENDING;
-      }
+      const newStatus = determineAssignmentStatus(newNetPaid, finalAmount, assignment.dueDate);
 
       await tx.studentFeeAssignment.update({
         where: { id: assignment.id },
@@ -1686,20 +1749,7 @@ export async function createFeeAdjustment(req: AuthenticatedRequest, res: Respon
       // Recalculate status
       const financials = calculateAssignmentFinancials(assignment);
       const netPaid = new Prisma.Decimal(financials.netPaid);
-      let newStatus: PaymentStatus;
-
-      const dueEndOfDay = new Date(assignment.dueDate);
-      dueEndOfDay.setHours(23, 59, 59, 999);
-
-      if (netPaid.greaterThanOrEqualTo(newFinalAmount)) {
-        newStatus = PaymentStatus.PAID;
-      } else if (netPaid.greaterThan(0)) {
-        newStatus = PaymentStatus.PARTIALLY_PAID;
-      } else if (dueEndOfDay < new Date()) {
-        newStatus = PaymentStatus.OVERDUE;
-      } else {
-        newStatus = PaymentStatus.PENDING;
-      }
+      const newStatus = determineAssignmentStatus(netPaid, newFinalAmount, assignment.dueDate);
 
       const updatedAssignment = await tx.studentFeeAssignment.update({
         where: { id: assignment.id },
@@ -2015,10 +2065,10 @@ export async function getOutstandingReport(req: AuthenticatedRequest, res: Respo
     let totalOutstandingAmount = new Prisma.Decimal(0);
 
     for (const a of assignments) {
-      const financials = calculateAssignmentFinancials(a);
+      const financials = calculateAssignmentFinancials(a, now);
       if (financials.remainingBalance <= 0) continue;
 
-      const isOverdue = new Date(a.dueDate) < now;
+      const isOverdue = isFeeDueDatePast(a.dueDate, now);
       if (isOverdueOnly === 'true' && !isOverdue) continue;
 
       totalOutstandingAmount = totalOutstandingAmount.plus(new Prisma.Decimal(financials.remainingBalance));

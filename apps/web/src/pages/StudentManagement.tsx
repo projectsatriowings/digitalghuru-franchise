@@ -1111,12 +1111,12 @@ Please keep this login and password safe. Use your registered mobile number and 
         return;
       }
     }
-    if (formData.studentInitialPassword.trim() && formData.studentInitialPassword.trim().length < 8) {
-      setAdmitError('Initial student password must be at least 8 characters long.');
+    if (formData.studentInitialPassword.trim() && formData.studentInitialPassword.trim().length < 6) {
+      setAdmitError('Initial student password must be at least 6 characters long.');
       return;
     }
-    if (formData.parentInitialPassword.trim() && formData.parentInitialPassword.trim().length < 8) {
-      setAdmitError('Initial parent password must be at least 8 characters long.');
+    if (formData.parentInitialPassword.trim() && formData.parentInitialPassword.trim().length < 6) {
+      setAdmitError('Initial parent password must be at least 6 characters long.');
       return;
     }
 
@@ -1146,6 +1146,9 @@ Please keep this login and password safe. Use your registered mobile number and 
           studentEmail: formData.studentEmail.trim() || undefined,
           studentInitialPassword: formData.studentInitialPassword.trim() || undefined,
           initialPassword: formData.studentInitialPassword.trim() || undefined,
+          studentPassword: formData.studentInitialPassword.trim() || undefined,
+          password: formData.studentInitialPassword.trim() || undefined,
+          temporaryPassword: formData.studentInitialPassword.trim() || undefined,
           dob: formData.dob || undefined,
           gender: formData.gender,
           bloodGroup: formData.bloodGroup.trim() || undefined,
@@ -1166,6 +1169,8 @@ Please keep this login and password safe. Use your registered mobile number and 
           parentEmail: formData.parentEmail.trim() || undefined,
           parentInitialPassword: formData.parentInitialPassword.trim() || undefined,
           parentPassword: formData.parentInitialPassword.trim() || undefined,
+          initialParentPassword: formData.parentInitialPassword.trim() || undefined,
+          parentTemporaryPassword: formData.parentInitialPassword.trim() || undefined,
           parentCanReceiveSms: formData.parentCanReceiveSms,
         }),
       });
@@ -1187,7 +1192,7 @@ Please keep this login and password safe. Use your registered mobile number and 
             identifier: studentCreds.identifier || generatedNum,
             email: studentCreds.email,
             phone: studentCreds.phone,
-            temporaryPassword: studentCreds.temporaryPassword,
+            temporaryPassword: studentCreds.temporaryPassword || formData.studentInitialPassword.trim() || undefined,
           } : undefined,
           parentCredentials: parentCreds ? {
             fullName: parentCreds.fullName,
@@ -1196,7 +1201,7 @@ Please keep this login and password safe. Use your registered mobile number and 
             phone: parentCreds.phone,
             email: parentCreds.email,
             isExistingAccount: parentCreds.isExistingAccount,
-            temporaryPassword: parentCreds.temporaryPassword,
+            temporaryPassword: parentCreds.temporaryPassword || formData.parentInitialPassword.trim() || undefined,
           } : undefined,
         });
 
@@ -2476,10 +2481,10 @@ Please keep this login and password safe. Use your registered mobile number and 
                         type={showStudentPassword ? 'text' : 'password'}
                         value={formData.studentInitialPassword}
                         onChange={(e) => setFormData({ ...formData, studentInitialPassword: e.target.value })}
-                        placeholder="Leave blank to auto-generate password (min 8 characters)"
-                        minLength={8}
+                        placeholder="Leave blank to auto-generate password (min 6 characters)"
+                        minLength={6}
                         className={`w-full bg-[#FAF8F5] border rounded-xl pl-9 pr-10 py-2.5 text-xs font-mono text-[#0F172A] focus:outline-none focus:ring-2 transition-colors ${
-                          formData.studentInitialPassword.trim() && formData.studentInitialPassword.trim().length < 8
+                          formData.studentInitialPassword.trim() && formData.studentInitialPassword.trim().length < 6
                             ? 'border-rose-400 focus:ring-rose-200 bg-rose-50/30'
                             : 'border-[#E2E8F0] focus:ring-[#006FFF]/20'
                         }`}
@@ -2492,13 +2497,13 @@ Please keep this login and password safe. Use your registered mobile number and 
                         {showStudentPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                       </button>
                     </div>
-                    {formData.studentInitialPassword.trim() && formData.studentInitialPassword.trim().length < 8 ? (
+                    {formData.studentInitialPassword.trim() && formData.studentInitialPassword.trim().length < 6 ? (
                       <p className="text-[11px] text-rose-600 mt-1 font-medium">
-                        Password must be at least 8 characters long.
+                        Password must be at least 6 characters long.
                       </p>
                     ) : (
                       <span className="text-[10px] text-[#94A3B8] mt-1 block">
-                        Used for student portal login (min 8 characters). Auto-generated by system if left blank.
+                        Used for student portal login (min 6 characters). Auto-generated by system if left blank.
                       </span>
                     )}
                   </div>
@@ -2534,10 +2539,10 @@ Please keep this login and password safe. Use your registered mobile number and 
                             type={showParentPassword ? 'text' : 'password'}
                             value={formData.parentInitialPassword}
                             onChange={(e) => setFormData({ ...formData, parentInitialPassword: e.target.value })}
-                            placeholder="Leave blank to auto-generate password (min 8 characters)"
-                            minLength={8}
+                            placeholder="Leave blank to auto-generate password (min 6 characters)"
+                            minLength={6}
                             className={`w-full bg-[#FAF8F5] border rounded-xl pl-9 pr-10 py-2.5 text-xs font-mono text-[#0F172A] focus:outline-none focus:ring-2 transition-colors ${
-                              formData.parentInitialPassword.trim() && formData.parentInitialPassword.trim().length < 8
+                              formData.parentInitialPassword.trim() && formData.parentInitialPassword.trim().length < 6
                                 ? 'border-rose-400 focus:ring-rose-200 bg-rose-50/30'
                                 : 'border-[#E2E8F0] focus:ring-[#006FFF]/20'
                             }`}
@@ -2550,13 +2555,13 @@ Please keep this login and password safe. Use your registered mobile number and 
                             {showParentPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                           </button>
                         </div>
-                        {formData.parentInitialPassword.trim() && formData.parentInitialPassword.trim().length < 8 ? (
+                        {formData.parentInitialPassword.trim() && formData.parentInitialPassword.trim().length < 6 ? (
                           <p className="text-[11px] text-rose-600 mt-1 font-medium">
-                            Password must be at least 8 characters long.
+                            Password must be at least 6 characters long.
                           </p>
                         ) : (
                           <span className="text-[10px] text-[#94A3B8] mt-1 block">
-                            Used for parent mobile login (min 8 characters). Auto-generated by system if left blank.
+                            Used for parent mobile login (min 6 characters). Auto-generated by system if left blank.
                           </span>
                         )}
                       </>

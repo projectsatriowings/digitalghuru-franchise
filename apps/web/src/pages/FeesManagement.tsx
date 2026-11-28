@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { apiFetch } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { formatCurrency } from '@tuition/shared';
+import { getBatchFeeMilestoneDates, getDefaultFeeDueDates } from '../utils/feeDates';
 import {
   CreditCard,
   Plus,
@@ -87,14 +88,15 @@ export const FeesManagement: React.FC = () => {
   const [students, setStudents] = useState<any[]>([]);
 
   // Form states
+  const initialDefaultDates = getDefaultFeeDueDates();
   const [newAssignment, setNewAssignment] = useState({
     studentId: '',
     feeStructureId: '',
     termLabel: '',
     academicYear: '2026-2027',
     discountAmount: 0,
-    dueDate: new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0],
-    midCourseDueDate: new Date(Date.now() + 45 * 86400000).toISOString().split('T')[0],
+    dueDate: initialDefaultDates.preCourseDate,
+    midCourseDueDate: initialDefaultDates.midCourseDate,
   });
 
   const [newBatchAssignment, setNewBatchAssignment] = useState({
@@ -102,8 +104,8 @@ export const FeesManagement: React.FC = () => {
     feeStructureId: '',
     termLabel: '',
     academicYear: '2026-2027',
-    dueDate: new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0],
-    midCourseDueDate: new Date(Date.now() + 45 * 86400000).toISOString().split('T')[0],
+    dueDate: initialDefaultDates.preCourseDate,
+    midCourseDueDate: initialDefaultDates.midCourseDate,
     defaultDiscount: 0,
   });
 
@@ -233,21 +235,9 @@ export const FeesManagement: React.FC = () => {
     }
   };
 
-  const getBatchMilestoneDates = (batchId: string) => {
+  const getBatchMilestoneDates = (batchId: string, midCourseDueDays?: number | null) => {
     const b = batches.find((x) => x.id === batchId);
-    if (!b?.startDate) {
-      return {
-        preCourseDate: new Date().toISOString().split('T')[0],
-        midCourseDate: new Date(Date.now() + 45 * 86400000).toISOString().split('T')[0],
-      };
-    }
-    const start = new Date(b.startDate);
-    const end = b.endDate ? new Date(b.endDate) : new Date(start.getTime() + 90 * 86400000);
-    const midMs = start.getTime() + Math.max(0, (end.getTime() - start.getTime()) / 2);
-    return {
-      preCourseDate: start.toISOString().split('T')[0],
-      midCourseDate: new Date(midMs).toISOString().split('T')[0],
-    };
+    return getBatchFeeMilestoneDates(b, { midCourseDueDays });
   };
 
   const handleUpdateFeeAmount = async (e: React.FormEvent) => {
@@ -319,14 +309,15 @@ export const FeesManagement: React.FC = () => {
       if (res.success) {
         setActionSuccess(res.message || 'Fee assigned successfully to student.');
         setShowAssignModal(false);
+        const resetDates = getDefaultFeeDueDates();
         setNewAssignment({
           studentId: '',
           feeStructureId: '',
           termLabel: '',
           academicYear: '2026-2027',
           discountAmount: 0,
-          dueDate: new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0],
-          midCourseDueDate: new Date(Date.now() + 45 * 86400000).toISOString().split('T')[0],
+          dueDate: resetDates.preCourseDate,
+          midCourseDueDate: resetDates.midCourseDate,
         });
         loadAssignments();
         loadDashboardData();
@@ -381,13 +372,14 @@ export const FeesManagement: React.FC = () => {
       if (res.success) {
         setActionSuccess(res.message || 'Batch fee assignment complete.');
         setShowBatchAssignModal(false);
+        const resetDates = getDefaultFeeDueDates();
         setNewBatchAssignment({
           batchId: '',
           feeStructureId: '',
           termLabel: '',
           academicYear: '2026-2027',
-          dueDate: new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0],
-          midCourseDueDate: new Date(Date.now() + 45 * 86400000).toISOString().split('T')[0],
+          dueDate: resetDates.preCourseDate,
+          midCourseDueDate: resetDates.midCourseDate,
           defaultDiscount: 0,
         });
         loadAssignments();
@@ -525,17 +517,20 @@ export const FeesManagement: React.FC = () => {
                 setActionError(null);
                 loadFeeStructures();
                 const defaultBatch = batches[0];
+                const fs = defaultBatch
+                  ? feeStructures.find((f) => f.batchId === defaultBatch.id && f.frequency === selectedStudentPlanType) ||
+                    feeStructures.find((f) => f.batchId === defaultBatch.id)
+                  : undefined;
                 if (defaultBatch) {
                   setSelectedStudentBatchId(defaultBatch.id);
-                  const fs = feeStructures.find((f) => f.batchId === defaultBatch.id && f.frequency === selectedStudentPlanType) || feeStructures.find((f) => f.batchId === defaultBatch.id);
-                  const { preCourseDate, midCourseDate } = getBatchMilestoneDates(defaultBatch.id);
-                  setNewAssignment((prev) => ({
-                    ...prev,
-                    feeStructureId: fs?.id || '',
-                    dueDate: preCourseDate,
-                    midCourseDueDate: midCourseDate,
-                  }));
                 }
+                const { preCourseDate, midCourseDate } = getBatchMilestoneDates(defaultBatch?.id || '', fs?.midCourseDueDays);
+                setNewAssignment((prev) => ({
+                  ...prev,
+                  feeStructureId: fs?.id || '',
+                  dueDate: preCourseDate,
+                  midCourseDueDate: midCourseDate,
+                }));
                 setShowAssignModal(true);
               }}
               className="px-4 py-2.5 rounded-xl text-xs font-bold bg-[#006FFF] hover:bg-[#0058D4] text-white shadow-sm flex items-center gap-1.5 transition-all"
@@ -547,17 +542,18 @@ export const FeesManagement: React.FC = () => {
                 setActionError(null);
                 loadFeeStructures();
                 const defaultBatch = batches[0];
-                if (defaultBatch) {
-                  const fs = feeStructures.find((f) => f.batchId === defaultBatch.id && f.frequency === selectedBatchPlanType) || feeStructures.find((f) => f.batchId === defaultBatch.id);
-                  const { preCourseDate, midCourseDate } = getBatchMilestoneDates(defaultBatch.id);
-                  setNewBatchAssignment((prev) => ({
-                    ...prev,
-                    batchId: defaultBatch.id,
-                    feeStructureId: fs?.id || '',
-                    dueDate: preCourseDate,
-                    midCourseDueDate: midCourseDate,
-                  }));
-                }
+                const fs = defaultBatch
+                  ? feeStructures.find((f) => f.batchId === defaultBatch.id && f.frequency === selectedBatchPlanType) ||
+                    feeStructures.find((f) => f.batchId === defaultBatch.id)
+                  : undefined;
+                const { preCourseDate, midCourseDate } = getBatchMilestoneDates(defaultBatch?.id || '', fs?.midCourseDueDays);
+                setNewBatchAssignment((prev) => ({
+                  ...prev,
+                  batchId: defaultBatch?.id || '',
+                  feeStructureId: fs?.id || '',
+                  dueDate: preCourseDate,
+                  midCourseDueDate: midCourseDate,
+                }));
                 setShowBatchAssignModal(true);
               }}
               className="px-4 py-2.5 rounded-xl text-xs font-bold bg-slate-900 hover:bg-slate-800 text-white shadow-sm flex items-center gap-1.5 transition-all"
@@ -854,6 +850,7 @@ export const FeesManagement: React.FC = () => {
                                 day: '2-digit',
                                 month: 'short',
                                 year: 'numeric',
+                                timeZone: 'UTC',
                               })}
                             </td>
                             <td className="py-3 px-4">{getStatusBadge(a.calculatedStatus || a.status)}</td>
@@ -1536,12 +1533,16 @@ export const FeesManagement: React.FC = () => {
                   onChange={(e) => {
                     const sId = e.target.value;
                     const student = students.find((s) => s.id === sId);
-                    const bId = student?.batchId || selectedStudentBatchId || (batches[0]?.id || '');
+                    const studentBatchId =
+                      student?.batchId ||
+                      student?.enrollments?.[0]?.batchId ||
+                      student?.enrollments?.[0]?.batch?.id;
+                    const bId = studentBatchId || selectedStudentBatchId || (batches[0]?.id || '');
                     setSelectedStudentBatchId(bId);
                     const matchingFs = feeStructures.find(
                       (f) => f.batchId === bId && f.frequency === selectedStudentPlanType
                     ) || feeStructures.find((f) => f.batchId === bId);
-                    const { preCourseDate, midCourseDate } = getBatchMilestoneDates(bId);
+                    const { preCourseDate, midCourseDate } = getBatchMilestoneDates(bId, matchingFs?.midCourseDueDays);
                     setNewAssignment({
                       ...newAssignment,
                       studentId: sId,
@@ -1572,7 +1573,7 @@ export const FeesManagement: React.FC = () => {
                     const matchingFs = feeStructures.find(
                       (f) => f.batchId === bId && f.frequency === selectedStudentPlanType
                     ) || feeStructures.find((f) => f.batchId === bId);
-                    const { preCourseDate, midCourseDate } = getBatchMilestoneDates(bId);
+                    const { preCourseDate, midCourseDate } = getBatchMilestoneDates(bId, matchingFs?.midCourseDueDays);
                     setNewAssignment({
                       ...newAssignment,
                       feeStructureId: matchingFs?.id || '',
@@ -1799,10 +1800,10 @@ export const FeesManagement: React.FC = () => {
                   value={newBatchAssignment.batchId}
                   onChange={(e) => {
                     const bId = e.target.value;
-                    const { preCourseDate, midCourseDate } = getBatchMilestoneDates(bId);
                     const matchingFs = feeStructures.find(
                       (f) => f.batchId === bId && f.frequency === selectedBatchPlanType
                     ) || feeStructures.find((f) => f.batchId === bId);
+                    const { preCourseDate, midCourseDate } = getBatchMilestoneDates(bId, matchingFs?.midCourseDueDays);
                     setNewBatchAssignment({
                       ...newBatchAssignment,
                       batchId: bId,

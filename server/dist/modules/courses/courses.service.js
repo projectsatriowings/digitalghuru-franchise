@@ -165,7 +165,7 @@ class CoursesService {
         const enrichedCourses = courses.map((course) => {
             const selections = course.franchiseSelections || [];
             const permittedFranchisesCount = selections.filter((s) => s.isPermitted).length;
-            const enabledFranchisesCount = selections.filter((s) => s.isPermitted && s.isEnabled).length;
+            const enabledFranchisesCount = permittedFranchisesCount;
             const modules = course.activeCurriculumVersion?.modules || [];
             const modulesCount = modules.length;
             const lessonsCount = modules.reduce((sum, m) => sum + (m._count?.chapters || 0), 0);
@@ -216,8 +216,8 @@ class CoursesService {
             return {
                 ...fr,
                 isPermitted: Boolean(sel?.isPermitted),
-                isEnabled: Boolean(sel?.isPermitted && sel?.isEnabled),
-                customPrice: sel?.localFeeOverride !== null && sel?.localFeeOverride !== undefined ? Number(sel.localFeeOverride) : null,
+                isEnabled: Boolean(sel?.isPermitted),
+                customPrice: null,
             };
         });
     }
@@ -829,13 +829,13 @@ class CoursesService {
         return filtered.map((c) => {
             const selection = c.franchiseSelections[0] || null;
             const isPermitted = Boolean(selection?.isPermitted);
-            const isSelected = isPermitted && Boolean(selection?.isEnabled);
+            const isSelected = isPermitted;
             return {
                 ...c,
                 isPermitted,
                 permittedAt: selection?.permittedAt || null,
                 isSelected,
-                franchiseCustomPrice: selection?.localFeeOverride || null,
+                franchiseCustomPrice: null,
                 activeEnrollmentsCount: c._count.enrollments,
             };
         });
@@ -1048,9 +1048,6 @@ class CoursesService {
             if (!selection || !selection.isPermitted) {
                 throw new CoursePermissionForbiddenError('This course has not been permitted for the selected franchise by Super Admin.');
             }
-            if (!selection.isEnabled) {
-                throw new Error('This course is not enabled for the selected franchise. Enable it in Franchise Offerings first.');
-            }
             // 5. Check if ACTIVE enrollment already exists in this exact mode
             const existingActive = await tx.courseEnrollment.findFirst({
                 where: {
@@ -1122,15 +1119,12 @@ class CoursesService {
                     throw new Error('Destination institute does not belong to the target franchise');
                 }
             }
-            // Verify target franchise has course permitted & enabled
+            // Verify target franchise has course permitted by Super Admin
             const targetSelection = await tx.franchiseCourseSelection.findUnique({
                 where: { franchiseId_courseId: { franchiseId: targetFranchiseId, courseId: source.courseId } }
             });
             if (!targetSelection || !targetSelection.isPermitted) {
                 throw new CoursePermissionForbiddenError('Target franchise is not permitted to offer this course by Super Admin');
-            }
-            if (!targetSelection.isEnabled) {
-                throw new Error('Target franchise does not have this course enabled');
             }
             // Check for another active enrollment in the target mode (e.g. concurrent dual enrollment transfer collision)
             const conflictingActive = await tx.courseEnrollment.findFirst({
