@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { apiFetch } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { ConfirmationModal } from '../components/ConfirmationModal';
 import {
   TrendingUp,
   Star,
@@ -59,6 +60,17 @@ export const ProgressReviewsManagement: React.FC = () => {
   // Loading & Error states
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Confirm modal state
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean; title: string; message: string; variant: 'danger' | 'warning' | 'primary';
+    confirmLabel: string; loading: boolean; onConfirm: () => void;
+  }>({ isOpen: false, title: '', message: '', variant: 'danger', confirmLabel: 'Confirm', loading: false, onConfirm: () => {} });
+
+  const openConfirm = (opts: { title: string; message: string; variant?: 'danger' | 'warning' | 'primary'; confirmLabel?: string; onConfirm: () => void }) => {
+    setConfirmModal({ isOpen: true, title: opts.title, message: opts.message, variant: opts.variant || 'danger', confirmLabel: opts.confirmLabel || 'Confirm', loading: false, onConfirm: opts.onConfirm });
+  };
+  const closeConfirm = () => setConfirmModal((m) => ({ ...m, isOpen: false, loading: false }));
 
   // Staff Parent Feedback State
   const [parentFeedbacks, setParentFeedbacks] = useState<any[]>([]);
@@ -196,7 +208,7 @@ export const ProgressReviewsManagement: React.FC = () => {
         await loadParentFeedbacks();
       }
     } catch (err: any) {
-      alert(err.message || 'Failed to submit response');
+      toast.error(err.message || 'Failed to submit response');
     } finally {
       setSubmittingStaffResponse(false);
     }
@@ -212,7 +224,7 @@ export const ProgressReviewsManagement: React.FC = () => {
         await loadParentFeedbacks();
       }
     } catch (err: any) {
-      alert(err.message || 'Failed to update feedback status');
+      toast.error(err.message || 'Failed to update feedback status');
     }
   }
 
@@ -409,30 +421,46 @@ export const ProgressReviewsManagement: React.FC = () => {
 
   // Publish a draft report directly from list
   async function handleDirectPublish(feedbackId: string) {
-    if (!window.confirm('Publish this report officially? The student and linked parents will be notified immediately.')) return;
-    try {
-      const res = await apiFetch(`/progress/${feedbackId}/publish`, { method: 'PATCH' });
-      if (res.success) {
-        toast.success('Report published officially!');
-        loadData();
-      }
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to publish report');
-    }
+    openConfirm({
+      title: 'Publish Progress Report',
+      message: 'Publish this report officially? The student and linked parents will be notified immediately.',
+      variant: 'primary',
+      confirmLabel: 'Publish Report',
+      onConfirm: async () => {
+        closeConfirm();
+        try {
+          const res = await apiFetch(`/progress/${feedbackId}/publish`, { method: 'PATCH' });
+          if (res.success) {
+            toast.success('Report published officially!');
+            loadData();
+          }
+        } catch (err: any) {
+          toast.error(err.message || 'Failed to publish report');
+        }
+      },
+    });
   }
 
   // Delete a report
   async function handleDeleteFeedback(feedbackId: string) {
-    if (!window.confirm('Are you sure you want to delete this progress report?')) return;
-    try {
-      const res = await apiFetch(`/progress/${feedbackId}`, { method: 'DELETE' });
-      if (res.success) {
-        toast.success('Progress report deleted successfully');
-        loadData();
-      }
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to delete report');
-    }
+    openConfirm({
+      title: 'Delete Progress Report',
+      message: 'Are you sure you want to delete this progress report? This action cannot be undone.',
+      variant: 'danger',
+      confirmLabel: 'Delete Report',
+      onConfirm: async () => {
+        closeConfirm();
+        try {
+          const res = await apiFetch(`/progress/${feedbackId}`, { method: 'DELETE' });
+          if (res.success) {
+            toast.success('Progress report deleted successfully');
+            loadData();
+          }
+        } catch (err: any) {
+          toast.error(err.message || 'Failed to delete report');
+        }
+      },
+    });
   }
 
   // Open Edit Form in Section Tab
@@ -544,6 +572,17 @@ export const ProgressReviewsManagement: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      <ConfirmationModal
+        isOpen={confirmModal.isOpen}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        confirmLabel={confirmModal.confirmLabel}
+        cancelLabel="Cancel"
+        variant={confirmModal.variant}
+        loading={confirmModal.loading}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={closeConfirm}
+      />
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>

@@ -7,6 +7,8 @@ import {
 import React, { useEffect, useState, useRef } from 'react';
 import { apiFetch } from '../../services/api';
 import { StaffMember, StaffQualification, StaffExperience, StaffDocument, Batch } from '../../types';
+import { ConfirmationModal } from '../ConfirmationModal';
+import { useToast } from '../../context/ToastContext';
 import {
   ArrowLeft,
   User,
@@ -68,10 +70,22 @@ export const StaffProfileView: React.FC<StaffProfileViewProps> = ({
   batches,
   onOpenBatchAssignments,
 }) => {
+  const toast = useToast();
   const [staff, setStaff] = useState<StaffMember | null>(initialStaff || null);
   const [loading, setLoading] = useState(!initialStaff);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabType>('overview');
+
+  // Confirm modal state
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean; title: string; message: string; variant: 'danger' | 'warning' | 'primary';
+    confirmLabel: string; loading: boolean; onConfirm: () => void;
+  }>({ isOpen: false, title: '', message: '', variant: 'danger', confirmLabel: 'Confirm', loading: false, onConfirm: () => {} });
+
+  const openConfirm = (opts: { title: string; message: string; variant?: 'danger' | 'warning' | 'primary'; confirmLabel?: string; onConfirm: () => void }) => {
+    setConfirmModal({ isOpen: true, title: opts.title, message: opts.message, variant: opts.variant || 'danger', confirmLabel: opts.confirmLabel || 'Confirm', loading: false, onConfirm: opts.onConfirm });
+  };
+  const closeConfirm = () => setConfirmModal((m) => ({ ...m, isOpen: false, loading: false }));
 
   // Photo upload ref
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -480,22 +494,27 @@ export const StaffProfileView: React.FC<StaffProfileViewProps> = ({
     if (!staff) return;
     const newStatus = !staff.user.isActive;
     const actionLabel = newStatus ? 'activate' : 'deactivate';
-    if (!window.confirm(`Are you sure you want to ${actionLabel} ${staff.user.fullName}?`)) {
-      return;
-    }
-
-    try {
-      const res = await apiFetch(`/staff/${staff.id}/status`, {
-        method: 'PATCH',
-        body: JSON.stringify({ isActive: newStatus }),
-      });
-      if (res.success) {
-        await fetchStaffDetails();
-        onUpdated?.();
-      }
-    } catch (err: any) {
-      alert(err.message || `Failed to ${actionLabel} staff`);
-    }
+    openConfirm({
+      title: newStatus ? 'Activate Staff Account' : 'Deactivate Staff Account',
+      message: `Are you sure you want to ${actionLabel} ${staff.user.fullName}?`,
+      variant: newStatus ? 'primary' : 'danger',
+      confirmLabel: newStatus ? 'Activate' : 'Deactivate',
+      onConfirm: async () => {
+        closeConfirm();
+        try {
+          const res = await apiFetch(`/staff/${staff.id}/status`, {
+            method: 'PATCH',
+            body: JSON.stringify({ isActive: newStatus }),
+          });
+          if (res.success) {
+            await fetchStaffDetails();
+            onUpdated?.();
+          }
+        } catch (err: any) {
+          toast.error(err.message || `Failed to ${actionLabel} staff`);
+        }
+      },
+    });
   };
 
   // Save Qualification
@@ -536,14 +555,22 @@ export const StaffProfileView: React.FC<StaffProfileViewProps> = ({
 
   // Delete Qualification
   const handleDeleteQualification = async (qid: string) => {
-    if (!window.confirm('Delete this qualification?')) return;
-    try {
-      await apiFetch(`/staff/${staffId}/qualifications/${qid}`, { method: 'DELETE' });
-      await fetchStaffDetails();
-      onUpdated?.();
-    } catch (err: any) {
-      alert(err.message || 'Failed to delete qualification');
-    }
+    openConfirm({
+      title: 'Delete Qualification',
+      message: 'Delete this qualification record? This action cannot be undone.',
+      variant: 'danger',
+      confirmLabel: 'Delete',
+      onConfirm: async () => {
+        closeConfirm();
+        try {
+          await apiFetch(`/staff/${staffId}/qualifications/${qid}`, { method: 'DELETE' });
+          await fetchStaffDetails();
+          onUpdated?.();
+        } catch (err: any) {
+          toast.error(err.message || 'Failed to delete qualification');
+        }
+      },
+    });
   };
 
   // Save Experience
@@ -587,14 +614,22 @@ export const StaffProfileView: React.FC<StaffProfileViewProps> = ({
 
   // Delete Experience
   const handleDeleteExperience = async (eid: string) => {
-    if (!window.confirm('Delete this experience record?')) return;
-    try {
-      await apiFetch(`/staff/${staffId}/experiences/${eid}`, { method: 'DELETE' });
-      await fetchStaffDetails();
-      onUpdated?.();
-    } catch (err: any) {
-      alert(err.message || 'Failed to delete experience');
-    }
+    openConfirm({
+      title: 'Delete Experience',
+      message: 'Delete this experience record? This action cannot be undone.',
+      variant: 'danger',
+      confirmLabel: 'Delete',
+      onConfirm: async () => {
+        closeConfirm();
+        try {
+          await apiFetch(`/staff/${staffId}/experiences/${eid}`, { method: 'DELETE' });
+          await fetchStaffDetails();
+          onUpdated?.();
+        } catch (err: any) {
+          toast.error(err.message || 'Failed to delete experience');
+        }
+      },
+    });
   };
 
   // Upload Document
@@ -637,14 +672,22 @@ export const StaffProfileView: React.FC<StaffProfileViewProps> = ({
 
   // Delete Document
   const handleDeleteDocument = async (docId: string) => {
-    if (!window.confirm('Are you sure you want to delete this document?')) return;
-    try {
-      await apiFetch(`/staff/${staffId}/documents/${docId}`, { method: 'DELETE' });
-      await fetchStaffDetails();
-      onUpdated?.();
-    } catch (err: any) {
-      alert(err.message || 'Failed to delete document');
-    }
+    openConfirm({
+      title: 'Delete Document',
+      message: 'Are you sure you want to delete this document? This action cannot be undone.',
+      variant: 'danger',
+      confirmLabel: 'Delete',
+      onConfirm: async () => {
+        closeConfirm();
+        try {
+          await apiFetch(`/staff/${staffId}/documents/${docId}`, { method: 'DELETE' });
+          await fetchStaffDetails();
+          onUpdated?.();
+        } catch (err: any) {
+          toast.error(err.message || 'Failed to delete document');
+        }
+      },
+    });
   };
 
   // Reset Password from Account Tab

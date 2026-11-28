@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { apiFetch } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
+import { ConfirmationModal } from '../components/ConfirmationModal';
 import { GeofenceMapPicker } from '../components/GeofenceMapPicker';
 import {
   Calendar,
@@ -40,6 +42,7 @@ interface StaffAttendanceAdminProps {
 
 export const StaffAttendanceAdmin: React.FC<StaffAttendanceAdminProps> = () => {
   const { user, activeInstitute } = useAuth();
+  const toast = useToast();
 
   // Navigation tab: 'register' | 'wfh' | 'settings' | 'monthly'
   const [activeTab, setActiveTab] = useState<'register' | 'wfh' | 'settings' | 'monthly'>('register');
@@ -477,12 +480,12 @@ export const StaffAttendanceAdmin: React.FC<StaffAttendanceAdminProps> = () => {
         setWfhSelectedStaffIds([]);
         loadWfhMetrics();
         loadWfhAuthorizations();
-        alert('Work From Home authorization created successfully!');
+        toast.success('Work From Home authorization created successfully!');
       } else {
-        alert(res.message || 'Failed to create authorization.');
+        toast.error(res.message || 'Failed to create authorization.');
       }
     } catch (err: any) {
-      alert(err.message || 'Failed to create authorization.');
+      toast.error(err.message || 'Failed to create authorization.');
     } finally {
       setWfhCreating(false);
     }
@@ -490,7 +493,6 @@ export const StaffAttendanceAdmin: React.FC<StaffAttendanceAdminProps> = () => {
 
   // Approve WFH Request
   const handleApproveWfh = async (id: string) => {
-    if (!window.confirm('Are you sure you want to approve this WFH request?')) return;
     try {
       const res = await apiFetch(`/staff-attendance/wfh/admin/authorizations/${id}/approve`, {
         method: 'POST',
@@ -499,10 +501,10 @@ export const StaffAttendanceAdmin: React.FC<StaffAttendanceAdminProps> = () => {
         loadWfhMetrics();
         loadWfhAuthorizations();
       } else {
-        alert(res.message || 'Failed to approve request.');
+        toast.error(res.message || 'Failed to approve request.');
       }
     } catch (err: any) {
-      alert(err.message || 'Failed to approve request.');
+      toast.error(err.message || 'Failed to approve request.');
     }
   };
 

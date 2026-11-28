@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { apiFetch } from '../services/api';
+import { ConfirmationModal } from '../components/ConfirmationModal';
+import { useToast } from '../context/ToastContext';
 import { StaffMember, Batch } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { StaffProfileView } from '../components/staff/StaffProfileView';
@@ -33,7 +35,18 @@ import {
 } from 'lucide-react';
 
 export const StaffManagement: React.FC = () => {
+  // Confirm modal state
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean; title: string; message: string; variant: 'danger' | 'warning' | 'primary';
+    confirmLabel: string; loading: boolean; onConfirm: () => void;
+  }>({ isOpen: false, title: '', message: '', variant: 'danger', confirmLabel: 'Confirm', loading: false, onConfirm: () => {} });
+
+  const openConfirm = (opts: { title: string; message: string; variant?: 'danger' | 'warning' | 'primary'; confirmLabel?: string; onConfirm: () => void }) => {
+    setConfirmModal({ isOpen: true, title: opts.title, message: opts.message, variant: opts.variant || 'danger', confirmLabel: opts.confirmLabel || 'Confirm', loading: false, onConfirm: opts.onConfirm });
+  };
+  const closeConfirm = () => setConfirmModal((m) => ({ ...m, isOpen: false, loading: false }));
   const { activeInstitute } = useAuth();
+  const toast = useToast();
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [batches, setBatches] = useState<Batch[]>([]);
   const [loading, setLoading] = useState(true);
@@ -269,17 +282,24 @@ export const StaffManagement: React.FC = () => {
       ? `Deactivate account for "${item.user.fullName}"? They will lose access.`
       : `Reactivate account for "${item.user.fullName}"?`;
 
-    if (!window.confirm(confirmMsg)) return;
-
-    try {
-      await apiFetch(`/staff/${item.id}/status`, {
-        method: 'PATCH',
-        body: JSON.stringify({ isActive: nextStatus }),
-      });
-      fetchData();
-    } catch (err: any) {
-      alert(`Error updating staff status: ${err.message}`);
-    }
+    openConfirm({
+      title: item.user.isActive ? 'Deactivate Staff Account' : 'Reactivate Staff Account',
+      message: confirmMsg,
+      variant: item.user.isActive ? 'danger' : 'primary',
+      confirmLabel: item.user.isActive ? 'Deactivate' : 'Reactivate',
+      onConfirm: async () => {
+        closeConfirm();
+        try {
+          await apiFetch(`/staff/${item.id}/status`, {
+            method: 'PATCH',
+            body: JSON.stringify({ isActive: nextStatus }),
+          });
+          fetchData();
+        } catch (err: any) {
+          toast.error(`Error updating staff status: ${err.message}`);
+        }
+      },
+    });
   };
 
   const handleOpenCredentialsModal = (item: StaffMember) => {
@@ -353,6 +373,17 @@ export const StaffManagement: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      <ConfirmationModal
+        isOpen={confirmModal.isOpen}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        confirmLabel={confirmModal.confirmLabel}
+        cancelLabel="Cancel"
+        variant={confirmModal.variant}
+        loading={confirmModal.loading}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={closeConfirm}
+      />
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>

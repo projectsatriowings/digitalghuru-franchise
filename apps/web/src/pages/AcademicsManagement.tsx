@@ -6,6 +6,7 @@ import { useToast } from '../context/ToastContext';
 import { ConfirmationModal } from '../components/ConfirmationModal';
 import { StudentAvatar } from '../components/StudentAvatar';
 import { SchedulePicker } from '../components/SchedulePicker';
+import { AddStaffModal } from '../components/staff/AddStaffModal';
 import {
   Layers,
   BookOpen,
@@ -19,6 +20,7 @@ import {
   CheckCircle2,
   Search,
   UserCheck,
+  UserPlus,
   ChevronRight,
   ChevronLeft,
   Sparkles,
@@ -32,7 +34,6 @@ import {
   Phone,
   Award,
   RefreshCw,
-  Loader2,
 } from 'lucide-react';
 
 interface StaffOption {
@@ -66,6 +67,8 @@ export const AcademicsManagement: React.FC<AcademicsManagementProps> = ({ onNavi
   const [batches, setBatches] = useState<Batch[]>([]);
   const [availableStaff, setAvailableStaff] = useState<StaffOption[]>([]);
   const [instituteStudents, setInstituteStudents] = useState<StudentOption[]>([]);
+  const [franchiseCourses, setFranchiseCourses] = useState<any[]>([]);
+  const [showAddTrainerModal, setShowAddTrainerModal] = useState(false);
   const [loading, setLoading] = useState(true);
 
   // Search & Filter state for batches
@@ -129,6 +132,7 @@ export const AcademicsManagement: React.FC<AcademicsManagementProps> = ({ onNavi
     description: '',
     schedule: '',
     isActive: true,
+    courseId: '',
     staffProfileIds: [] as string[],
   });
 
@@ -156,6 +160,22 @@ export const AcademicsManagement: React.FC<AcademicsManagementProps> = ({ onNavi
       setBatches(batchesRes.data?.batches || []);
       setAvailableStaff(staffRes.data?.staff || []);
       setInstituteStudents(studentsRes.data?.students || []);
+
+      // Load franchise courses assigned to this franchise
+      try {
+        const ctxRes = await apiFetch('/courses/my-franchise-context');
+        const fr = ctxRes?.data?.franchise || null;
+        if (fr?.id) {
+          const fcRes = await apiFetch(`/courses/franchise/${fr.id}`);
+          const allCourses = fcRes?.data || [];
+          const uniqueCourses = Array.from(
+            new Map(allCourses.filter((c: any) => c.isSelected || c.isPermitted).map((c: any) => [c.id, c])).values()
+          );
+          setFranchiseCourses(uniqueCourses);
+        }
+      } catch (e) {
+        console.warn('Could not load franchise courses for academics:', e);
+      }
     } catch (err: any) {
       if (!silent) error(err.message || 'Failed to load academics data');
     } finally {
@@ -213,8 +233,6 @@ export const AcademicsManagement: React.FC<AcademicsManagementProps> = ({ onNavi
     setEditingBatch(b);
     setBatchStep(1);
     setBatchModalError(null);
-    setBatchStep(1);
-    setBatchModalError(null);
     setBatchForm({
       name: b.name,
       code: b.code || '',
@@ -224,7 +242,8 @@ export const AcademicsManagement: React.FC<AcademicsManagementProps> = ({ onNavi
       description: b.description || '',
       schedule: b.schedule || '',
       isActive: b.isActive,
-      staffProfileIds: [] as string[],
+      courseId: b.courseId || '',
+      staffProfileIds: b.staffAssignments?.map((sa: any) => sa.staffProfileId) || [],
     });
     setShowBatchModal(true);
   };
@@ -245,6 +264,7 @@ export const AcademicsManagement: React.FC<AcademicsManagementProps> = ({ onNavi
             description: batchForm.description || null,
             schedule: batchForm.schedule || null,
             isActive: batchForm.isActive,
+            courseId: batchForm.courseId || null,
           }),
         });
         if (res.success) {
@@ -268,6 +288,7 @@ export const AcademicsManagement: React.FC<AcademicsManagementProps> = ({ onNavi
             description: batchForm.description || undefined,
             schedule: batchForm.schedule || undefined,
             isActive: batchForm.isActive,
+            courseId: batchForm.courseId || undefined,
             staffProfileIds: batchForm.staffProfileIds.length > 0 ? batchForm.staffProfileIds : undefined,
           }),
         });
@@ -283,6 +304,7 @@ export const AcademicsManagement: React.FC<AcademicsManagementProps> = ({ onNavi
             description: '',
             schedule: '',
             isActive: true,
+            courseId: '',
             staffProfileIds: [] as string[],
           });
           await fetchData();
@@ -507,9 +529,9 @@ export const AcademicsManagement: React.FC<AcademicsManagementProps> = ({ onNavi
           setSelectedBatchDetails((prev) =>
             prev
               ? {
-                  ...prev,
-                  staffAssignments: res.data.batch.staffAssignments,
-                }
+                ...prev,
+                staffAssignments: res.data.batch.staffAssignments,
+              }
               : prev
           );
         }
@@ -533,11 +555,11 @@ export const AcademicsManagement: React.FC<AcademicsManagementProps> = ({ onNavi
         setSelectedBatchDetails((prev) =>
           prev
             ? {
-                ...prev,
-                staffAssignments: (prev.staffAssignments || []).filter(
-                  (fa: any) => fa.staffProfileId !== staffProfileId && fa.id !== staffProfileId
-                ),
-              }
+              ...prev,
+              staffAssignments: (prev.staffAssignments || []).filter(
+                (fa: any) => fa.staffProfileId !== staffProfileId && fa.id !== staffProfileId
+              ),
+            }
             : prev
         );
         await loadBatchDetails(selectedBatchDetails.id);
@@ -615,17 +637,24 @@ export const AcademicsManagement: React.FC<AcademicsManagementProps> = ({ onNavi
                     </span>
                   )}
                   <span
-                    className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold border ${
-                      selectedBatchDetails.isActive
-                        ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                        : 'bg-stone-100 text-stone-600 border-stone-200'
-                    }`}
+                    className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold border ${selectedBatchDetails.isActive
+                      ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                      : 'bg-stone-100 text-stone-600 border-stone-200'
+                      }`}
                   >
                     <span className={`w-1.5 h-1.5 rounded-full ${selectedBatchDetails.isActive ? 'bg-emerald-500' : 'bg-stone-400'}`} />
                     {selectedBatchDetails.isActive ? 'Active Batch' : 'Inactive'}
                   </span>
                 </div>
-                <p className="text-xs text-[#94A3B8] mt-1 flex items-center gap-2">
+                <p className="text-xs text-[#94A3B8] mt-1 flex items-center gap-2 flex-wrap">
+                  {selectedBatchDetails.course && (
+                    <>
+                      <span className="inline-flex items-center gap-1 font-bold text-[#006FFF] bg-blue-50 px-2 py-0.5 rounded-lg border border-blue-100">
+                        <BookOpen className="w-3.5 h-3.5 text-[#006FFF]" /> Course: {selectedBatchDetails.course.title}
+                      </span>
+                      <span>•</span>
+                    </>
+                  )}
                   <span>Academic Year: <strong className="text-[#006FFF]">{selectedBatchDetails.academicYear}</strong></span>
                   {selectedBatchDetails.schedule && (
                     <>
@@ -688,55 +717,50 @@ export const AcademicsManagement: React.FC<AcademicsManagementProps> = ({ onNavi
           <div className="flex items-center gap-2 pt-4 overflow-x-auto">
             <button
               onClick={() => setBatchDetailTab('overview')}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 ${
-                batchDetailTab === 'overview'
-                  ? 'bg-[#006FFF] text-white shadow-sm'
-                  : 'text-[#64748B] hover:bg-[#F8FAFC]'
-              }`}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 ${batchDetailTab === 'overview'
+                ? 'bg-[#006FFF] text-white shadow-sm'
+                : 'text-[#64748B] hover:bg-[#F8FAFC]'
+                }`}
             >
               <Info className="w-3.5 h-3.5" />
               <span>Overview</span>
             </button>
             <button
               onClick={() => setBatchDetailTab('subjects')}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 ${
-                batchDetailTab === 'subjects'
-                  ? 'bg-[#006FFF] text-white shadow-sm'
-                  : 'text-[#64748B] hover:bg-[#F8FAFC]'
-              }`}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 ${batchDetailTab === 'subjects'
+                ? 'bg-[#006FFF] text-white shadow-sm'
+                : 'text-[#64748B] hover:bg-[#F8FAFC]'
+                }`}
             >
               <BookOpen className="w-3.5 h-3.5" />
               <span>Subjects ({subjectsInBatch.length})</span>
             </button>
             <button
               onClick={() => setBatchDetailTab('students')}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 ${
-                batchDetailTab === 'students'
-                  ? 'bg-[#006FFF] text-white shadow-sm'
-                  : 'text-[#64748B] hover:bg-[#F8FAFC]'
-              }`}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 ${batchDetailTab === 'students'
+                ? 'bg-[#006FFF] text-white shadow-sm'
+                : 'text-[#64748B] hover:bg-[#F8FAFC]'
+                }`}
             >
               <GraduationCap className="w-3.5 h-3.5" />
               <span>Enrolled Students ({enrolledStudents.length})</span>
             </button>
             <button
               onClick={() => setBatchDetailTab('allocations')}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 ${
-                batchDetailTab === 'allocations'
-                  ? 'bg-[#006FFF] text-white shadow-sm'
-                  : 'text-[#64748B] hover:bg-[#F8FAFC]'
-              }`}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 ${batchDetailTab === 'allocations'
+                ? 'bg-[#006FFF] text-white shadow-sm'
+                : 'text-[#64748B] hover:bg-[#F8FAFC]'
+                }`}
             >
               <BookMarked className="w-3.5 h-3.5" />
               <span>Subject Allocations</span>
             </button>
             <button
               onClick={() => setBatchDetailTab('staff')}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 ${
-                batchDetailTab === 'staff'
-                  ? 'bg-[#006FFF] text-white shadow-sm'
-                  : 'text-[#64748B] hover:bg-[#F8FAFC]'
-              }`}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 ${batchDetailTab === 'staff'
+                ? 'bg-[#006FFF] text-white shadow-sm'
+                : 'text-[#64748B] hover:bg-[#F8FAFC]'
+                }`}
             >
               <Users className="w-3.5 h-3.5" />
               <span>Assigned Trainers ({facultyAssigned.length})</span>
@@ -879,16 +903,15 @@ export const AcademicsManagement: React.FC<AcademicsManagementProps> = ({ onNavi
                     <div className="flex items-start justify-between gap-2">
                       <div>
                         <div className="flex items-center gap-2">
-                          <h4 className="text-sm font-bold text-[#0F172A]">{bs.subject?.name || bs.name || 'Subject'}</h4>
-                          {(bs.subject?.code || bs.code) && (
+                          <h4 className="text-sm font-bold text-[#0F172A]">{bs.subject.name}</h4>
+                          {bs.subject.code && (
                             <span className="font-mono text-[10px] font-bold px-2 py-0.5 rounded bg-white text-[#006FFF] border border-[#E2E8F0]">
-                              {bs.subject?.code || bs.code}
+                              {bs.subject.code}
                             </span>
                           )}
                           <span
-                            className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                              bs.isActive !== false ? 'bg-emerald-50 text-emerald-700' : 'bg-stone-200 text-stone-600'
-                            }`}
+                            className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${bs.isActive !== false ? 'bg-emerald-50 text-emerald-700' : 'bg-stone-200 text-stone-600'
+                              }`}
                           >
                             {bs.isActive !== false ? 'Active' : 'Inactive'}
                           </span>
@@ -1465,8 +1488,6 @@ export const AcademicsManagement: React.FC<AcademicsManagementProps> = ({ onNavi
               setEditingBatch(null);
               setBatchStep(1);
               setBatchModalError(null);
-              setBatchStep(1);
-              setBatchModalError(null);
               setBatchForm({
                 name: '',
                 code: '',
@@ -1476,6 +1497,7 @@ export const AcademicsManagement: React.FC<AcademicsManagementProps> = ({ onNavi
                 description: '',
                 schedule: '',
                 isActive: true,
+                courseId: '',
                 staffProfileIds: [] as string[],
               });
               setShowBatchModal(true);
@@ -1566,11 +1588,7 @@ export const AcademicsManagement: React.FC<AcademicsManagementProps> = ({ onNavi
                   <div className="flex items-start justify-between gap-2">
                     <div>
                       <div className="flex items-center gap-2 flex-wrap">
-                        <h3
-                          onClick={() => loadBatchDetails(b.id, b)}
-                          className="text-base font-black text-[#0F172A] tracking-tight group-hover:text-[#006FFF] transition cursor-pointer"
-                          title="Click to view batch details"
-                        >
+                        <h3 className="text-base font-black text-[#0F172A] tracking-tight group-hover:text-[#006FFF] transition">
                           {b.name}
                         </h3>
                         {b.code && (
@@ -1585,11 +1603,10 @@ export const AcademicsManagement: React.FC<AcademicsManagementProps> = ({ onNavi
                     </div>
 
                     <span
-                      className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold border shrink-0 ${
-                        b.isActive
-                          ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                          : 'bg-stone-100 text-stone-600 border-stone-200'
-                      }`}
+                      className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold border shrink-0 ${b.isActive
+                        ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                        : 'bg-stone-100 text-stone-600 border-stone-200'
+                        }`}
                     >
                       <span className={`w-1.5 h-1.5 rounded-full ${b.isActive ? 'bg-emerald-500' : 'bg-stone-400'}`} />
                       {b.isActive ? 'Active' : 'Inactive'}
@@ -1604,8 +1621,21 @@ export const AcademicsManagement: React.FC<AcademicsManagementProps> = ({ onNavi
                     </div>
                   )}
 
-                  {/* Subjects Pills */}
-                  {b.batchSubjects && b.batchSubjects.length > 0 && (
+                  {/* Course & Curriculum Binding */}
+                  {b.course ? (
+                    <div className="flex items-center gap-2 p-2.5 rounded-xl bg-blue-50/70 border border-blue-100 text-xs">
+                      <BookOpen className="w-4 h-4 text-[#006FFF] shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <span className="text-[10px] font-bold text-[#006FFF] uppercase tracking-wider block">Course</span>
+                        <span className="font-bold text-[#0F172A] truncate block">{b.course.title}</span>
+                      </div>
+                      {b.course.format && (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-white text-[#006FFF] border border-blue-200 shrink-0">
+                          {b.course.format}
+                        </span>
+                      )}
+                    </div>
+                  ) : b.batchSubjects && b.batchSubjects.length > 0 ? (
                     <div className="space-y-1">
                       <span className="text-[10px] font-bold text-[#94A3B8] uppercase tracking-wider block">
                         Subjects in Batch:
@@ -1625,6 +1655,21 @@ export const AcademicsManagement: React.FC<AcademicsManagementProps> = ({ onNavi
                           </span>
                         )}
                       </div>
+                    </div>
+                  ) : null}
+
+                  {/* Assigned Trainer */}
+                  {b.staffAssignments && b.staffAssignments.length > 0 && (
+                    <div className="flex items-center gap-1.5 text-xs text-[#475569] bg-[#FAF8F5] px-2.5 py-1.5 rounded-xl border border-[#F1F5F9]">
+                      <UserCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                      <span className="truncate">
+                        Trainer:{' '}
+                        <strong className="text-[#0F172A]">
+                          {b.staffAssignments
+                            .map((sa: any) => sa.staffProfile?.user?.fullName || 'Assigned Trainer')
+                            .join(', ')}
+                        </strong>
+                      </span>
                     </div>
                   )}
 
@@ -1647,51 +1692,36 @@ export const AcademicsManagement: React.FC<AcademicsManagementProps> = ({ onNavi
 
                 {/* Card Actions */}
                 <div className="flex items-center justify-between gap-2 pt-3 border-t border-[#F5F0EB]">
-                  {user?.role !== 'STAFF' ? (
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => handleOpenEditBatch(b)}
-                        className="p-1.5 text-[#64748B] hover:text-[#0F172A] hover:bg-[#F8FAFC] rounded-xl transition"
-                        title="Edit Batch"
-                      >
-                        <Edit2 className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        onClick={() => setConfirmDeactivate({ isOpen: true, batch: b })}
-                        className="p-1.5 text-[#64748B] hover:text-[#0F172A] hover:bg-[#F8FAFC] rounded-xl transition"
-                        title={b.isActive ? 'Deactivate Batch' : 'Activate Batch'}
-                      >
-                        <Power className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        onClick={() => setConfirmDeleteBatch({ isOpen: true, batch: b })}
-                        className="p-1.5 text-rose-600 hover:text-rose-800 hover:bg-rose-50 rounded-xl transition"
-                        title="Delete Batch from Database"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  ) : (
-                    <div />
-                  )}
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => handleOpenEditBatch(b)}
+                      className="p-1.5 text-[#64748B] hover:text-[#0F172A] hover:bg-[#F8FAFC] rounded-xl transition"
+                      title="Edit Batch"
+                    >
+                      <Edit2 className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={() => setConfirmDeactivate({ isOpen: true, batch: b })}
+                      className="p-1.5 text-[#64748B] hover:text-[#0F172A] hover:bg-[#F8FAFC] rounded-xl transition"
+                      title={b.isActive ? 'Deactivate Batch' : 'Activate Batch'}
+                    >
+                      <Power className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={() => setConfirmDeleteBatch({ isOpen: true, batch: b })}
+                      className="p-1.5 text-rose-600 hover:text-rose-800 hover:bg-rose-50 rounded-xl transition"
+                      title="Delete Batch from Database"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
 
                   <button
-                    type="button"
-                    disabled={openingBatchId === b.id}
-                    onClick={() => loadBatchDetails(b.id, b)}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#006FFF] hover:bg-[#0058D4] disabled:opacity-60 text-white text-xs font-bold transition shadow-sm cursor-pointer"
+                    onClick={() => loadBatchDetails(b.id)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#006FFF] hover:bg-[#0058D4] text-white text-xs font-bold transition shadow-sm"
                   >
-                    {openingBatchId === b.id ? (
-                      <>
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        <span>Opening...</span>
-                      </>
-                    ) : (
-                      <>
-                        <span>Open Batch</span>
-                        <ChevronRight className="w-3.5 h-3.5" />
-                      </>
-                    )}
+                    <span>Open Batch</span>
+                    <ChevronRight className="w-3.5 h-3.5" />
                   </button>
                 </div>
               </div>
@@ -1745,29 +1775,26 @@ export const AcademicsManagement: React.FC<AcademicsManagementProps> = ({ onNavi
                     <React.Fragment key={s.num}>
                       <div className="flex flex-col items-center">
                         <div
-                          className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
-                            batchStep === s.num
-                              ? 'bg-[#006FFF] text-white ring-4 ring-[#8D6E63]/20 shadow-md'
-                              : batchStep > s.num
+                          className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all ${batchStep === s.num
+                            ? 'bg-[#006FFF] text-white ring-4 ring-[#8D6E63]/20 shadow-md'
+                            : batchStep > s.num
                               ? 'bg-emerald-600 text-white'
                               : 'bg-[#F8FAFC] text-[#94A3B8] border border-[#E2E8F0]'
-                          }`}
+                            }`}
                         >
                           {batchStep > s.num ? <Check className="w-4 h-4" /> : s.num}
                         </div>
                         <span
-                          className={`text-[10px] font-semibold mt-1.5 hidden sm:block ${
-                            batchStep === s.num ? 'text-[#006FFF]' : 'text-[#94A3B8]'
-                          }`}
+                          className={`text-[10px] font-semibold mt-1.5 hidden sm:block ${batchStep === s.num ? 'text-[#006FFF]' : 'text-[#94A3B8]'
+                            }`}
                         >
                           {s.label}
                         </span>
                       </div>
                       {idx < 2 && (
                         <div
-                          className={`flex-1 h-0.5 mx-2 transition-colors ${
-                            batchStep > s.num ? 'bg-emerald-600' : 'bg-[#F1F5F9]'
-                          }`}
+                          className={`flex-1 h-0.5 mx-2 transition-colors ${batchStep > s.num ? 'bg-emerald-600' : 'bg-[#F1F5F9]'
+                            }`}
                         />
                       )}
                     </React.Fragment>
@@ -1787,6 +1814,53 @@ export const AcademicsManagement: React.FC<AcademicsManagementProps> = ({ onNavi
               {/* STEP 1: BATCH DETAILS (or when editing) */}
               {(batchStep === 1 || editingBatch) && (
                 <div className="space-y-4">
+                  {/* Franchise Course Selection */}
+                  <div>
+                    <label className="block text-xs font-semibold text-[#0F172A] mb-1">
+                      Assigned Course * <span className="font-normal text-[#94A3B8]">(Select from courses assigned to your franchise)</span>
+                    </label>
+                    {franchiseCourses.length > 0 ? (
+                      <select
+                        value={batchForm.courseId}
+                        onChange={(e) => {
+                          const selectedId = e.target.value;
+                          const selectedCourse = franchiseCourses.find((c) => c.id === selectedId);
+                          setBatchForm((prev) => ({
+                            ...prev,
+                            courseId: selectedId,
+                            name: !prev.name || franchiseCourses.some((fc) => prev.name.startsWith(fc.title))
+                              ? selectedCourse ? `${selectedCourse.title} - Batch 1` : ''
+                              : prev.name,
+                          }));
+                        }}
+                        className="w-full bg-[#FAF8F5] border border-[#E2E8F0] rounded-xl px-3.5 py-2.5 text-xs text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#006FFF]/20 font-medium"
+                      >
+                        <option value="">-- Select Course for this Batch --</option>
+                        {franchiseCourses.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.title} {c.format ? `(${c.format})` : ''} {c.duration ? `• ${c.duration}` : ''}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-xs flex items-center justify-between">
+                        <span>No courses assigned to this franchise yet in Course Offerings.</span>
+                        {onNavigateTab && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setShowBatchModal(false);
+                              onNavigateTab('courses');
+                            }}
+                            className="text-xs font-bold text-[#006FFF] underline ml-2"
+                          >
+                            Go to Offerings
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-xs font-semibold text-[#0F172A] mb-1">
@@ -1926,6 +2000,14 @@ export const AcademicsManagement: React.FC<AcademicsManagementProps> = ({ onNavi
                       Batch Summary
                     </span>
                     <div className="grid grid-cols-2 gap-2 text-xs">
+                      {batchForm.courseId && (
+                        <div>
+                          <span className="text-[#94A3B8]">Course:</span>{' '}
+                          <span className="font-bold text-[#006FFF]">
+                            {franchiseCourses.find((c) => c.id === batchForm.courseId)?.title || 'Assigned Course'}
+                          </span>
+                        </div>
+                      )}
                       <div>
                         <span className="text-[#94A3B8]">Batch:</span>{' '}
                         <span className="font-semibold text-[#0F172A]">{batchForm.name}</span>
@@ -1948,12 +2030,22 @@ export const AcademicsManagement: React.FC<AcademicsManagementProps> = ({ onNavi
                   {/* Faculty Selection */}
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-semibold text-[#0F172A]">
-                        Assign Trainers (Optional)
-                      </span>
-                      <span className="text-[11px] text-[#94A3B8]">
-                        {batchForm.staffProfileIds.length} trainer(s) selected
-                      </span>
+                      <div>
+                        <span className="text-xs font-semibold text-[#0F172A] block">
+                          Assign Trainer to Course Batch
+                        </span>
+                        <span className="text-[11px] text-[#94A3B8]">
+                          {batchForm.staffProfileIds.length} trainer(s) selected
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowAddTrainerModal(true)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#006FFF] hover:bg-[#0058D4] text-white text-xs font-bold rounded-xl transition shadow-xs cursor-pointer"
+                      >
+                        <UserPlus className="w-3.5 h-3.5" />
+                        <span>+ Add New Trainer</span>
+                      </button>
                     </div>
 
                     {availableStaff.length === 0 ? (
@@ -1967,11 +2059,10 @@ export const AcademicsManagement: React.FC<AcademicsManagementProps> = ({ onNavi
                           return (
                             <label
                               key={st.staffProfileId}
-                              className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition text-xs ${
-                                isChecked
-                                  ? 'border-[#006FFF] bg-[#FAF8F5] shadow-xs'
-                                  : 'border-[#F1F5F9] hover:border-[#E2E8F0] bg-white'
-                              }`}
+                              className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition text-xs ${isChecked
+                                ? 'border-[#006FFF] bg-[#FAF8F5] shadow-xs'
+                                : 'border-[#F1F5F9] hover:border-[#E2E8F0] bg-white'
+                                }`}
                             >
                               <input
                                 type="checkbox"
@@ -2061,6 +2152,10 @@ export const AcademicsManagement: React.FC<AcademicsManagementProps> = ({ onNavi
                         type="button"
                         onClick={() => {
                           if (batchStep === 1) {
+                            if (franchiseCourses.length > 0 && !batchForm.courseId) {
+                              setBatchModalError('Please select an assigned course for this batch');
+                              return;
+                            }
                             if (!batchForm.name.trim()) {
                               setBatchModalError('Batch name is required');
                               return;
@@ -2097,13 +2192,42 @@ export const AcademicsManagement: React.FC<AcademicsManagementProps> = ({ onNavi
         </div>
       )}
 
+      {/* Add Trainer Modal */}
+      {showAddTrainerModal && (
+        <AddStaffModal
+          isOpen={showAddTrainerModal}
+          onClose={() => setShowAddTrainerModal(false)}
+          onSuccess={async (newStaff, credentials) => {
+            setShowAddTrainerModal(false);
+            success(`Trainer '${credentials.fullName}' created successfully!`);
+            try {
+              const staffRes = await apiFetch('/academics/staff');
+              const updatedStaff = staffRes.data?.staff || [];
+              setAvailableStaff(updatedStaff);
+              const newStaffId = (newStaff as any).staffProfileId || newStaff.id;
+              if (newStaffId) {
+                setBatchForm((prev) => ({
+                  ...prev,
+                  staffProfileIds: prev.staffProfileIds.includes(newStaffId)
+                    ? prev.staffProfileIds
+                    : [...prev.staffProfileIds, newStaffId],
+                }));
+              }
+            } catch (e) {
+              console.warn('Failed to refresh staff after trainer creation', e);
+            }
+          }}
+          batches={batches}
+          activeInstituteCode={activeInstitute?.code}
+        />
+      )}
+
       {/* Confirmation Modal for Batch Status Toggle */}
       <ConfirmationModal
         isOpen={confirmDeactivate.isOpen}
         title={confirmDeactivate.batch?.isActive ? 'Deactivate Batch' : 'Activate Batch'}
-        message={`Are you sure you want to ${
-          confirmDeactivate.batch?.isActive ? 'deactivate' : 'activate'
-        } batch '${confirmDeactivate.batch?.name}'?`}
+        message={`Are you sure you want to ${confirmDeactivate.batch?.isActive ? 'deactivate' : 'activate'
+          } batch '${confirmDeactivate.batch?.name}'?`}
         confirmLabel={confirmDeactivate.batch?.isActive ? 'Deactivate' : 'Activate'}
         variant={confirmDeactivate.batch?.isActive ? 'danger' : 'primary'}
         onConfirm={() => confirmDeactivate.batch && handleToggleBatchStatus(confirmDeactivate.batch)}
