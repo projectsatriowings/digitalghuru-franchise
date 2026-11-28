@@ -1186,32 +1186,13 @@ async function updateFranchiseStatus(req, res) {
             },
             include: { ownerUser: true },
         });
-        // Update owner user active status (resolve via ownerUserId or contact email)
-        let ownerUserId = franchise.ownerUserId;
-        if (!ownerUserId && franchise.email) {
-            const matchedUser = await prisma_js_1.prisma.user.findFirst({
-                where: { email: { equals: franchise.email.trim(), mode: 'insensitive' } },
-                select: { id: true },
-            });
-            if (matchedUser) {
-                ownerUserId = matchedUser.id;
-                await prisma_js_1.prisma.franchise.update({
-                    where: { id: franchise.id },
-                    data: { ownerUserId: matchedUser.id },
-                });
-            }
-        }
-        if (ownerUserId) {
+        // Update user active status
+        if (franchise.ownerUserId) {
             await prisma_js_1.prisma.user.update({
-                where: { id: ownerUserId },
+                where: { id: franchise.ownerUserId },
                 data: { isActive: status === 'ACTIVE' },
             });
         }
-        // Cascade status to assigned campus branches so branch access reflects franchise suspension
-        await prisma_js_1.prisma.institute.updateMany({
-            where: { franchiseId: id },
-            data: { status: status === 'ACTIVE' ? 'ACTIVE' : 'SUSPENDED' },
-        });
         cache_js_1.serverCache.invalidate();
         return res.json({
             success: true,
@@ -1535,7 +1516,7 @@ async function addBranchToFranchise(req, res) {
                 },
             });
             // Grant institute membership to the franchise owner
-            const franchiseOwnerId = targetFranchise.ownerUserId || (req.user?.role === 'FRANCHISE_OWNER' ? req.user.userId : null);
+            const franchiseOwnerId = targetFranchise.ownerUserId;
             if (franchiseOwnerId) {
                 await prisma_js_1.prisma.instituteMembership.upsert({
                     where: {
