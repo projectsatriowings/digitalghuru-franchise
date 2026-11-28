@@ -22,7 +22,6 @@ import {
   HelpCircle,
   Users,
   Globe,
-  Check,
   AlertTriangle,
   ExternalLink,
   Download,
@@ -93,7 +92,7 @@ export const CourseManagement: React.FC = () => {
   const [franchiseCourse, setFranchiseCourse] = useState<any | null>(null);
   const [franchisesList, setFranchisesList] = useState<any[]>([]);
   const [franchiseSelections, setFranchiseSelections] = useState<
-    Record<string, { isPermitted: boolean; isEnabled: boolean; customPrice: string; loading?: boolean }>
+    Record<string, { isPermitted: boolean; loading?: boolean }>
   >({});
   const [loadingFranchises, setLoadingFranchises] = useState(false);
   const [bulkPermitting, setBulkPermitting] = useState(false);
@@ -401,16 +400,11 @@ export const CourseManagement: React.FC = () => {
 
       const selectionsMap: Record<
         string,
-        { isPermitted: boolean; isEnabled: boolean; customPrice: string }
+        { isPermitted: boolean }
       > = {};
       rows.forEach((fr: any) => {
         selectionsMap[fr.id] = {
           isPermitted: Boolean(fr.isPermitted),
-          isEnabled: Boolean(fr.isEnabled),
-          customPrice:
-            fr.customPrice !== null && fr.customPrice !== undefined
-              ? String(fr.customPrice)
-              : '',
         };
       });
       setFranchiseSelections(selectionsMap);
@@ -434,8 +428,6 @@ export const CourseManagement: React.FC = () => {
     if (!franchiseCourse) return;
     const current = franchiseSelections[franchiseId] || {
       isPermitted: false,
-      isEnabled: false,
-      customPrice: '',
     };
 
     setFranchiseSelections((prev) => ({
@@ -454,15 +446,14 @@ export const CourseManagement: React.FC = () => {
       });
       toast.success(
         nextPermitted
-          ? 'HQ permission granted & course activated for franchise'
-          : 'HQ permission revoked — course hidden from franchise offerings'
+          ? 'Course assigned & active for franchise'
+          : 'Course access removed — hidden from franchise offerings'
       );
       setFranchiseSelections((prev) => ({
         ...prev,
         [franchiseId]: {
           ...current,
           isPermitted: nextPermitted,
-          isEnabled: nextPermitted,
           loading: false,
         },
       }));
@@ -494,44 +485,6 @@ export const CourseManagement: React.FC = () => {
       toast.error(err.message || 'Bulk permission update failed');
     } finally {
       setBulkPermitting(false);
-    }
-  };
-
-  const handleToggleFranchiseSelection = async (franchiseId: string, nextEnabled: boolean, overridePrice?: string) => {
-    if (!franchiseCourse) return;
-    const current = franchiseSelections[franchiseId] || {
-      isPermitted: false,
-      isEnabled: false,
-      customPrice: '',
-    };
-    const priceVal = overridePrice !== undefined ? overridePrice : current.customPrice;
-
-    setFranchiseSelections((prev) => ({
-      ...prev,
-      [franchiseId]: { ...current, isEnabled: nextEnabled, customPrice: priceVal, loading: true },
-    }));
-
-    try {
-      await apiFetch(`/courses/franchise/${franchiseId}/select`, {
-        method: 'POST',
-        body: JSON.stringify({
-          courseId: franchiseCourse.id,
-          isEnabled: nextEnabled,
-          customPrice: priceVal.trim() !== '' ? Number(priceVal) : null,
-        }),
-      });
-      toast.success(nextEnabled ? 'Course enabled for franchise' : 'Course disabled for franchise');
-      setFranchiseSelections((prev) => ({
-        ...prev,
-        [franchiseId]: { ...current, isEnabled: nextEnabled, customPrice: priceVal, loading: false },
-      }));
-      await fetchCatalogue();
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to update franchise selection');
-      setFranchiseSelections((prev) => ({
-        ...prev,
-        [franchiseId]: { ...current, loading: false },
-      }));
     }
   };
 
@@ -1242,7 +1195,7 @@ export const CourseManagement: React.FC = () => {
                   Franchise Governance &amp; Course Permissions
                 </h2>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Course: <strong>{franchiseCourse.title}</strong> — Only HQ-permitted franchises can view, enable, or enroll students into this course.
+                  Course: <strong>{franchiseCourse.title}</strong> — Only HQ-permitted franchises can view and enroll students into this course.
                 </p>
               </div>
               <button
@@ -1304,17 +1257,13 @@ export const CourseManagement: React.FC = () => {
                     .map((fr) => {
                       const state = franchiseSelections[fr.id] || {
                         isPermitted: false,
-                        isEnabled: false,
-                        customPrice: '',
                       };
                       return (
                         <div
                           key={fr.id}
                           className={`p-4 rounded-2xl border transition-colors flex flex-col lg:flex-row lg:items-center justify-between gap-3 ${
                             state.isPermitted
-                              ? state.isEnabled
-                                ? 'border-emerald-200 bg-emerald-50/40'
-                                : 'border-blue-200 bg-blue-50/30'
+                              ? 'border-emerald-200 bg-emerald-50/40'
                               : 'border-slate-200 bg-slate-50/60'
                           }`}
                         >
@@ -1327,11 +1276,11 @@ export const CourseManagement: React.FC = () => {
                               <span
                                 className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
                                   state.isPermitted
-                                    ? 'bg-blue-50 text-[#006FFF] border-blue-200'
+                                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                                     : 'bg-slate-100 text-slate-500 border-slate-200'
                                 }`}
                               >
-                                {state.isPermitted ? 'HQ Permitted' : 'Not Permitted'}
+                                {state.isPermitted ? 'Active · HQ Permitted' : 'Not Permitted'}
                               </span>
                             </div>
                             <div className="text-xs text-slate-500 mt-0.5">
@@ -1362,51 +1311,6 @@ export const CourseManagement: React.FC = () => {
                                 </>
                               )}
                             </button>
-
-                            {state.isPermitted && (
-                              <>
-                                <input
-                                  type="number"
-                                  value={state.customPrice}
-                                  onChange={(e) =>
-                                    setFranchiseSelections((prev) => ({
-                                      ...prev,
-                                      [fr.id]: { ...prev[fr.id], customPrice: e.target.value },
-                                    }))
-                                  }
-                                  placeholder="Custom Fee ₹"
-                                  className="w-28 px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-xs"
-                                />
-                                {state.customPrice !== '' && state.isEnabled && (
-                                  <button
-                                    type="button"
-                                    disabled={state.loading}
-                                    onClick={() => handleToggleFranchiseSelection(fr.id, true, state.customPrice)}
-                                    className="px-2.5 py-1.5 rounded-lg bg-slate-800 text-white text-xs font-bold"
-                                  >
-                                    Save Fee
-                                  </button>
-                                )}
-                                <button
-                                  type="button"
-                                  disabled={state.loading}
-                                  onClick={() => handleToggleFranchiseSelection(fr.id, !state.isEnabled)}
-                                  className={`px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors ${
-                                    state.isEnabled
-                                      ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
-                                      : 'bg-white border border-slate-300 hover:bg-slate-100 text-slate-800'
-                                  }`}
-                                >
-                                  {state.isEnabled ? (
-                                    <>
-                                      <Check className="w-3.5 h-3.5" /> Active
-                                    </>
-                                  ) : (
-                                    'Turn On'
-                                  )}
-                                </button>
-                              </>
-                            )}
                           </div>
                         </div>
                       );

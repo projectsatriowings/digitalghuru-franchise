@@ -248,7 +248,9 @@ export const ParentFeesView: React.FC<ParentFeesViewProps> = ({
                             ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
                             : term.calculatedStatus === 'PARTIALLY_PAID'
                             ? 'bg-amber-100 text-amber-800 border border-amber-300'
-                            : 'bg-rose-100 text-rose-800 border border-rose-300'
+                            : term.calculatedStatus === 'OVERDUE'
+                            ? 'bg-rose-100 text-rose-800 border border-rose-300'
+                            : 'bg-slate-100 text-slate-700 border border-slate-300'
                         }`}
                       >
                         {term.calculatedStatus}
@@ -261,6 +263,7 @@ export const ParentFeesView: React.FC<ParentFeesViewProps> = ({
                           month: 'short',
                           day: 'numeric',
                           year: 'numeric',
+                          timeZone: 'UTC',
                         })}
                       </strong>
                     </p>

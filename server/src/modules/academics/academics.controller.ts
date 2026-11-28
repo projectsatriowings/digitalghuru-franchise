@@ -161,6 +161,9 @@ export async function getBatchDetails(req: AuthenticatedRequest, res: Response) 
     if (!instituteId) return res.status(400).json({ success: false, error: 'Institute context required' });
 
     const { id } = req.params;
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
 
     // If caller is STAFF, verify staff assignment to this batch
     if (req.user?.role === 'STAFF') {
@@ -375,6 +378,7 @@ export async function createBatch(req: AuthenticatedRequest, res: Response) {
       }
     }
 
+    serverCache.invalidate();
     return res.status(201).json({ success: true, message: 'Batch created successfully', data: { batch } });
   } catch (err: any) {
     console.error('[createBatch error]', err);
@@ -389,6 +393,9 @@ export async function updateBatch(req: AuthenticatedRequest, res: Response) {
     if (!instituteId) return res.status(400).json({ success: false, error: 'Institute context required' });
 
     const { id } = req.params;
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
     const parse = updateBatchSchema.safeParse(req.body);
     if (!parse.success) return res.status(400).json({ success: false, error: parse.error.errors[0]?.message });
 
@@ -446,6 +453,7 @@ export async function updateBatch(req: AuthenticatedRequest, res: Response) {
       },
     });
 
+    serverCache.invalidate();
     return res.json({ success: true, message: 'Batch updated successfully', data: { batch: updated } });
   } catch (err: any) {
     console.error('[updateBatch error]', err);
@@ -460,6 +468,9 @@ export async function toggleBatchStatus(req: AuthenticatedRequest, res: Response
     if (!instituteId) return res.status(400).json({ success: false, error: 'Institute context required' });
 
     const { id } = req.params;
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
     const { isActive } = req.body;
 
     const existing = await prisma.batch.findFirst({
@@ -476,6 +487,7 @@ export async function toggleBatchStatus(req: AuthenticatedRequest, res: Response
       data: { isActive: nextState },
     });
 
+    serverCache.invalidate();
     return res.json({
       success: true,
       message: `Batch ${nextState ? 'activated' : 'deactivated'} successfully`,
@@ -493,6 +505,9 @@ export async function deleteBatch(req: AuthenticatedRequest, res: Response) {
     if (!instituteId) return res.status(400).json({ success: false, error: 'Institute context required' });
 
     const { id } = req.params;
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
 
     const existing = await prisma.batch.findFirst({
       where: { id, instituteId },
@@ -510,6 +525,7 @@ export async function deleteBatch(req: AuthenticatedRequest, res: Response) {
       prisma.batch.delete({ where: { id } }),
     ]);
 
+    serverCache.invalidate();
     return res.json({
       success: true,
       message: `Batch '${existing.name}' deleted successfully`,
@@ -721,6 +737,7 @@ export async function assignSubjectsToBatch(req: AuthenticatedRequest, res: Resp
       },
     });
 
+    serverCache.invalidate();
     return res.json({
       success: true,
       message: `${subjectIds.length} subject(s) assigned to batch successfully`,
@@ -820,6 +837,7 @@ export async function updateBatchSubject(req: AuthenticatedRequest, res: Respons
       });
     }
 
+    serverCache.invalidate();
     return res.json({
       success: true,
       message: 'Batch subject updated successfully',
@@ -1127,6 +1145,7 @@ export async function removeSubjectFromBatch(req: AuthenticatedRequest, res: Res
       },
     });
 
+    serverCache.invalidate();
     return res.json({ success: true, message: 'Subject removed from batch successfully' });
   } catch (err: any) {
     return res.status(500).json({ success: false, error: 'Failed to remove subject from batch' });
@@ -1190,7 +1209,7 @@ export async function assignStaffToBatch(req: AuthenticatedRequest, res: Respons
           include: {
             staffProfile: {
               include: {
-                user: { select: { fullName: true, email: true } },
+                user: { select: { id: true, fullName: true, email: true, phone: true } },
               },
             },
           },
@@ -1198,6 +1217,7 @@ export async function assignStaffToBatch(req: AuthenticatedRequest, res: Respons
       },
     });
 
+    serverCache.invalidate();
     return res.json({
       success: true,
       message: 'Staff assigned to batch successfully',
@@ -1231,6 +1251,7 @@ export async function removeStaffFromBatch(req: AuthenticatedRequest, res: Respo
       },
     });
 
+    serverCache.invalidate();
     return res.json({ success: true, message: 'Staff removed from batch successfully' });
   } catch (err: any) {
     return res.status(500).json({ success: false, error: 'Failed to remove staff from batch' });
@@ -1309,6 +1330,7 @@ export async function enrollStudentInBatch(req: AuthenticatedRequest, res: Respo
       });
     }
 
+    serverCache.invalidate();
     return res.status(201).json({
       success: true,
       message: `${student.firstName} ${student.lastName} enrolled in batch successfully`,
@@ -1348,6 +1370,7 @@ export async function unenrollStudentFromBatch(req: AuthenticatedRequest, res: R
       data: { isActive: false },
     });
 
+    serverCache.invalidate();
     return res.json({ success: true, message: 'Student unenrolled from batch successfully' });
   } catch (err: any) {
     return res.status(500).json({ success: false, error: 'Failed to unenroll student from batch' });
@@ -1468,6 +1491,9 @@ export async function updateSubject(req: AuthenticatedRequest, res: Response) {
     if (!instituteId) return res.status(400).json({ success: false, error: 'Institute context required' });
 
     const { id } = req.params;
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
     const parse = updateSubjectSchema.safeParse(req.body);
     if (!parse.success) return res.status(400).json({ success: false, error: parse.error.errors[0]?.message });
 
@@ -1529,6 +1555,9 @@ export async function deleteSubject(req: AuthenticatedRequest, res: Response) {
     if (!instituteId) return res.status(400).json({ success: false, error: 'Institute context required' });
 
     const { id } = req.params;
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
 
     const existing = await prisma.subject.findFirst({
       where: { id, instituteId },
