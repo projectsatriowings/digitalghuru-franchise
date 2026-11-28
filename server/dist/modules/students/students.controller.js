@@ -263,16 +263,19 @@ async function listStudents(req, res) {
             }
         }
         if (search) {
-            const searchWords = search.split(/\s+/).filter(Boolean);
+            const trimmedSearch = search.trim();
+            const searchWords = trimmedSearch.split(/\s+/).filter(Boolean);
             const searchConditions = [
-                { admissionNumber: { contains: search, mode: 'insensitive' } },
-                { firstName: { contains: search, mode: 'insensitive' } },
-                { lastName: { contains: search, mode: 'insensitive' } },
-                { phone: { contains: search, mode: 'insensitive' } },
-                { user: { fullName: { contains: search, mode: 'insensitive' } } },
-                { user: { email: { contains: search, mode: 'insensitive' } } },
+                { admissionNumber: { contains: trimmedSearch, mode: 'insensitive' } },
+                { rollNumber: { contains: trimmedSearch, mode: 'insensitive' } },
+                { firstName: { contains: trimmedSearch, mode: 'insensitive' } },
+                { lastName: { contains: trimmedSearch, mode: 'insensitive' } },
+                { phone: { contains: trimmedSearch, mode: 'insensitive' } },
+                { user: { fullName: { contains: trimmedSearch, mode: 'insensitive' } } },
+                { user: { email: { contains: trimmedSearch, mode: 'insensitive' } } },
             ];
             if (searchWords.length > 1) {
+                // Match if all individual words exist anywhere across firstName, lastName, user fullName, admissionNumber
                 searchConditions.push({
                     AND: searchWords.map((word) => ({
                         OR: [
@@ -283,6 +286,32 @@ async function listStudents(req, res) {
                         ],
                     })),
                 });
+                // Also explicitly handle multi-word split across firstName and lastName
+                // e.g. "QA Test Student" -> (firstName: "QA Test", lastName: "Student") or (firstName: "QA", lastName: "Test Student")
+                const firstWord = searchWords[0];
+                const lastWord = searchWords[searchWords.length - 1];
+                searchConditions.push({
+                    AND: [
+                        { firstName: { contains: firstWord, mode: 'insensitive' } },
+                        { lastName: { contains: lastWord, mode: 'insensitive' } },
+                    ],
+                });
+                if (searchWords.length > 2) {
+                    const leadWords = searchWords.slice(0, -1).join(' ');
+                    const tailWords = searchWords.slice(1).join(' ');
+                    searchConditions.push({
+                        AND: [
+                            { firstName: { contains: leadWords, mode: 'insensitive' } },
+                            { lastName: { contains: lastWord, mode: 'insensitive' } },
+                        ],
+                    });
+                    searchConditions.push({
+                        AND: [
+                            { firstName: { contains: firstWord, mode: 'insensitive' } },
+                            { lastName: { contains: tailWords, mode: 'insensitive' } },
+                        ],
+                    });
+                }
             }
             andConditions.push({
                 OR: searchConditions,
@@ -625,11 +654,28 @@ async function admitStudent(req, res) {
         if (cleanParentEmail) {
             const existingParentUser = await prisma_js_1.prisma.user.findUnique({
                 where: { email: cleanParentEmail },
+                include: { parentProfile: true },
             });
-            if (existingParentUser && existingParentUser.role !== 'PARENT') {
+            if (existingParentUser && existingParentUser.role !== 'PARENT' && !existingParentUser.parentProfile) {
+                const roleDisplay = existingParentUser.role.toLowerCase().replace('_', ' ');
                 return res.status(409).json({
                     success: false,
-                    error: `Parent email '${cleanParentEmail}' is registered to a ${existingParentUser.role.toLowerCase()} account (${existingParentUser.fullName}) and cannot be used as a parent account.`,
+                    error: `Parent email '${cleanParentEmail}' is registered to a ${roleDisplay} account (${existingParentUser.fullName}) and cannot be used as a parent account.`,
+                });
+            }
+        }
+        // Check parent phone if provided
+        const cleanParentPhone = data.parentPhone?.trim() || null;
+        if (cleanParentPhone) {
+            const existingParentPhoneUser = await prisma_js_1.prisma.user.findFirst({
+                where: { phone: cleanParentPhone },
+                include: { parentProfile: true },
+            });
+            if (existingParentPhoneUser && existingParentPhoneUser.role !== 'PARENT' && !existingParentPhoneUser.parentProfile) {
+                const roleDisplay = existingParentPhoneUser.role.toLowerCase().replace('_', ' ');
+                return res.status(409).json({
+                    success: false,
+                    error: `Parent phone '${cleanParentPhone}' is registered to a ${roleDisplay} account (${existingParentPhoneUser.fullName}) and cannot be used as a parent account.`,
                 });
             }
         }
@@ -668,13 +714,16 @@ async function admitStudent(req, res) {
                                 throw new Error(`Phone number '${cleanPhone}' is already registered to another account.`);
                             }
                         }
-                        tempPassword =
-                            data.studentInitialPassword?.trim() ||
-                                data.studentPassword?.trim() ||
-                                data.initialPassword?.trim() ||
-                                data.password?.trim() ||
-                                data.temporaryPassword?.trim() ||
-                                `Student#${(0, security_js_1.generateSecureRandomToken)(4)}2026`;
+                        const rawStudentPass = (data.studentInitialPassword?.trim() ||
+                            data.studentPassword?.trim() ||
+                            data.initialPassword?.trim() ||
+                            data.password?.trim() ||
+                            data.temporaryPassword?.trim() ||
+                            (typeof req.body?.studentInitialPassword === 'string' ? req.body.studentInitialPassword.trim() : '') ||
+                            (typeof req.body?.studentPassword === 'string' ? req.body.studentPassword.trim() : '') ||
+                            (typeof req.body?.initialPassword === 'string' ? req.body.initialPassword.trim() : '') ||
+                            (typeof req.body?.password === 'string' ? req.body.password.trim() : ''));
+                        tempPassword = rawStudentPass || `Student#${(0, security_js_1.generateSecureRandomToken)(4)}2026`;
                         const passwordHash = await (0, security_js_1.hashPassword)(tempPassword);
                         studentUser = await tx.user.create({
                             data: {
@@ -789,8 +838,9 @@ async function admitStudent(req, res) {
                             include: { parentProfile: true },
                         });
                         if (existingUser) {
-                            if (existingUser.role === 'STUDENT' && !existingUser.parentProfile) {
-                                throw new Error(`Phone or email is registered to a student account and cannot be linked as a parent.`);
+                            if (existingUser.role !== 'PARENT' && !existingUser.parentProfile) {
+                                const roleDisplay = existingUser.role.toLowerCase().replace('_', ' ');
+                                throw new Error(`Phone or email is registered to a ${roleDisplay} account (${existingUser.fullName}) and cannot be used as a parent account.`);
                             }
                             parentUser = existingUser;
                             isExistingParentAccount = true;
@@ -826,12 +876,14 @@ async function admitStudent(req, res) {
                         }
                         else {
                             isExistingParentAccount = false;
-                            parentTempPassword =
-                                data.parentInitialPassword?.trim() ||
-                                    data.parentPassword?.trim() ||
-                                    data.initialParentPassword?.trim() ||
-                                    data.parentTemporaryPassword?.trim() ||
-                                    `Parent#${(0, security_js_1.generateSecureRandomToken)(4)}2026`;
+                            const rawParentPass = (data.parentInitialPassword?.trim() ||
+                                data.parentPassword?.trim() ||
+                                data.initialParentPassword?.trim() ||
+                                data.parentTemporaryPassword?.trim() ||
+                                (typeof req.body?.parentInitialPassword === 'string' ? req.body.parentInitialPassword.trim() : '') ||
+                                (typeof req.body?.parentPassword === 'string' ? req.body.parentPassword.trim() : '') ||
+                                (typeof req.body?.initialParentPassword === 'string' ? req.body.initialParentPassword.trim() : ''));
+                            parentTempPassword = rawParentPass || `Parent#${(0, security_js_1.generateSecureRandomToken)(4)}2026`;
                             const parentPasswordHash = await (0, security_js_1.hashPassword)(parentTempPassword);
                             parentUser = await tx.user.create({
                                 data: {
@@ -2358,13 +2410,18 @@ async function lookupParent(req, res) {
         if (!existingUser) {
             return res.json({ success: true, data: { found: false } });
         }
-        if (existingUser.role === 'STUDENT' && !existingUser.parentProfile) {
+        if (existingUser.role !== 'PARENT' && !existingUser.parentProfile) {
+            const isStudent = existingUser.role === 'STUDENT';
+            const roleDisplay = isStudent
+                ? 'student'
+                : ((existingUser.role === 'TRAINER' || existingUser.role === 'STAFF') ? 'trainer' : existingUser.role.toLowerCase().replace('_', ' '));
             return res.json({
                 success: true,
                 data: {
                     found: true,
-                    isStudent: true,
-                    message: 'Phone or email is registered to a student account and cannot be linked as a parent.',
+                    isStudent,
+                    isStaff: !isStudent,
+                    message: `Phone number is registered to a ${roleDisplay} account (${existingUser.fullName}) and cannot be used as a parent account.`,
                 },
             });
         }
@@ -2582,15 +2639,17 @@ async function lookupExistingStudent(req, res) {
         if (!search || search.length < 2) {
             return res.status(400).json({ success: false, error: 'Search term must be at least 2 characters' });
         }
-        const searchWords = search.split(/\s+/).filter(Boolean);
+        const trimmedSearch = search.trim();
+        const searchWords = trimmedSearch.split(/\s+/).filter(Boolean);
         const searchConditions = [
-            { admissionNumber: { contains: search, mode: 'insensitive' } },
-            { firstName: { contains: search, mode: 'insensitive' } },
-            { lastName: { contains: search, mode: 'insensitive' } },
-            { phone: { contains: search, mode: 'insensitive' } },
-            { user: { phone: { contains: search, mode: 'insensitive' } } },
-            { user: { email: { contains: search, mode: 'insensitive' } } },
-            { user: { fullName: { contains: search, mode: 'insensitive' } } },
+            { admissionNumber: { contains: trimmedSearch, mode: 'insensitive' } },
+            { rollNumber: { contains: trimmedSearch, mode: 'insensitive' } },
+            { firstName: { contains: trimmedSearch, mode: 'insensitive' } },
+            { lastName: { contains: trimmedSearch, mode: 'insensitive' } },
+            { phone: { contains: trimmedSearch, mode: 'insensitive' } },
+            { user: { phone: { contains: trimmedSearch, mode: 'insensitive' } } },
+            { user: { email: { contains: trimmedSearch, mode: 'insensitive' } } },
+            { user: { fullName: { contains: trimmedSearch, mode: 'insensitive' } } },
         ];
         if (searchWords.length > 1) {
             searchConditions.push({
@@ -2603,6 +2662,30 @@ async function lookupExistingStudent(req, res) {
                     ],
                 })),
             });
+            const firstWord = searchWords[0];
+            const lastWord = searchWords[searchWords.length - 1];
+            searchConditions.push({
+                AND: [
+                    { firstName: { contains: firstWord, mode: 'insensitive' } },
+                    { lastName: { contains: lastWord, mode: 'insensitive' } },
+                ],
+            });
+            if (searchWords.length > 2) {
+                const leadWords = searchWords.slice(0, -1).join(' ');
+                const tailWords = searchWords.slice(1).join(' ');
+                searchConditions.push({
+                    AND: [
+                        { firstName: { contains: leadWords, mode: 'insensitive' } },
+                        { lastName: { contains: lastWord, mode: 'insensitive' } },
+                    ],
+                });
+                searchConditions.push({
+                    AND: [
+                        { firstName: { contains: firstWord, mode: 'insensitive' } },
+                        { lastName: { contains: tailWords, mode: 'insensitive' } },
+                    ],
+                });
+            }
         }
         const students = await prisma_js_1.prisma.student.findMany({
             where: {

@@ -70,7 +70,7 @@ const isTabAllowedForRole = (tab: string, role?: string): boolean => {
     case 'ACADEMIC_ADMIN':
       return ['academic_dashboard', 'franchise_courses', 'staff', 'staff_attendance', 'students', 'academics', 'exams', 'question_generator', 'progress_reviews', 'messaging', 'fees', 'recorded_sessions'].includes(tab);
     case 'STAFF':
-      return ['my_attendance', 'attendance', 'academic_dashboard', 'exams', 'materials', 'homework', 'progress_reviews', 'messaging'].includes(tab);
+      return ['my_attendance', 'attendance', 'academic_dashboard', 'exams', 'materials', 'homework', 'progress_reviews', 'messaging', 'recorded_sessions'].includes(tab);
     case 'PARENT':
       return tab === 'parent_portal' || tab.startsWith('parent_') || tab === 'progress_reviews' || tab === 'recorded_sessions';
     case 'STUDENT':
@@ -292,7 +292,7 @@ const AppContent: React.FC = () => {
 
                 {currentTab === 'progress_reviews' && <ProgressReviewsManagement />}
 
-                {currentTab === 'recorded_sessions' && (user.role === 'FRANCHISE_OWNER' || user.role === 'STUDENT' || user.role === 'SUPER_ADMIN' || user.role === 'ACADEMIC_ADMIN' || user.role === 'BRANCH_ADMIN') && (
+                {currentTab === 'recorded_sessions' && (user.role === 'FRANCHISE_OWNER' || user.role === 'STUDENT' || user.role === 'SUPER_ADMIN' || user.role === 'ACADEMIC_ADMIN' || user.role === 'BRANCH_ADMIN' || user.role === 'STAFF') && (
                   <RecordedSessions onNavigateTab={(tab) => setCurrentTab(tab)} />
                 )}
 

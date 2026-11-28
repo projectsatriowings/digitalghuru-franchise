@@ -718,36 +718,12 @@ export async function getMyFranchiseCourseContext(req: Request, res: Response) {
       },
     });
 
-    const branchIds = (franchise?.branches || []).map((b) => b.id);
-    const students = await prisma.student.findMany({
-      where: isBranchScoped
-        ? { instituteId: { in: allowedInstituteIds }, status: 'ACTIVE' }
-        : {
-          status: 'ACTIVE',
-          OR: [
-            { franchiseId },
-            ...(branchIds.length > 0 ? [{ instituteId: { in: branchIds } }] : []),
-          ],
-        },
-      orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
-      select: {
-        id: true,
-        firstName: true,
-        lastName: true,
-        admissionNumber: true,
-        phone: true,
-        instituteId: true,
-        franchiseId: true,
-        user: { select: { email: true } },
-      },
-    });
-
     res.json({
       success: true,
       data: {
         franchise,
         branches: franchise?.branches || [],
-        students,
+        students: [],
         isBranchScoped,
       },
     });

@@ -33,6 +33,7 @@ const staff_attendance_routes_js_1 = __importDefault(require("./modules/staff-at
 const franchise_routes_js_1 = __importDefault(require("./modules/franchise/franchise.routes.js"));
 const courses_routes_js_1 = __importDefault(require("./modules/courses/courses.routes.js"));
 const settlement_routes_js_1 = __importDefault(require("./modules/settlements/settlement.routes.js"));
+const recorded_sessions_routes_js_1 = __importDefault(require("./modules/recorded-sessions/recorded-sessions.routes.js"));
 const webhook_controller_js_1 = require("./modules/payments/webhook.controller.js");
 const storage_js_1 = require("./utils/storage.js");
 const courses_controller_js_1 = require("./modules/courses/courses.controller.js");
@@ -145,6 +146,7 @@ const apiRoutesMap = [
     ['/franchises', franchise_routes_js_1.default],
     ['/courses', courses_routes_js_1.default],
     ['/settlements', settlement_routes_js_1.default],
+    ['/recorded-sessions', recorded_sessions_routes_js_1.default],
 ];
 for (const [routePath, router] of apiRoutesMap) {
     app.use(`/api${routePath}`, router);

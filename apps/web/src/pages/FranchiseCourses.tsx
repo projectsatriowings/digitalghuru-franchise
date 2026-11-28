@@ -176,15 +176,32 @@ export const FranchiseCourses: React.FC = () => {
                   }`}
                 >
                   <div>
-                    {course.thumbnail ? (
-                      <div className="h-44 w-full bg-slate-100 overflow-hidden relative">
+                    {course.thumbnailUrl || course.thumbnail ? (
+                      <div className="h-44 w-full bg-slate-900 overflow-hidden relative">
                         <img
-                          src={course.thumbnail}
+                          src={course.thumbnailUrl || course.thumbnail}
                           alt={course.title}
                           className="w-full h-full object-cover"
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none';
+                            const fallback = e.currentTarget.parentElement?.querySelector('.course-fallback-banner');
+                            if (fallback) (fallback as HTMLElement).style.display = 'flex';
+                          }}
                         />
+                        <div className="course-fallback-banner hidden absolute inset-0 bg-gradient-to-br from-blue-700 via-indigo-700 to-slate-900 p-5 flex flex-col justify-between text-white">
+                          <div className="flex items-center justify-between">
+                            <span className="px-2 py-0.5 rounded bg-white/20 backdrop-blur-sm text-[10px] font-mono font-bold tracking-wider uppercase">
+                              {course.category?.name || 'Curriculum'}
+                            </span>
+                            <BookOpen className="w-5 h-5 text-white/40" />
+                          </div>
+                          <div>
+                            <div className="text-lg font-black tracking-tight line-clamp-2">{course.title}</div>
+                            <div className="text-[11px] text-white/70 mt-0.5">{course.format || 'Hybrid (Online + Offline)'}</div>
+                          </div>
+                        </div>
                         <span
-                          className={`absolute top-3 right-3 px-2.5 py-1 rounded-full text-[11px] font-bold shadow-sm ${
+                          className={`absolute top-3 right-3 px-2.5 py-1 rounded-full text-[11px] font-bold shadow-sm z-10 ${
                             course.isSelected
                               ? 'bg-emerald-500 text-white'
                               : 'bg-slate-900/80 backdrop-blur-sm text-slate-200'
@@ -194,17 +211,29 @@ export const FranchiseCourses: React.FC = () => {
                         </span>
                       </div>
                     ) : (
-                      <div className="h-44 w-full bg-gradient-to-br from-slate-100 to-blue-50/50 flex items-center justify-center relative border-b border-slate-100">
-                        <BookOpen className="w-12 h-12 text-slate-300" />
-                        <span
-                          className={`absolute top-3 right-3 px-2.5 py-1 rounded-full text-[11px] font-bold shadow-sm ${
-                            course.isSelected
-                              ? 'bg-emerald-500 text-white'
-                              : 'bg-slate-900/80 backdrop-blur-sm text-slate-200'
-                          }`}
-                        >
-                          {course.isSelected ? 'Active in Campus' : 'Off'}
-                        </span>
+                      <div className="h-44 w-full bg-gradient-to-br from-blue-700 via-indigo-700 to-slate-900 p-5 flex flex-col justify-between relative text-white border-b border-slate-100 overflow-hidden">
+                        <div className="absolute -right-6 -bottom-6 w-32 h-32 rounded-full bg-white/5 pointer-events-none blur-xl"></div>
+                        <div className="flex items-center justify-between">
+                          <span className="px-2 py-0.5 rounded bg-white/20 backdrop-blur-sm text-[10px] font-mono font-bold tracking-wider uppercase">
+                            {course.category?.name || 'Curriculum'}
+                          </span>
+                          <span
+                            className={`px-2.5 py-1 rounded-full text-[11px] font-bold shadow-sm ${
+                              course.isSelected
+                                ? 'bg-emerald-500 text-white'
+                                : 'bg-white/20 backdrop-blur-sm text-slate-200'
+                            }`}
+                          >
+                            {course.isSelected ? 'Active in Campus' : 'Off'}
+                          </span>
+                        </div>
+                        <div className="relative z-10">
+                          <div className="w-8 h-8 rounded-lg bg-white/20 backdrop-blur-sm flex items-center justify-center mb-2">
+                            <BookOpen className="w-4 h-4 text-white" />
+                          </div>
+                          <div className="text-base font-black tracking-tight line-clamp-1">{course.title}</div>
+                          <div className="text-[11px] text-white/70 mt-0.5">{course.format || 'Hybrid (Online + Offline)'}</div>
+                        </div>
                       </div>
                     )}
 

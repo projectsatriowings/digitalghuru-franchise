@@ -46,11 +46,11 @@ export const FranchiseOwnerDashboard: React.FC = () => {
   const [showReceiptModal, setShowReceiptModal] = useState(false);
   const [receiptData, setReceiptData] = useState<any>(null);
 
-  const loadDashboard = async () => {
+  const loadDashboard = async (forceRefresh = false) => {
     try {
       setLoading(true);
       const branchParam = activeInstitute && activeInstitute.id !== 'ALL' ? `?branchId=${activeInstitute.id}` : '';
-      const res = await apiFetch(`/franchises/dashboard/owner${branchParam}`, { skipCache: true });
+      const res = await apiFetch(`/franchises/dashboard/owner${branchParam}`, { skipCache: forceRefresh });
       if (res.success) {
         setData(res.data);
       }
@@ -80,9 +80,18 @@ export const FranchiseOwnerDashboard: React.FC = () => {
 
   if (loading && !data) {
     return (
-      <div className="flex items-center justify-center p-16 text-slate-500 text-xs">
-        <div className="w-4 h-4 rounded-full bg-[#006FFF] animate-ping mr-3"></div>
-        Loading your multi-branch franchise center...
+      <div className="flex flex-col items-center justify-center p-16 text-slate-500 text-xs gap-3">
+        <div className="flex items-center gap-2">
+          <div className="w-3.5 h-3.5 rounded-full bg-[#006FFF] animate-ping"></div>
+          <span className="font-semibold text-slate-700">Loading your franchise center...</span>
+        </div>
+        <button
+          type="button"
+          onClick={() => loadDashboard(true)}
+          className="mt-2 px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50 cursor-pointer"
+        >
+          Retry Loading
+        </button>
       </div>
     );
   }

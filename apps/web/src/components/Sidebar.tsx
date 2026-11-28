@@ -170,6 +170,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <CreditCard className="w-5 h-5 shrink-0" /> Course Fees
             </button>
             <button
+              onClick={() => handleSelect('recorded_sessions')}
+              className={navItemClass('recorded_sessions')}
+            >
+              <Video className="w-5 h-5 shrink-0 text-rose-400" /> Recorded Sessions
+            </button>
+            <button
               onClick={() => handleSelect('messaging')}
               className={navItemClass('messaging')}
             >
@@ -258,6 +264,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
             >
               <CreditCard className="w-5 h-5 shrink-0" /> Fees & Payments
             </button>
+            <button
+              onClick={() => handleSelect('recorded_sessions')}
+              className={navItemClass('recorded_sessions')}
+            >
+              <Video className="w-5 h-5 shrink-0 text-rose-400" /> Recorded Sessions
+            </button>
           </>
         )}
 
@@ -304,6 +316,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
               className={navItemClass('messaging')}
             >
               <MessageSquare className="w-4 h-4" /> Parent Messages
+            </button>
+            <button
+              onClick={() => onSelectTab('recorded_sessions')}
+              className={navItemClass('recorded_sessions')}
+            >
+              <Video className="w-4 h-4 text-rose-400" /> Recorded Sessions
             </button>
           </>
         )}

@@ -29,6 +29,7 @@ import staffAttendanceRoutes from './modules/staff-attendance/staff-attendance.r
 import franchiseRoutes from './modules/franchise/franchise.routes.js';
 import coursesRoutes from './modules/courses/courses.routes.js';
 import settlementRoutes from './modules/settlements/settlement.routes.js';
+import recordedSessionsRoutes from './modules/recorded-sessions/recorded-sessions.routes.js';
 import { handleRazorpayWebhook } from './modules/payments/webhook.controller.js';
 import { isPublicCourseFolder, printStorageDiagnostics, StorageManager } from './utils/storage.js';
 import { streamPublicMedia, streamProtectedMedia } from './modules/courses/courses.controller.js';
@@ -160,6 +161,7 @@ const apiRoutesMap: [string, any][] = [
   ['/franchises', franchiseRoutes],
   ['/courses', coursesRoutes],
   ['/settlements', settlementRoutes],
+  ['/recorded-sessions', recordedSessionsRoutes],
 ];
 
 for (const [routePath, router] of apiRoutesMap) {

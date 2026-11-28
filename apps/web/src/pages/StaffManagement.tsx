@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { apiFetch } from '../services/api';
 import { ConfirmationModal } from '../components/ConfirmationModal';
@@ -120,36 +120,57 @@ export const StaffManagement: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [createdCredential, viewingStaffCreds, viewingStaffAssignments, showAddModal, selectedStaff]);
 
-  const fetchData = async () => {
+  const [searching, setSearching] = useState(false);
+  const searchSeq = useRef(0);
+
+  // Load batches once per institute context
+  const loadBatches = async () => {
     try {
-      setLoading(true);
-      const [staffRes, batchesRes] = await Promise.allSettled([
-        apiFetch(`/staff?search=${encodeURIComponent(search)}`),
-        apiFetch('/academics/batches'),
-      ]);
-      if (staffRes.status === 'fulfilled') {
-        setStaff(staffRes.value.data?.staff || []);
-      }
-      if (batchesRes.status === 'fulfilled') {
-        setBatches(batchesRes.value.data?.batches || []);
+      const res = await apiFetch('/academics/batches');
+      if (res.success && res.data?.batches) {
+        setBatches(res.data.batches);
       }
     } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
+      console.error('Failed to load batches for staff assignment:', err);
     }
+  };
+
+  const fetchStaff = async (queryText: string) => {
+    const seq = ++searchSeq.current;
+    try {
+      setSearching(true);
+      const res = await apiFetch(`/staff?search=${encodeURIComponent(queryText.trim())}`);
+      if (seq === searchSeq.current && res.success) {
+        setStaff(res.data?.staff || []);
+      }
+    } catch (err) {
+      console.error('Failed to fetch staff:', err);
+    } finally {
+      if (seq === searchSeq.current) {
+        setSearching(false);
+        setLoading(false);
+      }
+    }
+  };
+
+  const fetchData = async () => {
+    await loadBatches();
+    await fetchStaff(search);
   };
 
   useEffect(() => {
     setSelectedStaff(null);
+    setLoading(true);
+    loadBatches();
+    fetchStaff(search);
   }, [activeInstitute?.id]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      fetchData();
-    }, 300);
+      fetchStaff(search);
+    }, 350);
     return () => clearTimeout(timer);
-  }, [search, activeInstitute?.id]);
+  }, [search]);
 
   const handleOpenAssignmentModal = (item: StaffMember) => {
     setViewingStaffAssignments(item);
@@ -431,8 +452,13 @@ export const StaffManagement: React.FC = () => {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search by name, email, code..."
-              className="w-full bg-[#FFFFFF] border border-[#E2E8F0] rounded-xl pl-10 pr-4 py-2 text-xs text-[#0F172A] placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#006FFF]/20"
+              className="w-full bg-[#FFFFFF] border border-[#E2E8F0] rounded-xl pl-10 pr-9 py-2 text-xs text-[#0F172A] placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#006FFF]/20"
             />
+            {searching && (
+              <div className="absolute right-3 top-3">
+                <div className="w-3.5 h-3.5 border-2 border-[#006FFF] border-t-transparent rounded-full animate-spin"></div>
+              </div>
+            )}
           </div>
           <div className="text-xs text-[#64748B] font-medium hidden sm:block">
             Institute Code:{' '}

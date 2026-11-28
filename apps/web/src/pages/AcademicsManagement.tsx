@@ -34,6 +34,7 @@ import {
   Phone,
   Award,
   RefreshCw,
+  Loader2,
 } from 'lucide-react';
 
 interface StaffOption {
@@ -100,6 +101,7 @@ export const AcademicsManagement: React.FC<AcademicsManagementProps> = ({ onNavi
   // Assign Staff Modal
   const [showAssignStaffModal, setShowAssignStaffModal] = useState(false);
   const [selectedStaffToAssign, setSelectedStaffToAssign] = useState('');
+  const [isAssigningStaff, setIsAssigningStaff] = useState(false);
 
   // Student Subject Allocations Modal
   const [allocatingStudent, setAllocatingStudent] = useState<any | null>(null);
@@ -532,16 +534,17 @@ export const AcademicsManagement: React.FC<AcademicsManagementProps> = ({ onNavi
   // Assign Staff to Batch
   const handleAssignStaff = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedBatchDetails || !selectedStaffToAssign) return;
+    if (!selectedBatchDetails || !selectedStaffToAssign || isAssigningStaff) return;
     const batchId = selectedBatchDetails.id;
     const staffId = selectedStaffToAssign;
+    setIsAssigningStaff(true);
     try {
       const res = await apiFetch(`/academics/batches/${batchId}/staff`, {
         method: 'POST',
         body: JSON.stringify({ staffProfileId: staffId }),
       });
       if (res.success) {
-        success('Staff assigned to batch faculty');
+        success('Trainer assigned to batch faculty');
         setShowAssignStaffModal(false);
         setSelectedStaffToAssign('');
         // 1. Optimistic state update: update selectedBatchDetails immediately so tab count & list update instantly
@@ -586,12 +589,13 @@ export const AcademicsManagement: React.FC<AcademicsManagementProps> = ({ onNavi
         }
 
         // 2. Fetch fresh detailed batch from server to ensure complete consistency
-        await loadBatchDetails(batchId);
-        // 3. Silently sync the batch list in background so overview count also stays fresh
-        fetchData(true);
+        loadBatchDetails(batchId).catch(console.error);
+        fetchData(true).catch(console.error);
       }
     } catch (err: any) {
-      error(err.message || 'Failed to assign staff to batch');
+      error(err.message || 'Failed to assign trainer to batch');
+    } finally {
+      setIsAssigningStaff(false);
     }
   };
 
@@ -1533,10 +1537,17 @@ export const AcademicsManagement: React.FC<AcademicsManagementProps> = ({ onNavi
                   </button>
                   <button
                     type="submit"
-                    disabled={!selectedStaffToAssign}
-                    className="px-5 py-2 rounded-xl text-xs font-bold text-white bg-[#006FFF] hover:bg-[#0058D4] shadow-md transition disabled:opacity-50"
+                    disabled={!selectedStaffToAssign || isAssigningStaff}
+                    className="px-5 py-2 rounded-xl text-xs font-bold text-white bg-[#006FFF] hover:bg-[#0058D4] shadow-md transition disabled:opacity-50 flex items-center gap-1.5"
                   >
-                    Assign Trainer
+                    {isAssigningStaff ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        <span>Assigning Trainer...</span>
+                      </>
+                    ) : (
+                      'Assign Trainer'
+                    )}
                   </button>
                 </div>
               </form>

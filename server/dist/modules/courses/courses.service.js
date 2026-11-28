@@ -810,44 +810,38 @@ class CoursesService {
     // 3. FRANCHISE PERMISSION GOVERNANCE & OFFERINGS
     // -------------------------------------------------------------
     static async listFranchiseCourses(franchiseId, options) {
+        const whereClause = {
+            status: client_1.CourseStatus.PUBLISHED,
+            ...(options?.includeUnpermitted
+                ? {}
+                : {
+                    franchiseSelections: {
+                        some: { franchiseId, isPermitted: true },
+                    },
+                }),
+        };
         const courses = await prisma_js_1.prisma.globalCourse.findMany({
-            where: { status: client_1.CourseStatus.PUBLISHED },
+            where: whereClause,
             include: {
                 category: true,
                 activeCurriculumVersion: {
-                    include: {
-                        modules: {
-                            orderBy: { position: 'asc' },
-                            include: {
-                                chapters: {
-                                    orderBy: { position: 'asc' },
-                                    select: {
-                                        id: true,
-                                        title: true,
-                                        description: true,
-                                        videoUrl: true,
-                                        duration: true,
-                                        position: true,
-                                        isFree: true,
-                                    },
-                                },
-                            },
-                        },
+                    select: {
+                        id: true,
+                        version: true,
+                        title: true,
+                        _count: { select: { modules: true } },
                     },
                 },
                 franchiseSelections: {
-                    where: { franchiseId }
+                    where: { franchiseId },
                 },
                 _count: {
-                    select: { enrollments: { where: { franchiseId, status: client_1.EnrollmentStatus.ACTIVE } } }
-                }
+                    select: { enrollments: { where: { franchiseId, status: client_1.EnrollmentStatus.ACTIVE } } },
+                },
             },
-            orderBy: { title: 'asc' }
+            orderBy: { title: 'asc' },
         });
-        const filtered = options?.includeUnpermitted
-            ? courses
-            : courses.filter((c) => c.franchiseSelections[0]?.isPermitted === true);
-        return filtered.map((c) => {
+        return courses.map((c) => {
             const selection = c.franchiseSelections[0] || null;
             const isPermitted = Boolean(selection?.isPermitted);
             const isSelected = isPermitted;

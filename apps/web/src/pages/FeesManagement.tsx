@@ -26,6 +26,7 @@ import {
   RefreshCw,
   Building2,
   Edit2,
+  Loader2,
 } from 'lucide-react';
 
 export const FeesManagement: React.FC = () => {
@@ -119,6 +120,8 @@ export const FeesManagement: React.FC = () => {
 
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
+  const [isAssigningFee, setIsAssigningFee] = useState<boolean>(false);
+  const [isAssigningBatchFee, setIsAssigningBatchFee] = useState<boolean>(false);
 
   // Keyboard navigation & modal dismiss
   useEffect(() => {
@@ -314,6 +317,7 @@ export const FeesManagement: React.FC = () => {
 
   const handleAssignIndividual = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isAssigningFee) return;
     setActionError(null);
     try {
       if (!newAssignment.studentId) {
@@ -335,6 +339,7 @@ export const FeesManagement: React.FC = () => {
         return;
       }
 
+      setIsAssigningFee(true);
       const payload: any = {
         studentId: newAssignment.studentId,
         feeStructureId: targetFsId,
@@ -373,11 +378,14 @@ export const FeesManagement: React.FC = () => {
       }
     } catch (err: any) {
       setActionError(err.message || 'Error assigning fee');
+    } finally {
+      setIsAssigningFee(false);
     }
   };
 
   const handleAssignBatch = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isAssigningBatchFee) return;
     setActionError(null);
     try {
       if (!newBatchAssignment.batchId) {
@@ -398,6 +406,7 @@ export const FeesManagement: React.FC = () => {
         return;
       }
 
+      setIsAssigningBatchFee(true);
       const payload: any = {
         batchId: newBatchAssignment.batchId,
         feeStructureId: targetFsId,
@@ -436,6 +445,8 @@ export const FeesManagement: React.FC = () => {
       }
     } catch (err: any) {
       setActionError(err.message || 'Error running batch assignment');
+    } finally {
+      setIsAssigningBatchFee(false);
     }
   };
 
@@ -1798,9 +1809,17 @@ export const FeesManagement: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2.5 rounded-xl font-bold bg-[#006FFF] hover:bg-[#0058D4] text-white shadow-sm"
+                  disabled={isAssigningFee}
+                  className="px-5 py-2.5 rounded-xl font-bold bg-[#006FFF] hover:bg-[#0058D4] text-white shadow-sm disabled:opacity-50 flex items-center gap-2"
                 >
-                  Assign Fee
+                  {isAssigningFee ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Assigning Fee...</span>
+                    </>
+                  ) : (
+                    'Assign Fee'
+                  )}
                 </button>
               </div>
             </form>
@@ -2027,9 +2046,17 @@ export const FeesManagement: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2.5 rounded-xl font-bold bg-[#006FFF] hover:bg-[#006FFF] text-white shadow-sm"
+                  disabled={isAssigningBatchFee}
+                  className="px-5 py-2.5 rounded-xl font-bold bg-[#006FFF] hover:bg-[#0058D4] text-white shadow-sm disabled:opacity-50 flex items-center gap-2"
                 >
-                  Execute Batch Assignment
+                  {isAssigningBatchFee ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Assigning Batch Fee...</span>
+                    </>
+                  ) : (
+                    'Execute Batch Assignment'
+                  )}
                 </button>
               </div>
             </form>
