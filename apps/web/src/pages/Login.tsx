@@ -411,7 +411,7 @@ export const Login: React.FC = () => {
 
               <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200">
                 <div className="font-bold text-emerald-700 flex items-center gap-1.5 mb-1">
-                  <Users className="w-4 h-4" /> Staff & Faculty
+                  <Users className="w-4 h-4" /> Trainers
                 </div>
                 <p className="text-slate-600">
                   Employee codes and credentials are created by your Franchisee Admin upon profile approval.

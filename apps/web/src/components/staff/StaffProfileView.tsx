@@ -7,6 +7,8 @@ import {
 import React, { useEffect, useState, useRef } from 'react';
 import { apiFetch } from '../../services/api';
 import { StaffMember, StaffQualification, StaffExperience, StaffDocument, Batch } from '../../types';
+import { ConfirmationModal } from '../ConfirmationModal';
+import { useToast } from '../../context/ToastContext';
 import {
   ArrowLeft,
   User,
@@ -68,10 +70,22 @@ export const StaffProfileView: React.FC<StaffProfileViewProps> = ({
   batches,
   onOpenBatchAssignments,
 }) => {
+  const toast = useToast();
   const [staff, setStaff] = useState<StaffMember | null>(initialStaff || null);
   const [loading, setLoading] = useState(!initialStaff);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabType>('overview');
+
+  // Confirm modal state
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean; title: string; message: string; variant: 'danger' | 'warning' | 'primary';
+    confirmLabel: string; loading: boolean; onConfirm: () => void;
+  }>({ isOpen: false, title: '', message: '', variant: 'danger', confirmLabel: 'Confirm', loading: false, onConfirm: () => {} });
+
+  const openConfirm = (opts: { title: string; message: string; variant?: 'danger' | 'warning' | 'primary'; confirmLabel?: string; onConfirm: () => void }) => {
+    setConfirmModal({ isOpen: true, title: opts.title, message: opts.message, variant: opts.variant || 'danger', confirmLabel: opts.confirmLabel || 'Confirm', loading: false, onConfirm: opts.onConfirm });
+  };
+  const closeConfirm = () => setConfirmModal((m) => ({ ...m, isOpen: false, loading: false }));
 
   // Photo upload ref
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -84,6 +98,7 @@ export const StaffProfileView: React.FC<StaffProfileViewProps> = ({
     phone: '',
     dob: '',
     gender: '',
+    bloodGroup: '',
     altPhone: '',
     personalEmail: '',
     emergencyContactName: '',
@@ -174,6 +189,7 @@ export const StaffProfileView: React.FC<StaffProfileViewProps> = ({
       phone: s.user?.phone || '',
       dob: s.dob ? s.dob.split('T')[0] : '',
       gender: s.gender || '',
+      bloodGroup: s.bloodGroup || '',
       altPhone: s.altPhone || '',
       personalEmail: s.personalEmail || '',
       emergencyContactName: s.emergencyContactName || '',
@@ -217,7 +233,7 @@ export const StaffProfileView: React.FC<StaffProfileViewProps> = ({
         setStaff(s);
         populateForms(s);
       } else {
-        setError('Staff profile could not be loaded');
+        setError('Trainer profile could not be loaded');
       }
     } catch (err: any) {
       setError(err.message || 'Failed to fetch staff details');
@@ -388,6 +404,7 @@ export const StaffProfileView: React.FC<StaffProfileViewProps> = ({
         phone: personalForm.phone.trim() || null,
         dob: personalForm.dob || null,
         gender: personalForm.gender || null,
+        bloodGroup: personalForm.bloodGroup || null,
         altPhone: personalForm.altPhone.trim() || null,
         personalEmail: personalForm.personalEmail.trim() || null,
         emergencyContactName: personalForm.emergencyContactName.trim() || null,
@@ -477,22 +494,27 @@ export const StaffProfileView: React.FC<StaffProfileViewProps> = ({
     if (!staff) return;
     const newStatus = !staff.user.isActive;
     const actionLabel = newStatus ? 'activate' : 'deactivate';
-    if (!window.confirm(`Are you sure you want to ${actionLabel} ${staff.user.fullName}?`)) {
-      return;
-    }
-
-    try {
-      const res = await apiFetch(`/staff/${staff.id}/status`, {
-        method: 'PATCH',
-        body: JSON.stringify({ isActive: newStatus }),
-      });
-      if (res.success) {
-        await fetchStaffDetails();
-        onUpdated?.();
-      }
-    } catch (err: any) {
-      alert(err.message || `Failed to ${actionLabel} staff`);
-    }
+    openConfirm({
+      title: newStatus ? 'Activate Staff Account' : 'Deactivate Staff Account',
+      message: `Are you sure you want to ${actionLabel} ${staff.user.fullName}?`,
+      variant: newStatus ? 'primary' : 'danger',
+      confirmLabel: newStatus ? 'Activate' : 'Deactivate',
+      onConfirm: async () => {
+        closeConfirm();
+        try {
+          const res = await apiFetch(`/staff/${staff.id}/status`, {
+            method: 'PATCH',
+            body: JSON.stringify({ isActive: newStatus }),
+          });
+          if (res.success) {
+            await fetchStaffDetails();
+            onUpdated?.();
+          }
+        } catch (err: any) {
+          toast.error(err.message || `Failed to ${actionLabel} staff`);
+        }
+      },
+    });
   };
 
   // Save Qualification
@@ -533,14 +555,22 @@ export const StaffProfileView: React.FC<StaffProfileViewProps> = ({
 
   // Delete Qualification
   const handleDeleteQualification = async (qid: string) => {
-    if (!window.confirm('Delete this qualification?')) return;
-    try {
-      await apiFetch(`/staff/${staffId}/qualifications/${qid}`, { method: 'DELETE' });
-      await fetchStaffDetails();
-      onUpdated?.();
-    } catch (err: any) {
-      alert(err.message || 'Failed to delete qualification');
-    }
+    openConfirm({
+      title: 'Delete Qualification',
+      message: 'Delete this qualification record? This action cannot be undone.',
+      variant: 'danger',
+      confirmLabel: 'Delete',
+      onConfirm: async () => {
+        closeConfirm();
+        try {
+          await apiFetch(`/staff/${staffId}/qualifications/${qid}`, { method: 'DELETE' });
+          await fetchStaffDetails();
+          onUpdated?.();
+        } catch (err: any) {
+          toast.error(err.message || 'Failed to delete qualification');
+        }
+      },
+    });
   };
 
   // Save Experience
@@ -584,14 +614,22 @@ export const StaffProfileView: React.FC<StaffProfileViewProps> = ({
 
   // Delete Experience
   const handleDeleteExperience = async (eid: string) => {
-    if (!window.confirm('Delete this experience record?')) return;
-    try {
-      await apiFetch(`/staff/${staffId}/experiences/${eid}`, { method: 'DELETE' });
-      await fetchStaffDetails();
-      onUpdated?.();
-    } catch (err: any) {
-      alert(err.message || 'Failed to delete experience');
-    }
+    openConfirm({
+      title: 'Delete Experience',
+      message: 'Delete this experience record? This action cannot be undone.',
+      variant: 'danger',
+      confirmLabel: 'Delete',
+      onConfirm: async () => {
+        closeConfirm();
+        try {
+          await apiFetch(`/staff/${staffId}/experiences/${eid}`, { method: 'DELETE' });
+          await fetchStaffDetails();
+          onUpdated?.();
+        } catch (err: any) {
+          toast.error(err.message || 'Failed to delete experience');
+        }
+      },
+    });
   };
 
   // Upload Document
@@ -634,14 +672,22 @@ export const StaffProfileView: React.FC<StaffProfileViewProps> = ({
 
   // Delete Document
   const handleDeleteDocument = async (docId: string) => {
-    if (!window.confirm('Are you sure you want to delete this document?')) return;
-    try {
-      await apiFetch(`/staff/${staffId}/documents/${docId}`, { method: 'DELETE' });
-      await fetchStaffDetails();
-      onUpdated?.();
-    } catch (err: any) {
-      alert(err.message || 'Failed to delete document');
-    }
+    openConfirm({
+      title: 'Delete Document',
+      message: 'Are you sure you want to delete this document? This action cannot be undone.',
+      variant: 'danger',
+      confirmLabel: 'Delete',
+      onConfirm: async () => {
+        closeConfirm();
+        try {
+          await apiFetch(`/staff/${staffId}/documents/${docId}`, { method: 'DELETE' });
+          await fetchStaffDetails();
+          onUpdated?.();
+        } catch (err: any) {
+          toast.error(err.message || 'Failed to delete document');
+        }
+      },
+    });
   };
 
   // Reset Password from Account Tab
@@ -721,7 +767,7 @@ export const StaffProfileView: React.FC<StaffProfileViewProps> = ({
     return (
       <div className="bg-white border border-[#E2E8F0] rounded-2xl p-12 text-center shadow-sm">
         <RefreshCw className="w-8 h-8 text-[#94A3B8] animate-spin mx-auto mb-3" />
-        <p className="text-sm font-semibold text-[#006FFF]">Loading staff profile...</p>
+        <p className="text-sm font-semibold text-[#006FFF]">Loading trainer profile...</p>
       </div>
     );
   }
@@ -731,12 +777,12 @@ export const StaffProfileView: React.FC<StaffProfileViewProps> = ({
       <div className="bg-white border border-rose-200 rounded-2xl p-8 text-center shadow-sm">
         <AlertTriangle className="w-10 h-10 text-rose-500 mx-auto mb-3" />
         <h3 className="text-lg font-bold text-rose-900 mb-1">Failed to Load Profile</h3>
-        <p className="text-sm text-rose-700 mb-4">{error || 'Staff member not found'}</p>
+        <p className="text-sm text-rose-700 mb-4">{error || 'Trainer not found'}</p>
         <button
           onClick={onBack}
           className="inline-flex items-center gap-2 px-4 py-2 bg-[#006FFF] text-white text-xs font-semibold rounded-xl hover:bg-[#0058D4]"
         >
-          <ArrowLeft className="w-4 h-4" /> Return to Staff Directory
+          <ArrowLeft className="w-4 h-4" /> Return to Trainer Directory
         </button>
       </div>
     );
@@ -753,7 +799,7 @@ export const StaffProfileView: React.FC<StaffProfileViewProps> = ({
           className="inline-flex items-center gap-2 text-xs font-semibold text-[#006FFF] hover:text-[#0F172A] bg-white border border-[#E2E8F0] px-3.5 py-2 rounded-xl hover:bg-[#F8FAFC] transition-colors shadow-sm"
         >
           <ArrowLeft className="w-4 h-4" />
-          <span>Back to Staff Directory</span>
+          <span>Back to Trainer Directory</span>
         </button>
 
         <div className="flex items-center gap-2">
@@ -1173,7 +1219,7 @@ export const StaffProfileView: React.FC<StaffProfileViewProps> = ({
             <div>
               <h3 className="text-base font-bold text-[#0F172A]">Personal & Contact Information</h3>
               <p className="text-xs text-[#64748B] mt-0.5">
-                Staff identity, contact numbers, and residential address details
+                Trainer identity, contact numbers, and residential address details
               </p>
             </div>
             {!editingPersonal && (
@@ -1200,7 +1246,7 @@ export const StaffProfileView: React.FC<StaffProfileViewProps> = ({
                 <h4 className="text-xs font-bold text-[#006FFF] uppercase tracking-wider mb-3">
                   Basic Identity
                 </h4>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                   <div>
                     <label className="block text-xs font-semibold text-[#0F172A] mb-1">
                       Full Name *
@@ -1236,6 +1282,24 @@ export const StaffProfileView: React.FC<StaffProfileViewProps> = ({
                       <option value="Female">Female</option>
                       <option value="Other">Other</option>
                       <option value="Prefer not to say">Prefer not to say</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-[#0F172A] mb-1">Blood Group</label>
+                    <select
+                      value={personalForm.bloodGroup}
+                      onChange={(e) => setPersonalForm({ ...personalForm, bloodGroup: e.target.value })}
+                      className="w-full bg-[#FAF8F5] border border-[#E2E8F0] rounded-xl px-3 py-2 text-xs text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#006FFF]/20"
+                    >
+                      <option value="">Select Blood Group (Optional)</option>
+                      <option value="A+">A+</option>
+                      <option value="A-">A-</option>
+                      <option value="B+">B+</option>
+                      <option value="B-">B-</option>
+                      <option value="AB+">AB+</option>
+                      <option value="AB-">AB-</option>
+                      <option value="O+">O+</option>
+                      <option value="O-">O-</option>
                     </select>
                   </div>
                 </div>
@@ -1303,7 +1367,7 @@ export const StaffProfileView: React.FC<StaffProfileViewProps> = ({
                       onChange={(e) =>
                         setPersonalForm({ ...personalForm, personalEmail: e.target.value.trim() })
                       }
-                      placeholder="e.g. faculty@gmail.com"
+                      placeholder="e.g. trainer@gmail.com"
                       className={`w-full bg-[#FAF8F5] border rounded-xl px-3 py-2 text-xs text-[#0F172A] focus:outline-none focus:ring-2 transition-colors ${
                         personalForm.personalEmail.trim() && getEmailValidationError(personalForm.personalEmail)
                           ? 'border-rose-400 focus:ring-rose-200 bg-rose-50/30'
@@ -1649,6 +1713,12 @@ export const StaffProfileView: React.FC<StaffProfileViewProps> = ({
                     </span>
                   </div>
                   <div>
+                    <span className="text-[#94A3B8] text-[11px] block">Blood Group</span>
+                    <span className="font-semibold text-[#0F172A] mt-0.5 block">
+                      {staff.bloodGroup || 'Not specified'}
+                    </span>
+                  </div>
+                  <div>
                     <span className="text-[#94A3B8] text-[11px] block">Primary Phone</span>
                     <span className="font-semibold text-[#0F172A] mt-0.5 block">
                       {staff.user.phone || 'Not provided'}
@@ -1819,7 +1889,7 @@ export const StaffProfileView: React.FC<StaffProfileViewProps> = ({
                     onChange={(e) =>
                       setEmploymentForm({ ...employmentForm, designation: e.target.value })
                     }
-                    placeholder="e.g. Senior Physics Faculty"
+                    placeholder="e.g. Senior Physics Trainer"
                     className="w-full bg-[#FAF8F5] border border-[#E2E8F0] rounded-xl px-3 py-2 text-xs text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#006FFF]/20"
                   />
                 </div>
@@ -1854,7 +1924,7 @@ export const StaffProfileView: React.FC<StaffProfileViewProps> = ({
                     <option value="FULL_TIME">Full-time</option>
                     <option value="PART_TIME">Part-time</option>
                     <option value="CONTRACT">Contract</option>
-                    <option value="VISITING">Visiting Faculty</option>
+                    <option value="VISITING">Visiting Trainer</option>
                   </select>
                 </div>
                 <div>
@@ -2013,7 +2083,7 @@ export const StaffProfileView: React.FC<StaffProfileViewProps> = ({
               <div>
                 <h3 className="text-base font-bold text-[#0F172A]">Academic Qualifications</h3>
                 <p className="text-xs text-[#64748B] mt-0.5">
-                  Degrees, diplomas, and certifications earned by this staff member
+                  Degrees, diplomas, and certifications earned by this trainer
                 </p>
               </div>
               <button
@@ -2227,7 +2297,7 @@ export const StaffProfileView: React.FC<StaffProfileViewProps> = ({
                 Assigned Batches & Course Subjects
               </h3>
               <p className="text-xs text-[#64748B] mt-0.5">
-                Real-time active class assignments for this faculty member
+                Real-time active class assignments for this trainer
               </p>
             </div>
             <button
@@ -2300,7 +2370,7 @@ export const StaffProfileView: React.FC<StaffProfileViewProps> = ({
               <BookOpen className="w-8 h-8 text-[#94A3B8] mx-auto mb-2" />
               <p className="text-sm font-bold text-[#006FFF]">No Batches Currently Assigned</p>
               <p className="text-xs text-[#64748B] mt-1 max-w-sm mx-auto">
-                Assign this faculty member to classes and curriculum subjects so they can manage attendance and grades.
+                Assign this trainer to classes and curriculum subjects so they can manage attendance and grades.
               </p>
               <button
                 onClick={() => onOpenBatchAssignments(staff)}
@@ -2318,7 +2388,7 @@ export const StaffProfileView: React.FC<StaffProfileViewProps> = ({
         <div className="bg-white border border-[#E2E8F0] rounded-2xl p-6 shadow-sm space-y-6">
           <div className="flex items-center justify-between pb-4 border-b border-[#F1F5F9]">
             <div>
-              <h3 className="text-base font-bold text-[#0F172A]">Staff Documents & Records</h3>
+              <h3 className="text-base font-bold text-[#0F172A]">Trainer Documents & Records</h3>
               <p className="text-xs text-[#64748B] mt-0.5">
                 Official certificates, ID verification, contracts, and uploaded credentials
               </p>
@@ -2454,11 +2524,11 @@ export const StaffProfileView: React.FC<StaffProfileViewProps> = ({
             <div className="pt-4 border-t border-[#F1F5F9]">
               <div className="p-4 bg-[#FAF8F5] border border-[#E2E8F0] rounded-xl space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-[#006FFF]">Staff Login Coordinates</span>
+                  <span className="text-xs font-bold text-[#006FFF]">Trainer Login Coordinates</span>
                   <button
                     onClick={() =>
                       copyToClipboard(
-                        `Staff Login Portal\nEmail: ${staff.user.email}\nPortal URL: ${window.location.origin}`,
+                        `Trainer Login Portal\nEmail: ${staff.user.email}\nPortal URL: ${window.location.origin}`,
                         'coords'
                       )
                     }
@@ -2477,9 +2547,34 @@ export const StaffProfileView: React.FC<StaffProfileViewProps> = ({
                     Username: <span className="font-mono text-[#0F172A]">{staff.user.email}</span>
                   </div>
                   <div>
-                    Institute Code:{' '}
+                    Employee Code:{' '}
                     <span className="font-mono text-[#0F172A]">{staff.employeeCode || 'N/A'}</span>
                   </div>
+                  {(staff.permissionsJson as any)?.permanentPassword && (
+                    <div className="flex items-center gap-2 pt-1 border-t border-[#E2E8F0] mt-1">
+                      <span>Password:</span>
+                      <span className="font-mono font-bold text-[#006FFF] bg-white border border-[#E2E8F0] px-1.5 py-0.5 rounded text-[11px] select-all">
+                        {(staff.permissionsJson as any).permanentPassword}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          copyToClipboard(
+                            (staff.permissionsJson as any).permanentPassword,
+                            'account_pass'
+                          )
+                        }
+                        className="text-[#94A3B8] hover:text-[#006FFF]"
+                        title="Copy password"
+                      >
+                        {copiedKey === 'account_pass' ? (
+                          <Check className="w-3.5 h-3.5 text-emerald-600" />
+                        ) : (
+                          <Copy className="w-3.5 h-3.5" />
+                        )}
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -2491,7 +2586,7 @@ export const StaffProfileView: React.FC<StaffProfileViewProps> = ({
               <Key className="w-5 h-5 text-[#006FFF]" /> Change Permanent Password
             </h3>
             <p className="text-xs text-[#64748B] leading-relaxed">
-              Academic Admin can assign a new permanent password directly to this staff member. You can review and copy it below.
+              Academic Admin can assign a new permanent password directly to this trainer. You can review and copy it below.
             </p>
 
             {resetMsg && (
@@ -2710,7 +2805,7 @@ export const StaffProfileView: React.FC<StaffProfileViewProps> = ({
                   required
                   value={expForm.designation}
                   onChange={(e) => setExpForm({ ...expForm, designation: e.target.value })}
-                  placeholder="e.g. Senior Faculty / Lecturer"
+                  placeholder="e.g. Senior Trainer / Lecturer"
                   className="w-full bg-[#FAF8F5] border border-[#E2E8F0] rounded-xl px-3 py-2 text-xs text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#006FFF]/20"
                 />
               </div>
@@ -2818,7 +2913,7 @@ export const StaffProfileView: React.FC<StaffProfileViewProps> = ({
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl border border-[#E2E8F0] animate-in fade-in zoom-in-95">
             <div className="flex items-center justify-between pb-3 border-b border-[#F1F5F9]">
-              <h3 className="text-base font-bold text-[#0F172A]">Upload Staff Document</h3>
+              <h3 className="text-base font-bold text-[#0F172A]">Upload Trainer Document</h3>
               <button
                 onClick={() => setShowDocModal(false)}
                 className="text-[#94A3B8] hover:text-[#0F172A]"

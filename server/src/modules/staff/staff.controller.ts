@@ -69,6 +69,7 @@ export const createStaffSchema = z.object({
   // Personal Details
   dob: z.string().optional().nullable(),
   gender: z.string().optional().nullable(),
+  bloodGroup: z.string().optional().nullable(),
   altPhone: optionalPhoneValidator,
   personalEmail: optionalEmailValidator,
   emergencyContactName: z.string().optional().nullable(),
@@ -113,6 +114,7 @@ export const updateStaffSchema = z.object({
   // Personal Details
   dob: z.string().optional().nullable(),
   gender: z.string().optional().nullable(),
+  bloodGroup: z.string().optional().nullable(),
   altPhone: optionalPhoneValidator,
   personalEmail: optionalEmailValidator,
   emergencyContactName: z.string().optional().nullable(),
@@ -366,7 +368,7 @@ export async function createStaff(req: AuthenticatedRequest, res: Response) {
     const permPostal = sameAsCurrent ? data.currentPostalCode : data.permanentPostalCode;
     const permCountry = sameAsCurrent ? (data.currentCountry || 'India') : (data.permanentCountry || 'India');
 
-    const result = await prisma.$transaction(async (tx) => {
+    const result: any = await prisma.$transaction(async (tx: any): Promise<any> => {
       // 1. Create User
       const user = await tx.user.create({
         data: {
@@ -409,6 +411,7 @@ export async function createStaff(req: AuthenticatedRequest, res: Response) {
           // Personal Details
           dob: safeParseDate(data.dob),
           gender: data.gender || null,
+          bloodGroup: data.bloodGroup?.trim() || null,
           altPhone: data.altPhone?.trim() || null,
           personalEmail: data.personalEmail?.trim() || null,
           emergencyContactName: data.emergencyContactName?.trim() || null,
@@ -513,6 +516,7 @@ export async function createStaff(req: AuthenticatedRequest, res: Response) {
           qualification: result.staffProfile.qualification,
           department: result.staffProfile.department,
           employmentType: result.staffProfile.employmentType,
+          permissionsJson: result.staffProfile.permissionsJson,
           user: result.user,
         },
       },
@@ -717,12 +721,22 @@ export async function updateStaff(req: AuthenticatedRequest, res: Response) {
           ...(data.employeeCode !== undefined && { employeeCode: data.employeeCode?.trim() || null }),
           ...(data.designation && { designation: data.designation.trim() }),
           ...(data.qualification !== undefined && { qualification: data.qualification?.trim() || null }),
-          ...(data.permissionsJson && { permissionsJson: data.permissionsJson }),
+          ...(data.permissionsJson && {
+            permissionsJson: {
+              ...((existing.permissionsJson as Record<string, any>) || {}),
+              ...data.permissionsJson,
+              // Never wipe the stored permanentPassword during general profile updates
+              ...(((existing.permissionsJson as Record<string, any>)?.permanentPassword) && {
+                permanentPassword: (existing.permissionsJson as Record<string, any>).permanentPassword,
+              }),
+            },
+          }),
           ...((data.avatarUrl !== undefined || data.photoUrl !== undefined) && { avatarUrl: data.avatarUrl?.trim() || data.photoUrl?.trim() || null }),
 
           // Personal Details
           ...(data.dob !== undefined && { dob: data.dob ? new Date(data.dob) : null }),
           ...(data.gender !== undefined && { gender: data.gender || null }),
+          ...(data.bloodGroup !== undefined && { bloodGroup: data.bloodGroup?.trim() || null }),
           ...(data.altPhone !== undefined && { altPhone: data.altPhone?.trim() || null }),
           ...(data.personalEmail !== undefined && { personalEmail: data.personalEmail?.trim() || null }),
           ...(data.emergencyContactName !== undefined && { emergencyContactName: data.emergencyContactName?.trim() || null }),
@@ -1911,26 +1925,44 @@ export async function getMyStaffStudents(req: AuthenticatedRequest, res: Respons
     const serverNow = new Date();
     const eventDate = getInstituteLocalDate(serverNow);
 
-    const students = await prisma.student.findMany({
-      where: {
-        instituteId,
-        status: 'ACTIVE',
-        enrollments: {
-          some: {
-            batchId: { in: targetBatchIds },
-            isActive: true,
-          },
+    const studentWhere: any = {
+      instituteId,
+      status: 'ACTIVE',
+      enrollments: {
+        some: {
+          batchId: { in: targetBatchIds },
+          isActive: true,
         },
-        ...(search
-          ? {
-              OR: [
-                { firstName: { contains: search, mode: 'insensitive' } },
-                { lastName: { contains: search, mode: 'insensitive' } },
-                { admissionNumber: { contains: search, mode: 'insensitive' } },
-              ],
-            }
-          : {}),
       },
+    };
+
+    if (search) {
+      const searchWords = search.trim().split(/\s+/).filter(Boolean);
+      const searchConditions: any[] = [
+        { firstName: { contains: search, mode: 'insensitive' } },
+        { lastName: { contains: search, mode: 'insensitive' } },
+        { admissionNumber: { contains: search, mode: 'insensitive' } },
+        { user: { fullName: { contains: search, mode: 'insensitive' } } },
+      ];
+
+      if (searchWords.length > 1) {
+        searchConditions.push({
+          AND: searchWords.map((w: string) => ({
+            OR: [
+              { firstName: { contains: w, mode: 'insensitive' } },
+              { lastName: { contains: w, mode: 'insensitive' } },
+              { user: { fullName: { contains: w, mode: 'insensitive' } } },
+              { admissionNumber: { contains: w, mode: 'insensitive' } },
+            ],
+          })),
+        });
+      }
+
+      studentWhere.OR = searchConditions;
+    }
+
+    const students: any[] = await prisma.student.findMany({
+      where: studentWhere,
       include: {
         enrollments: {
           where: { isActive: true, batchId: { in: targetBatchIds } },
@@ -1966,9 +1998,9 @@ export async function getMyStaffStudents(req: AuthenticatedRequest, res: Respons
       hour12: true,
     });
 
-    const mapped = students.map((s) => {
-      const latestCheckIn = s.attendanceEvents.find((e) => e.eventType === 'CHECK_IN');
-      const latestCheckOut = s.attendanceEvents.find((e) => e.eventType === 'CHECK_OUT');
+    const mapped = students.map((s: any) => {
+      const latestCheckIn = s.attendanceEvents?.find((e: any) => e.eventType === 'CHECK_IN');
+      const latestCheckOut = s.attendanceEvents?.find((e: any) => e.eventType === 'CHECK_OUT');
 
       const isCheckedIn = !!(
         latestCheckIn &&

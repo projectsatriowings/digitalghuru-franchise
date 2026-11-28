@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { apiFetch, getMaterialDownloadUrl } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { ConfirmationModal } from '../components/ConfirmationModal';
 import {
   Award,
   Calendar,
@@ -44,6 +45,17 @@ export const ExaminationsManagement: React.FC = () => {
   const [batches, setBatches] = useState<any[]>([]);
   const [subjects, setSubjects] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Confirm modal state
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean; title: string; message: string; variant: 'danger' | 'warning' | 'primary';
+    confirmLabel: string; loading: boolean; onConfirm: () => void;
+  }>({ isOpen: false, title: '', message: '', variant: 'danger', confirmLabel: 'Confirm', loading: false, onConfirm: () => {} });
+
+  const openConfirm = (opts: { title: string; message: string; variant?: 'danger' | 'warning' | 'primary'; confirmLabel?: string; onConfirm: () => void }) => {
+    setConfirmModal({ isOpen: true, title: opts.title, message: opts.message, variant: opts.variant || 'danger', confirmLabel: opts.confirmLabel || 'Confirm', loading: false, onConfirm: opts.onConfirm });
+  };
+  const closeConfirm = () => setConfirmModal((m) => ({ ...m, isOpen: false, loading: false }));
 
   // Filters
   const [selectedBatch, setSelectedBatch] = useState<string>('ALL');
@@ -256,28 +268,32 @@ export const ExaminationsManagement: React.FC = () => {
   }
 
   async function handlePublishResults(exam: any) {
-    const confirmed = window.confirm(
-      `Confirm publishing official examination results for "${exam.title}"?\n\nThis will make scores visible to students and linked parents, and dispatch in-app notifications.`
-    );
-    if (!confirmed) return;
-
-    try {
-      setPublishingResults(true);
-      const res = await apiFetch(`/exams/${exam.id}/publish-results`, {
-        method: 'PATCH',
-      });
-      if (res.success) {
-        toast.success(res.message || 'Results published successfully!');
-        if (selectedExamForMarks?.id === exam.id) {
-          setSelectedExamForMarks(null);
+    openConfirm({
+      title: 'Publish Examination Results',
+      message: `Confirm publishing official examination results for "${exam.title}"? This will make scores visible to students and linked parents, and dispatch in-app notifications.`,
+      variant: 'primary',
+      confirmLabel: 'Publish Results',
+      onConfirm: async () => {
+        closeConfirm();
+        try {
+          setPublishingResults(true);
+          const res = await apiFetch(`/exams/${exam.id}/publish-results`, {
+            method: 'PATCH',
+          });
+          if (res.success) {
+            toast.success(res.message || 'Results published successfully!');
+            if (selectedExamForMarks?.id === exam.id) {
+              setSelectedExamForMarks(null);
+            }
+            loadExams();
+          }
+        } catch (err: any) {
+          toast.error(err.message || 'Failed to publish results');
+        } finally {
+          setPublishingResults(false);
         }
-        loadExams();
-      }
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to publish results');
-    } finally {
-      setPublishingResults(false);
-    }
+      },
+    });
   }
 
   async function handlePublishSchedule(exam: any) {
@@ -295,16 +311,24 @@ export const ExaminationsManagement: React.FC = () => {
   }
 
   async function handleDeleteExam(examId: string) {
-    if (!window.confirm('Are you sure you want to delete this scheduled examination?')) return;
-    try {
-      const res = await apiFetch(`/exams/${examId}`, { method: 'DELETE' });
-      if (res.success) {
-        toast.success('Exam deleted successfully.');
-        loadExams();
-      }
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to delete exam');
-    }
+    openConfirm({
+      title: 'Delete Examination',
+      message: 'Are you sure you want to delete this scheduled examination? This action cannot be undone.',
+      variant: 'danger',
+      confirmLabel: 'Delete Exam',
+      onConfirm: async () => {
+        closeConfirm();
+        try {
+          const res = await apiFetch(`/exams/${examId}`, { method: 'DELETE' });
+          if (res.success) {
+            toast.success('Exam deleted successfully.');
+            loadExams();
+          }
+        } catch (err: any) {
+          toast.error(err.message || 'Failed to delete exam');
+        }
+      },
+    });
   }
 
   async function openClassAnalytics(exam: any) {
@@ -334,6 +358,17 @@ export const ExaminationsManagement: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      <ConfirmationModal
+        isOpen={confirmModal.isOpen}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        confirmLabel={confirmModal.confirmLabel}
+        cancelLabel="Cancel"
+        variant={confirmModal.variant}
+        loading={confirmModal.loading}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={closeConfirm}
+      />
       {/* Top Banner */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -602,7 +637,7 @@ export const ExaminationsManagement: React.FC = () => {
                       ) : (
                         <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900 flex items-center gap-2">
                           <Clock className="w-3.5 h-3.5 text-amber-700 shrink-0" />
-                          <span>Results not yet published by academic staff.</span>
+                          <span>Results not yet published by academic trainers.</span>
                         </div>
                       )}
                     </div>

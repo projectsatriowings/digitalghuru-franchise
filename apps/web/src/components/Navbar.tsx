@@ -65,7 +65,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileSidebar }) => {
       case 'STAFF':
         return (
           <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-300">
-            Staff
+            Trainer
           </span>
         );
       case 'PARENT':

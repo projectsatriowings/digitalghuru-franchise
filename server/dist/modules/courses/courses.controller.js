@@ -38,6 +38,7 @@ exports.streamPublicMedia = streamPublicMedia;
 exports.generateMediaTokenController = generateMediaTokenController;
 exports.streamProtectedMedia = streamProtectedMedia;
 const path_1 = __importDefault(require("path"));
+const cache_js_1 = require("../../utils/cache.js");
 const courses_service_js_1 = require("./courses.service.js");
 const courses_types_js_1 = require("./courses.types.js");
 const client_1 = require("@prisma/client");
@@ -677,35 +678,12 @@ async function getMyFranchiseCourseContext(req, res) {
                 },
             },
         });
-        const branchIds = (franchise?.branches || []).map((b) => b.id);
-        const students = await prisma_js_1.prisma.student.findMany({
-            where: isBranchScoped
-                ? { instituteId: { in: allowedInstituteIds }, status: 'ACTIVE' }
-                : {
-                    status: 'ACTIVE',
-                    OR: [
-                        { franchiseId },
-                        ...(branchIds.length > 0 ? [{ instituteId: { in: branchIds } }] : []),
-                    ],
-                },
-            orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
-            select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                admissionNumber: true,
-                phone: true,
-                instituteId: true,
-                franchiseId: true,
-                user: { select: { email: true } },
-            },
-        });
         res.json({
             success: true,
             data: {
                 franchise,
                 branches: franchise?.branches || [],
-                students,
+                students: [],
                 isBranchScoped,
             },
         });
@@ -953,7 +931,13 @@ async function getMyLearningDashboard(req, res) {
         if (!auth.allowed || !auth.studentId) {
             return res.status(403).json({ success: false, message: auth.message || 'Forbidden' });
         }
+        const cacheKey = `student:dashboard:${auth.studentId}`;
+        const cached = cache_js_1.serverCache.get(cacheKey);
+        if (cached) {
+            return res.json({ success: true, data: cached });
+        }
         const dashboard = await courses_service_js_1.CoursesService.getStudentLearningDashboard(auth.studentId);
+        cache_js_1.serverCache.set(cacheKey, dashboard, 30000);
         res.json({ success: true, data: dashboard });
     }
     catch (error) {
@@ -1027,6 +1011,7 @@ async function completeLesson(req, res) {
         }
         const studentId = auth.studentId;
         const result = await courses_service_js_1.CoursesService.completeLesson(studentId, parse.data.courseId, parse.data.chapterId, parse.data.timeSpentSec);
+        cache_js_1.serverCache.invalidate(`student:dashboard:${studentId}`);
         res.json({
             success: true,
             data: {

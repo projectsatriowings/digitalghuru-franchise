@@ -882,34 +882,49 @@ export class CoursesService {
     franchiseId: string,
     options?: { includeUnpermitted?: boolean }
   ) {
+    const whereClause: any = {
+      status: CourseStatus.PUBLISHED,
+      ...(options?.includeUnpermitted
+        ? {}
+        : {
+            franchiseSelections: {
+              some: { franchiseId, isPermitted: true },
+            },
+          }),
+    };
+
     const courses = await prisma.globalCourse.findMany({
-      where: { status: CourseStatus.PUBLISHED },
+      where: whereClause,
       include: {
         category: true,
+        activeCurriculumVersion: {
+          select: {
+            id: true,
+            version: true,
+            title: true,
+            _count: { select: { modules: true } },
+          },
+        },
         franchiseSelections: {
-          where: { franchiseId }
+          where: { franchiseId },
         },
         _count: {
-          select: { enrollments: { where: { franchiseId, status: EnrollmentStatus.ACTIVE } } }
-        }
+          select: { enrollments: { where: { franchiseId, status: EnrollmentStatus.ACTIVE } } },
+        },
       },
-      orderBy: { title: 'asc' }
+      orderBy: { title: 'asc' },
     });
 
-    const filtered = options?.includeUnpermitted
-      ? courses
-      : courses.filter((c) => c.franchiseSelections[0]?.isPermitted === true);
-
-    return filtered.map((c) => {
+    return courses.map((c) => {
       const selection = c.franchiseSelections[0] || null;
       const isPermitted = Boolean(selection?.isPermitted);
-      const isSelected = isPermitted;
+      const isSelected = isPermitted && (selection?.isEnabled !== false);
       return {
         ...c,
         isPermitted,
         permittedAt: selection?.permittedAt || null,
         isSelected,
-        franchiseCustomPrice: null,
+        franchiseCustomPrice: selection?.localFeeOverride ? Number(selection.localFeeOverride) : null,
         activeEnrollmentsCount: c._count.enrollments,
       };
     });
@@ -1696,7 +1711,15 @@ export class CoursesService {
                     include: {
                       chapters: {
                         orderBy: { position: 'asc' },
-                        select: { id: true, title: true },
+                        select: {
+                          id: true,
+                          title: true,
+                          description: true,
+                          videoUrl: true,
+                          duration: true,
+                          position: true,
+                          isFree: true,
+                        },
                       },
                     },
                   },
@@ -1744,10 +1767,10 @@ export class CoursesService {
 
     const certByCourseId = new Map(certificates.map((c) => [c.courseId, c]));
 
-    const enrichedEnrollments = enrollments.map((enr) => {
-      const chapters = enr.course.activeCurriculumVersion?.modules.flatMap((m) => m.chapters) || [];
+    const enrichedEnrollments = enrollments.map((enr: any) => {
+      const chapters = enr.course?.activeCurriculumVersion?.modules?.flatMap((m: any) => m.chapters) || [];
       const totalLessons = chapters.length;
-      const completedLessons = chapters.filter((ch) => completedSet.has(ch.id)).length;
+      const completedLessons = chapters.filter((ch: any) => completedSet.has(ch.id)).length;
       const progressPercent = totalLessons > 0 ? Math.round((completedLessons / totalLessons) * 100) : enr.progress;
       const isCompleted = enr.status === EnrollmentStatus.COMPLETED || (totalLessons > 0 && completedLessons === totalLessons);
 

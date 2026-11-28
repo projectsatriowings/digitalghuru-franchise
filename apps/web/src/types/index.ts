@@ -240,6 +240,7 @@ export interface StaffMember {
   // Personal Info
   dob?: string | null;
   gender?: string | null;
+  bloodGroup?: string | null;
   altPhone?: string | null;
   personalEmail?: string | null;
   emergencyContactName?: string | null;
@@ -403,6 +404,14 @@ export interface Parent {
 export interface Batch {
   id: string;
   instituteId: string;
+  courseId?: string | null;
+  course?: {
+    id: string;
+    title: string;
+    slug?: string;
+    thumbnailUrl?: string | null;
+    format?: string | null;
+  } | null;
   name: string;
   code?: string | null;
   academicYear: string;

@@ -3611,6 +3611,7 @@ async function getSuperAdminFranchiseDashboard(req, res) {
                     take: 10,
                 }),
                 prisma_js_1.prisma.franchiseRoyaltyInstallment.findMany({
+                    take: 200,
                     select: {
                         id: true,
                         installmentNumber: true,
@@ -3671,7 +3672,7 @@ async function getSuperAdminFranchiseDashboard(req, res) {
             success: true,
             data,
         };
-        cache_js_1.serverCache.set(cacheKey, responsePayload, 15000);
+        cache_js_1.serverCache.set(cacheKey, responsePayload, 60000);
         return res.json(responsePayload);
     }
     catch (err) {
@@ -3683,6 +3684,13 @@ async function getFranchiseOwnerDashboard(req, res) {
     try {
         const userId = req.user.userId;
         const userRole = req.user.role;
+        const rawBranchId = req.query.branchId || req.headers['x-institute-id'] || undefined;
+        // Cache lookup for rapid re-entry
+        const cacheKey = `franchises:dashboard:owner:${userId}:${rawBranchId || 'all'}`;
+        const cached = cache_js_1.serverCache.get(cacheKey);
+        if (cached) {
+            return res.json(cached);
+        }
         // Support Super Admin inspecting a franchise, or Franchise Owner inspecting their own franchise
         let franchiseWhere = { ownerUserId: userId };
         if (userRole === 'SUPER_ADMIN' && req.query.franchiseId) {
@@ -3745,7 +3753,6 @@ async function getFranchiseOwnerDashboard(req, res) {
             });
         }
         // Branch scoping: check query param or header
-        const rawBranchId = req.query.branchId || req.headers['x-institute-id'] || undefined;
         const allBranchIds = franchise.branches.map((b) => b.id);
         let targetBranchIds = allBranchIds;
         let selectedBranch = null;
@@ -3763,44 +3770,38 @@ async function getFranchiseOwnerDashboard(req, res) {
             selectedBranch = matched;
             isConsolidated = false;
         }
-        // 1. Student Count
-        const totalStudents = await prisma_js_1.prisma.student.count({
-            where: { instituteId: { in: targetBranchIds }, status: 'ACTIVE' },
-        });
-        // 2. Staff Count
-        const totalStaff = await prisma_js_1.prisma.staffProfile.count({
-            where: { instituteId: { in: targetBranchIds }, user: { isActive: true } },
-        });
-        // 3. Batches Count
-        const activeBatches = await prisma_js_1.prisma.batch.count({
-            where: { instituteId: { in: targetBranchIds }, isActive: true },
-        });
-        // 4. Today's Student Attendance
+        // Today date bounds & start of month
         const todayStart = new Date();
         todayStart.setHours(0, 0, 0, 0);
         const todayEnd = new Date();
         todayEnd.setHours(23, 59, 59, 999);
-        const todayPresent = await prisma_js_1.prisma.attendanceEvent.count({
-            where: {
-                instituteId: { in: targetBranchIds },
-                eventDate: { gte: todayStart, lte: todayEnd },
-                eventType: 'CHECK_IN',
-            },
-        });
-        const todayLate = await prisma_js_1.prisma.attendanceEvent.count({
-            where: {
-                instituteId: { in: targetBranchIds },
-                eventDate: { gte: todayStart, lte: todayEnd },
-                eventType: 'CHECK_IN',
-                isLate: true,
-            },
-        });
-        const todayAbsent = Math.max(0, totalStudents - todayPresent);
-        const todayTotalMarked = totalStudents > 0 ? totalStudents : todayPresent;
-        const attendanceRate = todayTotalMarked > 0 ? Number(((todayPresent / todayTotalMarked) * 100).toFixed(1)) : 100.0;
-        // 5. Monthly & Total Fee Collections (net of REFUND adjustments)
         const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
-        const [monthlyPaymentAgg, monthlyRefundAgg, totalPaymentAgg, totalRefundAgg] = await Promise.all([
+        // Consolidated single Promise.all across top KPIs & branch groupings (Zero N+1)
+        const [totalStudents, totalStaff, activeBatches, todayPresent, todayLate, monthlyPaymentAgg, monthlyRefundAgg, totalPaymentAgg, totalRefundAgg, pendingAssignments, upcomingExamsList, upcomingExamsCount, homeworkCount, materialsCount, studentCountsByBranch, staffCountsByBranch, batchCountsByBranch, attendanceByBranch, totalPaymentsByBranch, monthlyPaymentsByBranch,] = await Promise.all([
+            prisma_js_1.prisma.student.count({
+                where: { instituteId: { in: targetBranchIds }, status: 'ACTIVE' },
+            }),
+            prisma_js_1.prisma.staffProfile.count({
+                where: { instituteId: { in: targetBranchIds }, user: { isActive: true } },
+            }),
+            prisma_js_1.prisma.batch.count({
+                where: { instituteId: { in: targetBranchIds }, isActive: true },
+            }),
+            prisma_js_1.prisma.attendanceEvent.count({
+                where: {
+                    instituteId: { in: targetBranchIds },
+                    eventDate: { gte: todayStart, lte: todayEnd },
+                    eventType: 'CHECK_IN',
+                },
+            }),
+            prisma_js_1.prisma.attendanceEvent.count({
+                where: {
+                    instituteId: { in: targetBranchIds },
+                    eventDate: { gte: todayStart, lte: todayEnd },
+                    eventType: 'CHECK_IN',
+                    isLate: true,
+                },
+            }),
             prisma_js_1.prisma.payment.aggregate({
                 where: {
                     instituteId: { in: targetBranchIds },
@@ -3837,113 +3838,14 @@ async function getFranchiseOwnerDashboard(req, res) {
                 },
                 _sum: { amount: true },
             }),
-        ]);
-        const monthlyFeeCollection = Math.max(0, Math.round((Number(monthlyPaymentAgg._sum?.amountPaid || 0) - Number(monthlyRefundAgg._sum?.amount || 0)) * 100) / 100);
-        const totalRevenue = Math.max(0, Math.round((Number(totalPaymentAgg._sum?.amountPaid || 0) - Number(totalRefundAgg._sum?.amount || 0)) * 100) / 100);
-        // 6. Pending Fees (net of REFUNDS)
-        const pendingAssignments = await prisma_js_1.prisma.studentFeeAssignment.findMany({
-            where: {
-                student: { instituteId: { in: targetBranchIds } },
-                status: { in: ['PENDING', 'PARTIALLY_PAID', 'OVERDUE'] },
-            },
-            include: {
-                payments: {
-                    where: { status: 'SUCCESS' },
-                    select: {
-                        amountPaid: true,
-                        adjustments: { where: { adjustmentType: 'REFUND' }, select: { amount: true } },
-                    },
-                },
-            },
-        });
-        let pendingFees = 0;
-        for (const a of pendingAssignments) {
-            const netPaidSum = a.payments.reduce((acc, p) => {
-                const refunded = (p.adjustments || []).reduce((rAcc, adj) => rAcc + Number(adj.amount), 0);
-                return acc + Number(p.amountPaid) - refunded;
-            }, 0);
-            pendingFees += Math.max(0, Number(a.finalAmount) - netPaidSum);
-        }
-        pendingFees = Math.round(pendingFees * 100) / 100;
-        // 7. Upcoming Examinations
-        const upcomingExamsList = await prisma_js_1.prisma.examination.findMany({
-            where: {
-                instituteId: { in: targetBranchIds },
-                examDate: { gte: todayStart },
-            },
-            include: {
-                subject: { select: { name: true, code: true } },
-                institute: { select: { id: true, name: true, code: true } },
-            },
-            orderBy: { examDate: 'asc' },
-            take: 5,
-        });
-        const upcomingExamsCount = await prisma_js_1.prisma.examination.count({
-            where: {
-                instituteId: { in: targetBranchIds },
-                examDate: { gte: todayStart },
-            },
-        });
-        // 8. Homework & Learning Activity
-        const homeworkCount = await prisma_js_1.prisma.learningMaterial.count({
-            where: { instituteId: { in: targetBranchIds }, type: 'HOMEWORK' },
-        });
-        const materialsCount = await prisma_js_1.prisma.learningMaterial.count({
-            where: { instituteId: { in: targetBranchIds }, type: { not: 'HOMEWORK' } },
-        });
-        // 9. Branch Performance Cards (Individual Branch Statistics for Comparison)
-        const branchCards = await Promise.all(franchise.branches.map(async (b) => {
-            const bStudents = await prisma_js_1.prisma.student.count({
-                where: { instituteId: b.id, status: 'ACTIVE' },
-            });
-            const bStaff = await prisma_js_1.prisma.staffProfile.count({
-                where: { instituteId: b.id, user: { isActive: true } },
-            });
-            const bBatches = await prisma_js_1.prisma.batch.count({
-                where: { instituteId: b.id, isActive: true },
-            });
-            const [bPayment, bRefundAgg, bMonthly, bMonthlyRefundAgg] = await Promise.all([
-                prisma_js_1.prisma.payment.aggregate({
-                    where: { instituteId: b.id, status: 'SUCCESS' },
-                    _sum: { amountPaid: true },
-                }),
-                prisma_js_1.prisma.paymentAdjustment.aggregate({
-                    where: {
-                        adjustmentType: 'REFUND',
-                        payment: { instituteId: b.id, status: 'SUCCESS' },
-                    },
-                    _sum: { amount: true },
-                }),
-                prisma_js_1.prisma.payment.aggregate({
-                    where: { instituteId: b.id, status: 'SUCCESS', paidAt: { gte: startOfMonth } },
-                    _sum: { amountPaid: true },
-                }),
-                prisma_js_1.prisma.paymentAdjustment.aggregate({
-                    where: {
-                        adjustmentType: 'REFUND',
-                        payment: { instituteId: b.id, status: 'SUCCESS', paidAt: { gte: startOfMonth } },
-                    },
-                    _sum: { amount: true },
-                }),
-            ]);
-            const bTotalRevenue = Math.max(0, Math.round((Number(bPayment._sum?.amountPaid || 0) - Number(bRefundAgg._sum?.amount || 0)) * 100) / 100);
-            const bMonthlyRevenue = Math.max(0, Math.round((Number(bMonthly._sum?.amountPaid || 0) - Number(bMonthlyRefundAgg._sum?.amount || 0)) * 100) / 100);
-            const bPresent = await prisma_js_1.prisma.attendanceEvent.count({
+            prisma_js_1.prisma.studentFeeAssignment.findMany({
                 where: {
-                    instituteId: b.id,
-                    eventDate: { gte: todayStart, lte: todayEnd },
-                    eventType: 'CHECK_IN',
-                },
-            });
-            const bAbsent = Math.max(0, bStudents - bPresent);
-            const bTotalMarked = bStudents > 0 ? bStudents : bPresent;
-            const bRate = bTotalMarked > 0 ? Number(((bPresent / bTotalMarked) * 100).toFixed(1)) : 100.0;
-            const bAssignments = await prisma_js_1.prisma.studentFeeAssignment.findMany({
-                where: {
-                    student: { instituteId: b.id },
+                    student: { instituteId: { in: allBranchIds } },
                     status: { in: ['PENDING', 'PARTIALLY_PAID', 'OVERDUE'] },
                 },
-                include: {
+                select: {
+                    finalAmount: true,
+                    student: { select: { instituteId: true } },
                     payments: {
                         where: { status: 'SUCCESS' },
                         select: {
@@ -3952,16 +3854,121 @@ async function getFranchiseOwnerDashboard(req, res) {
                         },
                     },
                 },
-            });
-            let bPending = 0;
-            for (const a of bAssignments) {
-                const pNetSum = a.payments.reduce((acc, p) => {
-                    const ref = (p.adjustments || []).reduce((rAcc, adj) => rAcc + Number(adj.amount), 0);
-                    return acc + Number(p.amountPaid) - ref;
-                }, 0);
-                bPending += Math.max(0, Number(a.finalAmount) - pNetSum);
+            }),
+            prisma_js_1.prisma.examination.findMany({
+                where: {
+                    instituteId: { in: targetBranchIds },
+                    examDate: { gte: todayStart },
+                },
+                include: {
+                    subject: { select: { name: true, code: true } },
+                    institute: { select: { id: true, name: true, code: true } },
+                },
+                orderBy: { examDate: 'asc' },
+                take: 5,
+            }),
+            prisma_js_1.prisma.examination.count({
+                where: {
+                    instituteId: { in: targetBranchIds },
+                    examDate: { gte: todayStart },
+                },
+            }),
+            prisma_js_1.prisma.learningMaterial.count({
+                where: { instituteId: { in: targetBranchIds }, type: 'HOMEWORK' },
+            }),
+            prisma_js_1.prisma.learningMaterial.count({
+                where: { instituteId: { in: targetBranchIds }, type: { not: 'HOMEWORK' } },
+            }),
+            // Branch-level grouped metrics (1 query each instead of per-branch sequential queries)
+            prisma_js_1.prisma.student.groupBy({
+                by: ['instituteId'],
+                where: { instituteId: { in: allBranchIds }, status: 'ACTIVE' },
+                _count: true,
+            }),
+            prisma_js_1.prisma.staffProfile.groupBy({
+                by: ['instituteId'],
+                where: { instituteId: { in: allBranchIds }, user: { isActive: true } },
+                _count: true,
+            }),
+            prisma_js_1.prisma.batch.groupBy({
+                by: ['instituteId'],
+                where: { instituteId: { in: allBranchIds }, isActive: true },
+                _count: true,
+            }),
+            prisma_js_1.prisma.attendanceEvent.groupBy({
+                by: ['instituteId'],
+                where: {
+                    instituteId: { in: allBranchIds },
+                    eventDate: { gte: todayStart, lte: todayEnd },
+                    eventType: 'CHECK_IN',
+                },
+                _count: true,
+            }),
+            prisma_js_1.prisma.payment.groupBy({
+                by: ['instituteId'],
+                where: { instituteId: { in: allBranchIds }, status: 'SUCCESS' },
+                _sum: { amountPaid: true },
+            }),
+            prisma_js_1.prisma.payment.groupBy({
+                by: ['instituteId'],
+                where: { instituteId: { in: allBranchIds }, status: 'SUCCESS', paidAt: { gte: startOfMonth } },
+                _sum: { amountPaid: true },
+            }),
+        ]);
+        const todayAbsent = Math.max(0, totalStudents - todayPresent);
+        const todayTotalMarked = totalStudents > 0 ? totalStudents : todayPresent;
+        const attendanceRate = todayTotalMarked > 0 ? Number(((todayPresent / todayTotalMarked) * 100).toFixed(1)) : 100.0;
+        const monthlyFeeCollection = Math.max(0, Math.round((Number(monthlyPaymentAgg._sum?.amountPaid || 0) - Number(monthlyRefundAgg._sum?.amount || 0)) * 100) / 100);
+        const totalRevenue = Math.max(0, Math.round((Number(totalPaymentAgg._sum?.amountPaid || 0) - Number(totalRefundAgg._sum?.amount || 0)) * 100) / 100);
+        // Group maps for branch-level cards
+        const studentCountMap = new Map();
+        studentCountsByBranch.forEach((s) => { if (s.instituteId)
+            studentCountMap.set(s.instituteId, s._count); });
+        const staffCountMap = new Map();
+        staffCountsByBranch.forEach((s) => { if (s.instituteId)
+            staffCountMap.set(s.instituteId, s._count); });
+        const batchCountMap = new Map();
+        batchCountsByBranch.forEach((b) => { if (b.instituteId)
+            batchCountMap.set(b.instituteId, b._count); });
+        const attendanceMap = new Map();
+        attendanceByBranch.forEach((a) => { if (a.instituteId)
+            attendanceMap.set(a.instituteId, a._count); });
+        const totalRevenueMap = new Map();
+        totalPaymentsByBranch.forEach((p) => { if (p.instituteId)
+            totalRevenueMap.set(p.instituteId, Number(p._sum?.amountPaid || 0)); });
+        const monthlyRevenueMap = new Map();
+        monthlyPaymentsByBranch.forEach((p) => { if (p.instituteId)
+            monthlyRevenueMap.set(p.instituteId, Number(p._sum?.amountPaid || 0)); });
+        // Group pending fees by branch and top KPI in a single in-memory pass
+        const pendingByBranchMap = new Map();
+        let topPendingFees = 0;
+        for (const a of pendingAssignments) {
+            const netPaidSum = a.payments.reduce((acc, p) => {
+                const refunded = (p.adjustments || []).reduce((rAcc, adj) => rAcc + Number(adj.amount), 0);
+                return acc + Number(p.amountPaid) - refunded;
+            }, 0);
+            const remaining = Math.max(0, Number(a.finalAmount) - netPaidSum);
+            const bId = a.student?.instituteId;
+            if (bId) {
+                pendingByBranchMap.set(bId, (pendingByBranchMap.get(bId) || 0) + remaining);
+                if (targetBranchIds.includes(bId)) {
+                    topPendingFees += remaining;
+                }
             }
-            bPending = Math.round(bPending * 100) / 100;
+        }
+        const pendingFees = Math.round(topPendingFees * 100) / 100;
+        // Fast in-memory assembly of branch cards (Zero database roundtrips)
+        const branchCards = franchise.branches.map((b) => {
+            const bStudents = studentCountMap.get(b.id) || 0;
+            const bStaff = staffCountMap.get(b.id) || 0;
+            const bBatches = batchCountMap.get(b.id) || 0;
+            const bTotalRev = Math.round((totalRevenueMap.get(b.id) || 0) * 100) / 100;
+            const bMonthlyRev = Math.round((monthlyRevenueMap.get(b.id) || 0) * 100) / 100;
+            const bPresent = attendanceMap.get(b.id) || 0;
+            const bAbsent = Math.max(0, bStudents - bPresent);
+            const bTotalMarked = bStudents > 0 ? bStudents : bPresent;
+            const bRate = bTotalMarked > 0 ? Number(((bPresent / bTotalMarked) * 100).toFixed(1)) : 100.0;
+            const bPending = Math.round((pendingByBranchMap.get(b.id) || 0) * 100) / 100;
             return {
                 id: b.id,
                 code: b.code,
@@ -3975,8 +3982,8 @@ async function getFranchiseOwnerDashboard(req, res) {
                 activeStudents: bStudents,
                 staffCount: bStaff,
                 activeBatches: bBatches,
-                totalRevenue: bTotalRevenue,
-                monthlyRevenue: bMonthlyRevenue,
+                totalRevenue: bTotalRev,
+                monthlyRevenue: bMonthlyRev,
                 pendingFees: bPending,
                 attendanceRate: bRate,
                 todayAttendance: {
@@ -3986,7 +3993,7 @@ async function getFranchiseOwnerDashboard(req, res) {
                     rate: bRate,
                 },
             };
-        }));
+        });
         // 10. Franchise Agreement & Two-Installment Schedule
         const activeAgreement = franchise.agreements.find((a) => a.status === 'ACTIVE');
         const installmentsWithStatus = franchise.installments.map((inst) => ({
@@ -3999,7 +4006,7 @@ async function getFranchiseOwnerDashboard(req, res) {
         const totalOverdue = installmentsWithStatus
             .filter((i) => i.liveStatus === 'OVERDUE')
             .reduce((sum, i) => sum + Number(i.outstandingBalance), 0);
-        return res.json({
+        const responsePayload = {
             success: true,
             data: {
                 franchise: {
@@ -4056,7 +4063,9 @@ async function getFranchiseOwnerDashboard(req, res) {
                 recentPayments: franchise.royaltyPayments,
                 royaltyRecords: franchise.royaltyRecords || [],
             },
-        });
+        };
+        cache_js_1.serverCache.set(cacheKey, responsePayload, 15000);
+        return res.json(responsePayload);
     }
     catch (err) {
         console.error('[Franchise Owner Dashboard Error]', err);

@@ -40,17 +40,17 @@ export const FranchiseOwnerDashboard: React.FC = () => {
   const [data, setData] = useState<any>(null);
 
   // Active view tab inside franchisee portal
-  const [activeTab, setActiveTab] = useState<'overview' | 'branches' | 'installments' | 'monthly_statements' | 'agreement' | 'revenue_settlements'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'installments' | 'monthly_statements' | 'agreement' | 'revenue_settlements'>('overview');
 
   // Receipt modal
   const [showReceiptModal, setShowReceiptModal] = useState(false);
   const [receiptData, setReceiptData] = useState<any>(null);
 
-  const loadDashboard = async () => {
+  const loadDashboard = async (forceRefresh = false) => {
     try {
       setLoading(true);
       const branchParam = activeInstitute && activeInstitute.id !== 'ALL' ? `?branchId=${activeInstitute.id}` : '';
-      const res = await apiFetch(`/franchises/dashboard/owner${branchParam}`, { skipCache: true });
+      const res = await apiFetch(`/franchises/dashboard/owner${branchParam}`, { skipCache: forceRefresh });
       if (res.success) {
         setData(res.data);
       }
@@ -80,9 +80,18 @@ export const FranchiseOwnerDashboard: React.FC = () => {
 
   if (loading && !data) {
     return (
-      <div className="flex items-center justify-center p-16 text-slate-500 text-xs">
-        <div className="w-4 h-4 rounded-full bg-[#006FFF] animate-ping mr-3"></div>
-        Loading your multi-branch franchise center...
+      <div className="flex flex-col items-center justify-center p-16 text-slate-500 text-xs gap-3">
+        <div className="flex items-center gap-2">
+          <div className="w-3.5 h-3.5 rounded-full bg-[#006FFF] animate-ping"></div>
+          <span className="font-semibold text-slate-700">Loading your franchise center...</span>
+        </div>
+        <button
+          type="button"
+          onClick={() => loadDashboard(true)}
+          className="mt-2 px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50 cursor-pointer"
+        >
+          Retry Loading
+        </button>
       </div>
     );
   }
@@ -236,9 +245,9 @@ export const FranchiseOwnerDashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* Metric 2: Active Staff */}
+        {/* Metric 2: Active Trainers */}
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-          <div className="text-xs font-semibold text-slate-500 uppercase">Staff & Faculty</div>
+          <div className="text-xs font-semibold text-slate-500 uppercase">Trainers</div>
           <div className="text-2xl font-black text-slate-900 mt-1">{metrics.totalStaff ?? 0}</div>
           <div className="text-[11px] text-slate-500 font-medium mt-1">Active Profiles</div>
         </div>
@@ -316,16 +325,6 @@ export const FranchiseOwnerDashboard: React.FC = () => {
             }`}
         >
           <Layers className="w-4 h-4" /> Overview & Campus Performance
-        </button>
-
-        <button
-          onClick={() => setActiveTab('branches')}
-          className={`py-3.5 px-2 text-sm font-bold border-b-2 whitespace-nowrap transition-all flex items-center gap-2 ${activeTab === 'branches'
-            ? 'border-[#006FFF] text-[#006FFF]'
-            : 'border-transparent text-slate-600 hover:text-slate-900'
-            }`}
-        >
-          <Building2 className="w-4 h-4" /> Authorized Campus ({branches.length})
         </button>
 
         <button
@@ -424,11 +423,16 @@ export const FranchiseOwnerDashboard: React.FC = () => {
                         <h4 className="font-extrabold text-sm text-slate-900 group-hover:text-[#006FFF] transition-colors">
                           {b.name}
                         </h4>
-                        <div className="flex items-center gap-2 text-xs text-slate-500 mt-0.5">
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate-500 mt-0.5">
                           <span className="font-mono text-[#006FFF] font-bold">{b.code}</span>
-                          {b.city && (
+                          {(b.address || b.city) && (
                             <span className="flex items-center gap-0.5">
-                              • <MapPin className="w-3 h-3 text-slate-400" /> {b.city}
+                              • <MapPin className="w-3 h-3 text-slate-400" /> {b.address ? `${b.address}, ` : ''}{b.city}
+                            </span>
+                          )}
+                          {b.phone && (
+                            <span className="flex items-center gap-0.5">
+                              • <Phone className="w-3 h-3 text-slate-400" /> {b.phone}
                             </span>
                           )}
                         </div>
@@ -442,7 +446,7 @@ export const FranchiseOwnerDashboard: React.FC = () => {
                         <div className="text-base font-bold text-slate-900 mt-0.5">{b.activeStudents}</div>
                       </div>
                       <div className="bg-slate-50 p-2 rounded-xl">
-                        <div className="text-[10px] text-slate-500 font-semibold uppercase">Staff</div>
+                        <div className="text-[10px] text-slate-500 font-semibold uppercase">Trainers</div>
                         <div className="text-base font-bold text-slate-900 mt-0.5">{b.staffCount}</div>
                       </div>
                       <div className="bg-slate-50 p-2 rounded-xl">
@@ -583,86 +587,7 @@ export const FranchiseOwnerDashboard: React.FC = () => {
         </div>
       )}
 
-      {/* TAB 2: ASSIGNED CAMPUSES LIST */}
-      {activeTab === 'branches' && (
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b pb-4">
-            <div>
-              <h3 className="font-bold text-slate-900 text-base">Authorized Campus Location</h3>
-              <p className="text-xs text-slate-500">
-                Operating campus authorized under your Digital Ghuru franchise license. To add another branch, please contact Super Admin.
-              </p>
-            </div>
-            <div className="flex items-center gap-2.5">
-              <span className="text-xs font-mono bg-slate-100 px-3 py-1.5 rounded text-slate-600 font-semibold">
-                {branches.length} Campus{branches.length > 1 ? 'es' : ''}
-              </span>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
-            {branches.map((b: any) => {
-              const isSelected = activeInstitute?.id === b.id;
-              return (
-                <div
-                  key={b.id}
-                  className={`border rounded-xl p-5 space-y-3 transition-all ${isSelected ? 'border-[#006FFF] bg-blue-50/20 shadow-sm' : 'border-slate-200 bg-slate-50/40'
-                    }`}
-                >
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <h4 className="font-bold text-slate-900 text-sm">{b.name}</h4>
-                      <span className="text-xs font-mono font-semibold text-[#006FFF]">{b.code}</span>
-                    </div>
-                    <span className="px-2 py-0.5 text-[11px] font-bold rounded bg-emerald-100 text-emerald-800">
-                      {b.status}
-                    </span>
-                  </div>
-
-                  <div className="text-xs text-slate-600 space-y-1">
-                    <div className="flex items-center gap-1.5">
-                      <MapPin className="w-3.5 h-3.5 text-slate-400" />
-                      {b.address ? `${b.address}, ` : ''}{b.city || 'Campus location on file'}
-                    </div>
-                    {b.phone && (
-                      <div className="flex items-center gap-1.5">
-                        <Phone className="w-3.5 h-3.5 text-slate-400" /> {b.phone}
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="pt-2 border-t border-slate-200 flex justify-between items-center text-xs">
-                    <div className="flex gap-4 text-slate-500">
-                      <span>Students: <strong>{b._count?.students || 0}</strong></span>
-                      <span>Batches: <strong>{b._count?.batches || 0}</strong></span>
-                      <span>Staff: <strong>{b._count?.staffProfiles || 0}</strong></span>
-                    </div>
-                    <button
-                      onClick={() => {
-                        setActiveInstitute({
-                          id: b.id,
-                          name: b.name,
-                          code: b.code,
-                          city: b.city,
-                        });
-                        setActiveTab('overview');
-                      }}
-                      className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${isSelected
-                        ? 'bg-[#006FFF] text-white'
-                        : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-50'
-                        }`}
-                    >
-                      {isSelected ? 'Active' : 'Select Branch'}
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* TAB 3: 2-INSTALLMENT SCHEDULE & PAYMENT HISTORY */}
+      {/* TAB 2: 2-INSTALLMENT SCHEDULE & PAYMENT HISTORY */}
       {activeTab === 'installments' && (
         <div className="space-y-6">
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 space-y-4">
@@ -1020,7 +945,7 @@ export const FranchiseOwnerDashboard: React.FC = () => {
                   1. <strong>Two-Installment Royalty:</strong> Exactly two installments are due per agreement year according to the schedule in the portal.
                 </p>
                 <p>
-                  2. <strong>Franchise Operation:</strong> The Franchisee Admin is authorized to manage students, admissions, staff, class schedules, exams, and course fees within their authorized campus locations.
+                  2. <strong>Franchise Operation:</strong> The Franchisee Admin is authorized to manage students, admissions, trainers, class schedules, exams, and course fees within their authorized campus locations.
                 </p>
                 <p>
                   3. <strong>Brand & Integrity:</strong> Official Digital Ghuru materials, badges, and learning systems are licensed for use during the active agreement term.

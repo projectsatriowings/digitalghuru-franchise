@@ -31,13 +31,14 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onNavi
   const [courseList, setCourseList] = useState<any[]>([]);
   const [lastRefreshed, setLastRefreshed] = useState<Date>(new Date());
 
-  const fetchDashboard = async () => {
+  const fetchDashboard = async (forceRefresh = false) => {
     try {
       setLoading(true);
+      const opts = forceRefresh ? { skipCache: true } : undefined;
       const [franchiseDashRes, franchisesRes, coursesRes] = await Promise.all([
-        apiFetch('/franchises/dashboard/super-admin', { skipCache: true }),
-        apiFetch('/franchises', { skipCache: true }),
-        apiFetch('/courses', { skipCache: true }),
+        apiFetch('/franchises/dashboard/super-admin', opts),
+        apiFetch('/franchises', opts),
+        apiFetch('/courses', opts),
       ]);
 
       if (franchiseDashRes.success) {
@@ -102,7 +103,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onNavi
         <div className="flex items-center gap-2 self-start sm:self-auto">
           <button
             type="button"
-            onClick={fetchDashboard}
+            onClick={() => fetchDashboard(true)}
             disabled={loading}
             className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50 transition shadow-xs cursor-pointer disabled:opacity-50"
             title="Refresh Dashboard KPIs"

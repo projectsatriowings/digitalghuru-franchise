@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import fs from 'fs';
 import path from 'path';
+import { serverCache } from '../../utils/cache.js';
 import { CoursesService, CoursePermissionForbiddenError } from './courses.service.js';
 import {
   CreateCourseCategorySchema,
@@ -717,36 +718,12 @@ export async function getMyFranchiseCourseContext(req: Request, res: Response) {
       },
     });
 
-    const branchIds = (franchise?.branches || []).map((b) => b.id);
-    const students = await prisma.student.findMany({
-      where: isBranchScoped
-        ? { instituteId: { in: allowedInstituteIds }, status: 'ACTIVE' }
-        : {
-          status: 'ACTIVE',
-          OR: [
-            { franchiseId },
-            ...(branchIds.length > 0 ? [{ instituteId: { in: branchIds } }] : []),
-          ],
-        },
-      orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
-      select: {
-        id: true,
-        firstName: true,
-        lastName: true,
-        admissionNumber: true,
-        phone: true,
-        instituteId: true,
-        franchiseId: true,
-        user: { select: { email: true } },
-      },
-    });
-
     res.json({
       success: true,
       data: {
         franchise,
         branches: franchise?.branches || [],
-        students,
+        students: [],
         isBranchScoped,
       },
     });
@@ -1014,7 +991,13 @@ export async function getMyLearningDashboard(req: Request, res: Response) {
     if (!auth.allowed || !auth.studentId) {
       return res.status(403).json({ success: false, message: auth.message || 'Forbidden' });
     }
+    const cacheKey = `student:dashboard:${auth.studentId}`;
+    const cached = serverCache.get<any>(cacheKey);
+    if (cached) {
+      return res.json({ success: true, data: cached });
+    }
     const dashboard = await CoursesService.getStudentLearningDashboard(auth.studentId);
+    serverCache.set(cacheKey, dashboard, 30000);
     res.json({ success: true, data: dashboard });
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message || 'Failed to load learning dashboard' });
@@ -1101,6 +1084,8 @@ export async function completeLesson(req: Request, res: Response) {
       parse.data.chapterId,
       parse.data.timeSpentSec
     );
+
+    serverCache.invalidate(`student:dashboard:${studentId}`);
 
     res.json({
       success: true,

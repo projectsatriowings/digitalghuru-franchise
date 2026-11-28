@@ -190,15 +190,15 @@ export async function listStudents(req: AuthenticatedRequest, res: Response) {
     if (req.user?.role === 'FRANCHISE_OWNER') {
       if (isConsolidated || !instituteId) {
         andConditions.push(scope.whereClause);
-      } else if (includeOnline || learningMode === 'ONLINE') {
+      } else if (learningMode === 'OFFLINE') {
+        andConditions.push({ instituteId });
+      } else {
         andConditions.push({
           OR: [
             { instituteId },
             ...(franchiseId ? [{ franchiseId, instituteId: null }] : []),
           ],
         });
-      } else {
-        andConditions.push({ instituteId });
       }
     } else if (req.user?.role === 'SUPER_ADMIN') {
       if (instituteId) {
@@ -265,12 +265,62 @@ export async function listStudents(req: AuthenticatedRequest, res: Response) {
     }
 
     if (search) {
+      const trimmedSearch = search.trim();
+      const searchWords = trimmedSearch.split(/\s+/).filter(Boolean);
+      const searchConditions: any[] = [
+        { admissionNumber: { contains: trimmedSearch, mode: 'insensitive' } },
+        { rollNumber: { contains: trimmedSearch, mode: 'insensitive' } },
+        { firstName: { contains: trimmedSearch, mode: 'insensitive' } },
+        { lastName: { contains: trimmedSearch, mode: 'insensitive' } },
+        { phone: { contains: trimmedSearch, mode: 'insensitive' } },
+        { user: { fullName: { contains: trimmedSearch, mode: 'insensitive' } } },
+        { user: { email: { contains: trimmedSearch, mode: 'insensitive' } } },
+      ];
+
+      if (searchWords.length > 1) {
+        // Match if all individual words exist anywhere across firstName, lastName, user fullName, admissionNumber
+        searchConditions.push({
+          AND: searchWords.map((word) => ({
+            OR: [
+              { firstName: { contains: word, mode: 'insensitive' } },
+              { lastName: { contains: word, mode: 'insensitive' } },
+              { user: { fullName: { contains: word, mode: 'insensitive' } } },
+              { admissionNumber: { contains: word, mode: 'insensitive' } },
+            ],
+          })),
+        });
+
+        // Also explicitly handle multi-word split across firstName and lastName
+        // e.g. "QA Test Student" -> (firstName: "QA Test", lastName: "Student") or (firstName: "QA", lastName: "Test Student")
+        const firstWord = searchWords[0];
+        const lastWord = searchWords[searchWords.length - 1];
+        searchConditions.push({
+          AND: [
+            { firstName: { contains: firstWord, mode: 'insensitive' } },
+            { lastName: { contains: lastWord, mode: 'insensitive' } },
+          ],
+        });
+
+        if (searchWords.length > 2) {
+          const leadWords = searchWords.slice(0, -1).join(' ');
+          const tailWords = searchWords.slice(1).join(' ');
+          searchConditions.push({
+            AND: [
+              { firstName: { contains: leadWords, mode: 'insensitive' } },
+              { lastName: { contains: lastWord, mode: 'insensitive' } },
+            ],
+          });
+          searchConditions.push({
+            AND: [
+              { firstName: { contains: firstWord, mode: 'insensitive' } },
+              { lastName: { contains: tailWords, mode: 'insensitive' } },
+            ],
+          });
+        }
+      }
+
       andConditions.push({
-        OR: [
-          { admissionNumber: { contains: search, mode: 'insensitive' } },
-          { firstName: { contains: search, mode: 'insensitive' } },
-          { lastName: { contains: search, mode: 'insensitive' } },
-        ],
+        OR: searchConditions,
       });
     }
 
@@ -381,9 +431,36 @@ export async function admitStudent(req: AuthenticatedRequest, res: Response) {
     const data = parse.data;
     const rawInstHeader = req.headers['x-institute-id'] as string | undefined;
     const callerRole = req.user?.role;
-    const isOnlineDirectRequest = Boolean(data.onlineDirect) || (!req.instituteId && data.learningMode === 'ONLINE');
 
     let effectiveInstituteId: string | null = req.instituteId || null;
+
+    // If caller has no explicit req.instituteId (e.g. ALL view), resolve from data.batchId or franchise campus
+    if (!effectiveInstituteId && !data.onlineDirect) {
+      if (data.batchId) {
+        const batch = await prisma.batch.findUnique({
+          where: { id: data.batchId },
+          select: { instituteId: true },
+        });
+        if (batch?.instituteId) {
+          effectiveInstituteId = batch.instituteId;
+        }
+      }
+      if (!effectiveInstituteId) {
+        const franchiseIdCandidate = req.franchiseId || data.franchiseId;
+        if (franchiseIdCandidate) {
+          const branches = await prisma.institute.findMany({
+            where: { franchiseId: franchiseIdCandidate },
+            select: { id: true },
+          });
+          if (branches.length === 1) {
+            effectiveInstituteId = branches[0].id;
+          }
+        }
+      }
+    }
+
+    const isOnlineDirectRequest = Boolean(data.onlineDirect) || (!effectiveInstituteId && data.learningMode === 'ONLINE');
+
     if (isOnlineDirectRequest) {
       if (callerRole !== 'FRANCHISE_OWNER' && callerRole !== 'SUPER_ADMIN') {
         return res.status(403).json({
@@ -609,11 +686,29 @@ export async function admitStudent(req: AuthenticatedRequest, res: Response) {
     if (cleanParentEmail) {
       const existingParentUser = await prisma.user.findUnique({
         where: { email: cleanParentEmail },
+        include: { parentProfile: true },
       });
-      if (existingParentUser && existingParentUser.role !== 'PARENT') {
+      if (existingParentUser && existingParentUser.role !== 'PARENT' && !existingParentUser.parentProfile) {
+        const roleDisplay = existingParentUser.role.toLowerCase().replace('_', ' ');
         return res.status(409).json({
           success: false,
-          error: `Parent email '${cleanParentEmail}' is registered to a ${existingParentUser.role.toLowerCase()} account (${existingParentUser.fullName}) and cannot be used as a parent account.`,
+          error: `Parent email '${cleanParentEmail}' is registered to a ${roleDisplay} account (${existingParentUser.fullName}) and cannot be used as a parent account.`,
+        });
+      }
+    }
+
+    // Check parent phone if provided
+    const cleanParentPhone = data.parentPhone?.trim() || null;
+    if (cleanParentPhone) {
+      const existingParentPhoneUser = await prisma.user.findFirst({
+        where: { phone: cleanParentPhone },
+        include: { parentProfile: true },
+      });
+      if (existingParentPhoneUser && existingParentPhoneUser.role !== 'PARENT' && !existingParentPhoneUser.parentProfile) {
+        const roleDisplay = existingParentPhoneUser.role.toLowerCase().replace('_', ' ');
+        return res.status(409).json({
+          success: false,
+          error: `Parent phone '${cleanParentPhone}' is registered to a ${roleDisplay} account (${existingParentPhoneUser.fullName}) and cannot be used as a parent account.`,
         });
       }
     }
@@ -661,13 +756,18 @@ export async function admitStudent(req: AuthenticatedRequest, res: Response) {
                 }
               }
 
-              tempPassword =
+              const rawStudentPass = (
                 data.studentInitialPassword?.trim() ||
                 data.studentPassword?.trim() ||
                 data.initialPassword?.trim() ||
                 data.password?.trim() ||
                 data.temporaryPassword?.trim() ||
-                `Student#${generateSecureRandomToken(4)}2026`;
+                (typeof req.body?.studentInitialPassword === 'string' ? req.body.studentInitialPassword.trim() : '') ||
+                (typeof req.body?.studentPassword === 'string' ? req.body.studentPassword.trim() : '') ||
+                (typeof req.body?.initialPassword === 'string' ? req.body.initialPassword.trim() : '') ||
+                (typeof req.body?.password === 'string' ? req.body.password.trim() : '')
+              );
+              tempPassword = rawStudentPass || `Student#${generateSecureRandomToken(4)}2026`;
               const passwordHash = await hashPassword(tempPassword);
 
               studentUser = await tx.user.create({
@@ -794,8 +894,9 @@ export async function admitStudent(req: AuthenticatedRequest, res: Response) {
               });
 
               if (existingUser) {
-                if (existingUser.role === 'STUDENT' && !existingUser.parentProfile) {
-                  throw new Error(`Phone or email is registered to a student account and cannot be linked as a parent.`);
+                if (existingUser.role !== 'PARENT' && !existingUser.parentProfile) {
+                  const roleDisplay = existingUser.role.toLowerCase().replace('_', ' ');
+                  throw new Error(`Phone or email is registered to a ${roleDisplay} account (${existingUser.fullName}) and cannot be used as a parent account.`);
                 }
 
                 parentUser = existingUser;
@@ -833,12 +934,16 @@ export async function admitStudent(req: AuthenticatedRequest, res: Response) {
                 }
               } else {
                 isExistingParentAccount = false;
-                parentTempPassword =
+                const rawParentPass = (
                   data.parentInitialPassword?.trim() ||
                   data.parentPassword?.trim() ||
                   data.initialParentPassword?.trim() ||
                   data.parentTemporaryPassword?.trim() ||
-                  `Parent#${generateSecureRandomToken(4)}2026`;
+                  (typeof req.body?.parentInitialPassword === 'string' ? req.body.parentInitialPassword.trim() : '') ||
+                  (typeof req.body?.parentPassword === 'string' ? req.body.parentPassword.trim() : '') ||
+                  (typeof req.body?.initialParentPassword === 'string' ? req.body.initialParentPassword.trim() : '')
+                );
+                parentTempPassword = rawParentPass || `Parent#${generateSecureRandomToken(4)}2026`;
                 const parentPasswordHash = await hashPassword(parentTempPassword);
 
                 parentUser = await tx.user.create({
@@ -1781,7 +1886,13 @@ export async function updateStudent(req: AuthenticatedRequest, res: Response) {
     if (data.studentPhone !== undefined) updateData.phone = data.studentPhone?.trim() || null;
     if (data.gender !== undefined) updateData.gender = data.gender;
     if (data.bloodGroup !== undefined) updateData.bloodGroup = data.bloodGroup?.trim() || null;
-    if (data.photoUrl !== undefined) updateData.photoUrl = data.photoUrl?.trim() || null;
+    if (data.photoUrl !== undefined) {
+      if (data.photoUrl && (data.photoUrl.startsWith('/api/students/') || data.photoUrl.startsWith('api/students/'))) {
+        // Do not overwrite underlying storage key with API route URL
+      } else {
+        updateData.photoUrl = data.photoUrl?.trim() || null;
+      }
+    }
     if (data.dob !== undefined) {
       updateData.dob = data.dob && data.dob.trim() ? new Date(data.dob) : null;
     }
@@ -2315,7 +2426,13 @@ export async function getStudentPhoto(req: AuthenticatedRequest, res: Response) 
       return res.status(404).json({ success: false, error: 'No photograph on file for this student' });
     }
 
-    if (targetInstituteId && student.instituteId !== targetInstituteId && req.user?.role !== 'SUPER_ADMIN') {
+    if (
+      targetInstituteId &&
+      student.instituteId &&
+      student.instituteId !== targetInstituteId &&
+      req.user?.role !== 'SUPER_ADMIN' &&
+      req.user?.role !== 'FRANCHISE_OWNER'
+    ) {
       return res.status(403).json({ success: false, error: 'Forbidden: Cross-institute photograph access rejected' });
     }
 
@@ -2484,13 +2601,18 @@ export async function lookupParent(req: AuthenticatedRequest, res: Response) {
       return res.json({ success: true, data: { found: false } });
     }
 
-    if (existingUser.role === 'STUDENT' && !existingUser.parentProfile) {
+    if (existingUser.role !== 'PARENT' && !(existingUser as any).parentProfile) {
+      const isStudent = existingUser.role === 'STUDENT';
+      const roleDisplay = isStudent
+        ? 'student'
+        : (((existingUser.role as string) === 'TRAINER' || existingUser.role === 'STAFF') ? 'trainer' : existingUser.role.toLowerCase().replace('_', ' '));
       return res.json({
         success: true,
         data: {
           found: true,
-          isStudent: true,
-          message: 'Phone or email is registered to a student account and cannot be linked as a parent.',
+          isStudent,
+          isStaff: !isStudent,
+          message: `Phone number is registered to a ${roleDisplay} account (${existingUser.fullName}) and cannot be used as a parent account.`,
         },
       });
     }
@@ -2534,10 +2656,17 @@ export async function assignStudentBatch(req: AuthenticatedRequest, res: Respons
     const { batchId, subjectIds = [] } = req.body;
 
     const student = await prisma.student.findFirst({
-      where: { id, instituteId },
+      where: {
+        id,
+        OR: [
+          { instituteId },
+          ...(req.franchiseId ? [{ franchiseId: req.franchiseId }] : []),
+          ...(req.user?.role === 'SUPER_ADMIN' ? [{}] : []),
+        ],
+      },
     });
     if (!student) {
-      return res.status(404).json({ success: false, error: 'Student not found in this institute' });
+      return res.status(404).json({ success: false, error: 'Student not found in this institute or franchise' });
     }
 
     if (student.status !== 'ACTIVE') {
@@ -2616,6 +2745,67 @@ export async function assignStudentBatch(req: AuthenticatedRequest, res: Respons
             }
           }
         }
+
+        // 4. If student was Online Direct or not yet bound to this branch, transition them to this campus
+        const isTransitioningFromOnline = !student.instituteId || student.admissionNumber.startsWith('ON');
+        if (isTransitioningFromOnline || student.instituteId !== instituteId) {
+          let updatedAdmNo = student.admissionNumber;
+          if (isTransitioningFromOnline) {
+            try {
+              const admInfo = await generateNextAdmissionNumber(tx, instituteId, batchId, student.admissionDate || new Date());
+              updatedAdmNo = admInfo.admissionNumber;
+            } catch (err) {
+              console.warn('[assignStudentBatch] Could not generate new branch admission number:', err);
+            }
+          }
+
+          await tx.student.update({
+            where: { id },
+            data: {
+              instituteId,
+              ...(updatedAdmNo !== student.admissionNumber ? { admissionNumber: updatedAdmNo } : {}),
+            },
+          });
+
+          if (student.userId) {
+            await tx.instituteMembership.upsert({
+              where: {
+                instituteId_userId: {
+                  instituteId,
+                  userId: student.userId,
+                },
+              },
+              update: { isActive: true },
+              create: {
+                instituteId,
+                userId: student.userId,
+                role: 'STUDENT',
+                isActive: true,
+              },
+            });
+          }
+
+          // Transition CourseEnrollment to OFFLINE mode for this campus & batch
+          if (batch?.courseId) {
+            await tx.courseEnrollment.updateMany({
+              where: { studentId: id, courseId: batch.courseId },
+              data: {
+                instituteId,
+                batchId,
+                mode: LearningMode.OFFLINE,
+              },
+            });
+          } else {
+            await tx.courseEnrollment.updateMany({
+              where: { studentId: id, status: 'ACTIVE' },
+              data: {
+                instituteId,
+                batchId,
+                mode: LearningMode.OFFLINE,
+              },
+            });
+          }
+        }
       }
 
       // 4. Audit Log
@@ -2655,19 +2845,64 @@ export async function lookupExistingStudent(req: AuthenticatedRequest, res: Resp
       return res.status(400).json({ success: false, error: 'Search term must be at least 2 characters' });
     }
 
+    const trimmedSearch = search.trim();
+    const searchWords = trimmedSearch.split(/\s+/).filter(Boolean);
+    const searchConditions: any[] = [
+      { admissionNumber: { contains: trimmedSearch, mode: 'insensitive' } },
+      { rollNumber: { contains: trimmedSearch, mode: 'insensitive' } },
+      { firstName: { contains: trimmedSearch, mode: 'insensitive' } },
+      { lastName: { contains: trimmedSearch, mode: 'insensitive' } },
+      { phone: { contains: trimmedSearch, mode: 'insensitive' } },
+      { user: { phone: { contains: trimmedSearch, mode: 'insensitive' } } },
+      { user: { email: { contains: trimmedSearch, mode: 'insensitive' } } },
+      { user: { fullName: { contains: trimmedSearch, mode: 'insensitive' } } },
+    ];
+
+    if (searchWords.length > 1) {
+      searchConditions.push({
+        AND: searchWords.map((word) => ({
+          OR: [
+            { firstName: { contains: word, mode: 'insensitive' } },
+            { lastName: { contains: word, mode: 'insensitive' } },
+            { user: { fullName: { contains: word, mode: 'insensitive' } } },
+            { admissionNumber: { contains: word, mode: 'insensitive' } },
+          ],
+        })),
+      });
+
+      const firstWord = searchWords[0];
+      const lastWord = searchWords[searchWords.length - 1];
+      searchConditions.push({
+        AND: [
+          { firstName: { contains: firstWord, mode: 'insensitive' } },
+          { lastName: { contains: lastWord, mode: 'insensitive' } },
+        ],
+      });
+
+      if (searchWords.length > 2) {
+        const leadWords = searchWords.slice(0, -1).join(' ');
+        const tailWords = searchWords.slice(1).join(' ');
+        searchConditions.push({
+          AND: [
+            { firstName: { contains: leadWords, mode: 'insensitive' } },
+            { lastName: { contains: lastWord, mode: 'insensitive' } },
+          ],
+        });
+        searchConditions.push({
+          AND: [
+            { firstName: { contains: firstWord, mode: 'insensitive' } },
+            { lastName: { contains: tailWords, mode: 'insensitive' } },
+          ],
+        });
+      }
+    }
+
     const students = await prisma.student.findMany({
       where: {
         AND: [
           scope.whereClause,
           {
-            OR: [
-              { admissionNumber: { contains: search, mode: 'insensitive' } },
-              { firstName: { contains: search, mode: 'insensitive' } },
-              { lastName: { contains: search, mode: 'insensitive' } },
-              { phone: { contains: search, mode: 'insensitive' } },
-              { user: { phone: { contains: search, mode: 'insensitive' } } },
-              { user: { email: { contains: search, mode: 'insensitive' } } },
-            ],
+            OR: searchConditions,
           },
         ],
       },

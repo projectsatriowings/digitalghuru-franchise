@@ -23,18 +23,20 @@ import {
   Loader2,
   Printer,
   CreditCard,
+  Video,
 } from 'lucide-react';
 import { CoursePlayer } from '../components/CoursePlayer';
 import { useToast } from '../context/ToastContext';
 import { StudentFeesView } from './student/StudentFeesView';
+import { RecordedSessions } from './RecordedSessions';
 
 interface StudentPortalProps {
-  initialSection?: 'overview' | 'courses' | 'fees';
+  initialSection?: 'overview' | 'courses' | 'recordings' | 'fees';
 }
 
 export const StudentPortal: React.FC<StudentPortalProps> = ({ initialSection = 'overview' }) => {
   const toast = useToast();
-  const [section, setSection] = useState<'overview' | 'courses' | 'fees'>(initialSection);
+  const [section, setSection] = useState<'overview' | 'courses' | 'recordings' | 'fees'>(initialSection);
 
   useEffect(() => {
     setSection(initialSection);
@@ -76,8 +78,8 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({ initialSection = '
     try {
       setLoading(true);
       const [profRes, lmsRes, matRes, hwRes, quizRes] = await Promise.allSettled([
-        apiFetch('/students/my/profile', { skipCache: true }),
-        apiFetch('/courses/learning/my-dashboard', { skipCache: true }),
+        apiFetch('/students/my/profile'),
+        apiFetch('/courses/learning/my-dashboard'),
         apiFetch('/materials'),
         apiFetch('/homework'),
         apiFetch('/quizzes'),
@@ -322,6 +324,17 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({ initialSection = '
         </button>
         <button
           type="button"
+          onClick={() => setSection('recordings')}
+          className={`py-3.5 px-3 font-bold text-xs border-b-2 transition-all flex items-center gap-2 cursor-pointer ${
+            section === 'recordings'
+              ? 'border-[#006FFF] text-[#006FFF]'
+              : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <Video className="w-4 h-4 text-rose-500" /> Recorded Sessions
+        </button>
+        <button
+          type="button"
           onClick={() => setSection('fees')}
           className={`py-3.5 px-3 font-bold text-xs border-b-2 transition-all flex items-center gap-2 cursor-pointer ${
             section === 'fees'
@@ -336,10 +349,17 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({ initialSection = '
       {/* RENDER FEE VIEW */}
       {section === 'fees' && <StudentFeesView />}
 
+      {/* RENDER DEDICATED RECORDED SESSIONS */}
+      {section === 'recordings' && (
+        <div className="pt-2">
+          <RecordedSessions onNavigateTab={(tab) => { if (tab === 'courses') setSection('courses'); }} />
+        </div>
+      )}
+
       {/* ================================================================= */}
       {/* MY ENROLLED GLOBAL COURSES (ONLINE & OFFLINE LMS)                 */}
       {/* ================================================================= */}
-      {section !== 'fees' && (
+      {section !== 'fees' && section !== 'recordings' && (
         <>
           <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
@@ -351,9 +371,21 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({ initialSection = '
               Access video lessons, recorded classroom sessions, downloadable guides, XP rewards, and certificates.
             </p>
           </div>
-          <span className="px-3 py-1 rounded-full bg-blue-50 text-[#006FFF] text-xs font-bold">
-            {courseEnrollments.length} Enrolled Course{courseEnrollments.length !== 1 ? 's' : ''}
-          </span>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                window.dispatchEvent(new CustomEvent('tuitionos:navigate-tab', { detail: { tab: 'recorded_sessions' } }));
+              }}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-bold rounded-xl transition shadow-xs"
+            >
+              <Video className="w-3.5 h-3.5 text-rose-600" />
+              <span>Browse Recorded Sessions</span>
+            </button>
+            <span className="px-3 py-1 rounded-full bg-blue-50 text-[#006FFF] text-xs font-bold">
+              {courseEnrollments.length} Enrolled Course{courseEnrollments.length !== 1 ? 's' : ''}
+            </span>
+          </div>
         </div>
 
         {courseEnrollments.length === 0 ? (
@@ -552,7 +584,7 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({ initialSection = '
       {/* ================================================================= */}
       {/* CAMPUS ACTIVITY & ACADEMIC WIDGETS (ONLY WHEN RELEVANT)           */}
       {/* ================================================================= */}
-      {initialSection !== 'courses' && (
+      {section === 'overview' && (
         <>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
             {/* Recent Materials & Audio Lessons */}

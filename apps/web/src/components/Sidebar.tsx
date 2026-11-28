@@ -19,6 +19,7 @@ import {
   User,
   Compass,
   Laptop,
+  Video,
   X,
 } from 'lucide-react';
 
@@ -119,6 +120,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             >
               <BookOpen className="w-5 h-5 shrink-0 text-emerald-400" /> Course Management
             </button>
+
             <button
               onClick={() => handleSelect('academics')}
               className={navItemClass('academics')}
@@ -129,13 +131,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
               onClick={() => handleSelect('staff')}
               className={navItemClass('staff')}
             >
-              <Users className="w-5 h-5 shrink-0" /> Staff Management
+              <Users className="w-5 h-5 shrink-0" /> Trainer Management
             </button>
             <button
               onClick={() => handleSelect('staff_attendance')}
               className={navItemClass('staff_attendance')}
             >
-              <Calendar className="w-5 h-5 shrink-0" /> Staff Attendance
+              <Calendar className="w-5 h-5 shrink-0" /> Trainer Attendance
             </button>
             <button
               onClick={() => handleSelect('students')}
@@ -168,6 +170,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <CreditCard className="w-5 h-5 shrink-0" /> Course Fees
             </button>
             <button
+              onClick={() => handleSelect('recorded_sessions')}
+              className={navItemClass('recorded_sessions')}
+            >
+              <Video className="w-5 h-5 shrink-0 text-rose-400" /> Recorded Sessions
+            </button>
+            <button
               onClick={() => handleSelect('messaging')}
               className={navItemClass('messaging')}
             >
@@ -193,18 +201,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <BookOpen className="w-5 h-5 shrink-0 text-emerald-400" /> Course Management
             </button>
 
+
             <button
               onClick={() => handleSelect('staff')}
               className={navItemClass('staff')}
             >
-              <Users className="w-5 h-5 shrink-0" /> Staff Management
+              <Users className="w-5 h-5 shrink-0" /> Trainer Management
             </button>
 
             <button
               onClick={() => handleSelect('staff_attendance')}
               className={navItemClass('staff_attendance')}
             >
-              <Calendar className="w-5 h-5 shrink-0" /> Staff Attendance
+              <Calendar className="w-5 h-5 shrink-0" /> Trainer Attendance
             </button>
 
             <button
@@ -255,6 +264,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
             >
               <CreditCard className="w-5 h-5 shrink-0" /> Fees & Payments
             </button>
+            <button
+              onClick={() => handleSelect('recorded_sessions')}
+              className={navItemClass('recorded_sessions')}
+            >
+              <Video className="w-5 h-5 shrink-0 text-rose-400" /> Recorded Sessions
+            </button>
           </>
         )}
 
@@ -276,24 +291,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </button>
 
             <button
-              onClick={() => onSelectTab('academics')}
-              className={navItemClass('academics')}
-            >
-              <Layers className="w-4 h-4" /> Batches & Subjects
-            </button>
-
-            <button
               onClick={() => onSelectTab('academic_dashboard')}
               className={navItemClass('academic_dashboard')}
             >
               <LayoutDashboard className="w-4 h-4" /> Dashboard
-            </button>
-
-            <button
-              onClick={() => onSelectTab('students')}
-              className={navItemClass('students')}
-            >
-              <GraduationCap className="w-4 h-4" /> Student Admissions
             </button>
 
             <button
@@ -316,6 +317,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
             >
               <MessageSquare className="w-4 h-4" /> Parent Messages
             </button>
+            <button
+              onClick={() => onSelectTab('recorded_sessions')}
+              className={navItemClass('recorded_sessions')}
+            >
+              <Video className="w-4 h-4 text-rose-400" /> Recorded Sessions
+            </button>
           </>
         )}
 
@@ -337,6 +344,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </button>
 
             <button
+              onClick={() => onSelectTab('parent_recordings')}
+              className={navItemClass('parent_recordings')}
+            >
+              <Video className="w-4 h-4 text-rose-400" /> Recorded Sessions
+            </button>
+
+            <button
               onClick={() => onSelectTab('parent_attendance')}
               className={navItemClass('parent_attendance')}
             >
@@ -347,7 +361,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               onClick={() => onSelectTab('parent_communication')}
               className={navItemClass('parent_communication')}
             >
-              <MessageSquare className="w-4 h-4" /> Message Teachers
+              <MessageSquare className="w-4 h-4" /> Message Trainers
             </button>
 
             <button
@@ -409,6 +423,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
               className={navItemClass('student_courses')}
             >
               <Laptop className="w-4 h-4" /> My Courses & Player
+            </button>
+
+            <button
+              onClick={() => onSelectTab('recorded_sessions')}
+              className={navItemClass('recorded_sessions')}
+            >
+              <Video className="w-4 h-4 text-rose-400" /> Recorded Sessions
             </button>
 
             <button

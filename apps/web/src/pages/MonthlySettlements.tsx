@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { apiFetch } from '../services/api';
 import { useToast } from '../context/ToastContext';
@@ -143,7 +143,7 @@ export const MonthlySettlements: React.FC = () => {
 
       if (statusToQuery && statusToQuery !== 'ALL') params.append('status', statusToQuery);
 
-      const res = await apiFetch(`/settlements?${params.toString()}`);
+      const res = await apiFetch(`/settlements?${params.toString()}`, { skipCache: true });
       if (res.success && res.data) {
         setSettlements(res.data.settlements || []);
         setSummary(res.data.summary || {});
@@ -154,6 +154,31 @@ export const MonthlySettlements: React.FC = () => {
       setLoading(false);
     }
   };
+
+  // Dynamically derived financial metrics strictly bound to loaded statements
+  const derivedApprovedAmount = useMemo(() => {
+    if (settlements && settlements.length > 0) {
+      return settlements.reduce((acc, s) => {
+        if (s.status === 'APPROVED' || s.status === 'PARTIALLY_PAID') {
+          const payable = Number(s.franchisePayableAmount || 0);
+          const transferred = Number(s.totalTransferredAmount || 0);
+          const remaining = s.remainingPayableAmount !== null && Number(s.remainingPayableAmount) >= 0
+            ? Number(s.remainingPayableAmount)
+            : Math.max(0, payable - transferred);
+          return acc + remaining;
+        }
+        return acc;
+      }, 0);
+    }
+    return 0;
+  }, [settlements]);
+
+  const derivedPendingCount = useMemo(() => {
+    if (settlements && settlements.length > 0) {
+      return settlements.filter((s) => ['PENDING_APPROVAL', 'PENDING_REVIEW', 'DRAFT'].includes(s.status)).length;
+    }
+    return 0;
+  }, [settlements]);
 
   useEffect(() => {
     loadFranchises();
@@ -515,7 +540,7 @@ export const MonthlySettlements: React.FC = () => {
         <div className="bg-white p-4 rounded-xl border border-amber-200 bg-amber-50/30 shadow-sm">
           <span className="text-xs font-semibold text-amber-700 block uppercase tracking-wider">Pending Review</span>
           <span className="text-lg font-black text-amber-900 mt-1 block">
-            {summary.pendingApprovalCount || 0}
+            {derivedPendingCount}
           </span>
           <span className="text-[11px] text-amber-600 mt-0.5 block">Awaiting approval</span>
         </div>
@@ -523,7 +548,7 @@ export const MonthlySettlements: React.FC = () => {
         <div className="bg-white p-4 rounded-xl border border-blue-200 bg-blue-50/30 shadow-sm">
           <span className="text-xs font-semibold text-blue-700 block uppercase tracking-wider">Approved Payable</span>
           <span className="text-lg font-black text-blue-900 mt-1 block">
-            ₹{summary.totalRemainingBalance?.toLocaleString('en-IN') || summary.approvedAmount?.toLocaleString('en-IN') || '0'}
+            ₹{derivedApprovedAmount.toLocaleString('en-IN')}
           </span>
           <span className="text-[11px] text-blue-600 mt-0.5 block">Ready for bank transfer</span>
         </div>

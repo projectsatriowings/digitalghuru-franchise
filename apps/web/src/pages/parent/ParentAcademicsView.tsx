@@ -52,7 +52,7 @@ export const ParentAcademicsView: React.FC<ParentAcademicsViewProps> = ({ studen
           <BookOpen className="w-5 h-5 text-[#64748B]" /> Academic Reports & Class Schedule
         </h2>
         <p className="text-xs text-[#64748B] mt-0.5">
-          Curriculum subjects, timetable, homework assignments, and faculty feedback for{' '}
+          Curriculum subjects, timetable, homework assignments, and trainer feedback for{' '}
           <strong className="text-[#0F172A]">{student?.firstName} {student?.lastName}</strong>
         </p>
       </div>
@@ -100,7 +100,7 @@ export const ParentAcademicsView: React.FC<ParentAcademicsViewProps> = ({ studen
                       </div>
                       <div className="flex items-center gap-1.5">
                         <User className="w-3.5 h-3.5 text-[#94A3B8]" />
-                        <span>Faculty: <strong className="text-[#0F172A]">{sub.teacher}</strong></span>
+                        <span>Trainer: <strong className="text-[#0F172A]">{sub.teacher}</strong></span>
                       </div>
                     </div>
                   </div>
@@ -182,7 +182,7 @@ export const ParentAcademicsView: React.FC<ParentAcademicsViewProps> = ({ studen
           {/* Section 3: Teacher Progress Feedback & Reviews */}
           <div className="p-6 rounded-3xl bg-white border border-[#E2E8F0] shadow-sm space-y-4">
             <h3 className="text-sm font-bold text-[#0F172A] flex items-center gap-2 border-b border-[#F1F5F9] pb-3">
-              <Sparkles className="w-4 h-4 text-[#64748B]" /> Faculty Academic Feedback & Reviews
+              <Sparkles className="w-4 h-4 text-[#64748B]" /> Trainer Academic Feedback & Reviews
             </h3>
 
             {feedbacks.length > 0 ? (

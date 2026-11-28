@@ -1,6 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { apiFetch } from '../services/api';
+import { ConfirmationModal } from '../components/ConfirmationModal';
+import { useToast } from '../context/ToastContext';
 import { StaffMember, Batch } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { StaffProfileView } from '../components/staff/StaffProfileView';
@@ -33,7 +35,18 @@ import {
 } from 'lucide-react';
 
 export const StaffManagement: React.FC = () => {
+  // Confirm modal state
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean; title: string; message: string; variant: 'danger' | 'warning' | 'primary';
+    confirmLabel: string; loading: boolean; onConfirm: () => void;
+  }>({ isOpen: false, title: '', message: '', variant: 'danger', confirmLabel: 'Confirm', loading: false, onConfirm: () => {} });
+
+  const openConfirm = (opts: { title: string; message: string; variant?: 'danger' | 'warning' | 'primary'; confirmLabel?: string; onConfirm: () => void }) => {
+    setConfirmModal({ isOpen: true, title: opts.title, message: opts.message, variant: opts.variant || 'danger', confirmLabel: opts.confirmLabel || 'Confirm', loading: false, onConfirm: opts.onConfirm });
+  };
+  const closeConfirm = () => setConfirmModal((m) => ({ ...m, isOpen: false, loading: false }));
   const { activeInstitute } = useAuth();
+  const toast = useToast();
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [batches, setBatches] = useState<Batch[]>([]);
   const [loading, setLoading] = useState(true);
@@ -86,36 +99,78 @@ export const StaffManagement: React.FC = () => {
   const [assignmentError, setAssignmentError] = useState<string | null>(null);
   const [assignmentSuccess, setAssignmentSuccess] = useState<string | null>(null);
 
-  const fetchData = async () => {
-    try {
-      setLoading(true);
-      const [staffRes, batchesRes] = await Promise.allSettled([
-        apiFetch(`/staff?search=${encodeURIComponent(search)}`),
-        apiFetch('/academics/batches'),
-      ]);
-      if (staffRes.status === 'fulfilled') {
-        setStaff(staffRes.value.data?.staff || []);
+  // Global Keyboard Navigation & Modal Dismiss
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (createdCredential) {
+          setCreatedCredential(null);
+        } else if (viewingStaffCreds) {
+          setViewingStaffCreds(null);
+        } else if (viewingStaffAssignments) {
+          setViewingStaffAssignments(null);
+        } else if (showAddModal) {
+          setShowAddModal(false);
+        } else if (selectedStaff) {
+          setSelectedStaff(null);
+        }
       }
-      if (batchesRes.status === 'fulfilled') {
-        setBatches(batchesRes.value.data?.batches || []);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [createdCredential, viewingStaffCreds, viewingStaffAssignments, showAddModal, selectedStaff]);
+
+  const [searching, setSearching] = useState(false);
+  const searchSeq = useRef(0);
+
+  // Load batches once per institute context
+  const loadBatches = async () => {
+    try {
+      const res = await apiFetch('/academics/batches');
+      if (res.success && res.data?.batches) {
+        setBatches(res.data.batches);
       }
     } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
+      console.error('Failed to load batches for staff assignment:', err);
     }
+  };
+
+  const fetchStaff = async (queryText: string) => {
+    const seq = ++searchSeq.current;
+    try {
+      setSearching(true);
+      const res = await apiFetch(`/staff?search=${encodeURIComponent(queryText.trim())}`);
+      if (seq === searchSeq.current && res.success) {
+        setStaff(res.data?.staff || []);
+      }
+    } catch (err) {
+      console.error('Failed to fetch staff:', err);
+    } finally {
+      if (seq === searchSeq.current) {
+        setSearching(false);
+        setLoading(false);
+      }
+    }
+  };
+
+  const fetchData = async () => {
+    await loadBatches();
+    await fetchStaff(search);
   };
 
   useEffect(() => {
     setSelectedStaff(null);
+    setLoading(true);
+    loadBatches();
+    fetchStaff(search);
   }, [activeInstitute?.id]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      fetchData();
-    }, 300);
+      fetchStaff(search);
+    }, 350);
     return () => clearTimeout(timer);
-  }, [search, activeInstitute?.id]);
+  }, [search]);
 
   const handleOpenAssignmentModal = (item: StaffMember) => {
     setViewingStaffAssignments(item);
@@ -249,15 +304,15 @@ export const StaffManagement: React.FC = () => {
     key: string = 'full'
   ) => {
     const text =
-      `Staff Login Credentials\n` +
-      `------------------------\n` +
-      `Staff Name: ${name}\n` +
+      `Trainer Login Credentials\n` +
+      `--------------------------\n` +
+      `Trainer Name: ${name}\n` +
       (empCode ? `Employee Code: ${empCode}\n` : '') +
       (instCode ? `Institute Code: ${instCode}\n` : '') +
       `Login Email: ${email}\n` +
       `Permanent Password: ${pass}\n` +
       `Portal: ${window.location.origin}\n` +
-      `------------------------\n` +
+      `--------------------------\n` +
       `Keep this password safe. You can log into Digital Ghuru with these credentials.`;
 
     copyToClipboard(text, key);
@@ -269,17 +324,24 @@ export const StaffManagement: React.FC = () => {
       ? `Deactivate account for "${item.user.fullName}"? They will lose access.`
       : `Reactivate account for "${item.user.fullName}"?`;
 
-    if (!window.confirm(confirmMsg)) return;
-
-    try {
-      await apiFetch(`/staff/${item.id}/status`, {
-        method: 'PATCH',
-        body: JSON.stringify({ isActive: nextStatus }),
-      });
-      fetchData();
-    } catch (err: any) {
-      alert(`Error updating staff status: ${err.message}`);
-    }
+    openConfirm({
+      title: item.user.isActive ? 'Deactivate Staff Account' : 'Reactivate Staff Account',
+      message: confirmMsg,
+      variant: item.user.isActive ? 'danger' : 'primary',
+      confirmLabel: item.user.isActive ? 'Deactivate' : 'Reactivate',
+      onConfirm: async () => {
+        closeConfirm();
+        try {
+          await apiFetch(`/staff/${item.id}/status`, {
+            method: 'PATCH',
+            body: JSON.stringify({ isActive: nextStatus }),
+          });
+          fetchData();
+        } catch (err: any) {
+          toast.error(`Error updating staff status: ${err.message}`);
+        }
+      },
+    });
   };
 
   const handleOpenCredentialsModal = (item: StaffMember) => {
@@ -353,19 +415,30 @@ export const StaffManagement: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      <ConfirmationModal
+        isOpen={confirmModal.isOpen}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        confirmLabel={confirmModal.confirmLabel}
+        cancelLabel="Cancel"
+        variant={confirmModal.variant}
+        loading={confirmModal.loading}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={closeConfirm}
+      />
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-extrabold text-[#0F172A]">Staff & Faculty Management</h1>
+          <h1 className="text-2xl font-extrabold text-[#0F172A]">Trainer Management</h1>
           <p className="text-sm text-[#64748B] mt-1">
-            Manage teaching faculty, staff profiles, and login credentials
+            Manage trainers, trainer profiles, and login credentials
           </p>
         </div>
         <button
           onClick={() => setShowAddModal(true)}
           className="inline-flex items-center gap-2 bg-[#006FFF] hover:bg-[#0058D4] text-white text-sm font-semibold px-4 py-2.5 rounded-xl shadow-md shadow-[#006FFF]/20 transition-all self-start"
         >
-          <Plus className="w-4 h-4" /> Add New Staff Member
+          <Plus className="w-4 h-4" /> Add New Trainer
         </button>
       </div>
 
@@ -379,8 +452,13 @@ export const StaffManagement: React.FC = () => {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search by name, email, code..."
-              className="w-full bg-[#FFFFFF] border border-[#E2E8F0] rounded-xl pl-10 pr-4 py-2 text-xs text-[#0F172A] placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#006FFF]/20"
+              className="w-full bg-[#FFFFFF] border border-[#E2E8F0] rounded-xl pl-10 pr-9 py-2 text-xs text-[#0F172A] placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#006FFF]/20"
             />
+            {searching && (
+              <div className="absolute right-3 top-3">
+                <div className="w-3.5 h-3.5 border-2 border-[#006FFF] border-t-transparent rounded-full animate-spin"></div>
+              </div>
+            )}
           </div>
           <div className="text-xs text-[#64748B] font-medium hidden sm:block">
             Institute Code:{' '}
@@ -394,7 +472,7 @@ export const StaffManagement: React.FC = () => {
           <table className="w-full text-left text-xs">
             <thead>
               <tr className="border-b border-[#E2E8F0] text-[#64748B] bg-[#F8FAFC] uppercase tracking-wider">
-                <th className="py-3 px-4 font-bold">Faculty / Staff</th>
+                <th className="py-3 px-4 font-bold">Trainer</th>
                 <th className="py-3 px-4 font-bold">Employee Code</th>
                 <th className="py-3 px-4 font-bold">Designation</th>
                 <th className="py-3 px-4 font-bold">Batches Assigned</th>
@@ -406,13 +484,13 @@ export const StaffManagement: React.FC = () => {
               {loading ? (
                 <tr>
                   <td colSpan={6} className="py-8 text-center text-[#64748B]">
-                    Loading staff directory...
+                    Loading trainer directory...
                   </td>
                 </tr>
               ) : staff.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="py-8 text-center text-[#64748B]">
-                    No staff members found.
+                    No trainers found.
                   </td>
                 </tr>
               ) : (
@@ -582,12 +660,12 @@ export const StaffManagement: React.FC = () => {
                               {item.user.isActive ? (
                                 <>
                                   <UserX className="w-4 h-4 text-rose-600" />
-                                  <span>Deactivate Staff</span>
+                                  <span>Deactivate Trainer</span>
                                 </>
                               ) : (
                                 <>
                                   <UserCheck className="w-4 h-4 text-emerald-600" />
-                                  <span>Activate Staff</span>
+                                  <span>Activate Trainer</span>
                                 </>
                               )}
                             </button>
@@ -623,7 +701,7 @@ export const StaffManagement: React.FC = () => {
           <div className="bg-white border border-[#E2E8F0] rounded-3xl w-full max-w-lg p-6 shadow-2xl text-[#0F172A]">
             <div className="flex items-center justify-between pb-4 border-b border-[#F1F5F9]">
               <h2 className="text-lg font-bold text-[#0F172A] flex items-center gap-2">
-                <CheckCircle className="w-5 h-5 text-emerald-600" /> Permanent Staff Login Created
+                <CheckCircle className="w-5 h-5 text-emerald-600" /> Permanent Trainer Login Created
               </h2>
               <button
                 onClick={() => {
@@ -639,12 +717,12 @@ export const StaffManagement: React.FC = () => {
             <div className="my-5 p-5 rounded-2xl bg-emerald-50 border border-emerald-300 text-[#0F172A] space-y-4">
               <p className="text-xs text-[#475569] leading-relaxed">
                 The permanent login account and profile have been created. You can hand over these login
-                details directly to the staff member.
+                details directly to the trainer.
               </p>
 
               <div className="p-4 rounded-xl bg-white border border-emerald-200 text-xs space-y-2.5">
                 <div className="flex justify-between items-center py-1 border-b border-emerald-100">
-                  <span className="text-[#64748B]">Staff Name:</span>
+                  <span className="text-[#64748B]">Trainer Name:</span>
                   <span className="font-bold text-[#0F172A]">{createdCredential.fullName}</span>
                 </div>
                 {createdCredential.employeeCode && (
@@ -1048,12 +1126,12 @@ export const StaffManagement: React.FC = () => {
                         {isBatchSelected && (
                           <div className="mt-3 pt-3 border-t border-[#F1F5F9] pl-6 space-y-2">
                             <div className="text-[11px] font-bold text-[#64748B]">
-                              Subjects taught by this staff member:
+                              Subjects taught by this trainer:
                             </div>
 
                             {batchSubjects.length === 0 ? (
                               <div className="text-[11px] text-[#94A3B8] italic">
-                                No distinct subjects configured in this batch. Staff will have general batch access.
+                                No distinct subjects configured in this batch. Trainer will have general batch access.
                               </div>
                             ) : (
                               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">

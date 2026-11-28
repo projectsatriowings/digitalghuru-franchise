@@ -89,6 +89,7 @@ exports.createStaffSchema = zod_1.z.object({
     // Personal Details
     dob: zod_1.z.string().optional().nullable(),
     gender: zod_1.z.string().optional().nullable(),
+    bloodGroup: zod_1.z.string().optional().nullable(),
     altPhone: optionalPhoneValidator,
     personalEmail: optionalEmailValidator,
     emergencyContactName: zod_1.z.string().optional().nullable(),
@@ -128,6 +129,7 @@ exports.updateStaffSchema = zod_1.z.object({
     // Personal Details
     dob: zod_1.z.string().optional().nullable(),
     gender: zod_1.z.string().optional().nullable(),
+    bloodGroup: zod_1.z.string().optional().nullable(),
     altPhone: optionalPhoneValidator,
     personalEmail: optionalEmailValidator,
     emergencyContactName: zod_1.z.string().optional().nullable(),
@@ -397,6 +399,7 @@ async function createStaff(req, res) {
                     // Personal Details
                     dob: safeParseDate(data.dob),
                     gender: data.gender || null,
+                    bloodGroup: data.bloodGroup?.trim() || null,
                     altPhone: data.altPhone?.trim() || null,
                     personalEmail: data.personalEmail?.trim() || null,
                     emergencyContactName: data.emergencyContactName?.trim() || null,
@@ -492,6 +495,7 @@ async function createStaff(req, res) {
                     qualification: result.staffProfile.qualification,
                     department: result.staffProfile.department,
                     employmentType: result.staffProfile.employmentType,
+                    permissionsJson: result.staffProfile.permissionsJson,
                     user: result.user,
                 },
             },
@@ -683,11 +687,21 @@ async function updateStaff(req, res) {
                     ...(data.employeeCode !== undefined && { employeeCode: data.employeeCode?.trim() || null }),
                     ...(data.designation && { designation: data.designation.trim() }),
                     ...(data.qualification !== undefined && { qualification: data.qualification?.trim() || null }),
-                    ...(data.permissionsJson && { permissionsJson: data.permissionsJson }),
+                    ...(data.permissionsJson && {
+                        permissionsJson: {
+                            ...(existing.permissionsJson || {}),
+                            ...data.permissionsJson,
+                            // Never wipe the stored permanentPassword during general profile updates
+                            ...((existing.permissionsJson?.permanentPassword) && {
+                                permanentPassword: existing.permissionsJson.permanentPassword,
+                            }),
+                        },
+                    }),
                     ...((data.avatarUrl !== undefined || data.photoUrl !== undefined) && { avatarUrl: data.avatarUrl?.trim() || data.photoUrl?.trim() || null }),
                     // Personal Details
                     ...(data.dob !== undefined && { dob: data.dob ? new Date(data.dob) : null }),
                     ...(data.gender !== undefined && { gender: data.gender || null }),
+                    ...(data.bloodGroup !== undefined && { bloodGroup: data.bloodGroup?.trim() || null }),
                     ...(data.altPhone !== undefined && { altPhone: data.altPhone?.trim() || null }),
                     ...(data.personalEmail !== undefined && { personalEmail: data.personalEmail?.trim() || null }),
                     ...(data.emergencyContactName !== undefined && { emergencyContactName: data.emergencyContactName?.trim() || null }),
@@ -1757,26 +1771,40 @@ async function getMyStaffStudents(req, res) {
         }
         const serverNow = new Date();
         const eventDate = (0, attendance_controller_js_1.getInstituteLocalDate)(serverNow);
-        const students = await prisma_js_1.prisma.student.findMany({
-            where: {
-                instituteId,
-                status: 'ACTIVE',
-                enrollments: {
-                    some: {
-                        batchId: { in: targetBatchIds },
-                        isActive: true,
-                    },
+        const studentWhere = {
+            instituteId,
+            status: 'ACTIVE',
+            enrollments: {
+                some: {
+                    batchId: { in: targetBatchIds },
+                    isActive: true,
                 },
-                ...(search
-                    ? {
-                        OR: [
-                            { firstName: { contains: search, mode: 'insensitive' } },
-                            { lastName: { contains: search, mode: 'insensitive' } },
-                            { admissionNumber: { contains: search, mode: 'insensitive' } },
-                        ],
-                    }
-                    : {}),
             },
+        };
+        if (search) {
+            const searchWords = search.trim().split(/\s+/).filter(Boolean);
+            const searchConditions = [
+                { firstName: { contains: search, mode: 'insensitive' } },
+                { lastName: { contains: search, mode: 'insensitive' } },
+                { admissionNumber: { contains: search, mode: 'insensitive' } },
+                { user: { fullName: { contains: search, mode: 'insensitive' } } },
+            ];
+            if (searchWords.length > 1) {
+                searchConditions.push({
+                    AND: searchWords.map((w) => ({
+                        OR: [
+                            { firstName: { contains: w, mode: 'insensitive' } },
+                            { lastName: { contains: w, mode: 'insensitive' } },
+                            { user: { fullName: { contains: w, mode: 'insensitive' } } },
+                            { admissionNumber: { contains: w, mode: 'insensitive' } },
+                        ],
+                    })),
+                });
+            }
+            studentWhere.OR = searchConditions;
+        }
+        const students = await prisma_js_1.prisma.student.findMany({
+            where: studentWhere,
             include: {
                 enrollments: {
                     where: { isActive: true, batchId: { in: targetBatchIds } },
@@ -1811,8 +1839,8 @@ async function getMyStaffStudents(req, res) {
             hour12: true,
         });
         const mapped = students.map((s) => {
-            const latestCheckIn = s.attendanceEvents.find((e) => e.eventType === 'CHECK_IN');
-            const latestCheckOut = s.attendanceEvents.find((e) => e.eventType === 'CHECK_OUT');
+            const latestCheckIn = s.attendanceEvents?.find((e) => e.eventType === 'CHECK_IN');
+            const latestCheckOut = s.attendanceEvents?.find((e) => e.eventType === 'CHECK_OUT');
             const isCheckedIn = !!(latestCheckIn &&
                 (!latestCheckOut || latestCheckOut.sessionNumber < latestCheckIn.sessionNumber));
             const isCheckedOut = !!(latestCheckIn &&

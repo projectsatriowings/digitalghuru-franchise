@@ -109,7 +109,7 @@ export const StaffAvatar: React.FC<StaffAvatarProps> = ({
     return (
       <img
         src={computedSrc}
-        alt={alt || name || 'Staff photograph'}
+        alt={alt || name || 'Trainer photograph'}
         onError={() => setHasError(true)}
         className={`${sizeClass.container} rounded-2xl object-cover border border-[#E2E8F0]/80 shadow-2xs shrink-0 select-none block ${className}`}
         style={{ width: `${sizeClass.sizePx}px`, height: `${sizeClass.sizePx}px`, objectFit: 'cover' }}
@@ -122,8 +122,8 @@ export const StaffAvatar: React.FC<StaffAvatarProps> = ({
     <div
       className={`${sizeClass.container} ${colorClass} rounded-2xl flex items-center justify-center font-bold tracking-tight shadow-2xs border border-[#E2E8F0]/80 shrink-0 select-none ${sizeClass.text} ${className}`}
       style={{ width: `${sizeClass.sizePx}px`, height: `${sizeClass.sizePx}px` }}
-      aria-label={name || 'Staff avatar'}
-      title={name || 'Staff Member'}
+      aria-label={name || 'Trainer avatar'}
+      title={name || 'Trainer'}
     >
       {initials}
     </div>

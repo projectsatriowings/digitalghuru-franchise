@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { apiFetch } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import { formatCurrency } from '@tuition/shared';
 import { getBatchFeeMilestoneDates, getDefaultFeeDueDates } from '../utils/feeDates';
 import {
@@ -26,10 +27,12 @@ import {
   RefreshCw,
   Building2,
   Edit2,
+  Loader2,
 } from 'lucide-react';
 
 export const FeesManagement: React.FC = () => {
   const { user, activeInstitute } = useAuth();
+  const { showToast } = useToast();
   const isAdmin =
     user?.role === 'ACADEMIC_ADMIN' ||
     user?.role === 'BRANCH_ADMIN' ||
@@ -119,6 +122,33 @@ export const FeesManagement: React.FC = () => {
 
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
+  const [isAssigningFee, setIsAssigningFee] = useState<boolean>(false);
+  const [isAssigningBatchFee, setIsAssigningBatchFee] = useState<boolean>(false);
+  const assigningRef = useRef(false);
+  const assigningBatchRef = useRef(false);
+
+  // Keyboard navigation & modal dismiss
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (showRecordPaymentModal) {
+          setShowRecordPaymentModal(false);
+        } else if (showRefundModal) {
+          setShowRefundModal(false);
+        } else if (showAssignModal) {
+          setShowAssignModal(false);
+        } else if (showBatchAssignModal) {
+          setShowBatchAssignModal(false);
+        } else if (showReceiptModal) {
+          setShowReceiptModal(false);
+        } else if (editingFeeStructure) {
+          setEditingFeeStructure(null);
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [showRecordPaymentModal, showRefundModal, showAssignModal, showBatchAssignModal, showReceiptModal, editingFeeStructure]);
 
   // Initial load
   useEffect(() => {
@@ -136,6 +166,30 @@ export const FeesManagement: React.FC = () => {
     if (activeTab === 'payments') loadPayments();
     if (activeTab === 'adjustments') loadAdjustments();
   }, [activeTab, isAdmin, activeInstitute?.id]);
+
+  // Global Escape key handler to close active fee modals
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (showReceiptModal) {
+          setShowReceiptModal(false);
+          setActiveReceipt(null);
+        } else if (showRecordPaymentModal) {
+          setShowRecordPaymentModal(false);
+          setSelectedAssignmentForPayment(null);
+        } else if (showRefundModal) {
+          setShowRefundModal(false);
+          setSelectedPaymentForRefund(null);
+        } else if (showAssignModal) {
+          setShowAssignModal(false);
+        } else if (showBatchAssignModal) {
+          setShowBatchAssignModal(false);
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [showReceiptModal, showRecordPaymentModal, showRefundModal, showAssignModal, showBatchAssignModal]);
 
   const loadDashboardData = async () => {
     try {
@@ -267,6 +321,7 @@ export const FeesManagement: React.FC = () => {
 
   const handleAssignIndividual = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isAssigningFee) return;
     setActionError(null);
     try {
       if (!newAssignment.studentId) {
@@ -288,6 +343,7 @@ export const FeesManagement: React.FC = () => {
         return;
       }
 
+      setIsAssigningFee(true);
       const payload: any = {
         studentId: newAssignment.studentId,
         feeStructureId: targetFsId,
@@ -326,11 +382,14 @@ export const FeesManagement: React.FC = () => {
       }
     } catch (err: any) {
       setActionError(err.message || 'Error assigning fee');
+    } finally {
+      setIsAssigningFee(false);
     }
   };
 
   const handleAssignBatch = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isAssigningBatchFee) return;
     setActionError(null);
     try {
       if (!newBatchAssignment.batchId) {
@@ -351,6 +410,7 @@ export const FeesManagement: React.FC = () => {
         return;
       }
 
+      setIsAssigningBatchFee(true);
       const payload: any = {
         batchId: newBatchAssignment.batchId,
         feeStructureId: targetFsId,
@@ -389,6 +449,8 @@ export const FeesManagement: React.FC = () => {
       }
     } catch (err: any) {
       setActionError(err.message || 'Error running batch assignment');
+    } finally {
+      setIsAssigningBatchFee(false);
     }
   };
 
@@ -1751,9 +1813,17 @@ export const FeesManagement: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2.5 rounded-xl font-bold bg-[#006FFF] hover:bg-[#0058D4] text-white shadow-sm"
+                  disabled={isAssigningFee}
+                  className="px-5 py-2.5 rounded-xl font-bold bg-[#006FFF] hover:bg-[#0058D4] text-white shadow-sm disabled:opacity-50 flex items-center gap-2"
                 >
-                  Assign Fee
+                  {isAssigningFee ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Assigning Fee...</span>
+                    </>
+                  ) : (
+                    'Assign Fee'
+                  )}
                 </button>
               </div>
             </form>
@@ -1980,9 +2050,17 @@ export const FeesManagement: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2.5 rounded-xl font-bold bg-[#006FFF] hover:bg-[#006FFF] text-white shadow-sm"
+                  disabled={isAssigningBatchFee}
+                  className="px-5 py-2.5 rounded-xl font-bold bg-[#006FFF] hover:bg-[#0058D4] text-white shadow-sm disabled:opacity-50 flex items-center gap-2"
                 >
-                  Execute Batch Assignment
+                  {isAssigningBatchFee ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Assigning Batch Fee...</span>
+                    </>
+                  ) : (
+                    'Execute Batch Assignment'
+                  )}
                 </button>
               </div>
             </form>

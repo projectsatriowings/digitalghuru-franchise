@@ -19,6 +19,7 @@ import {
   Search,
   CheckCircle,
   UserCheck,
+  Clock,
   X,
   Phone,
   Mail,
@@ -42,6 +43,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Globe,
+  Building,
   Laptop,
 } from 'lucide-react';
 
@@ -69,6 +71,7 @@ export const StudentManagement: React.FC = () => {
   const [matchedParent, setMatchedParent] = useState<{
     found: boolean;
     isStudent?: boolean;
+    isStaff?: boolean;
     message?: string;
     user?: {
       id: string;
@@ -462,7 +465,7 @@ Please keep this login and password safe. Use your registered mobile number and 
   const handleOpenEditStudentModal = (student: Student) => {
     setEditingStudent(student);
     setEditPhotoFile(null);
-    setEditPhotoPreview(student.photoUrl || null);
+    setEditPhotoPreview(null);
     setEditError(null);
 
     // Parse userNotes out of student.notes if it was stored as JSON credentials
@@ -769,23 +772,23 @@ Please keep this login and password safe. Use your registered mobile number and 
 
   // Load franchise & enabled Global LMS Courses
   const loadFranchiseCourses = async () => {
-    if (!user || !['SUPER_ADMIN', 'FRANCHISE_OWNER', 'BRANCH_ADMIN', 'ACADEMIC_ADMIN'].includes(user.role)) {
-      return;
-    }
     try {
-      const ctxRes = await apiFetch('/courses/my-franchise-context');
+      let uniqueCourses: any[] = [];
+      const ctxRes = await apiFetch('/courses/my-franchise-context').catch(() => null);
       const fr = ctxRes?.data?.franchise || null;
       setFranchiseContext(fr);
       if (fr?.id) {
-        const fcRes = await apiFetch(`/courses/franchise/${fr.id}`);
+        const fcRes = await apiFetch(`/courses/franchise/${fr.id}`).catch(() => null);
         const allCourses = fcRes?.data || [];
-        const uniqueCourses = Array.from(
-          new Map(allCourses.filter((c: any) => c.isSelected).map((c: any) => [c.id, c])).values()
+        uniqueCourses = Array.from(
+          new Map(allCourses.filter((c: any) => c.isSelected || c.isPermitted).map((c: any) => [c.id, c])).values()
         );
-        setEnabledGlobalCourses(uniqueCourses);
-      } else {
-        setEnabledGlobalCourses([]);
       }
+      if (uniqueCourses.length === 0) {
+        const gRes = await apiFetch('/courses').catch(() => null);
+        uniqueCourses = gRes?.data?.courses || (Array.isArray(gRes?.data) ? gRes.data : []);
+      }
+      setEnabledGlobalCourses(uniqueCourses);
     } catch {
       setEnabledGlobalCourses([]);
     }
@@ -799,7 +802,8 @@ Please keep this login and password safe. Use your registered mobile number and 
       setLoading(true);
       setFetchError(null);
       const query = new URLSearchParams({
-        search: debouncedSearch.trim(),
+        search: debouncedSearch.trim().replace(/\s+/g, ' '),
+        includeOnline: learningModeFilter === 'OFFLINE' ? 'false' : 'true',
         ...(statusFilter && statusFilter !== 'ALL' ? { status: statusFilter } : {}),
         ...(learningModeFilter && learningModeFilter !== 'ALL' ? { learningMode: learningModeFilter } : {}),
         ...(batchFilter ? { batchId: batchFilter } : {}),
@@ -847,6 +851,26 @@ Please keep this login and password safe. Use your registered mobile number and 
     }
   }, [showAdmitModal, formData.batchId, formData.onlineDirect]);
 
+  // Global Keyboard Shortcuts for Student Management Modals
+  useEffect(() => {
+    const handleModalKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (showAdmitModal) {
+          setShowAdmitModal(false);
+          setAdmitStep(1);
+        } else if (editingStudent) {
+          setEditingStudent(null);
+        } else if (showEnrollExistingModal) {
+          setShowEnrollExistingModal(false);
+        } else if (selectedStudentId) {
+          setSelectedStudentId(null);
+        }
+      }
+    };
+    window.addEventListener('keydown', handleModalKeyDown);
+    return () => window.removeEventListener('keydown', handleModalKeyDown);
+  }, [showAdmitModal, editingStudent, showEnrollExistingModal, selectedStudentId]);
+
   // Debounced parent account lookup for sibling auto-linking
   useEffect(() => {
     if (!showAdmitModal) {
@@ -874,7 +898,7 @@ Please keep this login and password safe. Use your registered mobile number and 
         const res = await apiFetch(`/students/lookup-parent?query=${encodeURIComponent(queryParam)}`);
         if (res.success && res.data?.found) {
           setMatchedParent(res.data);
-          if (res.data.user && !res.data.isStudent) {
+          if (res.data.user && !res.data.isStudent && !res.data.isStaff) {
             // Auto-populate parent details if not already typed
             setFormData((prev) => ({
               ...prev,
@@ -1036,8 +1060,12 @@ Please keep this login and password safe. Use your registered mobile number and 
       return;
     }
     if (!formData.onlineDirect && formData.globalCourseId && formData.learningMode === 'OFFLINE' && !formData.batchId) {
-      setAdmitError('Please select a class batch when enrolling a student in Offline / Recorded LMS mode.');
-      return;
+      const matchingBatches = batches.filter((b) => b.courseId === formData.globalCourseId);
+      if (matchingBatches.length > 0) {
+        setFormData((prev) => ({ ...prev, batchId: matchingBatches[0].id }));
+      } else if (batches.length > 0) {
+        setFormData((prev) => ({ ...prev, batchId: batches[0].id }));
+      }
     }
     setAdmitError(null);
     setAdmitStep(3);
@@ -1063,6 +1091,10 @@ Please keep this login and password safe. Use your registered mobile number and 
         setAdmitError(`Parent Email: ${parentEmailErr}`);
         return;
       }
+    }
+    if (matchedParent?.found && (matchedParent.isStudent || matchedParent.isStaff)) {
+      setAdmitError(matchedParent.message || 'Parent phone number is registered to another user account and cannot be linked as a parent.');
+      return;
     }
     setAdmitError(null);
     setAdmitStep(4);
@@ -1111,11 +1143,14 @@ Please keep this login and password safe. Use your registered mobile number and 
         return;
       }
     }
-    if (formData.studentInitialPassword.trim() && formData.studentInitialPassword.trim().length < 6) {
+    const studentPassVal = ((document.getElementById('studentInitialPasswordInput') as HTMLInputElement)?.value || formData.studentInitialPassword || '').trim();
+    const parentPassVal = ((document.getElementById('parentInitialPasswordInput') as HTMLInputElement)?.value || formData.parentInitialPassword || '').trim();
+
+    if (studentPassVal && studentPassVal.length < 6) {
       setAdmitError('Initial student password must be at least 6 characters long.');
       return;
     }
-    if (formData.parentInitialPassword.trim() && formData.parentInitialPassword.trim().length < 6) {
+    if (parentPassVal && parentPassVal.length < 6) {
       setAdmitError('Initial parent password must be at least 6 characters long.');
       return;
     }
@@ -1144,11 +1179,11 @@ Please keep this login and password safe. Use your registered mobile number and 
           lastName: formData.lastName.trim(),
           studentPhone: formData.studentPhone.trim() || undefined,
           studentEmail: formData.studentEmail.trim() || undefined,
-          studentInitialPassword: formData.studentInitialPassword.trim() || undefined,
-          initialPassword: formData.studentInitialPassword.trim() || undefined,
-          studentPassword: formData.studentInitialPassword.trim() || undefined,
-          password: formData.studentInitialPassword.trim() || undefined,
-          temporaryPassword: formData.studentInitialPassword.trim() || undefined,
+          studentInitialPassword: studentPassVal || undefined,
+          initialPassword: studentPassVal || undefined,
+          studentPassword: studentPassVal || undefined,
+          password: studentPassVal || undefined,
+          temporaryPassword: studentPassVal || undefined,
           dob: formData.dob || undefined,
           gender: formData.gender,
           bloodGroup: formData.bloodGroup.trim() || undefined,
@@ -1167,10 +1202,10 @@ Please keep this login and password safe. Use your registered mobile number and 
           parentRelationship: formData.parentRelationship,
           parentPhone: formData.parentPhone.trim(),
           parentEmail: formData.parentEmail.trim() || undefined,
-          parentInitialPassword: formData.parentInitialPassword.trim() || undefined,
-          parentPassword: formData.parentInitialPassword.trim() || undefined,
-          initialParentPassword: formData.parentInitialPassword.trim() || undefined,
-          parentTemporaryPassword: formData.parentInitialPassword.trim() || undefined,
+          parentInitialPassword: parentPassVal || undefined,
+          parentPassword: parentPassVal || undefined,
+          initialParentPassword: parentPassVal || undefined,
+          parentTemporaryPassword: parentPassVal || undefined,
           parentCanReceiveSms: formData.parentCanReceiveSms,
         }),
       });
@@ -1192,7 +1227,7 @@ Please keep this login and password safe. Use your registered mobile number and 
             identifier: studentCreds.identifier || generatedNum,
             email: studentCreds.email,
             phone: studentCreds.phone,
-            temporaryPassword: studentCreds.temporaryPassword || formData.studentInitialPassword.trim() || undefined,
+            temporaryPassword: studentPassVal || studentCreds.temporaryPassword || undefined,
           } : undefined,
           parentCredentials: parentCreds ? {
             fullName: parentCreds.fullName,
@@ -1201,7 +1236,7 @@ Please keep this login and password safe. Use your registered mobile number and 
             phone: parentCreds.phone,
             email: parentCreds.email,
             isExistingAccount: parentCreds.isExistingAccount,
-            temporaryPassword: parentCreds.temporaryPassword || formData.parentInitialPassword.trim() || undefined,
+            temporaryPassword: parentPassVal || parentCreds.temporaryPassword || undefined,
           } : undefined,
         });
 
@@ -1209,8 +1244,8 @@ Please keep this login and password safe. Use your registered mobile number and 
 
         setFormData({
           ...initialFormData,
-          onlineDirect: isConsolidatedView,
-          learningMode: isConsolidatedView ? 'ONLINE' : 'OFFLINE',
+          onlineDirect: false,
+          learningMode: 'OFFLINE',
         });
         setAdmitStep(1);
         fetchData();
@@ -1245,7 +1280,7 @@ Please keep this login and password safe. Use your registered mobile number and 
         method: 'PATCH',
         body: JSON.stringify({
           status: statusConfirm.newStatus,
-          reason: `Status changed to ${statusConfirm.newStatus} by staff`,
+          reason: `Status changed to ${statusConfirm.newStatus} by trainer`,
         }),
       });
 
@@ -1305,8 +1340,8 @@ Please keep this login and password safe. Use your registered mobile number and 
                 setAdmitStep(1);
                 setFormData({
                   ...initialFormData,
-                  onlineDirect: isConsolidatedView,
-                  learningMode: isConsolidatedView ? 'ONLINE' : 'OFFLINE',
+                  onlineDirect: false,
+                  learningMode: 'OFFLINE',
                 });
                 setShowAdmitModal(true);
               }}
@@ -1863,7 +1898,25 @@ Please keep this login and password safe. Use your registered mobile number and 
               </div>
             )}
 
-            <form onSubmit={handleAdmitSubmit} className="space-y-4">
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (admitStep === 4) {
+                  handleAdmitSubmit(e);
+                }
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (admitStep === 1) handleProceedFromAdmitStep1();
+                  else if (admitStep === 2) handleProceedFromAdmitStep2();
+                  else if (admitStep === 3) handleProceedFromAdmitStep3();
+                  // In Step 4, pressing Enter never submits; user must deliberately click Complete Admission
+                }
+              }}
+              className="space-y-4"
+            >
               {/* STEP 1: Student Identity & Photo */}
               {admitStep === 1 && (
                 <div className="space-y-4">
@@ -2024,13 +2077,21 @@ Please keep this login and password safe. Use your registered mobile number and 
                     </div>
                     <div>
                       <label className="block text-xs font-semibold text-[#006FFF] mb-1">Blood Group</label>
-                      <input
-                        type="text"
+                      <select
                         value={formData.bloodGroup}
-                        onChange={(e) => setFormData({ ...formData, bloodGroup: e.target.value.toUpperCase() })}
-                        placeholder="e.g. O+, B+, A-"
-                        className="w-full bg-[#FAF8F5] border border-[#E2E8F0] rounded-xl px-3.5 py-2.5 text-xs text-[#0F172A] uppercase focus:outline-none focus:ring-2 focus:ring-[#006FFF]/20"
-                      />
+                        onChange={(e) => setFormData({ ...formData, bloodGroup: e.target.value })}
+                        className="w-full bg-[#FAF8F5] border border-[#E2E8F0] rounded-xl px-3.5 py-2.5 text-xs text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#006FFF]/20"
+                      >
+                        <option value="">Select Blood Group (Optional)</option>
+                        <option value="A+">A+</option>
+                        <option value="A-">A-</option>
+                        <option value="B+">B+</option>
+                        <option value="B-">B-</option>
+                        <option value="AB+">AB+</option>
+                        <option value="AB-">AB-</option>
+                        <option value="O+">O+</option>
+                        <option value="O-">O-</option>
+                      </select>
                     </div>
                   </div>
                 </div>
@@ -2041,9 +2102,16 @@ Please keep this login and password safe. Use your registered mobile number and 
                 <div className="space-y-4">
                   {(user?.role === 'FRANCHISE_OWNER' || user?.role === 'SUPER_ADMIN') && (
                     <div className="p-4 bg-[#F8FAFC] border border-[#E2E8F0] rounded-2xl space-y-2.5">
-                      <label className="block text-xs font-bold text-[#006FFF]">
-                        Admission Delivery Channel
-                      </label>
+                      <div className="flex items-center justify-between">
+                        <label className="block text-xs font-bold text-[#006FFF]">
+                          Admission Delivery Channel
+                        </label>
+                        {activeInstitute && activeInstitute.id !== 'ALL' && (
+                          <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full flex items-center gap-1">
+                            <Building className="w-3 h-3" /> Campus: {activeInstitute.name}
+                          </span>
+                        )}
+                      </div>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                         <button
                           type="button"
@@ -2105,12 +2173,12 @@ Please keep this login and password safe. Use your registered mobile number and 
                     </div>
                   )}
 
-                  {/* Global LMS Course Enrollment (Optional) */}
+                  {/* Course Selection */}
                   <div className="p-4 bg-[#FAF8F5] border border-[#E2E8F0] rounded-2xl space-y-3">
                     <div className="flex items-center justify-between">
                       <label className="block text-xs font-bold text-[#006FFF] flex items-center gap-1.5">
                         <BookOpen className="w-3.5 h-3.5" />
-                        <span>Global LMS Course (Optional)</span>
+                        <span>Select Course *</span>
                       </label>
                       {franchiseContext?.name && (
                         <span className="text-[10px] font-semibold text-[#64748B] bg-white border border-[#E2E8F0] px-2 py-0.5 rounded-full">
@@ -2121,20 +2189,15 @@ Please keep this login and password safe. Use your registered mobile number and 
                     <select
                       value={formData.globalCourseId}
                       onChange={(e) => setFormData({ ...formData, globalCourseId: e.target.value })}
-                      className="w-full bg-white border border-[#E2E8F0] rounded-xl px-3.5 py-2.5 text-xs text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#006FFF]/20"
+                      className="w-full bg-white border border-[#E2E8F0] rounded-xl px-3.5 py-2.5 text-xs text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#006FFF]/20 font-medium"
                     >
-                      <option value="">-- Skip Global Course Enrollment (or enroll later) --</option>
+                      <option value="">-- Select Course --</option>
                       {enabledGlobalCourses.map((c: any) => (
                         <option key={c.id} value={c.id}>
                           {c.title}{c.duration ? ` (${c.duration})` : ''}{c.format ? ` • ${c.format}` : ''}
                         </option>
                       ))}
                     </select>
-                    {enabledGlobalCourses.length === 0 && (
-                      <p className="text-[11px] text-[#94A3B8]">
-                        No published Global Courses are currently enabled for this franchise in Franchise Offerings.
-                      </p>
-                    )}
 
                     {formData.globalCourseId && !formData.onlineDirect && (
                       <div className="grid grid-cols-2 gap-2 pt-1">
@@ -2178,80 +2241,89 @@ Please keep this login and password safe. Use your registered mobile number and 
                   ) : (
                     <div className="p-4 bg-[#FAF8F5] border border-[#E2E8F0] rounded-2xl space-y-3">
                       <div>
-                        <label className="block text-xs font-semibold text-[#006FFF] mb-1.5">
-                          Class Batch Allocation {formData.globalCourseId && formData.learningMode === 'OFFLINE' ? '*' : ''}
-                        </label>
-                        <select
-                          value={formData.batchId}
-                          onChange={(e) => setFormData({ ...formData, batchId: e.target.value, subjectIds: [] })}
-                          className="w-full bg-white border border-[#E2E8F0] rounded-xl px-3.5 py-2.5 text-xs text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#006FFF]/20"
-                        >
-                          <option value="">Select Class Batch (Optional)</option>
-                          {batches.map((b) => (
-                            <option key={b.id} value={b.id}>{b.name} ({b.academicYear})</option>
-                          ))}
-                        </select>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <label className="block text-xs font-semibold text-[#006FFF]">
+                            Class Batch Allocation
+                          </label>
+                          {formData.globalCourseId && (
+                            <span className="text-[10px] font-bold text-[#006FFF] bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">
+                              Filtered by Selected Course
+                            </span>
+                          )}
+                        </div>
+                        {(() => {
+                          const matchingBatches = formData.globalCourseId
+                            ? batches.filter((b) => b.courseId === formData.globalCourseId)
+                            : batches;
+                          const selectableBatches = matchingBatches.length > 0 ? matchingBatches : batches;
+                          const selectedBatch = batches.find((b) => b.id === formData.batchId);
+
+                          return (
+                            <div className="space-y-2.5">
+                              <select
+                                value={formData.batchId}
+                                onChange={(e) => {
+                                  const bId = e.target.value;
+                                  const b = batches.find((x) => x.id === bId);
+                                  const subIds = b?.batchSubjects?.map((bs: any) => bs.subject?.id || bs.subjectId).filter(Boolean) || [];
+                                  setFormData({ ...formData, batchId: bId, subjectIds: subIds });
+                                }}
+                                className="w-full bg-white border border-[#E2E8F0] rounded-xl px-3.5 py-2.5 text-xs text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#006FFF]/20 font-medium"
+                              >
+                                <option value="">Select Class Batch (Optional - can be assigned later)</option>
+                                {selectableBatches.map((b) => (
+                                  <option key={b.id} value={b.id}>
+                                    {b.name} ({b.academicYear}) • 🕒 {b.schedule || 'Flexible Timings'}
+                                  </option>
+                                ))}
+                              </select>
+
+                              {formData.globalCourseId && matchingBatches.length === 0 && (
+                                <p className="text-[11px] text-amber-700 bg-amber-50 p-2 rounded-lg border border-amber-200">
+                                  No dedicated batch found specifically bound to this course yet. Showing all available franchise batches.
+                                </p>
+                              )}
+
+                              {/* Prominent Batch Schedule & Timing Banner */}
+                              {selectedBatch && (
+                                <div className="p-3 bg-blue-50/80 border border-blue-200 rounded-xl space-y-1.5 animate-fadeIn">
+                                  <div className="flex items-center justify-between flex-wrap gap-2">
+                                    <span className="text-xs font-bold text-blue-900 flex items-center gap-1.5">
+                                      <Clock className="w-3.5 h-3.5 text-[#006FFF]" />
+                                      Batch Timings:
+                                    </span>
+                                    <span className="text-xs font-black text-[#006FFF] bg-white px-2.5 py-1 rounded-lg border border-blue-200 shadow-xs">
+                                      {selectedBatch.schedule || 'Flexible Timings'}
+                                    </span>
+                                  </div>
+                                  {selectedBatch.course && (
+                                    <div className="text-[11px] text-blue-800 flex items-center gap-1.5">
+                                      <BookOpen className="w-3.5 h-3.5 text-[#006FFF]" />
+                                      <span>Course: <strong>{selectedBatch.course.title}</strong></span>
+                                    </div>
+                                  )}
+                                  {selectedBatch.staffAssignments && selectedBatch.staffAssignments.length > 0 && (
+                                    <div className="text-[11px] text-blue-800 flex items-center gap-1.5">
+                                      <UserCheck className="w-3.5 h-3.5 text-emerald-600" />
+                                      <span>
+                                        Trainer:{' '}
+                                        <strong>
+                                          {selectedBatch.staffAssignments
+                                            .map((sa: any) => sa.staffProfile?.user?.fullName || 'Assigned Trainer')
+                                            .join(', ')}
+                                        </strong>
+                                      </span>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
                         <p className="text-[11px] text-[#94A3B8] mt-1">
                           Assigning a batch now enables instant attendance tracking and syllabus scheduling.
                         </p>
                       </div>
-
-                      {/* Batch Subject Selection (if batch selected and subjects exist) */}
-                      {(() => {
-                        const selectedBatch = batches.find((b) => b.id === formData.batchId);
-                        const subjects = selectedBatch?.batchSubjects || [];
-                        if (!formData.batchId) {
-                          return (
-                            <div className="p-3 bg-white border border-dashed border-[#E2E8F0] rounded-xl text-center text-xs text-[#94A3B8]">
-                              Select a class batch above to view and allocate curriculum subjects.
-                            </div>
-                          );
-                        }
-                        if (subjects.length === 0) {
-                          return (
-                            <div className="p-3 bg-white border border-[#E2E8F0] rounded-xl text-xs text-[#94A3B8]">
-                              No specific subjects configured for this batch yet. The student will be enrolled in the general batch curriculum.
-                            </div>
-                          );
-                        }
-                        return (
-                          <div className="bg-white border border-[#E2E8F0] rounded-xl p-3.5 space-y-2">
-                            <div className="flex items-center justify-between">
-                              <label className="block text-xs font-bold text-[#006FFF]">
-                                Select Subjects to Allocate
-                              </label>
-                              <span className="text-[10px] font-semibold text-[#94A3B8] bg-[#FAF8F5] px-2 py-0.5 rounded-full border border-[#E2E8F0]">
-                                {formData.subjectIds.length} of {subjects.length} selected
-                              </span>
-                            </div>
-                            <div className="flex flex-wrap gap-2 pt-1">
-                              {subjects.map((bs: any) => {
-                                const isSelected = formData.subjectIds.includes(bs.subject.id);
-                                return (
-                                  <button
-                                    key={bs.subject.id}
-                                    type="button"
-                                    onClick={() => {
-                                      const next = isSelected
-                                        ? formData.subjectIds.filter((id) => id !== bs.subject.id)
-                                        : [...formData.subjectIds, bs.subject.id];
-                                      setFormData({ ...formData, subjectIds: next });
-                                    }}
-                                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition ${
-                                      isSelected
-                                        ? 'bg-[#006FFF] text-white shadow-sm'
-                                        : 'bg-[#FAF8F5] border border-[#E2E8F0] text-[#475569] hover:bg-[#F8FAFC]'
-                                    }`}
-                                  >
-                                    {isSelected && <Check className="w-3.5 h-3.5" />}
-                                    <span>{bs.subject.name} {bs.subject.code ? `(${bs.subject.code})` : ''}</span>
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        );
-                      })()}
                     </div>
                   )}
 
@@ -2321,7 +2393,7 @@ Please keep this login and password safe. Use your registered mobile number and 
                           required
                           value={formData.parentPhone}
                           onChange={(e) =>
-                            setFormData({ ...formData, parentPhone: sanitizePhoneInput(e.target.value) })
+                            setFormData((prev) => ({ ...prev, parentPhone: sanitizePhoneInput(e.target.value) }))
                           }
                           placeholder="e.g. 9876543210 or +91 9876543210"
                           className={`w-full bg-[#FAF8F5] border rounded-xl pl-9 pr-3.5 py-2.5 text-xs text-[#0F172A] focus:outline-none focus:ring-2 transition-colors ${
@@ -2351,7 +2423,7 @@ Please keep this login and password safe. Use your registered mobile number and 
                           type="email"
                           value={formData.parentEmail}
                           onChange={(e) =>
-                            setFormData({ ...formData, parentEmail: e.target.value.trim() })
+                            setFormData((prev) => ({ ...prev, parentEmail: e.target.value.trim() }))
                           }
                           placeholder="e.g. parent@example.com"
                           className={`w-full bg-[#FAF8F5] border rounded-xl pl-9 pr-3.5 py-2.5 text-xs text-[#0F172A] focus:outline-none focus:ring-2 transition-colors ${
@@ -2370,7 +2442,7 @@ Please keep this login and password safe. Use your registered mobile number and 
                   </div>
 
                   {/* Existing Parent / Sibling Found Banner */}
-                  {matchedParent?.found && !matchedParent.isStudent && (
+                  {matchedParent?.found && !matchedParent.isStudent && !matchedParent.isStaff && (
                     <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-300 text-emerald-950 space-y-1.5 shadow-sm">
                       <div className="flex items-center gap-1.5 font-bold text-xs text-emerald-800">
                         <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
@@ -2389,11 +2461,11 @@ Please keep this login and password safe. Use your registered mobile number and 
                     </div>
                   )}
 
-                  {/* Student Account Collision Warning */}
-                  {matchedParent?.found && matchedParent.isStudent && (
-                    <div className="p-3 rounded-2xl bg-amber-50 border border-amber-300 text-amber-900 text-xs flex items-center gap-2">
-                      <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
-                      <span>{matchedParent.message}</span>
+                  {/* Student or Staff/Trainer Account Collision Warning */}
+                  {matchedParent?.found && (matchedParent.isStudent || matchedParent.isStaff) && (
+                    <div className="p-3 rounded-2xl bg-rose-50 border border-rose-300 text-rose-900 text-xs flex items-center gap-2 shadow-sm">
+                      <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                      <span className="font-semibold">{matchedParent.message}</span>
                     </div>
                   )}
 
@@ -2469,7 +2541,7 @@ Please keep this login and password safe. Use your registered mobile number and 
                       </label>
                       <button
                         type="button"
-                        onClick={() => setFormData({ ...formData, studentInitialPassword: generateStrongPassword('Stud') })}
+                        onClick={() => setFormData((prev) => ({ ...prev, studentInitialPassword: generateStrongPassword('Stud') }))}
                         className="text-[11px] font-semibold text-[#94A3B8] hover:text-[#006FFF] flex items-center gap-1"
                       >
                         <Sparkles className="w-3 h-3" /> Auto-generate
@@ -2478,9 +2550,22 @@ Please keep this login and password safe. Use your registered mobile number and 
                     <div className="relative">
                       <Key className="w-3.5 h-3.5 text-[#94A3B8] absolute left-3.5 top-3" />
                       <input
+                        id="studentInitialPasswordInput"
+                        name="studentInitialPassword"
                         type={showStudentPassword ? 'text' : 'password'}
+                        autoComplete="new-password"
                         value={formData.studentInitialPassword}
-                        onChange={(e) => setFormData({ ...formData, studentInitialPassword: e.target.value })}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setFormData((prev) => ({ ...prev, studentInitialPassword: val }));
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            document.getElementById('parentInitialPasswordInput')?.focus();
+                          }
+                        }}
                         placeholder="Leave blank to auto-generate password (min 6 characters)"
                         minLength={6}
                         className={`w-full bg-[#FAF8F5] border rounded-xl pl-9 pr-10 py-2.5 text-xs font-mono text-[#0F172A] focus:outline-none focus:ring-2 transition-colors ${
@@ -2514,17 +2599,17 @@ Please keep this login and password safe. Use your registered mobile number and 
                       <label className="text-xs font-semibold text-[#006FFF]">
                         Initial Parent Password (Optional — auto-generate if blank)
                       </label>
-                      {!matchedParent?.found && (
+                      {(!matchedParent?.found || matchedParent.isStaff || matchedParent.isStudent) && (
                         <button
                           type="button"
-                          onClick={() => setFormData({ ...formData, parentInitialPassword: generateStrongPassword('Parent') })}
+                          onClick={() => setFormData((prev) => ({ ...prev, parentInitialPassword: generateStrongPassword('Parent') }))}
                           className="text-[11px] font-semibold text-[#94A3B8] hover:text-[#006FFF] flex items-center gap-1"
                         >
                           <Sparkles className="w-3 h-3" /> Auto-generate
                         </button>
                       )}
                     </div>
-                    {matchedParent?.found && !matchedParent.isStudent ? (
+                    {matchedParent?.found && !matchedParent.isStudent && !matchedParent.isStaff ? (
                       <div className="bg-[#FAF8F5] border border-[#E2E8F0] rounded-xl px-3.5 py-2.5 text-xs text-[#006FFF] flex items-center gap-2">
                         <Check className="w-4 h-4 text-emerald-600 shrink-0" />
                         <span className="font-medium text-[11px]">
@@ -2536,9 +2621,21 @@ Please keep this login and password safe. Use your registered mobile number and 
                         <div className="relative">
                           <Key className="w-3.5 h-3.5 text-[#94A3B8] absolute left-3.5 top-3" />
                           <input
+                            id="parentInitialPasswordInput"
+                            name="parentInitialPassword"
                             type={showParentPassword ? 'text' : 'password'}
+                            autoComplete="new-password"
                             value={formData.parentInitialPassword}
-                            onChange={(e) => setFormData({ ...formData, parentInitialPassword: e.target.value })}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setFormData((prev) => ({ ...prev, parentInitialPassword: val }));
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                e.stopPropagation();
+                              }
+                            }}
                             placeholder="Leave blank to auto-generate password (min 6 characters)"
                             minLength={6}
                             className={`w-full bg-[#FAF8F5] border rounded-xl pl-9 pr-10 py-2.5 text-xs font-mono text-[#0F172A] focus:outline-none focus:ring-2 transition-colors ${
@@ -2612,12 +2709,13 @@ Please keep this login and password safe. Use your registered mobile number and 
                   </button>
                 ) : (
                   <button
-                    type="submit"
+                    type="button"
+                    onClick={handleAdmitSubmit}
                     disabled={admitLoading}
-                    className="inline-flex items-center gap-2 px-6 py-2.5 bg-[#006FFF] hover:bg-[#0058D4] text-white text-xs font-semibold rounded-xl shadow-md shadow-[#006FFF]/20 transition-all disabled:opacity-50"
+                    className="inline-flex items-center gap-2 px-6 py-2.5 bg-[#006FFF] hover:bg-[#0058D4] text-white text-xs font-semibold rounded-xl shadow-md shadow-[#006FFF]/20 transition-all disabled:opacity-50 cursor-pointer"
                   >
                     {admitLoading && <Loader2 className="w-4 h-4 animate-spin" />}
-                    <span>Complete Admission</span>
+                    <span>{admitLoading ? 'Completing Admission...' : 'Complete Admission'}</span>
                   </button>
                 )}
               </div>
@@ -3903,7 +4001,7 @@ Please keep credentials safe. Passwords must be changed upon first login.`;
               {/* Student Photo */}
               <div className="p-4 rounded-2xl bg-[#FFFFFF] border border-[#E2E8F0] flex items-center gap-4">
                 <div className="relative shrink-0">
-                  {editPhotoPreview ? (
+                  {editPhotoFile && editPhotoPreview ? (
                     <img
                       src={editPhotoPreview}
                       alt="Student"

@@ -271,7 +271,7 @@ export const MaterialsManagement: React.FC = () => {
       setMessage({
         text: isPublished
           ? 'Learning material published successfully to student portal!'
-          : 'Learning material saved as draft (visible to faculty only).',
+          : 'Learning material saved as draft (visible to trainer only).',
         type: 'success',
       });
       setShowCreateModal(false);
@@ -772,7 +772,7 @@ export const MaterialsManagement: React.FC = () => {
                     className="w-full bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl px-3 py-2.5 text-xs text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#006FFF]/20"
                   >
                     <option value="PUBLISHED">Publish to Students Immediately</option>
-                    <option value="DRAFT">Save as Draft (Faculty Only)</option>
+                    <option value="DRAFT">Save as Draft (Trainer Only)</option>
                   </select>
                 </div>
               </div>

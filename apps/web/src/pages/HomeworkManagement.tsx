@@ -198,7 +198,7 @@ export const HomeworkManagement: React.FC = () => {
 
       const successMsg = isPublished
         ? 'Homework assignment published to all enrolled students!'
-        : 'Homework assignment saved as draft (faculty only).';
+        : 'Homework assignment saved as draft (trainer only).';
       toast.success(successMsg);
       setMessage({
         text: successMsg,
@@ -977,7 +977,7 @@ export const HomeworkManagement: React.FC = () => {
                 <CheckCircle className="w-12 h-12 text-emerald-600 mx-auto" />
                 <h2 className="text-lg font-bold text-[#0F172A]">Mark Task as Completed?</h2>
                 <p className="text-xs text-[#64748B]">
-                  Confirm that you have finished <strong>"{confirmCompleteHw.title}"</strong>. This will notify your faculty that the task is complete.
+                  Confirm that you have finished <strong>"{confirmCompleteHw.title}"</strong>. This will notify your trainer that the task is complete.
                 </p>
                 <div className="pt-2 flex justify-center gap-2">
                   <button
@@ -1160,7 +1160,7 @@ export const HomeworkManagement: React.FC = () => {
                       className="w-full bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl px-3 py-2 text-xs text-[#0F172A] focus:ring-2 focus:ring-[#006FFF]/20"
                     >
                       <option value="PUBLISHED">Publish to Students Immediately</option>
-                      <option value="DRAFT">Save as Draft (Faculty Only)</option>
+                      <option value="DRAFT">Save as Draft (Trainer Only)</option>
                     </select>
                   </div>
 

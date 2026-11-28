@@ -3,6 +3,7 @@ import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import compression from 'compression';
+import { prisma } from './prisma.js';
 import { config, validateProductionConfig } from './config/index.js';
 import { checkDatabaseHealth } from './config/db.js';
 
@@ -28,6 +29,7 @@ import staffAttendanceRoutes from './modules/staff-attendance/staff-attendance.r
 import franchiseRoutes from './modules/franchise/franchise.routes.js';
 import coursesRoutes from './modules/courses/courses.routes.js';
 import settlementRoutes from './modules/settlements/settlement.routes.js';
+import recordedSessionsRoutes from './modules/recorded-sessions/recorded-sessions.routes.js';
 import { handleRazorpayWebhook } from './modules/payments/webhook.controller.js';
 import { isPublicCourseFolder, printStorageDiagnostics, StorageManager } from './utils/storage.js';
 import { streamPublicMedia, streamProtectedMedia } from './modules/courses/courses.controller.js';
@@ -159,6 +161,7 @@ const apiRoutesMap: [string, any][] = [
   ['/franchises', franchiseRoutes],
   ['/courses', coursesRoutes],
   ['/settlements', settlementRoutes],
+  ['/recorded-sessions', recordedSessionsRoutes],
 ];
 
 for (const [routePath, router] of apiRoutesMap) {
@@ -317,8 +320,18 @@ if (isDirectExecution) {
     NotificationService.startWorker(15000);
   });
 
+  // Database keep-alive ping to prevent Neon serverless cold-start sleep during active dev/prod sessions
+  const dbKeepAliveInterval = setInterval(async () => {
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+    } catch {
+      // Silently swallow keep-alive errors
+    }
+  }, 3 * 60 * 1000);
+
   const handleShutdown = () => {
     console.log('[Digital Ghuru Franchise API Server] Gracefully shutting down...');
+    clearInterval(dbKeepAliveInterval);
     NotificationService.stopWorker();
     server.close(() => {
       console.log('[Digital Ghuru Franchise API Server] Closed remaining connections.');

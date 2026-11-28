@@ -174,6 +174,15 @@ export const CoursePlayer: React.FC<CoursePlayerProps> = ({
     url: string;
   } | null>(null);
 
+  const [actualDurations, setActualDurations] = useState<Record<string, string>>({});
+
+  const formatDuration = (seconds: number) => {
+    if (!seconds || isNaN(seconds) || !isFinite(seconds)) return '';
+    const m = Math.floor(seconds / 60);
+    const s = Math.floor(seconds % 60);
+    return `${m}:${s < 10 ? '0' : ''}${s}`;
+  };
+
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const retryCountRef = useRef<number>(0);
   const pendingSeekRef = useRef<{ time: number; play: boolean } | null>(null);
@@ -278,7 +287,12 @@ export const CoursePlayer: React.FC<CoursePlayerProps> = ({
       setEnrollmentContext(data.enrollmentContext);
       setStats(data.stats);
 
-      const loadedModules = data.modules || data.curriculum || [];
+      const rawModules = data.modules || data.curriculum || [];
+      const loadedModules = rawModules.map((m: any) => ({
+        ...m,
+        chapters: [...(m.chapters || m.lessons || [])].sort((a: any, b: any) => (a.position ?? 0) - (b.position ?? 0)),
+        lessons: [...(m.chapters || m.lessons || [])].sort((a: any, b: any) => (a.position ?? 0) - (b.position ?? 0)),
+      })).sort((a: any, b: any) => (a.position ?? 0) - (b.position ?? 0));
       setModules(loadedModules);
 
       // Jump to first incomplete lesson or first lesson
@@ -551,6 +565,12 @@ export const CoursePlayer: React.FC<CoursePlayerProps> = ({
         onLoadedMetadata={() => {
           setStreamErrorState(null);
           retryCountRef.current = 0;
+          if (videoRef.current && activeLesson?.id && videoRef.current.duration) {
+            const formatted = formatDuration(videoRef.current.duration);
+            if (formatted) {
+              setActualDurations((prev) => ({ ...prev, [activeLesson.id]: formatted }));
+            }
+          }
           if (pendingSeekRef.current && videoRef.current) {
             const { time, play } = pendingSeekRef.current;
             pendingSeekRef.current = null;
@@ -735,7 +755,7 @@ export const CoursePlayer: React.FC<CoursePlayerProps> = ({
           <div className="flex-1 overflow-y-auto divide-y divide-slate-100 max-h-[540px]">
             {modules.map((mod, mIdx) => {
               const isOpen = expandedModule === mIdx;
-              const lessons = mod.chapters || mod.lessons || [];
+              const lessons = [...(mod.chapters || mod.lessons || [])].sort((a: any, b: any) => (a.position ?? 0) - (b.position ?? 0));
               return (
                 <div key={mod.id || mIdx}>
                   <button
@@ -779,7 +799,9 @@ export const CoursePlayer: React.FC<CoursePlayerProps> = ({
                                 >
                                   {lIdx + 1}. {lesson.title}
                                 </div>
-                                <div className="text-[10px] text-slate-400 mt-0.5">{lesson.duration || '10:00'}</div>
+                                <div className="text-[10px] text-slate-400 mt-0.5">
+                                  {actualDurations[lesson.id] || lesson.duration || '10:00'}
+                                </div>
                               </div>
                             </div>
                             {lesson.isCompleted ? (

@@ -2112,11 +2112,10 @@ export const FranchiseManagement: React.FC = () => {
                                     setActiveActionMenuId(null);
                                     handleStatusToggle(fr.id, fr.status);
                                   }}
-                                  className={`w-full flex items-center gap-2.5 px-3.5 py-2 text-xs font-semibold transition-colors ${
-                                    fr.status === 'ACTIVE'
+                                  className={`w-full flex items-center gap-2.5 px-3.5 py-2 text-xs font-semibold transition-colors ${fr.status === 'ACTIVE'
                                       ? 'text-rose-700 hover:bg-rose-50'
                                       : 'text-emerald-700 hover:bg-emerald-50'
-                                  }`}
+                                    }`}
                                 >
                                   {fr.status === 'ACTIVE' ? (
                                     <>
@@ -3052,62 +3051,62 @@ export const FranchiseManagement: React.FC = () => {
                             {agreementTemplates
                               .filter((tmpl: any) => tmpl.type !== 'BRAND_AND_COURSE_SUPPORT')
                               .map((tmpl: any) => {
-                              const isSelected = createForm.initialAgreement.agreementType === tmpl.type;
-                              const defs = tmpl.defaults || {};
-                              return (
-                                <button
-                                  key={tmpl.type}
-                                  type="button"
-                                  onClick={() => {
-                                    const normExpenses: Record<string, string> = {};
-                                    if (defs.expenseResponsibilities && typeof defs.expenseResponsibilities === 'object') {
-                                      for (const [k, v] of Object.entries(defs.expenseResponsibilities)) {
-                                        normExpenses[k] = typeof v === 'object' && v !== null && (v as any).payer ? (v as any).payer : String(v);
+                                const isSelected = createForm.initialAgreement.agreementType === tmpl.type;
+                                const defs = tmpl.defaults || {};
+                                return (
+                                  <button
+                                    key={tmpl.type}
+                                    type="button"
+                                    onClick={() => {
+                                      const normExpenses: Record<string, string> = {};
+                                      if (defs.expenseResponsibilities && typeof defs.expenseResponsibilities === 'object') {
+                                        for (const [k, v] of Object.entries(defs.expenseResponsibilities)) {
+                                          normExpenses[k] = typeof v === 'object' && v !== null && (v as any).payer ? (v as any).payer : String(v);
+                                        }
                                       }
-                                    }
-                                    setCreateForm({
-                                      ...createForm,
-                                      initialAgreement: {
-                                        ...createForm.initialAgreement,
-                                        agreementType: tmpl.type as any,
-                                        title: defs.title || createForm.initialAgreement.title,
-                                        calculationMethod: defs.calculationMethod || createForm.initialAgreement.calculationMethod,
-                                        annualRoyaltyAmount: defs.annualRoyaltyAmount !== undefined ? defs.annualRoyaltyAmount : createForm.initialAgreement.annualRoyaltyAmount,
-                                        digitalGuruRevenuePercentage: defs.digitalGuruRevenuePercentage !== undefined ? defs.digitalGuruRevenuePercentage : 50,
-                                        partnerRevenuePercentage: defs.partnerRevenuePercentage !== undefined ? defs.partnerRevenuePercentage : 50,
-                                        royaltyPercentage: defs.digitalGuruRevenuePercentage !== undefined ? defs.digitalGuruRevenuePercentage : 50,
-                                        revenueCalculationBasis: defs.revenueCalculationBasis || 'GROSS_COURSE_FEES',
-                                        settlementFrequency: defs.settlementFrequency || 'MONTHLY',
-                                        totalInvestment: defs.totalInvestment !== undefined ? defs.totalInvestment : 0,
-                                        digitalGuruInvestmentAmount: defs.digitalGuruInvestmentAmount !== undefined ? defs.digitalGuruInvestmentAmount : 0,
-                                        partnerInvestmentAmount: defs.partnerInvestmentAmount !== undefined ? defs.partnerInvestmentAmount : 0,
-                                        digitalGuruInvestmentPercentage: defs.digitalGuruInvestmentPercentage !== undefined ? defs.digitalGuruInvestmentPercentage : 0,
-                                        partnerInvestmentPercentage: defs.partnerInvestmentPercentage !== undefined ? defs.partnerInvestmentPercentage : 0,
-                                        operationalSetupContribution: defs.operationalSetupContribution !== undefined ? defs.operationalSetupContribution : 0,
-                                        investmentNotes: defs.investmentNotes || '',
-                                        expenseResponsibilities: Object.keys(normExpenses).length > 0 ? normExpenses : createForm.initialAgreement.expenseResponsibilities,
-                                        marketingResponsibleParty: defs.marketingResponsibleParty || 'DIGITAL_GURU',
-                                        marketingSupportDurationMonths: defs.marketingSupportDurationMonths !== undefined ? defs.marketingSupportDurationMonths : 0,
-                                        marketingPostSupportParty: defs.marketingPostSupportParty || 'PARTNER',
-                                        marketingBudget: defs.marketingBudget !== undefined ? defs.marketingBudget : 0,
-                                        courseSoftwareAccessEnabled: defs.courseSoftwareAccessEnabled !== undefined ? defs.courseSoftwareAccessEnabled : true,
-                                        courseSoftwarePricingNotes: defs.courseSoftwarePricingNotes || '',
-                                      },
-                                    });
-                                    invalidateModelAndFinancialSteps();
-                                  }}
-                                  className={`p-3 rounded-xl text-left border text-xs transition-all ${isSelected
-                                    ? 'bg-blue-50 border-[#006FFF] text-[#006FFF] font-bold shadow-sm ring-1 ring-[#006FFF]'
-                                    : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300'
-                                    }`}
-                                >
-                                  <div className="font-bold text-[12px] leading-tight">{tmpl.label}</div>
-                                  <div className="text-[10px] text-slate-500 mt-1">
-                                    {getAgreementPresetSubtitle(tmpl)}
-                                  </div>
-                                </button>
-                              );
-                            })}
+                                      setCreateForm({
+                                        ...createForm,
+                                        initialAgreement: {
+                                          ...createForm.initialAgreement,
+                                          agreementType: tmpl.type as any,
+                                          title: defs.title || createForm.initialAgreement.title,
+                                          calculationMethod: defs.calculationMethod || createForm.initialAgreement.calculationMethod,
+                                          annualRoyaltyAmount: defs.annualRoyaltyAmount !== undefined ? defs.annualRoyaltyAmount : createForm.initialAgreement.annualRoyaltyAmount,
+                                          digitalGuruRevenuePercentage: defs.digitalGuruRevenuePercentage !== undefined ? defs.digitalGuruRevenuePercentage : 50,
+                                          partnerRevenuePercentage: defs.partnerRevenuePercentage !== undefined ? defs.partnerRevenuePercentage : 50,
+                                          royaltyPercentage: defs.digitalGuruRevenuePercentage !== undefined ? defs.digitalGuruRevenuePercentage : 50,
+                                          revenueCalculationBasis: defs.revenueCalculationBasis || 'GROSS_COURSE_FEES',
+                                          settlementFrequency: defs.settlementFrequency || 'MONTHLY',
+                                          totalInvestment: defs.totalInvestment !== undefined ? defs.totalInvestment : 0,
+                                          digitalGuruInvestmentAmount: defs.digitalGuruInvestmentAmount !== undefined ? defs.digitalGuruInvestmentAmount : 0,
+                                          partnerInvestmentAmount: defs.partnerInvestmentAmount !== undefined ? defs.partnerInvestmentAmount : 0,
+                                          digitalGuruInvestmentPercentage: defs.digitalGuruInvestmentPercentage !== undefined ? defs.digitalGuruInvestmentPercentage : 0,
+                                          partnerInvestmentPercentage: defs.partnerInvestmentPercentage !== undefined ? defs.partnerInvestmentPercentage : 0,
+                                          operationalSetupContribution: defs.operationalSetupContribution !== undefined ? defs.operationalSetupContribution : 0,
+                                          investmentNotes: defs.investmentNotes || '',
+                                          expenseResponsibilities: Object.keys(normExpenses).length > 0 ? normExpenses : createForm.initialAgreement.expenseResponsibilities,
+                                          marketingResponsibleParty: defs.marketingResponsibleParty || 'DIGITAL_GURU',
+                                          marketingSupportDurationMonths: defs.marketingSupportDurationMonths !== undefined ? defs.marketingSupportDurationMonths : 0,
+                                          marketingPostSupportParty: defs.marketingPostSupportParty || 'PARTNER',
+                                          marketingBudget: defs.marketingBudget !== undefined ? defs.marketingBudget : 0,
+                                          courseSoftwareAccessEnabled: defs.courseSoftwareAccessEnabled !== undefined ? defs.courseSoftwareAccessEnabled : true,
+                                          courseSoftwarePricingNotes: defs.courseSoftwarePricingNotes || '',
+                                        },
+                                      });
+                                      invalidateModelAndFinancialSteps();
+                                    }}
+                                    className={`p-3 rounded-xl text-left border text-xs transition-all ${isSelected
+                                      ? 'bg-blue-50 border-[#006FFF] text-[#006FFF] font-bold shadow-sm ring-1 ring-[#006FFF]'
+                                      : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300'
+                                      }`}
+                                  >
+                                    <div className="font-bold text-[12px] leading-tight">{tmpl.label}</div>
+                                    <div className="text-[10px] text-slate-500 mt-1">
+                                      {getAgreementPresetSubtitle(tmpl)}
+                                    </div>
+                                  </button>
+                                );
+                              })}
                           </div>
                         )}
                         <p className="text-[10px] text-slate-400 mt-1.5 italic">
@@ -3359,7 +3358,7 @@ export const FranchiseManagement: React.FC = () => {
                                 },
                               })
                             }
-                            className="mt-0.5 w-full px-2.5 py-1.5 border rounded-lg text-xs bg-white"
+                            className="mt-0.5 w-full px-2.5 py-1.5 border rounded-lg text-xs"
                           />
                         </div>
                       </div>
@@ -4140,22 +4139,20 @@ export const FranchiseManagement: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => setResetPassMode('AUTO')}
-                      className={`py-2.5 px-3 rounded-xl border text-sm font-semibold transition cursor-pointer ${
-                        resetPassMode === 'AUTO'
+                      className={`py-2.5 px-3 rounded-xl border text-sm font-semibold transition cursor-pointer ${resetPassMode === 'AUTO'
                           ? 'bg-[#006FFF] text-white border-[#006FFF] shadow-sm'
                           : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
-                      }`}
+                        }`}
                     >
                       Auto-Generate
                     </button>
                     <button
                       type="button"
                       onClick={() => setResetPassMode('MANUAL')}
-                      className={`py-2.5 px-3 rounded-xl border text-sm font-semibold transition cursor-pointer ${
-                        resetPassMode === 'MANUAL'
+                      className={`py-2.5 px-3 rounded-xl border text-sm font-semibold transition cursor-pointer ${resetPassMode === 'MANUAL'
                           ? 'bg-[#006FFF] text-white border-[#006FFF] shadow-sm'
                           : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
-                      }`}
+                        }`}
                     >
                       Type New Password
                     </button>
@@ -5467,17 +5464,15 @@ export const FranchiseManagement: React.FC = () => {
         <div className="fixed inset-0 !m-0 bg-slate-900/60 backdrop-blur-sm z-[80] flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-slate-200 overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-150">
             {/* Header */}
-            <div className={`px-6 py-4 flex items-center justify-between border-b ${
-              statusModalState.targetStatus === 'SUSPENDED'
+            <div className={`px-6 py-4 flex items-center justify-between border-b ${statusModalState.targetStatus === 'SUSPENDED'
                 ? 'bg-gradient-to-r from-rose-900 to-slate-950 text-white border-rose-800/40'
                 : 'bg-gradient-to-r from-emerald-900 to-slate-950 text-white border-emerald-800/40'
-            }`}>
+              }`}>
               <div className="flex items-center gap-2.5">
-                <div className={`w-9 h-9 rounded-xl flex items-center justify-center border ${
-                  statusModalState.targetStatus === 'SUSPENDED'
+                <div className={`w-9 h-9 rounded-xl flex items-center justify-center border ${statusModalState.targetStatus === 'SUSPENDED'
                     ? 'bg-rose-500/20 text-rose-300 border-rose-500/30'
                     : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
-                }`}>
+                  }`}>
                   {statusModalState.targetStatus === 'SUSPENDED' ? (
                     <AlertTriangle className="w-5 h-5 text-rose-400" />
                   ) : (
@@ -5509,11 +5504,10 @@ export const FranchiseManagement: React.FC = () => {
 
             {/* Body Form */}
             <form onSubmit={handleConfirmStatusChange} className="p-6 space-y-4">
-              <div className={`p-3.5 rounded-xl border text-xs space-y-1 ${
-                statusModalState.targetStatus === 'SUSPENDED'
+              <div className={`p-3.5 rounded-xl border text-xs space-y-1 ${statusModalState.targetStatus === 'SUSPENDED'
                   ? 'bg-rose-50 border-rose-200 text-rose-900'
                   : 'bg-emerald-50 border-emerald-200 text-emerald-900'
-              }`}>
+                }`}>
                 <div className="font-bold flex items-center gap-1.5">
                   <ShieldCheck className="w-4 h-4 shrink-0" />
                   {statusModalState.targetStatus === 'SUSPENDED'
@@ -5523,7 +5517,7 @@ export const FranchiseManagement: React.FC = () => {
                 <p className="text-[11px] leading-relaxed opacity-90">
                   {statusModalState.targetStatus === 'SUSPENDED'
                     ? 'Franchise owner and campus administrators under this center will be prevented from enrolling new students or accessing operational dashboards until reactivated.'
-                    : 'The franchise center will be restored to active standing. Staff and owner accounts will regain immediate operational access.'}
+                    : 'The franchise center will be restored to active standing. Trainer and owner accounts will regain immediate operational access.'}
                 </p>
               </div>
 
@@ -5560,11 +5554,10 @@ export const FranchiseManagement: React.FC = () => {
                 <button
                   type="submit"
                   disabled={statusModalState.isSubmitting || !statusModalState.reason.trim()}
-                  className={`px-5 py-2 text-white font-bold rounded-xl text-xs shadow-sm transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50 ${
-                    statusModalState.targetStatus === 'SUSPENDED'
+                  className={`px-5 py-2 text-white font-bold rounded-xl text-xs shadow-sm transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50 ${statusModalState.targetStatus === 'SUSPENDED'
                       ? 'bg-rose-600 hover:bg-rose-700'
                       : 'bg-emerald-600 hover:bg-emerald-700'
-                  }`}
+                    }`}
                 >
                   {statusModalState.isSubmitting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                   {statusModalState.targetStatus === 'SUSPENDED' ? 'Confirm Suspension' : 'Confirm Activation'}
@@ -5754,8 +5747,8 @@ export const FranchiseManagement: React.FC = () => {
                             <span>
                               {showDrawerPassword
                                 ? (detailData.franchise.ownerPassword ||
-                                   detailData.franchise.businessDetails?.initialPassword ||
-                                   `DG@${(detailData.franchise.name || 'Partner').replace(/[^a-zA-Z]/g, '').slice(0, 7) || 'Partner'}2026#${(detailData.franchise.code || '1002').replace(/[^0-9]/g, '').slice(-4).padStart(4, '7')}`)
+                                  detailData.franchise.businessDetails?.initialPassword ||
+                                  `DG@${(detailData.franchise.name || 'Partner').replace(/[^a-zA-Z]/g, '').slice(0, 7) || 'Partner'}2026#${(detailData.franchise.code || '1002').replace(/[^0-9]/g, '').slice(-4).padStart(4, '7')}`)
                                 : '••••••••••••••••'}
                             </span>
                             <span className="text-[10px] font-sans font-medium text-slate-400 uppercase tracking-normal">
@@ -5783,11 +5776,10 @@ export const FranchiseManagement: React.FC = () => {
                               showToast('Franchise password copied to clipboard', 'success');
                               setTimeout(() => setDrawerCopiedKey(null), 2500);
                             }}
-                            className={`px-3 py-2 rounded-lg border text-xs font-semibold transition cursor-pointer shadow-xs flex items-center gap-1.5 ${
-                              drawerCopiedKey === 'drawer_password'
+                            className={`px-3 py-2 rounded-lg border text-xs font-semibold transition cursor-pointer shadow-xs flex items-center gap-1.5 ${drawerCopiedKey === 'drawer_password'
                                 ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
                                 : 'bg-[#006FFF] hover:bg-[#0058D4] text-white border-blue-600'
-                            }`}
+                              }`}
                             title="Copy password"
                           >
                             {drawerCopiedKey === 'drawer_password' ? (
@@ -5831,7 +5823,7 @@ export const FranchiseManagement: React.FC = () => {
                       </div>
                     </div>
 
-                    
+
                   </div>
 
                   {/* SECTION 2: FRANCHISE CENTER DETAILS & REGISTERED ADDRESS */}

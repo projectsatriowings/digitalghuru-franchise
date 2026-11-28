@@ -810,32 +810,47 @@ class CoursesService {
     // 3. FRANCHISE PERMISSION GOVERNANCE & OFFERINGS
     // -------------------------------------------------------------
     static async listFranchiseCourses(franchiseId, options) {
+        const whereClause = {
+            status: client_1.CourseStatus.PUBLISHED,
+            ...(options?.includeUnpermitted
+                ? {}
+                : {
+                    franchiseSelections: {
+                        some: { franchiseId, isPermitted: true },
+                    },
+                }),
+        };
         const courses = await prisma_js_1.prisma.globalCourse.findMany({
-            where: { status: client_1.CourseStatus.PUBLISHED },
+            where: whereClause,
             include: {
                 category: true,
+                activeCurriculumVersion: {
+                    select: {
+                        id: true,
+                        version: true,
+                        title: true,
+                        _count: { select: { modules: true } },
+                    },
+                },
                 franchiseSelections: {
-                    where: { franchiseId }
+                    where: { franchiseId },
                 },
                 _count: {
-                    select: { enrollments: { where: { franchiseId, status: client_1.EnrollmentStatus.ACTIVE } } }
-                }
+                    select: { enrollments: { where: { franchiseId, status: client_1.EnrollmentStatus.ACTIVE } } },
+                },
             },
-            orderBy: { title: 'asc' }
+            orderBy: { title: 'asc' },
         });
-        const filtered = options?.includeUnpermitted
-            ? courses
-            : courses.filter((c) => c.franchiseSelections[0]?.isPermitted === true);
-        return filtered.map((c) => {
+        return courses.map((c) => {
             const selection = c.franchiseSelections[0] || null;
             const isPermitted = Boolean(selection?.isPermitted);
-            const isSelected = isPermitted;
+            const isSelected = isPermitted && (selection?.isEnabled !== false);
             return {
                 ...c,
                 isPermitted,
                 permittedAt: selection?.permittedAt || null,
                 isSelected,
-                franchiseCustomPrice: null,
+                franchiseCustomPrice: selection?.localFeeOverride ? Number(selection.localFeeOverride) : null,
                 activeEnrollmentsCount: c._count.enrollments,
             };
         });
@@ -1489,7 +1504,15 @@ class CoursesService {
                                         include: {
                                             chapters: {
                                                 orderBy: { position: 'asc' },
-                                                select: { id: true, title: true },
+                                                select: {
+                                                    id: true,
+                                                    title: true,
+                                                    description: true,
+                                                    videoUrl: true,
+                                                    duration: true,
+                                                    position: true,
+                                                    isFree: true,
+                                                },
                                             },
                                         },
                                     },
@@ -1531,7 +1554,7 @@ class CoursesService {
         const nextThreshold = XP_LEVEL_THRESHOLDS[level] ?? null;
         const certByCourseId = new Map(certificates.map((c) => [c.courseId, c]));
         const enrichedEnrollments = enrollments.map((enr) => {
-            const chapters = enr.course.activeCurriculumVersion?.modules.flatMap((m) => m.chapters) || [];
+            const chapters = enr.course?.activeCurriculumVersion?.modules?.flatMap((m) => m.chapters) || [];
             const totalLessons = chapters.length;
             const completedLessons = chapters.filter((ch) => completedSet.has(ch.id)).length;
             const progressPercent = totalLessons > 0 ? Math.round((completedLessons / totalLessons) * 100) : enr.progress;

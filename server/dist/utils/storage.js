@@ -71,7 +71,19 @@ function getActiveStorageDir() {
     if (index_js_1.config.storage.driver === 's3') {
         throw new Error('[Storage Configuration Error]: getActiveStorageDir() invoked while STORAGE_DRIVER="s3". S3 storage uses object keys, not local filesystem paths.');
     }
-    return path_1.default.resolve(process.cwd(), index_js_1.config.storage.localPath || './uploads');
+    const configuredLocal = index_js_1.config.storage.localPath || './uploads';
+    if (path_1.default.isAbsolute(configuredLocal)) {
+        return configuredLocal;
+    }
+    const rootCandidate = path_1.default.resolve(process.cwd(), configuredLocal);
+    const serverCandidate = path_1.default.resolve(process.cwd(), 'server', configuredLocal);
+    // If cwd is repo root and root uploads is missing/empty, use server/uploads if available
+    if ((!fs_1.default.existsSync(rootCandidate) || !fs_1.default.existsSync(path_1.default.join(rootCandidate, 'courses'))) &&
+        fs_1.default.existsSync(serverCandidate) &&
+        fs_1.default.existsSync(path_1.default.join(serverCandidate, 'courses'))) {
+        return serverCandidate;
+    }
+    return rootCandidate;
 }
 /**
  * Initializes required folder partitions on disk for local and volume drivers.
@@ -439,6 +451,24 @@ exports.StorageManager = {
                 // continue searching remaining public folders
             }
         }
+        // Secondary fallback: check apps/web/public/uploads/courses if available (e.g. dev mode static assets)
+        try {
+            const publicAssetsFile = path_1.default.resolve(process.cwd(), 'apps/web/public/uploads/courses', filename);
+            if (fs_1.default.existsSync(publicAssetsFile)) {
+                const stat = fs_1.default.statSync(publicAssetsFile);
+                const contentType = getMimeType(path_1.default.extname(filename));
+                return {
+                    stream: fs_1.default.createReadStream(publicAssetsFile),
+                    statusCode: 200,
+                    contentType,
+                    contentLength: stat.size,
+                    acceptRanges: 'bytes',
+                };
+            }
+        }
+        catch {
+            // ignore fallback error
+        }
         return null;
     },
     async mediaExists(options) {
@@ -548,6 +578,7 @@ function resolveAbsolutePath(storageKey) {
     const cleanKey = storageKey
         .split('?')[0]
         .replace(/^(\/api\/courses\/media\/(public|protected)\/)/, 'courses/$2/')
+        .replace(/^(\/api\/students\/photo-raw\/)/, '')
         .replace(/^\/?(uploads\/)/, '')
         .replace(/^[/\\]+/, '');
     const normalizedKey = path_1.default.normalize(cleanKey);
@@ -555,12 +586,27 @@ function resolveAbsolutePath(storageKey) {
     const resolvedBase = path_1.default.resolve(activeDir);
     const resolvedPath = path_1.default.resolve(resolvedBase, normalizedKey);
     // Strict containment check: must never escape active storage directory
-    if (!resolvedPath.startsWith(resolvedBase + path_1.default.sep) &&
-        resolvedPath !== resolvedBase) {
-        return null;
+    if (resolvedPath.startsWith(resolvedBase + path_1.default.sep) ||
+        resolvedPath === resolvedBase) {
+        if (fs_1.default.existsSync(resolvedPath)) {
+            return resolvedPath;
+        }
     }
-    if (fs_1.default.existsSync(resolvedPath)) {
-        return resolvedPath;
+    // Cross-check alternative storage locations (e.g. server/uploads vs uploads)
+    const altDirs = [
+        path_1.default.resolve(process.cwd(), 'server', 'uploads'),
+        path_1.default.resolve(process.cwd(), 'uploads'),
+        path_1.default.resolve(process.cwd(), '..', 'server', 'uploads'),
+        path_1.default.resolve(process.cwd(), '..', 'uploads'),
+    ];
+    for (const altDir of altDirs) {
+        if (fs_1.default.existsSync(altDir)) {
+            const candidate = path_1.default.resolve(altDir, normalizedKey);
+            if ((candidate.startsWith(altDir + path_1.default.sep) || candidate === altDir) &&
+                fs_1.default.existsSync(candidate)) {
+                return candidate;
+            }
+        }
     }
     return null;
 }

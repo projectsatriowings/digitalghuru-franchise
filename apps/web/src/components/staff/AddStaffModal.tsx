@@ -48,7 +48,7 @@ interface AddStaffModalProps {
 
 function formatUserFriendlyError(rawError?: string | null): string {
   if (!rawError || typeof rawError !== 'string') {
-    return 'Failed to create staff member. Please check your information and try again.';
+    return 'Failed to create trainer. Please check your information and try again.';
   }
 
   // If already clean, single line without technical keywords
@@ -63,14 +63,14 @@ function formatUserFriendlyError(rawError?: string | null): string {
   }
 
   if (rawError.includes('phone') || rawError.includes('already exists')) {
-    return 'A staff account with this phone number, email, or employee code already exists.';
+    return 'A trainer account with this phone number, email, or employee code already exists.';
   }
 
   if (rawError.includes('dob') || rawError.includes('Date')) {
     return 'Please check the Date of Birth or Joining Date format.';
   }
 
-  return 'Unable to save staff profile. Please verify the entered details and try again.';
+  return 'Unable to save trainer profile. Please verify the entered details and try again.';
 }
 
 export const AddStaffModal: React.FC<AddStaffModalProps> = ({
@@ -88,6 +88,7 @@ export const AddStaffModal: React.FC<AddStaffModalProps> = ({
   const [personalEmail, setPersonalEmail] = useState('');
   const [dob, setDob] = useState('');
   const [gender, setGender] = useState('');
+  const [bloodGroup, setBloodGroup] = useState('');
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -193,7 +194,7 @@ export const AddStaffModal: React.FC<AddStaffModalProps> = ({
   // Sync login email from name/institute when step 1 progresses
   const handleProceedFromStep1 = () => {
     if (!fullName.trim()) {
-      setError('Staff full name is required');
+      setError('Trainer full name is required');
       return;
     }
     if (phone.trim()) {
@@ -231,7 +232,7 @@ export const AddStaffModal: React.FC<AddStaffModalProps> = ({
 
   const handleProceedFromStep2 = () => {
     if (!designation.trim()) {
-      setError('Designation is required (e.g. Senior Mathematics Faculty)');
+      setError('Designation is required (e.g. Senior Mathematics Trainer)');
       return;
     }
     setError(null);
@@ -243,10 +244,39 @@ export const AddStaffModal: React.FC<AddStaffModalProps> = ({
     setStep(4);
   };
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onClose();
+        return;
+      }
+      if (e.key === 'Enter') {
+        const target = e.target as HTMLElement | null;
+        if (target && target.tagName === 'TEXTAREA' && !e.ctrlKey && !e.metaKey) return;
+        if (target && (target.tagName === 'INPUT' || target.tagName === 'SELECT')) {
+          e.preventDefault();
+          if (step === 1) handleProceedFromStep1();
+          else if (step === 2) handleProceedFromStep2();
+          else if (step === 3) handleProceedFromStep3();
+          else if (step === 4) handleSubmit(e as any);
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, step, fullName, designation, loginEmail, password, phone, personalEmail]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!fullName.trim() || !designation.trim() || !loginEmail.trim() || !password.trim()) {
       setError('Please fill in all mandatory fields');
+      return;
+    }
+
+    if (password.trim().length < 6) {
+      setError('Permanent login password must be at least 6 characters long.');
       return;
     }
 
@@ -310,6 +340,7 @@ export const AddStaffModal: React.FC<AddStaffModalProps> = ({
         personalEmail: personalEmail.trim() || null,
         dob: dob || null,
         gender: gender || null,
+        bloodGroup: bloodGroup || null,
 
         // Employment Details
         department: department.trim() || null,
@@ -418,7 +449,7 @@ export const AddStaffModal: React.FC<AddStaffModalProps> = ({
               <User className="w-3 h-3 text-[#006FFF]" /> Step {step} of 4
             </div>
             <h2 className="text-xl font-extrabold text-[#0F172A]">
-              Provision New Staff & Faculty
+              Provision New Trainer
             </h2>
             <p className="text-xs text-[#64748B] mt-0.5">
               Step-by-step profile onboarding and portal account provisioning
@@ -498,7 +529,7 @@ export const AddStaffModal: React.FC<AddStaffModalProps> = ({
                     <div className="w-20 h-20 rounded-2xl overflow-hidden border-2 border-[#8D6E63] shadow-xs bg-stone-100 flex items-center justify-center shrink-0">
                       <img
                         src={photoPreview}
-                        alt="Staff Preview"
+                        alt="Trainer Preview"
                         className="w-full h-full object-cover block"
                         style={{ width: '80px', height: '80px', objectFit: 'cover' }}
                       />
@@ -523,7 +554,7 @@ export const AddStaffModal: React.FC<AddStaffModalProps> = ({
               <div className="flex-1 text-center sm:text-left space-y-1 min-w-0">
                 <div className="flex items-center justify-center sm:justify-between">
                   <span className="text-xs font-bold text-[#0F172A]">
-                    Staff Photograph <span className="text-[#94A3B8] font-normal">(Optional)</span>
+                    Trainer Photograph <span className="text-[#94A3B8] font-normal">(Optional)</span>
                   </span>
                   {photoFile && (
                     <span className="hidden sm:inline-flex text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
@@ -532,7 +563,7 @@ export const AddStaffModal: React.FC<AddStaffModalProps> = ({
                   )}
                 </div>
                 <p className="text-[11px] text-[#94A3B8]">
-                  Upload JPG, PNG or WebP portrait for staff directory and portal profile (Max 5MB)
+                  Upload JPG, PNG or WebP portrait for trainer directory and portal profile (Max 5MB)
                 </p>
                 <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 pt-1">
                   <label className="cursor-pointer px-3.5 py-1.5 rounded-xl bg-[#006FFF] hover:bg-[#0058D4] text-white text-xs font-semibold shadow-2xs hover:shadow-xs transition inline-flex items-center gap-1.5">
@@ -616,7 +647,7 @@ export const AddStaffModal: React.FC<AddStaffModalProps> = ({
                     setPersonalEmail(val);
                     if (error && (error.includes('email') || error.includes('Email'))) setError(null);
                   }}
-                  placeholder="e.g. faculty.personal@gmail.com"
+                  placeholder="e.g. trainer.personal@gmail.com"
                   className={`w-full bg-[#FAF8F5] border rounded-xl px-3.5 py-2.5 text-xs text-[#0F172A] focus:outline-none focus:ring-2 transition-colors ${
                     personalEmail.trim() && getEmailValidationError(personalEmail)
                       ? 'border-rose-400 focus:ring-rose-200 bg-rose-50/30'
@@ -635,7 +666,7 @@ export const AddStaffModal: React.FC<AddStaffModalProps> = ({
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
                 <label className="block text-xs font-semibold text-[#0F172A] mb-1">
                   Date of Birth
@@ -661,6 +692,26 @@ export const AddStaffModal: React.FC<AddStaffModalProps> = ({
                   <option value="Male">Male</option>
                   <option value="Female">Female</option>
                   <option value="Other">Other</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-[#0F172A] mb-1">
+                  Blood Group
+                </label>
+                <select
+                  value={bloodGroup}
+                  onChange={(e) => setBloodGroup(e.target.value)}
+                  className="w-full bg-[#FAF8F5] border border-[#E2E8F0] rounded-xl px-3.5 py-2.5 text-xs text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#006FFF]/20"
+                >
+                  <option value="">Select Blood Group (Optional)</option>
+                  <option value="A+">A+</option>
+                  <option value="A-">A-</option>
+                  <option value="B+">B+</option>
+                  <option value="B-">B-</option>
+                  <option value="AB+">AB+</option>
+                  <option value="AB-">AB-</option>
+                  <option value="O+">O+</option>
+                  <option value="O-">O-</option>
                 </select>
               </div>
             </div>
@@ -703,7 +754,7 @@ export const AddStaffModal: React.FC<AddStaffModalProps> = ({
                   required
                   value={designation}
                   onChange={(e) => setDesignation(e.target.value)}
-                  placeholder="e.g. Senior Physics Faculty"
+                  placeholder="e.g. Senior Physics Trainer"
                   className="w-full bg-[#FAF8F5] border border-[#E2E8F0] rounded-xl px-3.5 py-2.5 text-xs text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#006FFF]/20"
                 />
               </div>
@@ -734,7 +785,7 @@ export const AddStaffModal: React.FC<AddStaffModalProps> = ({
                   <option value="FULL_TIME">Full Time</option>
                   <option value="PART_TIME">Part Time</option>
                   <option value="CONTRACT">Contract</option>
-                  <option value="VISITING">Visiting Faculty</option>
+                  <option value="VISITING">Visiting Trainer</option>
                 </select>
               </div>
             </div>
@@ -827,7 +878,7 @@ export const AddStaffModal: React.FC<AddStaffModalProps> = ({
                 className="w-full bg-[#FAF8F5] border border-[#E2E8F0] rounded-xl px-3.5 py-2.5 text-xs text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#006FFF]/20"
               />
               <span className="text-[10px] text-[#94A3B8] mt-1 block">
-                Additional qualifications, past jobs, and certificates can be added later in the staff profile.
+                Additional qualifications, past jobs, and certificates can be added later in the trainer profile.
               </span>
             </div>
           </div>
@@ -841,7 +892,7 @@ export const AddStaffModal: React.FC<AddStaffModalProps> = ({
                 <div className="w-14 h-14 rounded-2xl overflow-hidden border-2 border-[#8D6E63] shadow-xs bg-stone-100 shrink-0">
                   <img
                     src={photoPreview}
-                    alt="Staff Thumbnail"
+                    alt="Trainer Thumbnail"
                     className="w-full h-full object-cover block"
                     style={{ width: '56px', height: '56px', objectFit: 'cover' }}
                   />
@@ -883,7 +934,7 @@ export const AddStaffModal: React.FC<AddStaffModalProps> = ({
                   setLoginEmail(e.target.value.trim());
                   if (error && (error.includes('email') || error.includes('Email'))) setError(null);
                 }}
-                placeholder="faculty@institute.edu"
+                placeholder="trainer@institute.edu"
                 className={`w-full bg-[#FAF8F5] border rounded-xl px-3.5 py-2.5 text-xs text-[#0F172A] focus:outline-none focus:ring-2 transition-colors ${
                   loginEmail.trim() && getEmailValidationError(loginEmail, true)
                     ? 'border-rose-400 focus:ring-rose-200 bg-rose-50/30'
@@ -918,10 +969,18 @@ export const AddStaffModal: React.FC<AddStaffModalProps> = ({
                 <input
                   type={showPassword ? 'text' : 'password'}
                   required
+                  minLength={6}
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={(e) => {
+                    setPassword(e.target.value);
+                    if (error && (error.includes('password') || error.includes('Password'))) setError(null);
+                  }}
                   placeholder="Type or generate permanent password"
-                  className="w-full bg-[#FAF8F5] border border-[#E2E8F0] rounded-xl pl-3.5 pr-10 py-2.5 text-xs font-mono text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#006FFF]/20"
+                  className={`w-full bg-[#FAF8F5] border rounded-xl pl-3.5 pr-10 py-2.5 text-xs font-mono text-[#0F172A] focus:outline-none focus:ring-2 transition-colors ${
+                    password.trim() && password.trim().length < 6
+                      ? 'border-rose-400 focus:ring-rose-200 bg-rose-50/30'
+                      : 'border-[#E2E8F0] focus:ring-[#006FFF]/20'
+                  }`}
                 />
                 <button
                   type="button"
@@ -931,9 +990,15 @@ export const AddStaffModal: React.FC<AddStaffModalProps> = ({
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
-              <span className="text-[10px] text-[#94A3B8] mt-1 block">
-                Permanent password generated by admin. You will receive credentials to copy after creation.
-              </span>
+              {password.trim() && password.trim().length < 6 ? (
+                <p className="text-[11px] text-rose-600 mt-1 font-medium">
+                  Permanent password must be at least 6 characters long.
+                </p>
+              ) : (
+                <span className="text-[10px] text-[#94A3B8] mt-1 block">
+                  Permanent login password generated by admin. You will receive these credentials in a confirmation dialog to copy after creation.
+                </span>
+              )}
             </div>
           </div>
         )}
@@ -979,7 +1044,7 @@ export const AddStaffModal: React.FC<AddStaffModalProps> = ({
               className="inline-flex items-center gap-2 px-6 py-2.5 bg-[#006FFF] hover:bg-[#0058D4] text-white text-xs font-semibold rounded-xl shadow-md shadow-[#006FFF]/20 transition-all disabled:opacity-50"
             >
               {loading && <RefreshCw className="w-4 h-4 animate-spin" />}
-              <span>Create Staff Member</span>
+              <span>Create Trainer</span>
             </button>
           )}
         </div>

@@ -440,10 +440,10 @@ export const MessagingInbox: React.FC = () => {
         <div>
           <h1 className="text-2xl font-extrabold text-[#0F172A] flex items-center gap-2.5">
             <MessageSquare className="w-7 h-7 text-[#64748B]" />
-            <span>Parent Messages & Faculty Communication Center</span>
+            <span>Parent Messages & Trainer Communication Center</span>
           </h1>
           <p className="text-sm text-[#64748B] mt-1">
-            Authenticated, private channels between teachers and verified student guardians
+            Authenticated, private channels between trainers and verified student guardians
           </p>
         </div>
 

@@ -6,6 +6,7 @@ import { Sidebar } from './components/Sidebar';
 import { Login } from './pages/Login';
 import { PageSkeleton } from './components/PageSkeleton';
 import { ToastProvider } from './context/ToastContext';
+import { useFormKeyboardNavigation } from './hooks/useFormKeyboardNavigation';
 
 // Route-level code splitting via React.lazy (with prefetch helpers for instant tab switches)
 const loadFranchiseManagement = () => import('./pages/FranchiseManagement');
@@ -35,6 +36,7 @@ const QuestionGenerator = lazy(() => import('./pages/QuestionGenerator/QuestionG
 const ProgressReviewsManagement = lazy(() => import('./pages/ProgressReviewsManagement').then((m) => ({ default: m.ProgressReviewsManagement })));
 const MessagingInbox = lazy(() => import('./pages/MessagingInbox').then((m) => ({ default: m.MessagingInbox })));
 const FeesManagement = lazy(() => import('./pages/FeesManagement').then((m) => ({ default: m.FeesManagement })));
+const RecordedSessions = lazy(() => import('./pages/RecordedSessions').then((m) => ({ default: m.RecordedSessions })));
 
 const getDefaultTabForRole = (role?: string): string => {
   switch (role) {
@@ -61,24 +63,25 @@ const isTabAllowedForRole = (tab: string, role?: string): boolean => {
   if (!role) return false;
   switch (role) {
     case 'SUPER_ADMIN':
-      return ['super_admin_dashboard', 'franchise_management', 'course_management', 'monthly_settlements', 'staff', 'students', 'academics', 'exams', 'fees'].includes(tab);
+      return ['super_admin_dashboard', 'franchise_management', 'course_management', 'monthly_settlements', 'staff', 'students', 'academics', 'exams', 'fees', 'recorded_sessions'].includes(tab);
     case 'FRANCHISE_OWNER':
-      return ['franchise_owner_dashboard', 'franchise_courses', 'franchise_branches', 'franchise_royalties', 'franchise_agreements', 'monthly_settlements', 'academic_dashboard', 'students', 'staff', 'staff_attendance', 'academics', 'exams', 'question_generator', 'fees', 'messaging', 'progress_reviews'].includes(tab) || tab.startsWith('franchise_');
+      return ['franchise_owner_dashboard', 'franchise_courses', 'franchise_branches', 'franchise_royalties', 'franchise_agreements', 'monthly_settlements', 'academic_dashboard', 'students', 'staff', 'staff_attendance', 'academics', 'exams', 'question_generator', 'fees', 'messaging', 'progress_reviews', 'recorded_sessions'].includes(tab) || tab.startsWith('franchise_');
     case 'BRANCH_ADMIN':
     case 'ACADEMIC_ADMIN':
-      return ['academic_dashboard', 'franchise_courses', 'staff', 'staff_attendance', 'students', 'academics', 'exams', 'question_generator', 'progress_reviews', 'messaging', 'fees'].includes(tab);
+      return ['academic_dashboard', 'franchise_courses', 'staff', 'staff_attendance', 'students', 'academics', 'exams', 'question_generator', 'progress_reviews', 'messaging', 'fees', 'recorded_sessions'].includes(tab);
     case 'STAFF':
-      return ['my_attendance', 'attendance', 'academic_dashboard', 'students', 'academics', 'exams', 'materials', 'homework', 'progress_reviews', 'messaging'].includes(tab);
+      return ['my_attendance', 'attendance', 'academic_dashboard', 'exams', 'materials', 'homework', 'progress_reviews', 'messaging', 'recorded_sessions'].includes(tab);
     case 'PARENT':
-      return tab === 'parent_portal' || tab.startsWith('parent_') || tab === 'progress_reviews';
+      return tab === 'parent_portal' || tab.startsWith('parent_') || tab === 'progress_reviews' || tab === 'recorded_sessions';
     case 'STUDENT':
-      return ['student_portal', 'exams', 'progress_reviews'].includes(tab) || tab.startsWith('student_');
+      return ['student_portal', 'exams', 'progress_reviews', 'recorded_sessions'].includes(tab) || tab.startsWith('student_');
     default:
       return false;
   }
 };
 
 const AppContent: React.FC = () => {
+  useFormKeyboardNavigation();
   const { user, loading } = useAuth();
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [currentTab, setCurrentTab] = useState<string>(() => {
@@ -257,9 +260,9 @@ const AppContent: React.FC = () => {
 
                 {currentTab === 'my_attendance' && user.role === 'STAFF' && <StaffMyAttendance />}
 
-                {currentTab === 'students' && (user.role === 'ACADEMIC_ADMIN' || user.role === 'BRANCH_ADMIN' || user.role === 'SUPER_ADMIN' || user.role === 'STAFF' || user.role === 'FRANCHISE_OWNER') && <StudentManagement />}
+                {currentTab === 'students' && (user.role === 'ACADEMIC_ADMIN' || user.role === 'BRANCH_ADMIN' || user.role === 'SUPER_ADMIN' || user.role === 'FRANCHISE_OWNER') && <StudentManagement />}
 
-                {currentTab === 'academics' && (user.role === 'ACADEMIC_ADMIN' || user.role === 'BRANCH_ADMIN' || user.role === 'SUPER_ADMIN' || user.role === 'FRANCHISE_OWNER' || user.role === 'STAFF') && (
+                {currentTab === 'academics' && (user.role === 'ACADEMIC_ADMIN' || user.role === 'BRANCH_ADMIN' || user.role === 'SUPER_ADMIN' || user.role === 'FRANCHISE_OWNER') && (
                   <AcademicsManagement onNavigateTab={(tab) => setCurrentTab(tab)} />
                 )}
 
@@ -288,6 +291,10 @@ const AppContent: React.FC = () => {
                 {currentTab === 'question_generator' && (user.role === 'ACADEMIC_ADMIN' || user.role === 'BRANCH_ADMIN' || user.role === 'FRANCHISE_OWNER') && <QuestionGenerator />}
 
                 {currentTab === 'progress_reviews' && <ProgressReviewsManagement />}
+
+                {currentTab === 'recorded_sessions' && (user.role === 'FRANCHISE_OWNER' || user.role === 'STUDENT' || user.role === 'SUPER_ADMIN' || user.role === 'ACADEMIC_ADMIN' || user.role === 'BRANCH_ADMIN' || user.role === 'STAFF') && (
+                  <RecordedSessions onNavigateTab={(tab) => setCurrentTab(tab)} />
+                )}
 
                 {currentTab === 'messaging' && (user.role === 'ACADEMIC_ADMIN' || user.role === 'BRANCH_ADMIN' || user.role === 'STAFF' || user.role === 'FRANCHISE_OWNER') && <MessagingInbox />}
                 {currentTab === 'fees' && (user.role === 'ACADEMIC_ADMIN' || user.role === 'BRANCH_ADMIN' || user.role === 'SUPER_ADMIN' || user.role === 'FRANCHISE_OWNER') && <FeesManagement />}

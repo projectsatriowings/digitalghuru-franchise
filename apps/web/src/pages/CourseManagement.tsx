@@ -113,6 +113,27 @@ export const CourseManagement: React.FC = () => {
 
   useBodyScrollLock(Boolean(showCategoriesModal || curriculumCourse || previewCourse || franchiseCourse || deleteModalState.isOpen));
 
+  // Global keyboard shortcuts for modals and drawers
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (deleteModalState.isOpen) {
+          setDeleteModalState((prev) => ({ ...prev, isOpen: false }));
+        } else if (showCategoriesModal) {
+          setShowCategoriesModal(false);
+        } else if (curriculumCourse) {
+          setCurriculumCourse(null);
+        } else if (previewCourse) {
+          setPreviewCourse(null);
+        } else if (franchiseCourse) {
+          setFranchiseCourse(null);
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [deleteModalState.isOpen, showCategoriesModal, curriculumCourse, previewCourse, franchiseCourse]);
+
   const fetchCatalogue = useCallback(async (forceRefresh = false) => {
     setLoading(true);
     try {
@@ -840,18 +861,28 @@ export const CourseManagement: React.FC = () => {
               >
                 <div className="p-5 flex gap-4">
                   {/* Thumbnail */}
-                  <div className="w-28 h-24 rounded-xl bg-slate-100 border border-slate-200 overflow-hidden shrink-0 flex items-center justify-center relative">
-                    {course.thumbnailUrl ? (
+                  <div className="w-28 h-24 rounded-xl bg-gradient-to-br from-blue-700 via-indigo-700 to-slate-900 border border-slate-200 overflow-hidden shrink-0 flex items-center justify-center relative text-white shadow-inner">
+                    {course.thumbnailUrl || course.thumbnail ? (
                       <img
-                        src={course.thumbnailUrl}
+                        src={course.thumbnailUrl || course.thumbnail}
                         alt={course.title}
-                        className="w-full h-full object-cover"
+                        className="w-full h-full object-cover relative z-10"
                         onError={(e) => {
                           e.currentTarget.style.display = 'none';
                         }}
                       />
                     ) : null}
-                    <BookOpen className="w-8 h-8 text-slate-300 absolute -z-0 pointer-events-none" />
+                    <div className="absolute inset-0 p-2.5 flex flex-col justify-between pointer-events-none">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[9px] font-mono font-bold tracking-wider uppercase opacity-75 truncate max-w-[60px]">
+                          {course.category?.name || 'LMS'}
+                        </span>
+                        <BookOpen className="w-3.5 h-3.5 opacity-50" />
+                      </div>
+                      <div className="text-xs font-black tracking-tight line-clamp-2 leading-tight">
+                        {course.title}
+                      </div>
+                    </div>
                   </div>
 
                   {/* Metadata */}
