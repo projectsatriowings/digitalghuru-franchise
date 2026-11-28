@@ -19,13 +19,13 @@ const router = Router();
 // Base authentication for all settlement endpoints
 router.use(authenticateToken);
 
-// Read endpoints: SUPER_ADMIN and FRANCHISE_OWNER (controller enforces franchise ownership)
-router.get('/', requireRole('SUPER_ADMIN', 'FRANCHISE_OWNER'), listSettlements);
-router.get('/:id', requireRole('SUPER_ADMIN', 'FRANCHISE_OWNER'), getSettlementById);
-router.get('/:id/transfers', requireRole('SUPER_ADMIN', 'FRANCHISE_OWNER'), getSettlementTransfers);
+// Read endpoints: SUPER_ADMIN, FRANCHISE_OWNER, and BRANCH_ADMIN (controller enforces franchise ownership)
+router.get('/', requireRole('SUPER_ADMIN', 'FRANCHISE_OWNER', 'BRANCH_ADMIN'), listSettlements);
+router.get('/:id', requireRole('SUPER_ADMIN', 'FRANCHISE_OWNER', 'BRANCH_ADMIN'), getSettlementById);
+router.get('/:id/transfers', requireRole('SUPER_ADMIN', 'FRANCHISE_OWNER', 'BRANCH_ADMIN'), getSettlementTransfers);
 
-// Super Admin actions (Manual Settlement Workflow)
-router.post('/generate', requireRole('SUPER_ADMIN'), generateMonthlySettlements);
+// Settlement Generation: Allowed for Super Admin (all or single) and Franchise Owner / Branch Admin (own franchise)
+router.post('/generate', requireRole('SUPER_ADMIN', 'FRANCHISE_OWNER', 'BRANCH_ADMIN'), generateMonthlySettlements);
 router.post('/:id/approve', requireRole('SUPER_ADMIN'), approveSettlement);
 router.post('/:id/status', requireRole('SUPER_ADMIN'), updateSettlementStatus);
 router.post('/:id/transfers/manual', requireRole('SUPER_ADMIN'), recordManualTransfer);

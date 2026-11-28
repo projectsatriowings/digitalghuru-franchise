@@ -13,7 +13,8 @@ router.use(auth_js_1.requireInstituteContext);
 router.post('/structures', (0, auth_js_1.requireRole)('SUPER_ADMIN', 'ACADEMIC_ADMIN'), fees_controller_js_1.createFeeStructure);
 router.get('/structures', (0, auth_js_1.requireRole)('SUPER_ADMIN', 'ACADEMIC_ADMIN'), fees_controller_js_1.listFeeStructures);
 router.get('/structures/:id', (0, auth_js_1.requireRole)('SUPER_ADMIN', 'ACADEMIC_ADMIN'), fees_controller_js_1.getFeeStructureById);
-router.patch('/structures/:id', (0, auth_js_1.requireRole)('SUPER_ADMIN', 'ACADEMIC_ADMIN'), fees_controller_js_1.updateFeeStructure);
+router.patch('/structures/:id', (0, auth_js_1.requireRole)('SUPER_ADMIN', 'ACADEMIC_ADMIN', 'BRANCH_ADMIN', 'FRANCHISE_OWNER'), fees_controller_js_1.updateFeeStructure);
+router.put('/structures/:id', (0, auth_js_1.requireRole)('SUPER_ADMIN', 'ACADEMIC_ADMIN', 'BRANCH_ADMIN', 'FRANCHISE_OWNER'), fees_controller_js_1.updateFeeStructure);
 // ============================================================================
 // MODULE B: STUDENT FEE ASSIGNMENTS
 // ============================================================================
@@ -25,9 +26,12 @@ router.get('/students/:studentId/statement', (0, auth_js_1.requireRole)('SUPER_A
 // ============================================================================
 // MODULE C & D: PAYMENTS & RECEIPTS
 // ============================================================================
-router.post('/payments', (0, auth_js_1.requireRole)('SUPER_ADMIN', 'ACADEMIC_ADMIN'), fees_controller_js_1.recordPayment);
-router.get('/payments', (0, auth_js_1.requireRole)('SUPER_ADMIN', 'ACADEMIC_ADMIN', 'PARENT', 'STUDENT'), fees_controller_js_1.listPayments);
-router.get('/payments/:id/receipt', (0, auth_js_1.requireRole)('SUPER_ADMIN', 'ACADEMIC_ADMIN', 'PARENT', 'STUDENT'), fees_controller_js_1.getReceipt);
+router.post('/payments', (0, auth_js_1.requireRole)('SUPER_ADMIN', 'ACADEMIC_ADMIN', 'BRANCH_ADMIN', 'FRANCHISE_OWNER'), fees_controller_js_1.recordPayment);
+router.post('/assignments/:id/payments', (0, auth_js_1.requireRole)('SUPER_ADMIN', 'ACADEMIC_ADMIN', 'BRANCH_ADMIN', 'FRANCHISE_OWNER'), fees_controller_js_1.recordPayment);
+router.post('/assignments/:assignmentId/payments', (0, auth_js_1.requireRole)('SUPER_ADMIN', 'ACADEMIC_ADMIN', 'BRANCH_ADMIN', 'FRANCHISE_OWNER'), fees_controller_js_1.recordPayment);
+router.get('/payments', (0, auth_js_1.requireRole)('SUPER_ADMIN', 'ACADEMIC_ADMIN', 'BRANCH_ADMIN', 'FRANCHISE_OWNER', 'PARENT', 'STUDENT'), fees_controller_js_1.listPayments);
+router.get('/payments/:id/receipt', (0, auth_js_1.requireRole)('SUPER_ADMIN', 'ACADEMIC_ADMIN', 'BRANCH_ADMIN', 'FRANCHISE_OWNER', 'PARENT', 'STUDENT'), fees_controller_js_1.getReceipt);
+router.get('/receipts/:id', (0, auth_js_1.requireRole)('SUPER_ADMIN', 'ACADEMIC_ADMIN', 'BRANCH_ADMIN', 'FRANCHISE_OWNER', 'PARENT', 'STUDENT'), fees_controller_js_1.getReceipt);
 // ============================================================================
 // MODULE E: REFUNDS & ADJUSTMENTS (STRICT RBAC: ADMIN ONLY)
 // ============================================================================

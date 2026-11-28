@@ -139,7 +139,7 @@ exports.BulkFranchisePermissionSchema = zod_1.z.object({
     franchiseIds: zod_1.z.array(zod_1.z.string().uuid()).optional(),
     allActiveFranchises: zod_1.z.boolean().optional().default(false),
     isPermitted: zod_1.z.boolean().default(true),
-    autoEnable: zod_1.z.boolean().optional().default(false),
+    autoEnable: zod_1.z.boolean().optional().default(true),
 });
 exports.FranchiseCourseSelectionSchema = zod_1.z.object({
     courseId: zod_1.z.string().uuid(),

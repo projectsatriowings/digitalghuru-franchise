@@ -38,6 +38,7 @@ const storage_js_1 = require("../../utils/storage.js");
 const student_authorization_service_js_1 = require("../students/student-authorization.service.js");
 const timetable_resolver_js_1 = require("../students/timetable-resolver.js");
 const attendance_controller_js_1 = require("../attendance/attendance.controller.js");
+const cache_js_1 = require("../../utils/cache.js");
 function safeParseDate(dateVal) {
     if (!dateVal || typeof dateVal !== 'string' || !dateVal.trim())
         return null;
@@ -80,6 +81,7 @@ exports.createStaffSchema = zod_1.z.object({
     qualification: zod_1.z.string().optional().nullable(),
     password: zod_1.z.string().min(6, 'Password must be at least 6 characters').optional(),
     initialPassword: zod_1.z.string().min(6, 'Password must be at least 6 characters').optional(),
+    temporaryPassword: zod_1.z.string().min(6, 'Password must be at least 6 characters').optional(),
     permissionsJson: zod_1.z.record(zod_1.z.any()).optional().nullable(),
     batchIds: zod_1.z.array(zod_1.z.string().uuid()).optional(),
     avatarUrl: zod_1.z.string().optional().nullable(),
@@ -159,6 +161,8 @@ exports.updateStaffStatusSchema = zod_1.z.object({
 });
 exports.resetStaffPasswordSchema = zod_1.z.object({
     password: zod_1.z.string().min(6, 'Password must be at least 6 characters').optional(),
+    newPassword: zod_1.z.string().min(6, 'Password must be at least 6 characters').optional(),
+    temporaryPassword: zod_1.z.string().min(6, 'Password must be at least 6 characters').optional(),
 });
 exports.qualificationSchema = zod_1.z.object({
     degree: zod_1.z.string().min(1, 'Degree or certification name is required'),
@@ -341,7 +345,10 @@ async function createStaff(req, res) {
                 });
             }
         }
-        const permanentPassword = data.password?.trim() || data.initialPassword?.trim() || `Staff@${(0, security_js_1.generateSecureRandomToken)(4)}2026`;
+        const permanentPassword = data.password?.trim() ||
+            data.initialPassword?.trim() ||
+            data.temporaryPassword?.trim() ||
+            `Staff@${(0, security_js_1.generateSecureRandomToken)(4)}2026`;
         const passwordHash = await (0, security_js_1.hashPassword)(permanentPassword);
         // Address sync logic
         const sameAsCurrent = data.sameAsCurrentAddress ?? false;
@@ -920,7 +927,10 @@ async function resetStaffPassword(req, res) {
                 error: parse.error.errors[0]?.message || 'Validation failed',
             });
         }
-        const newPassword = parse.data.password?.trim() || `Staff@${(0, security_js_1.generateSecureRandomToken)(4)}2026`;
+        const newPassword = parse.data.password?.trim() ||
+            parse.data.newPassword?.trim() ||
+            parse.data.temporaryPassword?.trim() ||
+            `Staff@${(0, security_js_1.generateSecureRandomToken)(4)}2026`;
         const passwordHash = await (0, security_js_1.hashPassword)(newPassword);
         const existingPerms = staff.permissionsJson || {};
         const updatedPerms = {
@@ -1486,6 +1496,13 @@ async function getMyStaffDashboard(req, res) {
         if (!instituteId || !userId) {
             return res.status(400).json({ success: false, error: 'Institute and user context required' });
         }
+        const cacheKey = `dashboard:staff:${userId}:${instituteId}`;
+        if (req.query.refresh !== 'true') {
+            const cached = cache_js_1.serverCache.get(cacheKey);
+            if (cached) {
+                return res.json(cached);
+            }
+        }
         const assignments = await (0, student_authorization_service_js_1.getAuthorizedStaffAssignments)(req, prisma_js_1.prisma);
         const authorizedBatchIds = assignments.authorizedBatchIds;
         const staffProfile = await prisma_js_1.prisma.staffProfile.findFirst({
@@ -1517,60 +1534,71 @@ async function getMyStaffDashboard(req, res) {
         if (!staffProfile) {
             return res.status(404).json({ success: false, error: 'Staff profile not found' });
         }
-        // Unique active students enrolled in teacher's batches
-        const studentCount = await prisma_js_1.prisma.student.count({
-            where: {
-                instituteId,
-                status: 'ACTIVE',
-                enrollments: {
-                    some: {
-                        batchId: { in: authorizedBatchIds },
-                        isActive: true,
-                    },
-                },
-            },
-        });
-        // Pending homework submissions needing evaluation
-        const pendingHomeworkCount = await prisma_js_1.prisma.homeworkSubmission.count({
-            where: {
-                material: {
-                    instituteId,
-                    batchId: { in: authorizedBatchIds },
-                },
-                gradedAt: null,
-            },
-        });
-        // Today's attendance summary in teacher's batches
         const serverNow = new Date();
         const eventDate = (0, attendance_controller_js_1.getInstituteLocalDate)(serverNow);
-        const todayCheckIns = await prisma_js_1.prisma.attendanceEvent.findMany({
-            where: {
-                instituteId,
-                batchId: { in: authorizedBatchIds },
-                eventDate,
-                eventType: 'CHECK_IN',
-            },
-            select: { studentId: true, isLate: true },
-        });
+        // Concurrently fetch all independent teacher dashboard sub-queries in parallel
+        const [studentCount, pendingHomeworkCount, todayCheckIns, allBatches, recentNotifications,] = await Promise.all([
+            // 1. Unique active students enrolled in teacher's batches
+            prisma_js_1.prisma.student.count({
+                where: {
+                    instituteId,
+                    status: 'ACTIVE',
+                    enrollments: {
+                        some: {
+                            batchId: { in: authorizedBatchIds },
+                            isActive: true,
+                        },
+                    },
+                },
+            }),
+            // 2. Pending homework submissions needing evaluation
+            prisma_js_1.prisma.homeworkSubmission.count({
+                where: {
+                    material: {
+                        instituteId,
+                        batchId: { in: authorizedBatchIds },
+                    },
+                    gradedAt: null,
+                },
+            }),
+            // 3. Today's attendance summary in teacher's batches
+            prisma_js_1.prisma.attendanceEvent.findMany({
+                where: {
+                    instituteId,
+                    batchId: { in: authorizedBatchIds },
+                    eventDate,
+                    eventType: 'CHECK_IN',
+                },
+                select: { studentId: true, isLate: true },
+            }),
+            // 4. Today's scheduled periods for this staff
+            prisma_js_1.prisma.batch.findMany({
+                where: {
+                    id: { in: authorizedBatchIds },
+                    instituteId,
+                    isActive: true,
+                },
+                include: {
+                    batchSubjects: {
+                        include: {
+                            subject: true,
+                            staffProfile: { include: { user: true } },
+                        },
+                    },
+                },
+            }),
+            // 5. Recent notifications
+            prisma_js_1.prisma.inAppNotification.findMany({
+                where: {
+                    userId,
+                },
+                orderBy: { createdAt: 'desc' },
+                take: 5,
+            }),
+        ]);
         const uniquePresentStudents = new Set(todayCheckIns.map((e) => e.studentId)).size;
         const lateStudentsCount = todayCheckIns.filter((e) => e.isLate).length;
         const attendancePercentage = studentCount > 0 ? Math.round((uniquePresentStudents / studentCount) * 100) : 0;
-        // Today's scheduled periods for this staff
-        const allBatches = await prisma_js_1.prisma.batch.findMany({
-            where: {
-                id: { in: authorizedBatchIds },
-                instituteId,
-                isActive: true,
-            },
-            include: {
-                batchSubjects: {
-                    include: {
-                        subject: true,
-                        staffProfile: { include: { user: true } },
-                    },
-                },
-            },
-        });
         const todayClasses = [];
         for (const b of allBatches) {
             const timetable = (0, timetable_resolver_js_1.resolveStructuredTimetable)(b, serverNow);
@@ -1588,15 +1616,7 @@ async function getMyStaffDashboard(req, res) {
             }
         }
         todayClasses.sort((a, b) => (a.startTime || '').localeCompare(b.startTime || ''));
-        // Recent notifications
-        const recentNotifications = await prisma_js_1.prisma.inAppNotification.findMany({
-            where: {
-                userId,
-            },
-            orderBy: { createdAt: 'desc' },
-            take: 5,
-        });
-        return res.json({
+        const responsePayload = {
             success: true,
             data: {
                 teacher: {
@@ -1629,7 +1649,9 @@ async function getMyStaffDashboard(req, res) {
                 todayClasses,
                 recentNotifications,
             },
-        });
+        };
+        cache_js_1.serverCache.set(cacheKey, responsePayload, 20000);
+        return res.json(responsePayload);
     }
     catch (err) {
         console.error('[getMyStaffDashboard Error]', err);

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { apiFetch } from '../services/api';
 import { useToast } from '../context/ToastContext';
+import { useAuth } from '../context/AuthContext';
 import {
   CreditCard,
   Building2,
@@ -32,6 +33,8 @@ import {
 
 export const MonthlySettlements: React.FC = () => {
   const { showToast } = useToast();
+  const { user } = useAuth();
+  const isSuperAdmin = user?.role === 'SUPER_ADMIN';
   const [loading, setLoading] = useState(true);
   const [settlements, setSettlements] = useState<any[]>([]);
   const [summary, setSummary] = useState<any>({
@@ -111,6 +114,9 @@ export const MonthlySettlements: React.FC = () => {
           ? res.data
           : [];
         setFranchisesList(list);
+        if (!isSuperAdmin && list.length > 0 && genFranchiseId === 'ALL') {
+          setGenFranchiseId(list[0].id);
+        }
       }
     } catch (err) {
       console.error('Failed to load franchises for settlements:', err);
@@ -323,6 +329,9 @@ export const MonthlySettlements: React.FC = () => {
         showToast(res.message || 'Settlements generated successfully', 'success');
         setShowGenModal(false);
         setSelectedMonth(genMonth);
+        if (genFranchiseId !== 'ALL' && selectedFranchiseId !== 'ALL' && selectedFranchiseId !== genFranchiseId) {
+          setSelectedFranchiseId(genFranchiseId);
+        }
         loadSettlements();
       }
     } catch (err: any) {
@@ -707,17 +716,25 @@ export const MonthlySettlements: React.FC = () => {
                         )}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
-                        <button
-                          type="button"
-                          onClick={() => openSplitEditModal(s)}
-                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-50 hover:bg-blue-50 text-slate-700 hover:text-[#006FFF] border border-slate-200 hover:border-blue-300 transition-all cursor-pointer group whitespace-nowrap"
-                          title="Click to edit franchise royalty share %"
-                        >
-                          <span className="font-bold text-[#006FFF]">{Number(s.applicableFranchisePercentage)}%</span>
-                          <span className="text-slate-400 font-normal">/</span>
-                          <span className="text-slate-500 font-medium">{Number(s.applicableDigitalGuruPercentage)}%</span>
-                          <Edit3 className="w-3 h-3 text-slate-400 group-hover:text-[#006FFF] transition-colors ml-0.5" />
-                        </button>
+                        {isSuperAdmin ? (
+                          <button
+                            type="button"
+                            onClick={() => openSplitEditModal(s)}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-50 hover:bg-blue-50 text-slate-700 hover:text-[#006FFF] border border-slate-200 hover:border-blue-300 transition-all cursor-pointer group whitespace-nowrap"
+                            title="Click to edit franchise royalty share %"
+                          >
+                            <span className="font-bold text-[#006FFF]">{Number(s.applicableFranchisePercentage)}%</span>
+                            <span className="text-slate-400 font-normal">/</span>
+                            <span className="text-slate-500 font-medium">{Number(s.applicableDigitalGuruPercentage)}%</span>
+                            <Edit3 className="w-3 h-3 text-slate-400 group-hover:text-[#006FFF] transition-colors ml-0.5" />
+                          </button>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-50 text-slate-700 border border-slate-200 whitespace-nowrap">
+                            <span className="font-bold text-[#006FFF]">{Number(s.applicableFranchisePercentage)}%</span>
+                            <span className="text-slate-400 font-normal">/</span>
+                            <span className="text-slate-500 font-medium">{Number(s.applicableDigitalGuruPercentage)}%</span>
+                          </span>
+                        )}
                       </td>
                       <td className="px-4 py-3 font-bold text-slate-900">
                         ₹{payable.toLocaleString('en-IN')}
@@ -748,7 +765,7 @@ export const MonthlySettlements: React.FC = () => {
                           >
                             Review
                           </button>
-                          {(s.status === 'PENDING_APPROVAL' || s.status === 'PENDING_REVIEW') && (
+                          {isSuperAdmin && (s.status === 'PENDING_APPROVAL' || s.status === 'PENDING_REVIEW') && (
                             <button
                               onClick={() => handleApproveSettlement(s.id)}
                               className="px-2.5 py-1 text-xs font-bold rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white transition-colors cursor-pointer"
@@ -756,7 +773,7 @@ export const MonthlySettlements: React.FC = () => {
                               Approve
                             </button>
                           )}
-                          {isEligibleForTransfer && (
+                          {isSuperAdmin && isEligibleForTransfer && (
                             <button
                               onClick={() => openManualTransferModal(s)}
                               className="px-2.5 py-1 text-xs font-bold rounded-lg bg-[#006FFF] hover:bg-[#0057CC] text-white transition-colors cursor-pointer"
@@ -831,7 +848,7 @@ export const MonthlySettlements: React.FC = () => {
                         <span className="text-[11px] font-semibold text-blue-700 block uppercase">
                           Franchise Share ({Number(activeSettlement.applicableFranchisePercentage)}%)
                         </span>
-                        {['PENDING_REVIEW', 'PENDING_APPROVAL', 'DRAFT'].includes(activeSettlement.status) && (
+                        {isSuperAdmin && ['PENDING_REVIEW', 'PENDING_APPROVAL', 'DRAFT'].includes(activeSettlement.status) && (
                           <button
                             type="button"
                             onClick={() => openSplitEditModal(activeSettlement)}
@@ -1123,7 +1140,7 @@ export const MonthlySettlements: React.FC = () => {
                 >
                   <Printer className="w-4 h-4" /> Download / Print Statement
                 </button>
-                {(activeSettlement?.status === 'APPROVED' || activeSettlement?.status === 'PARTIALLY_PAID') && (
+                {isSuperAdmin && (activeSettlement?.status === 'APPROVED' || activeSettlement?.status === 'PARTIALLY_PAID') && (
                   <button
                     onClick={() => setShowAdjustmentModal(true)}
                     className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 bg-white text-slate-700 font-bold text-xs hover:bg-slate-100 transition-colors cursor-pointer"
@@ -1133,46 +1150,48 @@ export const MonthlySettlements: React.FC = () => {
                 )}
               </div>
 
-              <div className="flex items-center gap-2">
-                {(activeSettlement?.status === 'PENDING_APPROVAL' || activeSettlement?.status === 'PENDING_REVIEW') && (
-                  <>
-                    <button
-                      onClick={() => {
-                        setActionType('ON_HOLD');
-                        setShowActionModal(true);
-                      }}
-                      className="px-3.5 py-2 rounded-xl border border-slate-300 text-slate-700 font-bold text-xs hover:bg-slate-100 transition-colors cursor-pointer"
-                    >
-                      Put On Hold
-                    </button>
-                    <button
-                      onClick={() => {
-                        setActionType('CANCELLED');
-                        setShowActionModal(true);
-                      }}
-                      className="px-3.5 py-2 rounded-xl border border-rose-200 bg-rose-50 text-rose-700 font-bold text-xs hover:bg-rose-100 transition-colors cursor-pointer"
-                    >
-                      Cancel Statement
-                    </button>
-                    <button
-                      onClick={() => handleApproveSettlement(activeSettlement.id)}
-                      className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition-colors shadow-sm cursor-pointer"
-                    >
-                      Approve Settlement
-                    </button>
-                  </>
-                )}
+              {isSuperAdmin && (
+                <div className="flex items-center gap-2">
+                  {(activeSettlement?.status === 'PENDING_APPROVAL' || activeSettlement?.status === 'PENDING_REVIEW') && (
+                    <>
+                      <button
+                        onClick={() => {
+                          setActionType('ON_HOLD');
+                          setShowActionModal(true);
+                        }}
+                        className="px-3.5 py-2 rounded-xl border border-slate-300 text-slate-700 font-bold text-xs hover:bg-slate-100 transition-colors cursor-pointer"
+                      >
+                        Put On Hold
+                      </button>
+                      <button
+                        onClick={() => {
+                          setActionType('CANCELLED');
+                          setShowActionModal(true);
+                        }}
+                        className="px-3.5 py-2 rounded-xl border border-rose-200 bg-rose-50 text-rose-700 font-bold text-xs hover:bg-rose-100 transition-colors cursor-pointer"
+                      >
+                        Cancel Statement
+                      </button>
+                      <button
+                        onClick={() => handleApproveSettlement(activeSettlement.id)}
+                        className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition-colors shadow-sm cursor-pointer"
+                      >
+                        Approve Settlement
+                      </button>
+                    </>
+                  )}
 
-                {(activeSettlement?.status === 'APPROVED' || activeSettlement?.status === 'PARTIALLY_PAID') && (
-                  <button
-                    onClick={() => openManualTransferModal(activeSettlement)}
-                    disabled={Number(activeSettlement.remainingPayableAmount || 0) <= 0 && activeSettlement.status === 'PAID'}
-                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition-colors shadow-sm cursor-pointer"
-                  >
-                    <CreditCard className="w-3.5 h-3.5" /> Record Bank Transfer
-                  </button>
-                )}
-              </div>
+                  {(activeSettlement?.status === 'APPROVED' || activeSettlement?.status === 'PARTIALLY_PAID') && (
+                    <button
+                      onClick={() => openManualTransferModal(activeSettlement)}
+                      disabled={Number(activeSettlement.remainingPayableAmount || 0) <= 0 && activeSettlement.status === 'PAID'}
+                      className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition-colors shadow-sm cursor-pointer"
+                    >
+                      <CreditCard className="w-3.5 h-3.5" /> Record Bank Transfer
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>,
@@ -1398,7 +1417,9 @@ export const MonthlySettlements: React.FC = () => {
                   onChange={(e) => setGenFranchiseId(e.target.value)}
                   className="w-full px-3 py-2 border border-slate-200 rounded-lg text-slate-800 font-medium"
                 >
-                  <option value="ALL">All Active Franchises (Batch Generation)</option>
+                  {isSuperAdmin && (
+                    <option value="ALL">All Active Franchises (Batch Generation)</option>
+                  )}
                   {loadingFranchises && franchisesList.length === 0 && (
                     <option disabled value="">Loading franchises...</option>
                   )}

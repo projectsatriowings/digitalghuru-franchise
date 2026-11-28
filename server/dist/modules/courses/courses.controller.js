@@ -56,13 +56,17 @@ async function authorizeFranchiseAccess(user, targetFranchiseId) {
     const userId = user.userId || user.id;
     if (!userId)
         return { allowed: false, isBranchScoped: false, allowedInstituteIds: [] };
+    // Target franchise must be ACTIVE for non-Super Admin users
+    const targetFr = await prisma_js_1.prisma.franchise.findUnique({
+        where: { id: targetFranchiseId },
+        select: { id: true, status: true, ownerUserId: true },
+    });
+    if (!targetFr || targetFr.status !== 'ACTIVE') {
+        return { allowed: false, isBranchScoped: false, allowedInstituteIds: [] };
+    }
     // Franchise owner owns their franchise(s)
     if (user.role === client_1.UserRole.FRANCHISE_OWNER) {
-        const owned = await prisma_js_1.prisma.franchise.findFirst({
-            where: { id: targetFranchiseId, ownerUserId: userId },
-            select: { id: true },
-        });
-        if (owned || user.franchiseId === targetFranchiseId) {
+        if (targetFr.ownerUserId === userId || user.franchiseId === targetFranchiseId) {
             return { allowed: true, isBranchScoped: false, allowedInstituteIds: [] };
         }
     }
@@ -488,21 +492,95 @@ async function updateGlobalCourseStatus(req, res) {
 async function deleteGlobalCourse(req, res) {
     try {
         const { id } = req.params;
-        // Check if active or historical enrollments exist
-        const enrollmentCount = await prisma_js_1.prisma.courseEnrollment.count({
-            where: { courseId: id }
+        // Check if course exists
+        const course = await prisma_js_1.prisma.globalCourse.findUnique({
+            where: { id },
+            include: {
+                curriculumVersions: {
+                    select: { id: true },
+                },
+                _count: {
+                    select: {
+                        enrollments: true,
+                        franchiseSelections: true,
+                    },
+                },
+            },
         });
-        if (enrollmentCount > 0) {
-            return res.status(400).json({
-                success: false,
-                error: `Cannot delete course with ${enrollmentCount} existing student enrollment(s). Please archive it instead.`
+        if (!course) {
+            return res.json({
+                success: true,
+                message: 'Course has already been removed.',
+                alreadyDeleted: true,
             });
         }
-        await prisma_js_1.prisma.globalCourse.delete({ where: { id } });
-        res.json({ success: true, message: 'Course deleted successfully' });
+        // Check if active or historical enrollments exist
+        if (course._count.enrollments > 0) {
+            return res.status(400).json({
+                success: false,
+                message: `This course cannot be deleted because ${course._count.enrollments} student(s) are actively or historically enrolled in it. Please archive it instead to preserve student learning records.`,
+            });
+        }
+        // Collect all version IDs, module IDs, and chapter IDs to batch delete efficiently
+        const versionIds = course.curriculumVersions.map((v) => v.id);
+        const modules = versionIds.length > 0
+            ? await prisma_js_1.prisma.courseModule.findMany({
+                where: { curriculumVersionId: { in: versionIds } },
+                select: { id: true },
+            })
+            : [];
+        const moduleIds = modules.map((m) => m.id);
+        const chapters = moduleIds.length > 0
+            ? await prisma_js_1.prisma.courseChapter.findMany({
+                where: { moduleId: { in: moduleIds } },
+                select: { id: true },
+            })
+            : [];
+        const chapterIds = chapters.map((c) => c.id);
+        // Permanently delete course with 0 student enrollments cleanly in an optimized batch transaction
+        await prisma_js_1.prisma.$transaction(async (tx) => {
+            // 1. Unlink active version pointer on GlobalCourse
+            await tx.globalCourse.update({
+                where: { id },
+                data: { activeCurriculumVersionId: null },
+            });
+            // 2. Remove franchise course selections and slug aliases
+            await tx.franchiseCourseSelection.deleteMany({ where: { courseId: id } });
+            await tx.courseSlugAlias.deleteMany({ where: { courseId: id } });
+            // 3. Batch delete child curriculum data
+            if (chapterIds.length > 0) {
+                await tx.lessonAttachment.deleteMany({
+                    where: { chapterId: { in: chapterIds } },
+                });
+                await tx.courseChapter.deleteMany({
+                    where: { id: { in: chapterIds } },
+                });
+            }
+            if (moduleIds.length > 0) {
+                await tx.courseModule.deleteMany({
+                    where: { id: { in: moduleIds } },
+                });
+            }
+            if (versionIds.length > 0) {
+                await tx.courseCurriculumVersion.deleteMany({
+                    where: { id: { in: versionIds } },
+                });
+            }
+            // 4. Finally delete the global course record
+            await tx.globalCourse.delete({ where: { id } });
+        }, { timeout: 30000, maxWait: 10000 });
+        return res.json({
+            success: true,
+            message: `Course "${course.title}" was permanently deleted successfully.`,
+        });
     }
     catch (error) {
-        res.status(400).json({ success: false, message: error.message || 'Failed to delete course' });
+        console.error('[Failed to delete course]', error);
+        let humanMessage = error?.message || 'Failed to delete course.';
+        if (error?.message?.includes('CourseEnrollment') || error?.message?.includes('student enrollments')) {
+            humanMessage = 'This course cannot be deleted because student enrollments exist for it. Please archive it to protect student academic history.';
+        }
+        res.status(400).json({ success: false, message: humanMessage });
     }
 }
 // -------------------------------------------------------------
@@ -526,24 +604,45 @@ async function getMyFranchiseCourseContext(req, res) {
         }
         else if (user.role === client_1.UserRole.FRANCHISE_OWNER) {
             const owned = await prisma_js_1.prisma.franchise.findFirst({
-                where: franchiseId ? { id: franchiseId, ownerUserId: userId } : { ownerUserId: userId },
-                select: { id: true },
+                where: franchiseId
+                    ? { id: franchiseId, OR: [{ ownerUserId: userId }, ...(user.email ? [{ email: { equals: user.email.trim(), mode: 'insensitive' } }] : [])] }
+                    : { OR: [{ ownerUserId: userId }, ...(user.email ? [{ email: { equals: user.email.trim(), mode: 'insensitive' } }] : [])] },
+                select: { id: true, status: true },
             });
             if (!owned) {
-                return res.status(403).json({ success: false, message: 'No franchise assigned to this account' });
+                return res.json({
+                    success: true,
+                    data: { franchise: null, branches: [], students: [], isBranchScoped: false, message: 'No franchise assigned to this account' },
+                });
+            }
+            if (owned.status === 'SUSPENDED' || owned.status === 'TERMINATED') {
+                return res.status(403).json({
+                    success: false,
+                    error: 'Forbidden: Your franchise center has been suspended. Please contact Super Admin.',
+                    isDeactivated: true,
+                });
             }
             franchiseId = owned.id;
         }
         else {
             const memberships = await prisma_js_1.prisma.instituteMembership.findMany({
                 where: { userId, isActive: true },
-                include: { institute: { select: { id: true, franchiseId: true } } },
+                include: { institute: { select: { id: true, name: true, franchiseId: true } } },
             });
             const matchingFranchises = memberships
                 .map((m) => m.institute?.franchiseId)
                 .filter((fid) => Boolean(fid));
             if (matchingFranchises.length === 0) {
-                return res.status(403).json({ success: false, message: 'No franchise branch assigned to this account' });
+                return res.json({
+                    success: true,
+                    data: {
+                        franchise: null,
+                        branches: memberships.map((m) => ({ id: m.institute.id, name: m.institute.name })),
+                        students: [],
+                        isBranchScoped: true,
+                        message: 'No franchise branch assigned to this account',
+                    },
+                });
             }
             franchiseId = franchiseId && matchingFranchises.includes(franchiseId) ? franchiseId : matchingFranchises[0];
             isBranchScoped = true;
@@ -1194,7 +1293,11 @@ async function generateMediaTokenController(req, res) {
         }
         // Verify user authorization for resolvedCourseId
         let isAuthorized = false;
-        if (user.role === client_1.UserRole.SUPER_ADMIN) {
+        if (user.role === client_1.UserRole.SUPER_ADMIN ||
+            user.role === client_1.UserRole.FRANCHISE_OWNER ||
+            user.role === client_1.UserRole.BRANCH_ADMIN ||
+            user.role === client_1.UserRole.ACADEMIC_ADMIN ||
+            user.role === client_1.UserRole.STAFF) {
             isAuthorized = true;
         }
         else if (user.role === client_1.UserRole.STUDENT) {
@@ -1263,6 +1366,12 @@ async function generateMediaTokenController(req, res) {
             expiresIn: 900,
             expiresAt: new Date(Date.now() + 900 * 1000).toISOString(),
             mediaUrl: mediaUrlWithToken,
+            data: {
+                token,
+                mediaUrl: mediaUrlWithToken,
+                expiresIn: 900,
+                expiresAt: new Date(Date.now() + 900 * 1000).toISOString(),
+            },
         });
     }
     catch (err) {
@@ -1442,7 +1551,11 @@ async function streamProtectedMedia(req, res) {
         // AUTHORIZATION AGAINST RESOLVED COURSE
         // -------------------------------------------------------------
         let isAuthorized = false;
-        if (user.role === client_1.UserRole.SUPER_ADMIN) {
+        if (user.role === client_1.UserRole.SUPER_ADMIN ||
+            user.role === client_1.UserRole.FRANCHISE_OWNER ||
+            user.role === client_1.UserRole.BRANCH_ADMIN ||
+            user.role === client_1.UserRole.ACADEMIC_ADMIN ||
+            user.role === client_1.UserRole.STAFF) {
             isAuthorized = true;
         }
         else if (resolvedCourseId) {

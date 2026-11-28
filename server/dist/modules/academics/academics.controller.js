@@ -23,6 +23,7 @@ exports.updateSubject = updateSubject;
 exports.deleteSubject = deleteSubject;
 const prisma_js_1 = require("../../prisma.js");
 const zod_1 = require("zod");
+const cache_js_1 = require("../../utils/cache.js");
 const student_authorization_service_js_1 = require("../students/student-authorization.service.js");
 exports.createBatchSchema = zod_1.z.object({
     name: zod_1.z.string().min(2, 'Batch name is required'),
@@ -80,6 +81,13 @@ async function listBatches(req, res) {
         const instituteId = req.instituteId;
         if (!instituteId)
             return res.status(400).json({ success: false, error: 'Institute context required' });
+        const cacheKey = `batches:${instituteId}:${req.user?.userId || 'all'}`;
+        if (req.query.refresh !== 'true') {
+            const cached = cache_js_1.serverCache.get(cacheKey);
+            if (cached) {
+                return res.json(cached);
+            }
+        }
         const isStaff = req.user?.role === 'STAFF';
         let batchWhere = { instituteId };
         let authorizedSubjectIds = null;
@@ -137,7 +145,9 @@ async function listBatches(req, res) {
                 };
             })
             : batches;
-        return res.json({ success: true, data: { batches: filteredBatches } });
+        const responsePayload = { success: true, data: { batches: filteredBatches } };
+        cache_js_1.serverCache.set(cacheKey, responsePayload, 30000);
+        return res.json(responsePayload);
     }
     catch (err) {
         console.error('[listBatches error]', err);

@@ -12,6 +12,7 @@ router.use(auth_js_1.authenticateToken);
 router.get('/dashboard/super-admin', (0, auth_js_1.requireRole)('SUPER_ADMIN'), franchise_controller_js_1.getSuperAdminFranchiseDashboard);
 router.get('/dashboard/owner', (0, auth_js_1.requireRole)('SUPER_ADMIN', 'FRANCHISE_OWNER'), franchise_controller_js_1.getFranchiseOwnerDashboard);
 router.get('/my-branches', (0, auth_js_1.requireRole)('SUPER_ADMIN', 'FRANCHISE_OWNER'), franchise_controller_js_1.getMyAssignedBranches);
+router.post('/my-branches', (0, auth_js_1.requireRole)('SUPER_ADMIN', 'FRANCHISE_OWNER'), franchise_controller_js_1.addBranchToFranchise);
 router.get('/unassigned-branches', (0, auth_js_1.requireRole)('SUPER_ADMIN'), franchise_controller_js_1.getUnassignedBranches);
 router.get('/agreement-templates', (0, auth_js_1.requireRole)('SUPER_ADMIN', 'FRANCHISE_OWNER'), franchise_controller_js_1.getAgreementTemplates);
 // -------------------------------------------------------------
@@ -28,9 +29,9 @@ router.put('/:id/beneficiary-account', (0, auth_js_1.requireRole)('SUPER_ADMIN',
 router.get('/:id/revenue-dashboard', (0, auth_js_1.requireRole)('SUPER_ADMIN', 'FRANCHISE_OWNER'), franchise_controller_js_1.getFranchiseRevenueDashboard);
 router.post('/:id/owner/reset-password', (0, auth_js_1.requireRole)('SUPER_ADMIN'), franchise_controller_js_1.resetFranchiseOwnerPassword);
 // -------------------------------------------------------------
-// BRANCH MANAGEMENT (Strictly SUPER_ADMIN only)
+// BRANCH MANAGEMENT
 // -------------------------------------------------------------
-router.post('/:id/branches', (0, auth_js_1.requireRole)('SUPER_ADMIN'), franchise_controller_js_1.addBranchToFranchise);
+router.post('/:id/branches', (0, auth_js_1.requireRole)('SUPER_ADMIN', 'FRANCHISE_OWNER'), franchise_controller_js_1.addBranchToFranchise);
 router.get('/:id/branches', (0, auth_js_1.requireRole)('SUPER_ADMIN', 'FRANCHISE_OWNER'), franchise_controller_js_1.listFranchiseBranches);
 router.delete('/:id/branches/:branchId', (0, auth_js_1.requireRole)('SUPER_ADMIN'), franchise_controller_js_1.removeBranchFromFranchise);
 // -------------------------------------------------------------

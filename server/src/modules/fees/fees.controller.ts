@@ -57,12 +57,12 @@ export const batchAssignFeeSchema = z.object({
 });
 
 export const recordPaymentSchema = z.object({
-  feeAssignmentId: z.string().uuid(),
-  amountPaid: z.number().positive('Payment amount must be greater than zero'),
-  method: z.nativeEnum(PaymentMethod),
-  transactionReference: z.string().optional(),
-  idempotencyKey: z.string().optional(),
-  remarks: z.string().optional(),
+  feeAssignmentId: z.string().min(1, 'Fee assignment ID is required'),
+  amountPaid: z.coerce.number().positive('Payment amount must be greater than zero'),
+  method: z.preprocess((val) => typeof val === 'string' ? val.toUpperCase() : val, z.nativeEnum(PaymentMethod)),
+  transactionReference: z.string().optional().nullable().transform((v) => (v && v.trim() ? v.trim() : undefined)),
+  idempotencyKey: z.string().optional().nullable().transform((v) => (v && v.trim() ? v.trim() : undefined)),
+  remarks: z.string().optional().nullable().transform((v) => (v && v.trim() ? v.trim() : undefined)),
 });
 
 export const refundPaymentSchema = z.object({
@@ -1025,10 +1025,29 @@ export async function getStudentFeeStatement(req: AuthenticatedRequest, res: Res
 
 export async function recordPayment(req: AuthenticatedRequest, res: Response) {
   try {
-    const instituteId = req.instituteId;
-    if (!instituteId) return res.status(400).json({ success: false, error: 'Institute context required' });
+    const rawFeeAssignmentId = req.body?.feeAssignmentId || req.params?.assignmentId || req.params?.id;
 
-    const parse = recordPaymentSchema.safeParse(req.body);
+    let instituteId = req.instituteId;
+    if (!instituteId && rawFeeAssignmentId) {
+      const assignmentLookup = await prisma.studentFeeAssignment.findUnique({
+        where: { id: String(rawFeeAssignmentId) },
+        include: { student: { select: { instituteId: true } } },
+      });
+      if (assignmentLookup?.student?.instituteId) {
+        instituteId = assignmentLookup.student.instituteId;
+      }
+    }
+
+    if (!instituteId && req.user?.role !== 'SUPER_ADMIN') {
+      return res.status(400).json({ success: false, error: 'Institute context required' });
+    }
+
+    const parse = recordPaymentSchema.safeParse({
+      ...req.body,
+      feeAssignmentId: rawFeeAssignmentId,
+      amountPaid: req.body.amountPaid !== undefined ? req.body.amountPaid : req.body.amount,
+      method: req.body.method !== undefined ? req.body.method : req.body.paymentMethod,
+    });
     if (!parse.success) {
       return res.status(400).json({ success: false, error: 'Validation failed', details: parse.error.errors });
     }
@@ -1075,13 +1094,14 @@ export async function recordPayment(req: AuthenticatedRequest, res: Response) {
     // Atomic transaction for payment recording and balance checking
     const result = await prisma.$transaction(async (tx) => {
       // Fetch assignment with current payments & adjustments
+      const assignmentWhere: any = { id: data.feeAssignmentId };
+      if (instituteId && req.user?.role !== 'SUPER_ADMIN') {
+        assignmentWhere.student = { instituteId };
+      }
       const assignment = await tx.studentFeeAssignment.findFirst({
-        where: {
-          id: data.feeAssignmentId,
-          student: { instituteId },
-        },
+        where: assignmentWhere,
         include: {
-          student: { select: { id: true, firstName: true, lastName: true, admissionNumber: true } },
+          student: { select: { id: true, firstName: true, lastName: true, admissionNumber: true, instituteId: true } },
           feeStructure: { select: { id: true, name: true } },
           payments: {
             where: { status: 'SUCCESS' },
@@ -1092,7 +1112,12 @@ export async function recordPayment(req: AuthenticatedRequest, res: Response) {
       });
 
       if (!assignment) {
-        throw { status: 404, message: 'Fee assignment not found in this institute' };
+        throw { status: 404, message: 'Fee assignment not found' };
+      }
+
+      const effectiveInstituteId = assignment.student?.instituteId || instituteId;
+      if (!effectiveInstituteId) {
+        throw { status: 400, message: 'Cannot determine institute context for assignment' };
       }
 
       const currentFinancials = calculateAssignmentFinancials(assignment);
@@ -1109,7 +1134,7 @@ export async function recordPayment(req: AuthenticatedRequest, res: Response) {
 
       // Resolve Franchise and Snapshot applicable revenue sharing percentage (Rules 3-9)
       const institute = await tx.institute.findUnique({
-        where: { id: instituteId },
+        where: { id: effectiveInstituteId },
         include: { franchise: true },
       });
       const franchiseId = institute?.franchiseId || null;
@@ -1121,18 +1146,18 @@ export async function recordPayment(req: AuthenticatedRequest, res: Response) {
       // Create Payment
       const payment = await tx.payment.create({
         data: {
-          instituteId,
+          instituteId: effectiveInstituteId,
           studentId: assignment.studentId,
           feeAssignmentId: assignment.id,
           franchiseId,
           receiptNumber,
           amountPaid: paymentAmountDecimal,
           method: data.method,
-          transactionReference: data.transactionReference?.trim() || null,
+          transactionReference: data.transactionReference || null,
           idempotencyKey: data.idempotencyKey || null,
           status: 'SUCCESS',
           recordedById: req.user!.userId,
-          remarks: data.remarks?.trim() || null,
+          remarks: data.remarks || null,
           franchisePercentage: new Prisma.Decimal(shares.franchisePercentage),
           digitalGuruPercentage: new Prisma.Decimal(shares.digitalGuruPercentage),
           franchiseShareAmount: new Prisma.Decimal(shares.franchiseShareAmount),
@@ -1162,7 +1187,7 @@ export async function recordPayment(req: AuthenticatedRequest, res: Response) {
       // Audit Log
       await tx.auditLog.create({
         data: {
-          instituteId,
+          instituteId: effectiveInstituteId,
           userId: req.user?.userId || null,
           action: 'FEE_PAYMENT_RECORDED',
           entityType: 'Payment',
@@ -1318,11 +1343,15 @@ export async function getReceipt(req: AuthenticatedRequest, res: Response) {
     const { id } = req.params;
 
     // Support lookup by either payment ID or receipt number
+    const where: any = {
+      OR: [{ id }, { receiptNumber: id }],
+    };
+    if (instituteId && req.user?.role !== 'SUPER_ADMIN') {
+      where.instituteId = instituteId;
+    }
+
     const payment = await prisma.payment.findFirst({
-      where: {
-        OR: [{ id }, { receiptNumber: id }],
-        instituteId,
-      },
+      where,
       include: {
         institute: {
           select: {

@@ -17,6 +17,7 @@ const zod_1 = require("zod");
 const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
 const storage_js_1 = require("../../utils/storage.js");
+const cache_js_1 = require("../../utils/cache.js");
 const student_authorization_service_js_1 = require("../students/student-authorization.service.js");
 exports.createMaterialSchema = zod_1.z.object({
     batchId: zod_1.z.string().uuid('Valid Batch ID required'),
@@ -159,6 +160,13 @@ async function listMaterials(req, res) {
         const instituteId = req.instituteId;
         if (!instituteId) {
             return res.status(400).json({ success: false, error: 'Institute context required' });
+        }
+        const cacheKey = `mat:${instituteId}:${req.user?.userId || 'all'}:${req.query.batchId || ''}:${req.query.subjectId || ''}:${req.query.type || ''}:${req.query.search || ''}`;
+        if (req.query.refresh !== 'true') {
+            const cached = cache_js_1.serverCache.get(cacheKey);
+            if (cached) {
+                return res.json(cached);
+            }
         }
         const batchId = req.query.batchId;
         const subjectId = req.query.subjectId;
@@ -359,10 +367,12 @@ async function listMaterials(req, res) {
                 _count: { select: { submissions: true, interactions: true } },
             },
         });
-        return res.json({
+        const responsePayload = {
             success: true,
             data: { materials },
-        });
+        };
+        cache_js_1.serverCache.set(cacheKey, responsePayload, 20000);
+        return res.json(responsePayload);
     }
     catch (err) {
         console.error('[List Materials Error]', err);
