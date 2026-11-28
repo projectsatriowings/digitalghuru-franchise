@@ -844,13 +844,13 @@ class CoursesService {
         return courses.map((c) => {
             const selection = c.franchiseSelections[0] || null;
             const isPermitted = Boolean(selection?.isPermitted);
-            const isSelected = isPermitted;
+            const isSelected = isPermitted && (selection?.isEnabled !== false);
             return {
                 ...c,
                 isPermitted,
                 permittedAt: selection?.permittedAt || null,
                 isSelected,
-                franchiseCustomPrice: null,
+                franchiseCustomPrice: selection?.localFeeOverride ? Number(selection.localFeeOverride) : null,
                 activeEnrollmentsCount: c._count.enrollments,
             };
         });
