@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { apiFetch } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import { formatCurrency } from '@tuition/shared';
 import { getBatchFeeMilestoneDates, getDefaultFeeDueDates } from '../utils/feeDates';
 import {
@@ -31,6 +32,7 @@ import {
 
 export const FeesManagement: React.FC = () => {
   const { user, activeInstitute } = useAuth();
+  const { showToast } = useToast();
   const isAdmin =
     user?.role === 'ACADEMIC_ADMIN' ||
     user?.role === 'BRANCH_ADMIN' ||
@@ -122,6 +124,8 @@ export const FeesManagement: React.FC = () => {
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
   const [isAssigningFee, setIsAssigningFee] = useState<boolean>(false);
   const [isAssigningBatchFee, setIsAssigningBatchFee] = useState<boolean>(false);
+  const assigningRef = useRef(false);
+  const assigningBatchRef = useRef(false);
 
   // Keyboard navigation & modal dismiss
   useEffect(() => {

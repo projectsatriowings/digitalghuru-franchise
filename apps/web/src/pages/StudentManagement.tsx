@@ -1899,14 +1899,20 @@ Please keep this login and password safe. Use your registered mobile number and 
             )}
 
             <form
-              onSubmit={handleAdmitSubmit}
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (admitStep === 4) {
+                  handleAdmitSubmit(e);
+                }
+              }}
               onKeyDown={(e) => {
-                if (e.key === 'Enter' && ((e.target as HTMLElement).tagName === 'INPUT' || (e.target as HTMLElement).tagName === 'SELECT')) {
+                if (e.key === 'Enter') {
                   e.preventDefault();
+                  e.stopPropagation();
                   if (admitStep === 1) handleProceedFromAdmitStep1();
                   else if (admitStep === 2) handleProceedFromAdmitStep2();
                   else if (admitStep === 3) handleProceedFromAdmitStep3();
-                  // Step 4 intentionally requires deliberate click on Complete Admission button
+                  // In Step 4, pressing Enter never submits; user must deliberately click Complete Admission
                 }
               }}
               className="space-y-4"
@@ -2703,7 +2709,8 @@ Please keep this login and password safe. Use your registered mobile number and 
                   </button>
                 ) : (
                   <button
-                    type="submit"
+                    type="button"
+                    onClick={handleAdmitSubmit}
                     disabled={admitLoading}
                     className="inline-flex items-center gap-2 px-6 py-2.5 bg-[#006FFF] hover:bg-[#0058D4] text-white text-xs font-semibold rounded-xl shadow-md shadow-[#006FFF]/20 transition-all disabled:opacity-50 cursor-pointer"
                   >

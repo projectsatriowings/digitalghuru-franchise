@@ -630,7 +630,7 @@ export async function assignFeeToStudent(req: AuthenticatedRequest, res: Respons
     const assignments = await prisma.$transaction(async (tx) => {
       const created: any[] = [];
       for (const ms of milestones) {
-        const exists = await tx.studentFeeAssignment.findUnique({
+        const assignment = await tx.studentFeeAssignment.upsert({
           where: {
             studentId_feeStructureId_termLabel: {
               studentId: data.studentId,
@@ -638,14 +638,8 @@ export async function assignFeeToStudent(req: AuthenticatedRequest, res: Respons
               termLabel: ms.termLabel,
             },
           },
-        });
-        if (exists) {
-          created.push(exists);
-          continue;
-        }
-
-        const assignment = await tx.studentFeeAssignment.create({
-          data: {
+          update: {},
+          create: {
             studentId: data.studentId,
             feeStructureId: data.feeStructureId,
             termLabel: ms.termLabel,
@@ -662,16 +656,20 @@ export async function assignFeeToStudent(req: AuthenticatedRequest, res: Respons
           },
         });
 
-        await tx.auditLog.create({
-          data: {
-            instituteId,
-            userId: req.user?.userId || null,
-            action: 'FEE_ASSIGNED',
-            entityType: 'StudentFeeAssignment',
-            entityId: assignment.id,
-            newValues: assignment as any,
-          },
-        });
+        // Audit log only if newly assigned
+        const wasCreated = Math.abs(new Date(assignment.createdAt).getTime() - new Date().getTime()) < 5000;
+        if (wasCreated) {
+          await tx.auditLog.create({
+            data: {
+              instituteId,
+              userId: req.user?.userId || null,
+              action: 'FEE_ASSIGNED',
+              entityType: 'StudentFeeAssignment',
+              entityId: assignment.id,
+              newValues: assignment as any,
+            },
+          });
+        }
 
         created.push(assignment);
       }
@@ -689,7 +687,23 @@ export async function assignFeeToStudent(req: AuthenticatedRequest, res: Respons
       },
     });
   } catch (err: any) {
-    return res.status(500).json({ success: false, error: err.message || 'Failed to assign fee to student' });
+    console.error('[assignFeeToStudent error]', err);
+    if (
+      err.code === 'P2002' ||
+      (typeof err.message === 'string' &&
+        (err.message.includes('unique constraint') ||
+          err.message.includes('studentId_feeStructureId_termLabel')))
+    ) {
+      return res.status(409).json({
+        success: false,
+        error: 'This fee structure has already been assigned to this student for the selected term/schedule.',
+      });
+    }
+    const cleanError =
+      err.message && !err.message.includes('prisma') && !err.message.includes('invocation')
+        ? err.message
+        : 'Failed to assign fee to student. Please check if this fee is already assigned.';
+    return res.status(500).json({ success: false, error: cleanError });
   }
 }
 
@@ -744,7 +758,7 @@ export async function assignFeeToBatch(req: AuthenticatedRequest, res: Response)
       for (const enrollment of batch.enrollments) {
         let studentGotCreated = false;
         for (const ms of milestones) {
-          const exists = await tx.studentFeeAssignment.findUnique({
+          const newAssignment = await tx.studentFeeAssignment.upsert({
             where: {
               studentId_feeStructureId_termLabel: {
                 studentId: enrollment.studentId,
@@ -752,14 +766,8 @@ export async function assignFeeToBatch(req: AuthenticatedRequest, res: Response)
                 termLabel: ms.termLabel,
               },
             },
-          });
-
-          if (exists) {
-            continue;
-          }
-
-          const newAssignment = await tx.studentFeeAssignment.create({
-            data: {
+            update: {},
+            create: {
               studentId: enrollment.studentId,
               feeStructureId: data.feeStructureId,
               termLabel: ms.termLabel,
@@ -772,8 +780,11 @@ export async function assignFeeToBatch(req: AuthenticatedRequest, res: Response)
             },
           });
 
-          assignmentsCreated.push(newAssignment);
-          studentGotCreated = true;
+          const wasCreated = Math.abs(new Date(newAssignment.createdAt).getTime() - new Date().getTime()) < 5000;
+          if (wasCreated) {
+            assignmentsCreated.push(newAssignment);
+            studentGotCreated = true;
+          }
         }
 
         if (studentGotCreated) {
@@ -811,7 +822,12 @@ export async function assignFeeToBatch(req: AuthenticatedRequest, res: Response)
       },
     });
   } catch (err: any) {
-    return res.status(500).json({ success: false, error: err.message || 'Failed to assign fee to batch' });
+    console.error('[batchAssignFee error]', err);
+    const cleanError =
+      err.message && !err.message.includes('prisma') && !err.message.includes('invocation')
+        ? err.message
+        : 'Failed to assign fee to batch. Please check batch enrollment and fee structure.';
+    return res.status(500).json({ success: false, error: cleanError });
   }
 }
 
