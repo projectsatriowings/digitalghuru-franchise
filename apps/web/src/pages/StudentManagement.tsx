@@ -43,6 +43,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Globe,
+  Building,
   Laptop,
 } from 'lucide-react';
 
@@ -1038,8 +1039,12 @@ Please keep this login and password safe. Use your registered mobile number and 
       return;
     }
     if (!formData.onlineDirect && formData.globalCourseId && formData.learningMode === 'OFFLINE' && !formData.batchId) {
-      setAdmitError('Please select a class batch when enrolling a student in Offline / Recorded LMS mode.');
-      return;
+      const matchingBatches = batches.filter((b) => b.courseId === formData.globalCourseId);
+      if (matchingBatches.length > 0) {
+        setFormData((prev) => ({ ...prev, batchId: matchingBatches[0].id }));
+      } else if (batches.length > 0) {
+        setFormData((prev) => ({ ...prev, batchId: batches[0].id }));
+      }
     }
     setAdmitError(null);
     setAdmitStep(3);
@@ -1206,8 +1211,8 @@ Please keep this login and password safe. Use your registered mobile number and 
 
         setFormData({
           ...initialFormData,
-          onlineDirect: isConsolidatedView,
-          learningMode: isConsolidatedView ? 'ONLINE' : 'OFFLINE',
+          onlineDirect: false,
+          learningMode: 'OFFLINE',
         });
         setAdmitStep(1);
         fetchData();
@@ -1302,8 +1307,8 @@ Please keep this login and password safe. Use your registered mobile number and 
                 setAdmitStep(1);
                 setFormData({
                   ...initialFormData,
-                  onlineDirect: isConsolidatedView,
-                  learningMode: isConsolidatedView ? 'ONLINE' : 'OFFLINE',
+                  onlineDirect: false,
+                  learningMode: 'OFFLINE',
                 });
                 setShowAdmitModal(true);
               }}
@@ -2054,9 +2059,16 @@ Please keep this login and password safe. Use your registered mobile number and 
                 <div className="space-y-4">
                   {(user?.role === 'FRANCHISE_OWNER' || user?.role === 'SUPER_ADMIN') && (
                     <div className="p-4 bg-[#F8FAFC] border border-[#E2E8F0] rounded-2xl space-y-2.5">
-                      <label className="block text-xs font-bold text-[#006FFF]">
-                        Admission Delivery Channel
-                      </label>
+                      <div className="flex items-center justify-between">
+                        <label className="block text-xs font-bold text-[#006FFF]">
+                          Admission Delivery Channel
+                        </label>
+                        {activeInstitute && activeInstitute.id !== 'ALL' && (
+                          <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full flex items-center gap-1">
+                            <Building className="w-3 h-3" /> Campus: {activeInstitute.name}
+                          </span>
+                        )}
+                      </div>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                         <button
                           type="button"
@@ -2188,7 +2200,7 @@ Please keep this login and password safe. Use your registered mobile number and 
                       <div>
                         <div className="flex items-center justify-between mb-1.5">
                           <label className="block text-xs font-semibold text-[#006FFF]">
-                            Class Batch Allocation {formData.globalCourseId && formData.learningMode === 'OFFLINE' ? '*' : ''}
+                            Class Batch Allocation
                           </label>
                           {formData.globalCourseId && (
                             <span className="text-[10px] font-bold text-[#006FFF] bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">
@@ -2215,7 +2227,7 @@ Please keep this login and password safe. Use your registered mobile number and 
                                 }}
                                 className="w-full bg-white border border-[#E2E8F0] rounded-xl px-3.5 py-2.5 text-xs text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#006FFF]/20 font-medium"
                               >
-                                <option value="">Select Class Batch (Optional)</option>
+                                <option value="">Select Class Batch (Optional - can be assigned later)</option>
                                 {selectableBatches.map((b) => (
                                   <option key={b.id} value={b.id}>
                                     {b.name} ({b.academicYear}) • 🕒 {b.schedule || 'Flexible Timings'}

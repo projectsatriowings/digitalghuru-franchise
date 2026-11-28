@@ -394,9 +394,36 @@ export async function admitStudent(req: AuthenticatedRequest, res: Response) {
     const data = parse.data;
     const rawInstHeader = req.headers['x-institute-id'] as string | undefined;
     const callerRole = req.user?.role;
-    const isOnlineDirectRequest = Boolean(data.onlineDirect) || (!req.instituteId && data.learningMode === 'ONLINE');
 
     let effectiveInstituteId: string | null = req.instituteId || null;
+
+    // If caller has no explicit req.instituteId (e.g. ALL view), resolve from data.batchId or franchise campus
+    if (!effectiveInstituteId && !data.onlineDirect) {
+      if (data.batchId) {
+        const batch = await prisma.batch.findUnique({
+          where: { id: data.batchId },
+          select: { instituteId: true },
+        });
+        if (batch?.instituteId) {
+          effectiveInstituteId = batch.instituteId;
+        }
+      }
+      if (!effectiveInstituteId) {
+        const franchiseIdCandidate = req.franchiseId || data.franchiseId;
+        if (franchiseIdCandidate) {
+          const branches = await prisma.institute.findMany({
+            where: { franchiseId: franchiseIdCandidate },
+            select: { id: true },
+          });
+          if (branches.length === 1) {
+            effectiveInstituteId = branches[0].id;
+          }
+        }
+      }
+    }
+
+    const isOnlineDirectRequest = Boolean(data.onlineDirect) || (!effectiveInstituteId && data.learningMode === 'ONLINE');
+
     if (isOnlineDirectRequest) {
       if (callerRole !== 'FRANCHISE_OWNER' && callerRole !== 'SUPER_ADMIN') {
         return res.status(403).json({
@@ -2560,10 +2587,17 @@ export async function assignStudentBatch(req: AuthenticatedRequest, res: Respons
     const { batchId, subjectIds = [] } = req.body;
 
     const student = await prisma.student.findFirst({
-      where: { id, instituteId },
+      where: {
+        id,
+        OR: [
+          { instituteId },
+          ...(req.franchiseId ? [{ franchiseId: req.franchiseId }] : []),
+          ...(req.user?.role === 'SUPER_ADMIN' ? [{}] : []),
+        ],
+      },
     });
     if (!student) {
-      return res.status(404).json({ success: false, error: 'Student not found in this institute' });
+      return res.status(404).json({ success: false, error: 'Student not found in this institute or franchise' });
     }
 
     if (student.status !== 'ACTIVE') {
@@ -2640,6 +2674,67 @@ export async function assignStudentBatch(req: AuthenticatedRequest, res: Respons
                 },
               });
             }
+          }
+        }
+
+        // 4. If student was Online Direct or not yet bound to this branch, transition them to this campus
+        const isTransitioningFromOnline = !student.instituteId || student.admissionNumber.startsWith('ON');
+        if (isTransitioningFromOnline || student.instituteId !== instituteId) {
+          let updatedAdmNo = student.admissionNumber;
+          if (isTransitioningFromOnline) {
+            try {
+              const admInfo = await generateNextAdmissionNumber(tx, instituteId, batchId, student.admissionDate || new Date());
+              updatedAdmNo = admInfo.admissionNumber;
+            } catch (err) {
+              console.warn('[assignStudentBatch] Could not generate new branch admission number:', err);
+            }
+          }
+
+          await tx.student.update({
+            where: { id },
+            data: {
+              instituteId,
+              ...(updatedAdmNo !== student.admissionNumber ? { admissionNumber: updatedAdmNo } : {}),
+            },
+          });
+
+          if (student.userId) {
+            await tx.instituteMembership.upsert({
+              where: {
+                instituteId_userId: {
+                  instituteId,
+                  userId: student.userId,
+                },
+              },
+              update: { isActive: true },
+              create: {
+                instituteId,
+                userId: student.userId,
+                role: 'STUDENT',
+                isActive: true,
+              },
+            });
+          }
+
+          // Transition CourseEnrollment to OFFLINE mode for this campus & batch
+          if (batch?.courseId) {
+            await tx.courseEnrollment.updateMany({
+              where: { studentId: id, courseId: batch.courseId },
+              data: {
+                instituteId,
+                batchId,
+                mode: LearningMode.OFFLINE,
+              },
+            });
+          } else {
+            await tx.courseEnrollment.updateMany({
+              where: { studentId: id, status: 'ACTIVE' },
+              data: {
+                instituteId,
+                batchId,
+                mode: LearningMode.OFFLINE,
+              },
+            });
           }
         }
       }
