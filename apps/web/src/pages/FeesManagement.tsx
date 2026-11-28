@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { apiFetch } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { formatCurrency } from '@tuition/shared';
 import {
   CreditCard,
   Plus,
@@ -469,11 +470,6 @@ export const FeesManagement: React.FC = () => {
     } finally {
       setProcessingRefund(false);
     }
-  };
-
-  const formatCurrency = (val: number | string | undefined) => {
-    const num = Number(val || 0);
-    return `₹${num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
 
   const getStatusBadge = (status: string) => {
@@ -1478,7 +1474,7 @@ export const FeesManagement: React.FC = () => {
                 />
                 <span className="block text-[11px] text-slate-500 mt-1">
                   {editingFeeStructure.frequency === 'TWO_INSTALLMENTS'
-                    ? `Each installment will automatically be ₹${Math.round(editFeeAmount / 2).toLocaleString('en-IN')}`
+                    ? `Each installment will automatically be ${formatCurrency(Math.round(editFeeAmount / 2))}`
                     : 'Full 100% upfront course payment'}
                 </span>
               </div>

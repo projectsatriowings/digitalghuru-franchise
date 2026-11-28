@@ -371,8 +371,8 @@ function normalizeWizardData(initialData?: any) {
     overviewObj.showCareerFeatures !== undefined
       ? overviewObj.showCareerFeatures
       : mData.showCareerFeatures !== undefined
-      ? mData.showCareerFeatures
-      : true;
+        ? mData.showCareerFeatures
+        : true;
 
   const existingExt = overviewObj.extensibleConfig || initialData.extensibleConfig || {};
   const extensibleConfig = {
@@ -553,8 +553,8 @@ export const CourseWizard: React.FC<CourseWizardProps> = ({
       type === 'card'
         ? setUploadingCard
         : type === 'banner'
-        ? setUploadingBanner
-        : setUploadingBrochure;
+          ? setUploadingBanner
+          : setUploadingBrochure;
 
     const folder = type === 'card' ? 'thumbnails' : type === 'banner' ? 'banners' : 'brochures';
     setLoading(true);
@@ -871,13 +871,12 @@ export const CourseWizard: React.FC<CourseWizardProps> = ({
               key={step}
               type="button"
               onClick={() => setCurrentStep(idx)}
-              className={`h-8 px-2.5 rounded-lg text-xs font-bold transition-all ${
-                currentStep === idx
+              className={`h-8 px-2.5 rounded-lg text-xs font-bold transition-all ${currentStep === idx
                   ? 'bg-[#006FFF] text-white shadow-sm'
                   : idx < currentStep
-                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                  : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
-              }`}
+                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                    : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                }`}
               title={step}
             >
               {idx + 1}. <span className="hidden xl:inline">{step}</span>
@@ -1719,110 +1718,110 @@ export const CourseWizard: React.FC<CourseWizardProps> = ({
                 ? aud.bullets
                 : (Array.isArray(aud.points) ? aud.points : []);
               return (
-              <div key={idx} className="p-4 rounded-2xl border border-slate-200 bg-white space-y-3">
-                <div className="flex justify-between items-center">
-                  <span className="text-xs font-bold text-[#006FFF]">Persona #{idx + 1}</span>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      updateMarketing(
-                        'whoIsThisForData',
-                        mData.whoIsThisForData.filter((_: any, i: number) => i !== idx)
-                      )
-                    }
-                    className="text-rose-500 text-xs font-semibold flex items-center gap-1"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" /> Remove
-                  </button>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  <div className="md:col-span-2">
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">Persona / Role</label>
-                    <input
-                      type="text"
-                      value={aud.title || aud.role || ''}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        const list = [...mData.whoIsThisForData];
-                        list[idx] = { ...list[idx], title: val, role: val };
-                        updateMarketing('whoIsThisForData', list);
-                      }}
-                      placeholder="e.g. Aspiring Marketing Professionals & Students"
-                      className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm"
-                    />
+                <div key={idx} className="p-4 rounded-2xl border border-slate-200 bg-white space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-bold text-[#006FFF]">Persona #{idx + 1}</span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        updateMarketing(
+                          'whoIsThisForData',
+                          mData.whoIsThisForData.filter((_: any, i: number) => i !== idx)
+                        )
+                      }
+                      className="text-rose-500 text-xs font-semibold flex items-center gap-1"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" /> Remove
+                    </button>
                   </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">Icon</label>
-                    <IconPickerDropdown
-                      value={aud.iconName || 'User'}
-                      onChange={(val) => {
-                        const list = [...mData.whoIsThisForData];
-                        list[idx] = { ...list[idx], iconName: val };
-                        updateMarketing('whoIsThisForData', list);
-                      }}
-                    />
-                  </div>
-                </div>
-                <textarea
-                  value={aud.description || aud.desc || ''}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    const list = [...mData.whoIsThisForData];
-                    list[idx] = { ...list[idx], description: val, desc: val };
-                    updateMarketing('whoIsThisForData', list);
-                  }}
-                  placeholder="Persona background & goal..."
-                  rows={2}
-                  className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm"
-                />
-                <div className="space-y-1.5">
-                  <label className="block text-xs font-semibold text-slate-600">Key Takeaways</label>
-                  {bulletList.map((b: string, bIdx: number) => (
-                    <div key={bIdx} className="flex gap-2">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div className="md:col-span-2">
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">Persona / Role</label>
                       <input
                         type="text"
-                        value={b}
+                        value={aud.title || aud.role || ''}
                         onChange={(e) => {
+                          const val = e.target.value;
                           const list = [...mData.whoIsThisForData];
-                          const updatedBullets = [...bulletList];
-                          updatedBullets[bIdx] = e.target.value;
-                          list[idx] = { ...list[idx], bullets: updatedBullets, points: updatedBullets };
+                          list[idx] = { ...list[idx], title: val, role: val };
                           updateMarketing('whoIsThisForData', list);
                         }}
-                        className="flex-1 px-3 py-1.5 rounded-lg border border-slate-200 text-xs"
+                        placeholder="e.g. Aspiring Marketing Professionals & Students"
+                        className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm"
                       />
-                      <button
-                        type="button"
-                        onClick={() => {
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">Icon</label>
+                      <IconPickerDropdown
+                        value={aud.iconName || 'User'}
+                        onChange={(val) => {
                           const list = [...mData.whoIsThisForData];
-                          const updatedBullets = bulletList.filter((_: any, j: number) => j !== bIdx);
-                          list[idx] = {
-                            ...list[idx],
-                            bullets: updatedBullets,
-                            points: updatedBullets,
-                          };
+                          list[idx] = { ...list[idx], iconName: val };
                           updateMarketing('whoIsThisForData', list);
                         }}
-                        className="text-rose-500 p-1"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
+                      />
                     </div>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={() => {
+                  </div>
+                  <textarea
+                    value={aud.description || aud.desc || ''}
+                    onChange={(e) => {
+                      const val = e.target.value;
                       const list = [...mData.whoIsThisForData];
-                      const updatedBullets = [...bulletList, ''];
-                      list[idx] = { ...list[idx], bullets: updatedBullets, points: updatedBullets };
+                      list[idx] = { ...list[idx], description: val, desc: val };
                       updateMarketing('whoIsThisForData', list);
                     }}
-                    className="text-[11px] font-bold text-[#006FFF] hover:underline"
-                  >
-                    + Add Bullet Point
-                  </button>
+                    placeholder="Persona background & goal..."
+                    rows={2}
+                    className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm"
+                  />
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-semibold text-slate-600">Key Takeaways</label>
+                    {bulletList.map((b: string, bIdx: number) => (
+                      <div key={bIdx} className="flex gap-2">
+                        <input
+                          type="text"
+                          value={b}
+                          onChange={(e) => {
+                            const list = [...mData.whoIsThisForData];
+                            const updatedBullets = [...bulletList];
+                            updatedBullets[bIdx] = e.target.value;
+                            list[idx] = { ...list[idx], bullets: updatedBullets, points: updatedBullets };
+                            updateMarketing('whoIsThisForData', list);
+                          }}
+                          className="flex-1 px-3 py-1.5 rounded-lg border border-slate-200 text-xs"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const list = [...mData.whoIsThisForData];
+                            const updatedBullets = bulletList.filter((_: any, j: number) => j !== bIdx);
+                            list[idx] = {
+                              ...list[idx],
+                              bullets: updatedBullets,
+                              points: updatedBullets,
+                            };
+                            updateMarketing('whoIsThisForData', list);
+                          }}
+                          className="text-rose-500 p-1"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const list = [...mData.whoIsThisForData];
+                        const updatedBullets = [...bulletList, ''];
+                        list[idx] = { ...list[idx], bullets: updatedBullets, points: updatedBullets };
+                        updateMarketing('whoIsThisForData', list);
+                      }}
+                      className="text-[11px] font-bold text-[#006FFF] hover:underline"
+                    >
+                      + Add Bullet Point
+                    </button>
+                  </div>
                 </div>
-              </div>
               );
             })}
             <button
@@ -2201,307 +2200,308 @@ export const CourseWizard: React.FC<CourseWizardProps> = ({
                       const attachments: any[] = Array.isArray(lesson.attachments) ? lesson.attachments : [];
                       const isUploadingAtt = uploadingAttachmentKey === `${mIdx}-${lIdx}`;
                       return (
-                      <div key={lIdx} className="p-3.5 rounded-xl border border-slate-200 bg-white space-y-2.5">
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <div className="flex items-center gap-2 flex-1 min-w-[200px]">
-                            <PlayCircle className="w-4 h-4 text-[#006FFF] shrink-0" />
+                        <div key={lIdx} className="p-3.5 rounded-xl border border-slate-200 bg-white space-y-2.5">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div className="flex items-center gap-2 flex-1 min-w-[200px]">
+                              <PlayCircle className="w-4 h-4 text-[#006FFF] shrink-0" />
+                              <input
+                                type="text"
+                                disabled={data.isCurriculumLocked}
+                                value={lesson.title}
+                                onChange={(e) => {
+                                  const list = [...data.modules];
+                                  const lessons = [...list[mIdx].lessons];
+                                  lessons[lIdx] = { ...lessons[lIdx], title: e.target.value };
+                                  list[mIdx] = { ...list[mIdx], lessons };
+                                  setData({ ...data, modules: list });
+                                }}
+                                placeholder={`Lesson ${lIdx + 1} Title...`}
+                                className={`flex-1 px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold ${data.isCurriculumLocked ? 'opacity-80 cursor-not-allowed bg-slate-50 text-slate-700' : ''}`}
+                              />
+                            </div>
                             <input
                               type="text"
                               disabled={data.isCurriculumLocked}
-                              value={lesson.title}
+                              value={lesson.duration || '10:00'}
                               onChange={(e) => {
                                 const list = [...data.modules];
                                 const lessons = [...list[mIdx].lessons];
-                                lessons[lIdx] = { ...lessons[lIdx], title: e.target.value };
+                                lessons[lIdx] = { ...lessons[lIdx], duration: e.target.value };
                                 list[mIdx] = { ...list[mIdx], lessons };
                                 setData({ ...data, modules: list });
                               }}
-                              placeholder={`Lesson ${lIdx + 1} Title...`}
-                              className={`flex-1 px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold ${data.isCurriculumLocked ? 'opacity-80 cursor-not-allowed bg-slate-50 text-slate-700' : ''}`}
+                              placeholder="10:00"
+                              className={`w-20 px-2 py-1.5 rounded-lg border border-slate-200 text-xs text-center ${data.isCurriculumLocked ? 'opacity-80 cursor-not-allowed bg-slate-50 text-slate-700' : ''}`}
                             />
+                            <label className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-50 border border-slate-200 text-[11px] font-semibold text-slate-700 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={Boolean(lesson.isFree)}
+                                onChange={(e) => {
+                                  const list = [...data.modules];
+                                  const lessons = [...list[mIdx].lessons];
+                                  lessons[lIdx] = { ...lessons[lIdx], isFree: e.target.checked };
+                                  list[mIdx] = { ...list[mIdx], lessons };
+                                  setData({ ...data, modules: list });
+                                }}
+                              />
+                              Free Preview
+                            </label>
+                            {!data.isCurriculumLocked && (
+                              <div className="flex items-center gap-0.5">
+                                <button
+                                  type="button"
+                                  disabled={lIdx === 0}
+                                  onClick={() => {
+                                    const list = [...data.modules];
+                                    const lessons = [...list[mIdx].lessons];
+                                    [lessons[lIdx - 1], lessons[lIdx]] = [lessons[lIdx], lessons[lIdx - 1]];
+                                    list[mIdx] = { ...list[mIdx], lessons };
+                                    setData({ ...data, modules: list });
+                                  }}
+                                  className="p-1 text-slate-400 hover:text-slate-700 disabled:opacity-30"
+                                >
+                                  <ArrowUp className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={lIdx === (mod.lessons?.length || 1) - 1}
+                                  onClick={() => {
+                                    const list = [...data.modules];
+                                    const lessons = [...list[mIdx].lessons];
+                                    [lessons[lIdx], lessons[lIdx + 1]] = [lessons[lIdx + 1], lessons[lIdx]];
+                                    list[mIdx] = { ...list[mIdx], lessons };
+                                    setData({ ...data, modules: list });
+                                  }}
+                                  className="p-1 text-slate-400 hover:text-slate-700 disabled:opacity-30"
+                                >
+                                  <ArrowDown className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const list = [...data.modules];
+                                    const lessons = list[mIdx].lessons.filter((_: any, j: number) => j !== lIdx);
+                                    list[mIdx] = { ...list[mIdx], lessons };
+                                    setData({ ...data, modules: list });
+                                  }}
+                                  className="text-rose-500 p-1"
+                                >
+                                  <X className="w-4 h-4" />
+                                </button>
+                              </div>
+                            )}
                           </div>
+
                           <input
                             type="text"
-                            disabled={data.isCurriculumLocked}
-                            value={lesson.duration || '10:00'}
+                            value={lesson.description || ''}
                             onChange={(e) => {
                               const list = [...data.modules];
                               const lessons = [...list[mIdx].lessons];
-                              lessons[lIdx] = { ...lessons[lIdx], duration: e.target.value };
+                              lessons[lIdx] = { ...lessons[lIdx], description: e.target.value };
                               list[mIdx] = { ...list[mIdx], lessons };
                               setData({ ...data, modules: list });
                             }}
-                            placeholder="10:00"
-                            className={`w-20 px-2 py-1.5 rounded-lg border border-slate-200 text-xs text-center ${data.isCurriculumLocked ? 'opacity-80 cursor-not-allowed bg-slate-50 text-slate-700' : ''}`}
+                            placeholder="Optional lesson summary / learning notes..."
+                            className="w-full px-3 py-1.5 rounded-lg border border-slate-200 text-xs text-slate-600"
                           />
-                          <label className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-50 border border-slate-200 text-[11px] font-semibold text-slate-700 cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={Boolean(lesson.isFree)}
-                              onChange={(e) => {
-                                const list = [...data.modules];
-                                const lessons = [...list[mIdx].lessons];
-                                lessons[lIdx] = { ...lessons[lIdx], isFree: e.target.checked };
-                                list[mIdx] = { ...list[mIdx], lessons };
-                                setData({ ...data, modules: list });
-                              }}
-                            />
-                            Free Preview
-                          </label>
-                          {!data.isCurriculumLocked && (
-                            <div className="flex items-center gap-0.5">
-                              <button
-                                type="button"
-                                disabled={lIdx === 0}
-                                onClick={() => {
-                                  const list = [...data.modules];
-                                  const lessons = [...list[mIdx].lessons];
-                                  [lessons[lIdx - 1], lessons[lIdx]] = [lessons[lIdx], lessons[lIdx - 1]];
-                                  list[mIdx] = { ...list[mIdx], lessons };
-                                  setData({ ...data, modules: list });
-                                }}
-                                className="p-1 text-slate-400 hover:text-slate-700 disabled:opacity-30"
-                              >
-                                <ArrowUp className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                type="button"
-                                disabled={lIdx === (mod.lessons?.length || 1) - 1}
-                                onClick={() => {
-                                  const list = [...data.modules];
-                                  const lessons = [...list[mIdx].lessons];
-                                  [lessons[lIdx], lessons[lIdx + 1]] = [lessons[lIdx + 1], lessons[lIdx]];
-                                  list[mIdx] = { ...list[mIdx], lessons };
-                                  setData({ ...data, modules: list });
-                                }}
-                                className="p-1 text-slate-400 hover:text-slate-700 disabled:opacity-30"
-                              >
-                                <ArrowDown className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const list = [...data.modules];
-                                  const lessons = list[mIdx].lessons.filter((_: any, j: number) => j !== lIdx);
-                                  list[mIdx] = { ...list[mIdx], lessons };
-                                  setData({ ...data, modules: list });
-                                }}
-                                className="text-rose-500 p-1"
-                              >
-                                <X className="w-4 h-4" />
-                              </button>
-                            </div>
-                          )}
-                        </div>
 
-                        <input
-                          type="text"
-                          value={lesson.description || ''}
-                          onChange={(e) => {
-                            const list = [...data.modules];
-                            const lessons = [...list[mIdx].lessons];
-                            lessons[lIdx] = { ...lessons[lIdx], description: e.target.value };
-                            list[mIdx] = { ...list[mIdx], lessons };
-                            setData({ ...data, modules: list });
-                          }}
-                          placeholder="Optional lesson summary / learning notes..."
-                          className="w-full px-3 py-1.5 rounded-lg border border-slate-200 text-xs text-slate-600"
-                        />
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
-                          <div className="flex items-center gap-1.5">
-                            <Video className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                            <input
-                              type="url"
-                              value={lesson.videoUrl || ''}
-                              onChange={(e) => {
-                                const list = [...data.modules];
-                                const lessons = [...list[mIdx].lessons];
-                                lessons[lIdx] = { ...lessons[lIdx], videoUrl: e.target.value };
-                                list[mIdx] = { ...list[mIdx], lessons };
-                                setData({ ...data, modules: list });
-                              }}
-                              placeholder="Google Drive, YouTube, or MP4 URL..."
-                              className="flex-1 px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs"
-                            />
-                          </div>
-                          <div className="flex items-center gap-1.5">
-                            <LinkIcon className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                            <input
-                              type="text"
-                              value={lesson.pdfUrl || ''}
-                              onChange={(e) => {
-                                const list = [...data.modules];
-                                const lessons = [...list[mIdx].lessons];
-                                lessons[lIdx] = { ...lessons[lIdx], pdfUrl: e.target.value };
-                                list[mIdx] = { ...list[mIdx], lessons };
-                                setData({ ...data, modules: list });
-                              }}
-                              placeholder="Primary Document URL or upload PPT, DOC, PDF..."
-                              className="flex-1 px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs"
-                            />
-                            <label className="cursor-pointer px-2 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-semibold flex items-center gap-1 shrink-0">
-                              <Upload className="w-3 h-3" />
-                              <span>Upload File</span>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                            <div className="flex items-center gap-1.5">
+                              <Video className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                               <input
-                                type="file"
-                                className="hidden"
-                                accept=".pdf,.ppt,.pptx,.doc,.docx,.xls,.xlsx,.txt,.csv,.zip,image/*"
-                                onChange={async (e) => {
-                                  const f = e.target.files?.[0];
-                                  if (!f) return;
-                                  try {
-                                    const uploaded = await uploadToCourseMedia(f, 'resources');
-                                    const list = [...data.modules];
-                                    const lessons = [...list[mIdx].lessons];
-                                    lessons[lIdx] = { ...lessons[lIdx], pdfUrl: uploaded.fileUrl };
-                                    list[mIdx] = { ...list[mIdx], lessons };
-                                    setData({ ...data, modules: list });
-                                    toast.success(`"${f.name}" uploaded`);
-                                  } catch (err: any) {
-                                    toast.error(err.message || 'Upload failed');
-                                  }
-                                  e.target.value = '';
+                                type="url"
+                                value={lesson.videoUrl || ''}
+                                onChange={(e) => {
+                                  const list = [...data.modules];
+                                  const lessons = [...list[mIdx].lessons];
+                                  lessons[lIdx] = { ...lessons[lIdx], videoUrl: e.target.value };
+                                  list[mIdx] = { ...list[mIdx], lessons };
+                                  setData({ ...data, modules: list });
                                 }}
+                                placeholder="YouTube, Google Drive, Vimeo, Loom, or direct MP4/WebM URL..."
+                                title="Supports YouTube (watch, shorts, embed), Google Drive, Vimeo, Loom, Dropbox, and direct MP4/WebM video streams"
+                                className="flex-1 px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs"
                               />
-                            </label>
-                          </div>
-                        </div>
-
-                        {/* Multi-Resource Lesson Attachments */}
-                        <div className="pt-2 border-t border-slate-100 space-y-2">
-                          <div className="flex flex-wrap items-center justify-between gap-2">
-                            <span className="text-[11px] font-bold text-slate-600 flex items-center gap-1">
-                              <Paperclip className="w-3 h-3 text-[#006FFF]" /> Lesson Attachments &amp; Downloads ({attachments.length})
-                            </span>
-                            <div className="flex items-center gap-2">
-                              <label className="cursor-pointer px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-semibold flex items-center gap-1">
-                                {isUploadingAtt ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
-                                Upload File
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <LinkIcon className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                              <input
+                                type="text"
+                                value={lesson.pdfUrl || ''}
+                                onChange={(e) => {
+                                  const list = [...data.modules];
+                                  const lessons = [...list[mIdx].lessons];
+                                  lessons[lIdx] = { ...lessons[lIdx], pdfUrl: e.target.value };
+                                  list[mIdx] = { ...list[mIdx], lessons };
+                                  setData({ ...data, modules: list });
+                                }}
+                                placeholder="Primary Document URL or upload PPT, DOC, PDF..."
+                                className="flex-1 px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs"
+                              />
+                              <label className="cursor-pointer px-2 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-semibold flex items-center gap-1 shrink-0">
+                                <Upload className="w-3 h-3" />
+                                <span>Upload File</span>
                                 <input
                                   type="file"
                                   className="hidden"
-                                  accept=".pdf,.zip,.doc,.docx,.ppt,.pptx,.csv,.txt,image/*"
-                                  onChange={(e) => {
+                                  accept=".pdf,.ppt,.pptx,.doc,.docx,.xls,.xlsx,.txt,.csv,.zip,image/*"
+                                  onChange={async (e) => {
                                     const f = e.target.files?.[0];
-                                    if (f) handleLessonAttachmentUpload(f, mIdx, lIdx);
+                                    if (!f) return;
+                                    try {
+                                      const uploaded = await uploadToCourseMedia(f, 'resources');
+                                      const list = [...data.modules];
+                                      const lessons = [...list[mIdx].lessons];
+                                      lessons[lIdx] = { ...lessons[lIdx], pdfUrl: uploaded.fileUrl };
+                                      list[mIdx] = { ...list[mIdx], lessons };
+                                      setData({ ...data, modules: list });
+                                      toast.success(`"${f.name}" uploaded`);
+                                    } catch (err: any) {
+                                      toast.error(err.message || 'Upload failed');
+                                    }
                                     e.target.value = '';
                                   }}
                                 />
                               </label>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const list = [...data.modules];
-                                  const lessons = [...list[mIdx].lessons];
-                                  lessons[lIdx] = {
-                                    ...lessons[lIdx],
-                                    attachments: [
-                                      ...attachments,
-                                      { title: '', fileUrl: '', fileType: 'PDF', fileSize: 0, isDownload: true },
-                                    ],
-                                  };
-                                  list[mIdx] = { ...list[mIdx], lessons };
-                                  setData({ ...data, modules: list });
-                                }}
-                                className="text-[11px] font-bold text-[#006FFF] hover:underline"
-                              >
-                                + Add Link/PDF
-                              </button>
                             </div>
                           </div>
 
-                          {attachments.length > 0 && (
-                            <div className="space-y-1.5">
-                              {attachments.map((att: any, aIdx: number) => (
-                                <div key={aIdx} className="grid grid-cols-1 md:grid-cols-12 gap-1.5 items-center bg-slate-50 p-2 rounded-lg border border-slate-200/80">
+                          {/* Multi-Resource Lesson Attachments */}
+                          <div className="pt-2 border-t border-slate-100 space-y-2">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <span className="text-[11px] font-bold text-slate-600 flex items-center gap-1">
+                                <Paperclip className="w-3 h-3 text-[#006FFF]" /> Lesson Attachments &amp; Downloads ({attachments.length})
+                              </span>
+                              <div className="flex items-center gap-2">
+                                <label className="cursor-pointer px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-semibold flex items-center gap-1">
+                                  {isUploadingAtt ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
+                                  Upload File
                                   <input
-                                    type="text"
-                                    value={att.title || ''}
+                                    type="file"
+                                    className="hidden"
+                                    accept=".pdf,.zip,.doc,.docx,.ppt,.pptx,.csv,.txt,image/*"
                                     onChange={(e) => {
-                                      const list = [...data.modules];
-                                      const lessons = [...list[mIdx].lessons];
-                                      const nextAtts = [...attachments];
-                                      nextAtts[aIdx] = { ...nextAtts[aIdx], title: e.target.value };
-                                      lessons[lIdx] = { ...lessons[lIdx], attachments: nextAtts };
-                                      list[mIdx] = { ...list[mIdx], lessons };
-                                      setData({ ...data, modules: list });
+                                      const f = e.target.files?.[0];
+                                      if (f) handleLessonAttachmentUpload(f, mIdx, lIdx);
+                                      e.target.value = '';
                                     }}
-                                    placeholder="Resource title..."
-                                    className="md:col-span-3 px-2 py-1 rounded border border-slate-200 bg-white text-xs"
                                   />
-                                  <select
-                                    value={att.fileType || 'PDF'}
-                                    onChange={(e) => {
-                                      const list = [...data.modules];
-                                      const lessons = [...list[mIdx].lessons];
-                                      const nextAtts = [...attachments];
-                                      nextAtts[aIdx] = { ...nextAtts[aIdx], fileType: e.target.value };
-                                      lessons[lIdx] = { ...lessons[lIdx], attachments: nextAtts };
-                                      list[mIdx] = { ...list[mIdx], lessons };
-                                      setData({ ...data, modules: list });
-                                    }}
-                                    className="md:col-span-2 px-2 py-1 rounded border border-slate-200 bg-white text-xs"
-                                  >
-                                    <option value="PDF">PDF</option>
-                                    <option value="DOCUMENT">DOC</option>
-                                    <option value="ZIP">ZIP</option>
-                                    <option value="IMAGE">IMAGE</option>
-                                    <option value="EXTERNAL_LINK">LINK</option>
-                                  </select>
-                                  <input
-                                    type="text"
-                                    value={att.fileUrl || ''}
-                                    onChange={(e) => {
-                                      const list = [...data.modules];
-                                      const lessons = [...list[mIdx].lessons];
-                                      const nextAtts = [...attachments];
-                                      nextAtts[aIdx] = { ...nextAtts[aIdx], fileUrl: e.target.value };
-                                      lessons[lIdx] = { ...lessons[lIdx], attachments: nextAtts };
-                                      list[mIdx] = { ...list[mIdx], lessons };
-                                      setData({ ...data, modules: list });
-                                    }}
-                                    placeholder="/api/courses/media/... or https://..."
-                                    className="md:col-span-5 px-2 py-1 rounded border border-slate-200 bg-white text-xs font-mono"
-                                  />
-                                  <label className="md:col-span-1 flex items-center justify-center gap-1 text-[10px] text-slate-600 cursor-pointer" title="Allow download">
+                                </label>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const list = [...data.modules];
+                                    const lessons = [...list[mIdx].lessons];
+                                    lessons[lIdx] = {
+                                      ...lessons[lIdx],
+                                      attachments: [
+                                        ...attachments,
+                                        { title: '', fileUrl: '', fileType: 'PDF', fileSize: 0, isDownload: true },
+                                      ],
+                                    };
+                                    list[mIdx] = { ...list[mIdx], lessons };
+                                    setData({ ...data, modules: list });
+                                  }}
+                                  className="text-[11px] font-bold text-[#006FFF] hover:underline"
+                                >
+                                  + Add Link/PDF
+                                </button>
+                              </div>
+                            </div>
+
+                            {attachments.length > 0 && (
+                              <div className="space-y-1.5">
+                                {attachments.map((att: any, aIdx: number) => (
+                                  <div key={aIdx} className="grid grid-cols-1 md:grid-cols-12 gap-1.5 items-center bg-slate-50 p-2 rounded-lg border border-slate-200/80">
                                     <input
-                                      type="checkbox"
-                                      checked={att.isDownload !== false}
+                                      type="text"
+                                      value={att.title || ''}
                                       onChange={(e) => {
                                         const list = [...data.modules];
                                         const lessons = [...list[mIdx].lessons];
                                         const nextAtts = [...attachments];
-                                        nextAtts[aIdx] = { ...nextAtts[aIdx], isDownload: e.target.checked };
+                                        nextAtts[aIdx] = { ...nextAtts[aIdx], title: e.target.value };
                                         lessons[lIdx] = { ...lessons[lIdx], attachments: nextAtts };
                                         list[mIdx] = { ...list[mIdx], lessons };
                                         setData({ ...data, modules: list });
                                       }}
+                                      placeholder="Resource title..."
+                                      className="md:col-span-3 px-2 py-1 rounded border border-slate-200 bg-white text-xs"
                                     />
-                                    DL
-                                  </label>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      const list = [...data.modules];
-                                      const lessons = [...list[mIdx].lessons];
-                                      lessons[lIdx] = {
-                                        ...lessons[lIdx],
-                                        attachments: attachments.filter((_: any, j: number) => j !== aIdx),
-                                      };
-                                      list[mIdx] = { ...list[mIdx], lessons };
-                                      setData({ ...data, modules: list });
-                                    }}
-                                    className="md:col-span-1 text-rose-500 p-1 flex justify-end"
-                                  >
-                                    <X className="w-3.5 h-3.5" />
-                                  </button>
-                                </div>
-                              ))}
-                            </div>
-                          )}
+                                    <select
+                                      value={att.fileType || 'PDF'}
+                                      onChange={(e) => {
+                                        const list = [...data.modules];
+                                        const lessons = [...list[mIdx].lessons];
+                                        const nextAtts = [...attachments];
+                                        nextAtts[aIdx] = { ...nextAtts[aIdx], fileType: e.target.value };
+                                        lessons[lIdx] = { ...lessons[lIdx], attachments: nextAtts };
+                                        list[mIdx] = { ...list[mIdx], lessons };
+                                        setData({ ...data, modules: list });
+                                      }}
+                                      className="md:col-span-2 px-2 py-1 rounded border border-slate-200 bg-white text-xs"
+                                    >
+                                      <option value="PDF">PDF</option>
+                                      <option value="DOCUMENT">DOC</option>
+                                      <option value="ZIP">ZIP</option>
+                                      <option value="IMAGE">IMAGE</option>
+                                      <option value="EXTERNAL_LINK">LINK</option>
+                                    </select>
+                                    <input
+                                      type="text"
+                                      value={att.fileUrl || ''}
+                                      onChange={(e) => {
+                                        const list = [...data.modules];
+                                        const lessons = [...list[mIdx].lessons];
+                                        const nextAtts = [...attachments];
+                                        nextAtts[aIdx] = { ...nextAtts[aIdx], fileUrl: e.target.value };
+                                        lessons[lIdx] = { ...lessons[lIdx], attachments: nextAtts };
+                                        list[mIdx] = { ...list[mIdx], lessons };
+                                        setData({ ...data, modules: list });
+                                      }}
+                                      placeholder="/api/courses/media/... or https://..."
+                                      className="md:col-span-5 px-2 py-1 rounded border border-slate-200 bg-white text-xs font-mono"
+                                    />
+                                    <label className="md:col-span-1 flex items-center justify-center gap-1 text-[10px] text-slate-600 cursor-pointer" title="Allow download">
+                                      <input
+                                        type="checkbox"
+                                        checked={att.isDownload !== false}
+                                        onChange={(e) => {
+                                          const list = [...data.modules];
+                                          const lessons = [...list[mIdx].lessons];
+                                          const nextAtts = [...attachments];
+                                          nextAtts[aIdx] = { ...nextAtts[aIdx], isDownload: e.target.checked };
+                                          lessons[lIdx] = { ...lessons[lIdx], attachments: nextAtts };
+                                          list[mIdx] = { ...list[mIdx], lessons };
+                                          setData({ ...data, modules: list });
+                                        }}
+                                      />
+                                      DL
+                                    </label>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const list = [...data.modules];
+                                        const lessons = [...list[mIdx].lessons];
+                                        lessons[lIdx] = {
+                                          ...lessons[lIdx],
+                                          attachments: attachments.filter((_: any, j: number) => j !== aIdx),
+                                        };
+                                        list[mIdx] = { ...list[mIdx], lessons };
+                                        setData({ ...data, modules: list });
+                                      }}
+                                      className="md:col-span-1 text-rose-500 p-1 flex justify-end"
+                                    >
+                                      <X className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
                         </div>
-                      </div>
                       );
                     })}
                     {!data.isCurriculumLocked && (

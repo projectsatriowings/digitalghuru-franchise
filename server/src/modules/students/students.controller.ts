@@ -80,14 +80,15 @@ export const studentAdmissionSchema = z.object({
   email: z.string().email().optional().or(z.literal('')),
   studentEmail: z.string().email().optional().or(z.literal('')),
   phone: z.string().optional(),
-  initialPassword: z.string().min(8).optional(),
-  studentInitialPassword: z.string().min(8).optional(),
+  initialPassword: z.string().min(8, 'Student password must be at least 8 characters').optional().or(z.literal('')),
+  studentInitialPassword: z.string().min(8, 'Student password must be at least 8 characters').optional().or(z.literal('')),
   // Parent / Guardian fields during admission (Requirement 3)
   parentFullName: z.string().min(2, 'Parent/guardian full name is required').optional(),
   parentRelationship: z.enum(['FATHER', 'MOTHER', 'GUARDIAN']).default('GUARDIAN').optional(),
   parentPhone: z.string().min(8, 'Parent/guardian phone number is required').optional(),
   parentEmail: z.string().email().optional().or(z.literal('')).optional(),
-  parentInitialPassword: z.string().min(8).optional(),
+  parentInitialPassword: z.string().min(8, 'Parent password must be at least 8 characters').optional().or(z.literal('')),
+  parentPassword: z.string().min(8, 'Parent password must be at least 8 characters').optional().or(z.literal('')),
   parentCanReceiveSms: z.boolean().default(true).optional(),
   photoUrl: z.string().optional(),
 });
@@ -829,7 +830,10 @@ export async function admitStudent(req: AuthenticatedRequest, res: Response) {
                 }
               } else {
                 isExistingParentAccount = false;
-                parentTempPassword = data.parentInitialPassword?.trim() || `Parent#${generateSecureRandomToken(4)}2026`;
+                parentTempPassword =
+                  data.parentInitialPassword?.trim() ||
+                  data.parentPassword?.trim() ||
+                  `Parent#${generateSecureRandomToken(4)}2026`;
                 const parentPasswordHash = await hashPassword(parentTempPassword);
 
                 parentUser = await tx.user.create({

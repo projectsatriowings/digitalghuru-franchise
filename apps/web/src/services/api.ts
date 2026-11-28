@@ -17,6 +17,60 @@ export function getAuthToken(): string | null {
 }
 
 /**
+ * Retrieve refresh token from local storage
+ */
+export function getRefreshToken(): string | null {
+  if (typeof window === 'undefined' || !window.localStorage) return null;
+  return (
+    localStorage.getItem('tuition_refresh_token') ||
+    localStorage.getItem('refreshToken') ||
+    null
+  );
+}
+
+let activeRefreshPromise: Promise<string | null> | null = null;
+
+export async function refreshAccessToken(): Promise<string | null> {
+  const rToken = getRefreshToken();
+  if (!rToken) return null;
+
+  if (activeRefreshPromise) {
+    return activeRefreshPromise;
+  }
+
+  activeRefreshPromise = (async () => {
+    try {
+      const response = await fetch(`${API_BASE}/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken: rToken }),
+      });
+
+      if (!response.ok) {
+        return null;
+      }
+
+      const res = await response.json();
+      if (res.success && res.data?.accessToken) {
+        const newAccess = res.data.accessToken;
+        localStorage.setItem('tuition_token', newAccess);
+        if (res.data.refreshToken) {
+          localStorage.setItem('tuition_refresh_token', res.data.refreshToken);
+        }
+        return newAccess;
+      }
+      return null;
+    } catch {
+      return null;
+    } finally {
+      activeRefreshPromise = null;
+    }
+  })();
+
+  return activeRefreshPromise;
+}
+
+/**
  * Robust active institute ID retrieval across potential storage keys and cached objects
  */
 export function getActiveInstituteId(): string | null {
@@ -162,6 +216,40 @@ export async function apiFetch<T = any>(endpoint: string, options: ApiFetchOptio
     }
 
     if (!response.ok) {
+      // Automatic token renewal or graceful session expiry on HTTP 401
+      if (
+        response.status === 401 &&
+        !endpoint.startsWith('/auth/login') &&
+        !endpoint.startsWith('/auth/refresh') &&
+        !(options as any)._isRetry
+      ) {
+        const newAccess = await refreshAccessToken();
+        if (newAccess) {
+          return apiFetch<T>(endpoint, {
+            ...options,
+            _isRetry: true,
+          } as any);
+        } else {
+          // Token is dead & refresh token cannot renew: evict stale session immediately
+          localStorage.removeItem('tuition_token');
+          localStorage.removeItem('tuition_access_token');
+          localStorage.removeItem('tuition_mobile_access_token');
+          localStorage.removeItem('tuition_refresh_token');
+          localStorage.removeItem('tuition_user');
+          localStorage.removeItem('tuition_active_institute');
+          localStorage.removeItem('tuition_active_institute_id');
+          invalidateApiCache();
+
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(
+              new CustomEvent('tuitionos:session-expired', {
+                detail: { message: 'Your session has expired. Please sign in again.' },
+              })
+            );
+          }
+        }
+      }
+
       console.error(`[apiFetch] Request rejected (HTTP ${response.status}) on ${endpoint}:`, data);
       const errMessage = data?.message || data?.error || `HTTP ${response.status}: Request failed`;
 

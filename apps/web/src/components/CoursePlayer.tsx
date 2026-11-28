@@ -18,11 +18,90 @@ import {
   Paperclip,
   Trophy,
   AlertCircle,
+  ExternalLink,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { apiFetch } from '../services/api';
 import { useToast } from '../context/ToastContext';
 import { openMediaResource } from '../utils/mediaHelper';
+
+export interface ParsedVideoEmbed {
+  type: 'youtube' | 'gdrive' | 'vimeo' | 'loom' | 'dailymotion' | 'direct';
+  src: string;
+}
+
+/**
+ * Robust video source parser supporting YouTube (all link shapes), Google Drive,
+ * Vimeo, Loom, Dailymotion, Dropbox direct links, and standard direct HTML5 streams.
+ */
+export function parseVideoSource(rawUrl?: string | null): ParsedVideoEmbed | null {
+  if (!rawUrl || typeof rawUrl !== 'string') return null;
+  const url = rawUrl.trim();
+  if (!url) return null;
+
+  // 1. YouTube (handles /watch?v=, youtu.be/, /embed/, /shorts/, /live/, m.youtube.com)
+  const ytMatch = url.match(/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?|shorts|live)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/i);
+  if (ytMatch && ytMatch[1]) {
+    return {
+      type: 'youtube',
+      src: `https://www.youtube.com/embed/${ytMatch[1]}?rel=0&modestbranding=1`,
+    };
+  }
+
+  // 2. Google Drive preview embed
+  if (url.includes('drive.google.com') || url.includes('docs.google.com/file')) {
+    const driveMatch = url.match(/\/d\/([a-zA-Z0-9_-]+)/) || url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+    if (driveMatch && driveMatch[1]) {
+      return {
+        type: 'gdrive',
+        src: `https://drive.google.com/file/d/${driveMatch[1]}/preview`,
+      };
+    }
+  }
+
+  // 3. Vimeo embed
+  const vimeoMatch = url.match(/(?:vimeo\.com\/(?:video\/)?|player\.vimeo\.com\/video\/)(\d+)/i);
+  if (vimeoMatch && vimeoMatch[1]) {
+    return {
+      type: 'vimeo',
+      src: `https://player.vimeo.com/video/${vimeoMatch[1]}?badge=0&autopause=0&player_id=0`,
+    };
+  }
+
+  // 4. Loom embed
+  const loomMatch = url.match(/loom\.com\/(?:share|embed)\/([a-zA-Z0-9_-]+)/i);
+  if (loomMatch && loomMatch[1]) {
+    return {
+      type: 'loom',
+      src: `https://www.loom.com/embed/${loomMatch[1]}`,
+    };
+  }
+
+  // 5. Dailymotion embed
+  const dailyMatch = url.match(/(?:dailymotion\.com\/video\/|dai\.ly\/)([a-zA-Z0-9]+)/i);
+  if (dailyMatch && dailyMatch[1]) {
+    return {
+      type: 'dailymotion',
+      src: `https://www.dailymotion.com/embed/video/${dailyMatch[1]}`,
+    };
+  }
+
+  // 6. Dropbox (direct video stream normalization)
+  if (url.includes('dropbox.com')) {
+    let cleanDropbox = url.replace(/[?&]dl=0/g, '');
+    cleanDropbox += (cleanDropbox.includes('?') ? '&' : '?') + 'raw=1';
+    return {
+      type: 'direct',
+      src: cleanDropbox,
+    };
+  }
+
+  // Default: Direct HTML5 video element (MP4, WebM, HLS, local protected media stream)
+  return {
+    type: 'direct',
+    src: url,
+  };
+}
 
 /**
  * Requests a short-lived media access token bound to the current user, course, and file.
@@ -88,7 +167,12 @@ export const CoursePlayer: React.FC<CoursePlayerProps> = ({
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [videoMediaUrl, setVideoMediaUrl] = useState<string>('');
   const [isVideoLoading, setIsVideoLoading] = useState<boolean>(false);
-  const [streamError, setStreamError] = useState<string | null>(null);
+  const [streamErrorState, setStreamErrorState] = useState<{
+    title: string;
+    message: string;
+    isExternal: boolean;
+    url: string;
+  } | null>(null);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const retryCountRef = useRef<number>(0);
@@ -98,18 +182,42 @@ export const CoursePlayer: React.FC<CoursePlayerProps> = ({
   useEffect(() => {
     let isCancelled = false;
     retryCountRef.current = 0;
-    setStreamError(null);
+    setStreamErrorState(null);
     pendingSeekRef.current = null;
 
-    const url = activeLesson?.videoUrl;
-    if (!url || url.includes('drive.google.com') || url.includes('youtube.com') || url.includes('youtu.be')) {
-      setVideoMediaUrl(url || '');
+    const rawUrl = activeLesson?.videoUrl;
+    if (!rawUrl) {
+      setVideoMediaUrl('');
       setIsVideoLoading(false);
       return;
     }
 
+    const parsed = parseVideoSource(rawUrl);
+    if (!parsed) {
+      setVideoMediaUrl('');
+      setIsVideoLoading(false);
+      return;
+    }
+
+    // Embeddable iframe providers (YouTube, Google Drive, Vimeo, Loom, Dailymotion)
+    if (parsed.type !== 'direct') {
+      setVideoMediaUrl(parsed.src);
+      setIsVideoLoading(false);
+      return;
+    }
+
+    // Direct video: Check if it's an internal protected media asset
+    const isInternalProtected = parsed.src.includes('/media/protected/') || parsed.src.includes('/uploads/courses/');
+    if (!isInternalProtected) {
+      // External MP4/WebM/Dropbox URL
+      setVideoMediaUrl(parsed.src);
+      setIsVideoLoading(false);
+      return;
+    }
+
+    // Internal protected asset: request short-lived media authorization token
     setIsVideoLoading(true);
-    requestShortLivedMediaUrl(courseId, url)
+    requestShortLivedMediaUrl(courseId, parsed.src)
       .then((tokenUrl) => {
         if (!isCancelled) {
           setVideoMediaUrl(tokenUrl);
@@ -333,8 +441,8 @@ export const CoursePlayer: React.FC<CoursePlayerProps> = ({
   }
 
   const renderVideoStage = () => {
-    const url = activeLesson?.videoUrl;
-    if (!url) {
+    const rawUrl = activeLesson?.videoUrl;
+    if (!rawUrl) {
       return (
         <div className="text-center px-6 py-10 space-y-2">
           <PlayCircle className="w-14 h-14 text-amber-400/70 mx-auto" />
@@ -346,70 +454,79 @@ export const CoursePlayer: React.FC<CoursePlayerProps> = ({
       );
     }
 
-    // Google Drive embed (/d/<fileId>/preview)
-    if (url.includes('drive.google.com')) {
-      const match = url.match(/\/d\/([a-zA-Z0-9_-]+)/) || url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
-      if (match?.[1]) {
-        return (
-          <iframe
-            src={`https://drive.google.com/file/d/${match[1]}/preview`}
-            className="w-full h-full border-0"
-            allow="autoplay"
-            allowFullScreen
-            title={activeLesson?.title || 'Recorded Session'}
-          />
-        );
-      }
+    const parsed = parseVideoSource(rawUrl);
+    if (!parsed) {
+      return (
+        <div className="text-center px-6 py-10 space-y-2">
+          <PlayCircle className="w-14 h-14 text-amber-400/70 mx-auto" />
+          <h3 className="text-white font-display font-bold text-xl">{activeLesson?.title || 'Select a Lesson'}</h3>
+          <p className="text-amber-300 text-xs font-bold tracking-wider uppercase">
+            Reading / Practical Lesson (No Video Attached Yet)
+          </p>
+        </div>
+      );
     }
 
-    // YouTube embed
-    if (url.includes('youtube.com') || url.includes('youtu.be')) {
-      let videoId = '';
-      if (url.includes('youtu.be/')) {
-        videoId = url.split('youtu.be/')[1]?.split(/[?&]/)[0] || '';
-      } else {
-        try {
-          videoId = new URL(url).searchParams.get('v') || '';
-        } catch {
-          videoId = '';
-        }
-      }
-      if (videoId) {
-        return (
-          <iframe
-            src={`https://www.youtube.com/embed/${videoId}?rel=0`}
-            className="w-full h-full border-0"
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-            allowFullScreen
-            title={activeLesson?.title || 'Video Lesson'}
-          />
-        );
-      }
+    // Embeddable iframe providers (YouTube, Google Drive, Vimeo, Loom, Dailymotion)
+    if (parsed.type !== 'direct') {
+      return (
+        <iframe
+          src={parsed.src}
+          className="w-full h-full border-0"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
+          allowFullScreen
+          title={activeLesson?.title || 'Lesson Video'}
+        />
+      );
     }
 
-    // Direct MP4/WebM/Stream video (with dedicated short-lived media token and auto-refresh)
-    if (streamError) {
+    // Direct MP4/WebM/Stream video
+    if (streamErrorState) {
       return (
         <div className="flex flex-col items-center justify-center p-8 space-y-4 bg-slate-900 text-white rounded-2xl h-full min-h-[360px]">
           <AlertCircle className="w-12 h-12 text-rose-500 animate-pulse" />
-          <div className="text-center space-y-1">
-            <h3 className="text-sm font-bold text-white">Stream Authorization Failed</h3>
-            <p className="text-xs text-slate-400 max-w-sm">{streamError}</p>
+          <div className="text-center space-y-1.5 max-w-md">
+            <h3 className="text-base font-bold text-white">{streamErrorState.title}</h3>
+            <p className="text-xs text-slate-300 leading-relaxed">{streamErrorState.message}</p>
+            {streamErrorState.isExternal && (
+              <p
+                className="text-[11px] font-mono text-slate-400 truncate max-w-sm mt-1 bg-slate-800/80 px-2.5 py-1 rounded border border-slate-700/60"
+                title={streamErrorState.url}
+              >
+                {streamErrorState.url}
+              </p>
+            )}
           </div>
-          <button
-            type="button"
-            onClick={async () => {
-              setStreamError(null);
-              retryCountRef.current = 0;
-              setIsVideoLoading(true);
-              const freshUrl = await requestShortLivedMediaUrl(courseId, activeLesson?.videoUrl);
-              setVideoMediaUrl(freshUrl);
-              setIsVideoLoading(false);
-            }}
-            className="px-5 py-2.5 bg-[#006FFF] hover:bg-blue-600 rounded-xl text-xs font-bold text-white transition-colors shadow-md"
-          >
-            Retry Playback
-          </button>
+          <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+            {streamErrorState.isExternal && (
+              <button
+                type="button"
+                onClick={() => window.open(streamErrorState.url, '_blank', 'noopener,noreferrer')}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-xs font-semibold text-slate-200 transition-colors inline-flex items-center gap-1.5 shadow-sm cursor-pointer"
+              >
+                <ExternalLink className="w-3.5 h-3.5" /> Open Video in New Window
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={async () => {
+                setStreamErrorState(null);
+                retryCountRef.current = 0;
+                setIsVideoLoading(true);
+                const isInternal = parsed.src.includes('/media/protected/') || parsed.src.includes('/uploads/courses/');
+                if (isInternal) {
+                  const freshUrl = await requestShortLivedMediaUrl(courseId, activeLesson?.videoUrl);
+                  setVideoMediaUrl(freshUrl);
+                } else {
+                  setVideoMediaUrl(parsed.src + (parsed.src.includes('?') ? '&' : '?') + '_r=' + Date.now());
+                }
+                setIsVideoLoading(false);
+              }}
+              className="px-5 py-2 bg-[#006FFF] hover:bg-blue-600 rounded-xl text-xs font-bold text-white transition-colors shadow-md cursor-pointer"
+            >
+              Retry Playback
+            </button>
+          </div>
         </div>
       );
     }
@@ -432,7 +549,7 @@ export const CoursePlayer: React.FC<CoursePlayerProps> = ({
         className="w-full h-full object-contain bg-black"
         onEnded={handleCompleteAndNext}
         onLoadedMetadata={() => {
-          setStreamError(null);
+          setStreamErrorState(null);
           retryCountRef.current = 0;
           if (pendingSeekRef.current && videoRef.current) {
             const { time, play } = pendingSeekRef.current;
@@ -446,10 +563,12 @@ export const CoursePlayer: React.FC<CoursePlayerProps> = ({
           }
         }}
         onError={async () => {
-          // Allow exactly ONE automatic retry after a media-stream failure
-          if (retryCountRef.current < 1) {
+          const isInternal = videoMediaUrl.includes('/media/protected/') || videoMediaUrl.includes('/uploads/courses/');
+
+          // For internal protected assets, execute one automatic token refresh attempt
+          if (isInternal && retryCountRef.current < 1) {
             retryCountRef.current += 1;
-            console.warn('[CoursePlayer] Video stream error, executing single automatic token refresh and retry (retry #1)...');
+            console.warn('[CoursePlayer] Internal stream token refresh attempt (retry #1)...');
             const savedTime = videoRef.current?.currentTime || 0;
             const wasPlaying = videoRef.current ? !videoRef.current.paused : false;
             const freshUrl = await requestShortLivedMediaUrl(courseId, activeLesson?.videoUrl);
@@ -459,9 +578,28 @@ export const CoursePlayer: React.FC<CoursePlayerProps> = ({
               return;
             }
           }
-          // Exactly one retry has been exhausted: show clear error state and stop loop
-          console.error('[CoursePlayer] Single automatic retry exhausted without recovery. Halting refresh loop.');
-          setStreamError('The lesson video stream could not be loaded or authorized. Please check your network connection or click retry below.');
+
+          if (isInternal) {
+            setStreamErrorState({
+              title: 'Stream Session Expired',
+              message: 'Your secure media authorization token has expired or is invalid. Click retry below to obtain a fresh session token.',
+              isExternal: false,
+              url: videoMediaUrl,
+            });
+          } else {
+            let host = 'external host';
+            try {
+              host = new URL(videoMediaUrl).hostname;
+            } catch {
+              host = 'video server';
+            }
+            setStreamErrorState({
+              title: 'External Video Inaccessible',
+              message: `The video stream from ${host} could not be loaded in the browser. The host server may be blocking embedded playback (e.g. HTTP 403 Forbidden or CORS restrictions), the link is private/expired, or the format is unsupported.`,
+              isExternal: true,
+              url: videoMediaUrl,
+            });
+          }
         }}
       >
         Your browser does not support HTML5 video playback.
