@@ -658,6 +658,29 @@ export const AcademicsManagement: React.FC<AcademicsManagementProps> = ({ onNavi
     return Array.from(set);
   }, [batches]);
 
+  // Keyboard navigation & modal dismiss
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (showAddTrainerModal) {
+          setShowAddTrainerModal(false);
+        } else if (showEnrollModal) {
+          setShowEnrollModal(false);
+        } else if (showAssignStaffModal) {
+          setShowAssignStaffModal(false);
+        } else if (showAddSubjectModal) {
+          setShowAddSubjectModal(false);
+        } else if (showBatchModal) {
+          setShowBatchModal(false);
+        } else if (selectedBatchDetails) {
+          setSelectedBatchDetails(null);
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [showAddTrainerModal, showEnrollModal, showAssignStaffModal, showAddSubjectModal, showBatchModal, selectedBatchDetails]);
+
   // Eligible students for enrollment
   const enrolledStudentIds = useMemo(() => {
     return new Set(selectedBatchDetails?.enrolledStudents?.map((s) => s.id) || []);
@@ -1902,6 +1925,8 @@ export const AcademicsManagement: React.FC<AcademicsManagementProps> = ({ onNavi
                   } else if (!editingBatch && batchStep === 2) {
                     setBatchModalError(null);
                     setBatchStep(3);
+                  } else if (editingBatch || batchStep === 3) {
+                    handleSaveBatch(e);
                   }
                 }
               }}

@@ -113,6 +113,27 @@ export const CourseManagement: React.FC = () => {
 
   useBodyScrollLock(Boolean(showCategoriesModal || curriculumCourse || previewCourse || franchiseCourse || deleteModalState.isOpen));
 
+  // Global keyboard shortcuts for modals and drawers
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (deleteModalState.isOpen) {
+          setDeleteModalState((prev) => ({ ...prev, isOpen: false }));
+        } else if (showCategoriesModal) {
+          setShowCategoriesModal(false);
+        } else if (curriculumCourse) {
+          setCurriculumCourse(null);
+        } else if (previewCourse) {
+          setPreviewCourse(null);
+        } else if (franchiseCourse) {
+          setFranchiseCourse(null);
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [deleteModalState.isOpen, showCategoriesModal, curriculumCourse, previewCourse, franchiseCourse]);
+
   const fetchCatalogue = useCallback(async (forceRefresh = false) => {
     setLoading(true);
     try {

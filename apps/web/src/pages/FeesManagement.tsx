@@ -120,6 +120,29 @@ export const FeesManagement: React.FC = () => {
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
 
+  // Keyboard navigation & modal dismiss
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (showRecordPaymentModal) {
+          setShowRecordPaymentModal(false);
+        } else if (showRefundModal) {
+          setShowRefundModal(false);
+        } else if (showAssignModal) {
+          setShowAssignModal(false);
+        } else if (showBatchAssignModal) {
+          setShowBatchAssignModal(false);
+        } else if (showReceiptModal) {
+          setShowReceiptModal(false);
+        } else if (editingFeeStructure) {
+          setEditingFeeStructure(null);
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [showRecordPaymentModal, showRefundModal, showAssignModal, showBatchAssignModal, showReceiptModal, editingFeeStructure]);
+
   // Initial load
   useEffect(() => {
     if (!isAdmin) return;
@@ -136,6 +159,30 @@ export const FeesManagement: React.FC = () => {
     if (activeTab === 'payments') loadPayments();
     if (activeTab === 'adjustments') loadAdjustments();
   }, [activeTab, isAdmin, activeInstitute?.id]);
+
+  // Global Escape key handler to close active fee modals
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (showReceiptModal) {
+          setShowReceiptModal(false);
+          setActiveReceipt(null);
+        } else if (showRecordPaymentModal) {
+          setShowRecordPaymentModal(false);
+          setSelectedAssignmentForPayment(null);
+        } else if (showRefundModal) {
+          setShowRefundModal(false);
+          setSelectedPaymentForRefund(null);
+        } else if (showAssignModal) {
+          setShowAssignModal(false);
+        } else if (showBatchAssignModal) {
+          setShowBatchAssignModal(false);
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [showReceiptModal, showRecordPaymentModal, showRefundModal, showAssignModal, showBatchAssignModal]);
 
   const loadDashboardData = async () => {
     try {

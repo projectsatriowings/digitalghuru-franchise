@@ -850,6 +850,26 @@ Please keep this login and password safe. Use your registered mobile number and 
     }
   }, [showAdmitModal, formData.batchId, formData.onlineDirect]);
 
+  // Global Keyboard Shortcuts for Student Management Modals
+  useEffect(() => {
+    const handleModalKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (showAdmitModal) {
+          setShowAdmitModal(false);
+          setAdmitStep(1);
+        } else if (editingStudent) {
+          setEditingStudent(null);
+        } else if (showEnrollExistingModal) {
+          setShowEnrollExistingModal(false);
+        } else if (selectedStudentId) {
+          setSelectedStudentId(null);
+        }
+      }
+    };
+    window.addEventListener('keydown', handleModalKeyDown);
+    return () => window.removeEventListener('keydown', handleModalKeyDown);
+  }, [showAdmitModal, editingStudent, showEnrollExistingModal, selectedStudentId]);
+
   // Debounced parent account lookup for sibling auto-linking
   useEffect(() => {
     if (!showAdmitModal) {
@@ -1873,8 +1893,12 @@ Please keep this login and password safe. Use your registered mobile number and 
             <form
               onSubmit={handleAdmitSubmit}
               onKeyDown={(e) => {
-                if (e.key === 'Enter' && (e.target as HTMLElement).tagName === 'INPUT') {
+                if (e.key === 'Enter' && ((e.target as HTMLElement).tagName === 'INPUT' || (e.target as HTMLElement).tagName === 'SELECT')) {
                   e.preventDefault();
+                  if (admitStep === 1) handleProceedFromAdmitStep1();
+                  else if (admitStep === 2) handleProceedFromAdmitStep2();
+                  else if (admitStep === 3) handleProceedFromAdmitStep3();
+                  else if (admitStep === 4) handleAdmitSubmit(e);
                 }
               }}
               className="space-y-4"

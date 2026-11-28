@@ -6,6 +6,7 @@ import { Sidebar } from './components/Sidebar';
 import { Login } from './pages/Login';
 import { PageSkeleton } from './components/PageSkeleton';
 import { ToastProvider } from './context/ToastContext';
+import { useFormKeyboardNavigation } from './hooks/useFormKeyboardNavigation';
 
 // Route-level code splitting via React.lazy (with prefetch helpers for instant tab switches)
 const loadFranchiseManagement = () => import('./pages/FranchiseManagement');
@@ -80,6 +81,7 @@ const isTabAllowedForRole = (tab: string, role?: string): boolean => {
 };
 
 const AppContent: React.FC = () => {
+  useFormKeyboardNavigation();
   const { user, loading } = useAuth();
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [currentTab, setCurrentTab] = useState<string>(() => {

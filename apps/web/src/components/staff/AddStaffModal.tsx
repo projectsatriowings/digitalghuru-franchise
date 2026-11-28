@@ -244,6 +244,30 @@ export const AddStaffModal: React.FC<AddStaffModalProps> = ({
     setStep(4);
   };
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onClose();
+        return;
+      }
+      if (e.key === 'Enter') {
+        const target = e.target as HTMLElement | null;
+        if (target && target.tagName === 'TEXTAREA' && !e.ctrlKey && !e.metaKey) return;
+        if (target && (target.tagName === 'INPUT' || target.tagName === 'SELECT')) {
+          e.preventDefault();
+          if (step === 1) handleProceedFromStep1();
+          else if (step === 2) handleProceedFromStep2();
+          else if (step === 3) handleProceedFromStep3();
+          else if (step === 4) handleSubmit(e as any);
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, step, fullName, designation, loginEmail, password, phone, personalEmail]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!fullName.trim() || !designation.trim() || !loginEmail.trim() || !password.trim()) {

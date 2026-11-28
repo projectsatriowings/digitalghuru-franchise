@@ -99,6 +99,27 @@ export const StaffManagement: React.FC = () => {
   const [assignmentError, setAssignmentError] = useState<string | null>(null);
   const [assignmentSuccess, setAssignmentSuccess] = useState<string | null>(null);
 
+  // Global Keyboard Navigation & Modal Dismiss
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (createdCredential) {
+          setCreatedCredential(null);
+        } else if (viewingStaffCreds) {
+          setViewingStaffCreds(null);
+        } else if (viewingStaffAssignments) {
+          setViewingStaffAssignments(null);
+        } else if (showAddModal) {
+          setShowAddModal(false);
+        } else if (selectedStaff) {
+          setSelectedStaff(null);
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [createdCredential, viewingStaffCreds, viewingStaffAssignments, showAddModal, selectedStaff]);
+
   const fetchData = async () => {
     try {
       setLoading(true);
