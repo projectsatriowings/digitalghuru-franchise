@@ -89,15 +89,20 @@ exports.studentAdmissionSchema = zod_1.z.object({
     email: zod_1.z.string().email().optional().or(zod_1.z.literal('')),
     studentEmail: zod_1.z.string().email().optional().or(zod_1.z.literal('')),
     phone: zod_1.z.string().optional(),
-    initialPassword: zod_1.z.string().min(8, 'Student password must be at least 8 characters').optional().or(zod_1.z.literal('')),
-    studentInitialPassword: zod_1.z.string().min(8, 'Student password must be at least 8 characters').optional().or(zod_1.z.literal('')),
+    initialPassword: zod_1.z.preprocess((v) => (typeof v === 'string' && v.trim() === '' ? undefined : v), zod_1.z.string().min(6, 'Student password must be at least 6 characters').optional()),
+    studentInitialPassword: zod_1.z.preprocess((v) => (typeof v === 'string' && v.trim() === '' ? undefined : v), zod_1.z.string().min(6, 'Student password must be at least 6 characters').optional()),
+    studentPassword: zod_1.z.preprocess((v) => (typeof v === 'string' && v.trim() === '' ? undefined : v), zod_1.z.string().min(6, 'Student password must be at least 6 characters').optional()),
+    password: zod_1.z.preprocess((v) => (typeof v === 'string' && v.trim() === '' ? undefined : v), zod_1.z.string().min(6, 'Student password must be at least 6 characters').optional()),
+    temporaryPassword: zod_1.z.preprocess((v) => (typeof v === 'string' && v.trim() === '' ? undefined : v), zod_1.z.string().min(6, 'Student password must be at least 6 characters').optional()),
     // Parent / Guardian fields during admission (Requirement 3)
     parentFullName: zod_1.z.string().min(2, 'Parent/guardian full name is required').optional(),
     parentRelationship: zod_1.z.enum(['FATHER', 'MOTHER', 'GUARDIAN']).default('GUARDIAN').optional(),
     parentPhone: zod_1.z.string().min(8, 'Parent/guardian phone number is required').optional(),
     parentEmail: zod_1.z.string().email().optional().or(zod_1.z.literal('')).optional(),
-    parentInitialPassword: zod_1.z.string().min(8, 'Parent password must be at least 8 characters').optional().or(zod_1.z.literal('')),
-    parentPassword: zod_1.z.string().min(8, 'Parent password must be at least 8 characters').optional().or(zod_1.z.literal('')),
+    parentInitialPassword: zod_1.z.preprocess((v) => (typeof v === 'string' && v.trim() === '' ? undefined : v), zod_1.z.string().min(6, 'Parent password must be at least 6 characters').optional()),
+    parentPassword: zod_1.z.preprocess((v) => (typeof v === 'string' && v.trim() === '' ? undefined : v), zod_1.z.string().min(6, 'Parent password must be at least 6 characters').optional()),
+    initialParentPassword: zod_1.z.preprocess((v) => (typeof v === 'string' && v.trim() === '' ? undefined : v), zod_1.z.string().min(6, 'Parent password must be at least 6 characters').optional()),
+    parentTemporaryPassword: zod_1.z.preprocess((v) => (typeof v === 'string' && v.trim() === '' ? undefined : v), zod_1.z.string().min(6, 'Parent password must be at least 6 characters').optional()),
     parentCanReceiveSms: zod_1.z.boolean().default(true).optional(),
     photoUrl: zod_1.z.string().optional(),
 });
@@ -123,8 +128,9 @@ exports.updateStudentStatusSchema = zod_1.z.object({
     reason: zod_1.z.string().optional(),
 });
 exports.resetStudentPasswordSchema = zod_1.z.object({
-    password: zod_1.z.string().min(8, 'Password must be at least 8 characters').optional(),
-    newPassword: zod_1.z.string().min(8, 'Password must be at least 8 characters').optional(),
+    password: zod_1.z.preprocess((v) => (typeof v === 'string' && v.trim() === '' ? undefined : v), zod_1.z.string().min(6, 'Password must be at least 6 characters').optional()),
+    newPassword: zod_1.z.preprocess((v) => (typeof v === 'string' && v.trim() === '' ? undefined : v), zod_1.z.string().min(6, 'Password must be at least 6 characters').optional()),
+    temporaryPassword: zod_1.z.preprocess((v) => (typeof v === 'string' && v.trim() === '' ? undefined : v), zod_1.z.string().min(6, 'Password must be at least 6 characters').optional()),
 });
 exports.updateStudentIdentifierSchema = zod_1.z.object({
     email: zod_1.z.string().email('Invalid email address').optional().or(zod_1.z.literal('')),
@@ -181,16 +187,16 @@ async function listStudents(req, res) {
             if (isConsolidated || !instituteId) {
                 andConditions.push(scope.whereClause);
             }
-            else if (includeOnline || learningMode === 'ONLINE') {
+            else if (learningMode === 'OFFLINE') {
+                andConditions.push({ instituteId });
+            }
+            else {
                 andConditions.push({
                     OR: [
                         { instituteId },
                         ...(franchiseId ? [{ franchiseId, instituteId: null }] : []),
                     ],
                 });
-            }
-            else {
-                andConditions.push({ instituteId });
             }
         }
         else if (req.user?.role === 'SUPER_ADMIN') {
@@ -382,8 +388,32 @@ async function admitStudent(req, res) {
         const data = parse.data;
         const rawInstHeader = req.headers['x-institute-id'];
         const callerRole = req.user?.role;
-        const isOnlineDirectRequest = Boolean(data.onlineDirect) || (!req.instituteId && data.learningMode === 'ONLINE');
         let effectiveInstituteId = req.instituteId || null;
+        // If caller has no explicit req.instituteId (e.g. ALL view), resolve from data.batchId or franchise campus
+        if (!effectiveInstituteId && !data.onlineDirect) {
+            if (data.batchId) {
+                const batch = await prisma_js_1.prisma.batch.findUnique({
+                    where: { id: data.batchId },
+                    select: { instituteId: true },
+                });
+                if (batch?.instituteId) {
+                    effectiveInstituteId = batch.instituteId;
+                }
+            }
+            if (!effectiveInstituteId) {
+                const franchiseIdCandidate = req.franchiseId || data.franchiseId;
+                if (franchiseIdCandidate) {
+                    const branches = await prisma_js_1.prisma.institute.findMany({
+                        where: { franchiseId: franchiseIdCandidate },
+                        select: { id: true },
+                    });
+                    if (branches.length === 1) {
+                        effectiveInstituteId = branches[0].id;
+                    }
+                }
+            }
+        }
+        const isOnlineDirectRequest = Boolean(data.onlineDirect) || (!effectiveInstituteId && data.learningMode === 'ONLINE');
         if (isOnlineDirectRequest) {
             if (callerRole !== 'FRANCHISE_OWNER' && callerRole !== 'SUPER_ADMIN') {
                 return res.status(403).json({
@@ -513,12 +543,6 @@ async function admitStudent(req, res) {
                     error: 'Selected Global Course is not permitted for this franchise by Super Admin.',
                 });
             }
-            if (!franchiseSelection.isEnabled) {
-                return res.status(400).json({
-                    success: false,
-                    error: 'Selected Global Course is not enabled for this franchise. Enable it in Franchise Offerings first.',
-                });
-            }
             verifiedGlobalCourse = {
                 id: globalCourse.id,
                 title: globalCourse.title,
@@ -646,7 +670,10 @@ async function admitStudent(req, res) {
                         }
                         tempPassword =
                             data.studentInitialPassword?.trim() ||
+                                data.studentPassword?.trim() ||
                                 data.initialPassword?.trim() ||
+                                data.password?.trim() ||
+                                data.temporaryPassword?.trim() ||
                                 `Student#${(0, security_js_1.generateSecureRandomToken)(4)}2026`;
                         const passwordHash = await (0, security_js_1.hashPassword)(tempPassword);
                         studentUser = await tx.user.create({
@@ -802,6 +829,8 @@ async function admitStudent(req, res) {
                             parentTempPassword =
                                 data.parentInitialPassword?.trim() ||
                                     data.parentPassword?.trim() ||
+                                    data.initialParentPassword?.trim() ||
+                                    data.parentTemporaryPassword?.trim() ||
                                     `Parent#${(0, security_js_1.generateSecureRandomToken)(4)}2026`;
                             const parentPasswordHash = await (0, security_js_1.hashPassword)(parentTempPassword);
                             parentUser = await tx.user.create({
@@ -1681,8 +1710,14 @@ async function updateStudent(req, res) {
             updateData.gender = data.gender;
         if (data.bloodGroup !== undefined)
             updateData.bloodGroup = data.bloodGroup?.trim() || null;
-        if (data.photoUrl !== undefined)
-            updateData.photoUrl = data.photoUrl?.trim() || null;
+        if (data.photoUrl !== undefined) {
+            if (data.photoUrl && (data.photoUrl.startsWith('/api/students/') || data.photoUrl.startsWith('api/students/'))) {
+                // Do not overwrite underlying storage key with API route URL
+            }
+            else {
+                updateData.photoUrl = data.photoUrl?.trim() || null;
+            }
+        }
         if (data.dob !== undefined) {
             updateData.dob = data.dob && data.dob.trim() ? new Date(data.dob) : null;
         }
@@ -2168,7 +2203,11 @@ async function getStudentPhoto(req, res) {
         if (!student || !student.photoUrl) {
             return res.status(404).json({ success: false, error: 'No photograph on file for this student' });
         }
-        if (targetInstituteId && student.instituteId !== targetInstituteId && req.user?.role !== 'SUPER_ADMIN') {
+        if (targetInstituteId &&
+            student.instituteId &&
+            student.instituteId !== targetInstituteId &&
+            req.user?.role !== 'SUPER_ADMIN' &&
+            req.user?.role !== 'FRANCHISE_OWNER') {
             return res.status(403).json({ success: false, error: 'Forbidden: Cross-institute photograph access rejected' });
         }
         if (student.photoUrl.startsWith('http://') || student.photoUrl.startsWith('https://')) {
@@ -2366,10 +2405,17 @@ async function assignStudentBatch(req, res) {
         const { id } = req.params;
         const { batchId, subjectIds = [] } = req.body;
         const student = await prisma_js_1.prisma.student.findFirst({
-            where: { id, instituteId },
+            where: {
+                id,
+                OR: [
+                    { instituteId },
+                    ...(req.franchiseId ? [{ franchiseId: req.franchiseId }] : []),
+                    ...(req.user?.role === 'SUPER_ADMIN' ? [{}] : []),
+                ],
+            },
         });
         if (!student) {
-            return res.status(404).json({ success: false, error: 'Student not found in this institute' });
+            return res.status(404).json({ success: false, error: 'Student not found in this institute or franchise' });
         }
         if (student.status !== 'ACTIVE') {
             return res.status(400).json({ success: false, error: `Cannot assign batch to student in ${student.status} status` });
@@ -2440,6 +2486,65 @@ async function assignStudentBatch(req, res) {
                                 },
                             });
                         }
+                    }
+                }
+                // 4. If student was Online Direct or not yet bound to this branch, transition them to this campus
+                const isTransitioningFromOnline = !student.instituteId || student.admissionNumber.startsWith('ON');
+                if (isTransitioningFromOnline || student.instituteId !== instituteId) {
+                    let updatedAdmNo = student.admissionNumber;
+                    if (isTransitioningFromOnline) {
+                        try {
+                            const admInfo = await (0, admission_number_service_js_1.generateNextAdmissionNumber)(tx, instituteId, batchId, student.admissionDate || new Date());
+                            updatedAdmNo = admInfo.admissionNumber;
+                        }
+                        catch (err) {
+                            console.warn('[assignStudentBatch] Could not generate new branch admission number:', err);
+                        }
+                    }
+                    await tx.student.update({
+                        where: { id },
+                        data: {
+                            instituteId,
+                            ...(updatedAdmNo !== student.admissionNumber ? { admissionNumber: updatedAdmNo } : {}),
+                        },
+                    });
+                    if (student.userId) {
+                        await tx.instituteMembership.upsert({
+                            where: {
+                                instituteId_userId: {
+                                    instituteId,
+                                    userId: student.userId,
+                                },
+                            },
+                            update: { isActive: true },
+                            create: {
+                                instituteId,
+                                userId: student.userId,
+                                role: 'STUDENT',
+                                isActive: true,
+                            },
+                        });
+                    }
+                    // Transition CourseEnrollment to OFFLINE mode for this campus & batch
+                    if (batch?.courseId) {
+                        await tx.courseEnrollment.updateMany({
+                            where: { studentId: id, courseId: batch.courseId },
+                            data: {
+                                instituteId,
+                                batchId,
+                                mode: client_1.LearningMode.OFFLINE,
+                            },
+                        });
+                    }
+                    else {
+                        await tx.courseEnrollment.updateMany({
+                            where: { studentId: id, status: 'ACTIVE' },
+                            data: {
+                                instituteId,
+                                batchId,
+                                mode: client_1.LearningMode.OFFLINE,
+                            },
+                        });
                     }
                 }
             }

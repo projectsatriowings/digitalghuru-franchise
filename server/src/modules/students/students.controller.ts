@@ -80,15 +80,20 @@ export const studentAdmissionSchema = z.object({
   email: z.string().email().optional().or(z.literal('')),
   studentEmail: z.string().email().optional().or(z.literal('')),
   phone: z.string().optional(),
-  initialPassword: z.string().min(8, 'Student password must be at least 8 characters').optional().or(z.literal('')),
-  studentInitialPassword: z.string().min(8, 'Student password must be at least 8 characters').optional().or(z.literal('')),
+  initialPassword: z.preprocess((v) => (typeof v === 'string' && v.trim() === '' ? undefined : v), z.string().min(6, 'Student password must be at least 6 characters').optional()),
+  studentInitialPassword: z.preprocess((v) => (typeof v === 'string' && v.trim() === '' ? undefined : v), z.string().min(6, 'Student password must be at least 6 characters').optional()),
+  studentPassword: z.preprocess((v) => (typeof v === 'string' && v.trim() === '' ? undefined : v), z.string().min(6, 'Student password must be at least 6 characters').optional()),
+  password: z.preprocess((v) => (typeof v === 'string' && v.trim() === '' ? undefined : v), z.string().min(6, 'Student password must be at least 6 characters').optional()),
+  temporaryPassword: z.preprocess((v) => (typeof v === 'string' && v.trim() === '' ? undefined : v), z.string().min(6, 'Student password must be at least 6 characters').optional()),
   // Parent / Guardian fields during admission (Requirement 3)
   parentFullName: z.string().min(2, 'Parent/guardian full name is required').optional(),
   parentRelationship: z.enum(['FATHER', 'MOTHER', 'GUARDIAN']).default('GUARDIAN').optional(),
   parentPhone: z.string().min(8, 'Parent/guardian phone number is required').optional(),
   parentEmail: z.string().email().optional().or(z.literal('')).optional(),
-  parentInitialPassword: z.string().min(8, 'Parent password must be at least 8 characters').optional().or(z.literal('')),
-  parentPassword: z.string().min(8, 'Parent password must be at least 8 characters').optional().or(z.literal('')),
+  parentInitialPassword: z.preprocess((v) => (typeof v === 'string' && v.trim() === '' ? undefined : v), z.string().min(6, 'Parent password must be at least 6 characters').optional()),
+  parentPassword: z.preprocess((v) => (typeof v === 'string' && v.trim() === '' ? undefined : v), z.string().min(6, 'Parent password must be at least 6 characters').optional()),
+  initialParentPassword: z.preprocess((v) => (typeof v === 'string' && v.trim() === '' ? undefined : v), z.string().min(6, 'Parent password must be at least 6 characters').optional()),
+  parentTemporaryPassword: z.preprocess((v) => (typeof v === 'string' && v.trim() === '' ? undefined : v), z.string().min(6, 'Parent password must be at least 6 characters').optional()),
   parentCanReceiveSms: z.boolean().default(true).optional(),
   photoUrl: z.string().optional(),
 });
@@ -117,8 +122,9 @@ export const updateStudentStatusSchema = z.object({
 });
 
 export const resetStudentPasswordSchema = z.object({
-  password: z.string().min(8, 'Password must be at least 8 characters').optional(),
-  newPassword: z.string().min(8, 'Password must be at least 8 characters').optional(),
+  password: z.preprocess((v) => (typeof v === 'string' && v.trim() === '' ? undefined : v), z.string().min(6, 'Password must be at least 6 characters').optional()),
+  newPassword: z.preprocess((v) => (typeof v === 'string' && v.trim() === '' ? undefined : v), z.string().min(6, 'Password must be at least 6 characters').optional()),
+  temporaryPassword: z.preprocess((v) => (typeof v === 'string' && v.trim() === '' ? undefined : v), z.string().min(6, 'Password must be at least 6 characters').optional()),
 });
 
 export const updateStudentIdentifierSchema = z.object({
@@ -559,12 +565,6 @@ export async function admitStudent(req: AuthenticatedRequest, res: Response) {
           error: 'Selected Global Course is not permitted for this franchise by Super Admin.',
         });
       }
-      if (!franchiseSelection.isEnabled) {
-        return res.status(400).json({
-          success: false,
-          error: 'Selected Global Course is not enabled for this franchise. Enable it in Franchise Offerings first.',
-        });
-      }
 
       verifiedGlobalCourse = {
         id: globalCourse.id,
@@ -709,7 +709,10 @@ export async function admitStudent(req: AuthenticatedRequest, res: Response) {
 
               tempPassword =
                 data.studentInitialPassword?.trim() ||
+                data.studentPassword?.trim() ||
                 data.initialPassword?.trim() ||
+                data.password?.trim() ||
+                data.temporaryPassword?.trim() ||
                 `Student#${generateSecureRandomToken(4)}2026`;
               const passwordHash = await hashPassword(tempPassword);
 
@@ -879,6 +882,8 @@ export async function admitStudent(req: AuthenticatedRequest, res: Response) {
                 parentTempPassword =
                   data.parentInitialPassword?.trim() ||
                   data.parentPassword?.trim() ||
+                  data.initialParentPassword?.trim() ||
+                  data.parentTemporaryPassword?.trim() ||
                   `Parent#${generateSecureRandomToken(4)}2026`;
                 const parentPasswordHash = await hashPassword(parentTempPassword);
 

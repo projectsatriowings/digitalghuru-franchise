@@ -181,6 +181,9 @@ async function getBatchDetails(req, res) {
         if (!instituteId)
             return res.status(400).json({ success: false, error: 'Institute context required' });
         const { id } = req.params;
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
         // If caller is STAFF, verify staff assignment to this batch
         if (req.user?.role === 'STAFF') {
             const isAssigned = await (0, student_authorization_service_js_1.isStaffAssignedToBatch)(req, id, prisma_js_1.prisma);
@@ -479,6 +482,9 @@ async function updateBatch(req, res) {
         if (!instituteId)
             return res.status(400).json({ success: false, error: 'Institute context required' });
         const { id } = req.params;
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
         const parse = exports.updateBatchSchema.safeParse(req.body);
         if (!parse.success)
             return res.status(400).json({ success: false, error: parse.error.errors[0]?.message });
@@ -532,6 +538,7 @@ async function updateBatch(req, res) {
                 ...(isActive !== undefined ? { isActive } : {}),
             },
         });
+        cache_js_1.serverCache.invalidate();
         return res.json({ success: true, message: 'Batch updated successfully', data: { batch: updated } });
     }
     catch (err) {
@@ -546,6 +553,9 @@ async function toggleBatchStatus(req, res) {
         if (!instituteId)
             return res.status(400).json({ success: false, error: 'Institute context required' });
         const { id } = req.params;
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
         const { isActive } = req.body;
         const existing = await prisma_js_1.prisma.batch.findFirst({
             where: { id, instituteId },
@@ -558,6 +568,7 @@ async function toggleBatchStatus(req, res) {
             where: { id },
             data: { isActive: nextState },
         });
+        cache_js_1.serverCache.invalidate();
         return res.json({
             success: true,
             message: `Batch ${nextState ? 'activated' : 'deactivated'} successfully`,
@@ -575,6 +586,9 @@ async function deleteBatch(req, res) {
         if (!instituteId)
             return res.status(400).json({ success: false, error: 'Institute context required' });
         const { id } = req.params;
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
         const existing = await prisma_js_1.prisma.batch.findFirst({
             where: { id, instituteId },
         });
@@ -589,6 +603,7 @@ async function deleteBatch(req, res) {
             prisma_js_1.prisma.attendanceEvent.deleteMany({ where: { batchId: id } }),
             prisma_js_1.prisma.batch.delete({ where: { id } }),
         ]);
+        cache_js_1.serverCache.invalidate();
         return res.json({
             success: true,
             message: `Batch '${existing.name}' deleted successfully`,
@@ -781,6 +796,7 @@ async function assignSubjectsToBatch(req, res) {
                 },
             },
         });
+        cache_js_1.serverCache.invalidate();
         return res.json({
             success: true,
             message: `${subjectIds.length} subject(s) assigned to batch successfully`,
@@ -874,6 +890,7 @@ async function updateBatchSubject(req, res) {
                 update: {},
             });
         }
+        cache_js_1.serverCache.invalidate();
         return res.json({
             success: true,
             message: 'Batch subject updated successfully',
@@ -1162,6 +1179,7 @@ async function removeSubjectFromBatch(req, res) {
                 subjectId,
             },
         });
+        cache_js_1.serverCache.invalidate();
         return res.json({ success: true, message: 'Subject removed from batch successfully' });
     }
     catch (err) {
@@ -1331,6 +1349,7 @@ async function enrollStudentInBatch(req, res) {
                 },
             });
         }
+        cache_js_1.serverCache.invalidate();
         return res.status(201).json({
             success: true,
             message: `${student.firstName} ${student.lastName} enrolled in batch successfully`,
@@ -1366,6 +1385,7 @@ async function unenrollStudentFromBatch(req, res) {
             },
             data: { isActive: false },
         });
+        cache_js_1.serverCache.invalidate();
         return res.json({ success: true, message: 'Student unenrolled from batch successfully' });
     }
     catch (err) {
@@ -1478,6 +1498,9 @@ async function updateSubject(req, res) {
         if (!instituteId)
             return res.status(400).json({ success: false, error: 'Institute context required' });
         const { id } = req.params;
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
         const parse = exports.updateSubjectSchema.safeParse(req.body);
         if (!parse.success)
             return res.status(400).json({ success: false, error: parse.error.errors[0]?.message });
@@ -1534,6 +1557,9 @@ async function deleteSubject(req, res) {
         if (!instituteId)
             return res.status(400).json({ success: false, error: 'Institute context required' });
         const { id } = req.params;
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
         const existing = await prisma_js_1.prisma.subject.findFirst({
             where: { id, instituteId },
             include: {

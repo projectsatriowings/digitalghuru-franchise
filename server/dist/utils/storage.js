@@ -578,6 +578,7 @@ function resolveAbsolutePath(storageKey) {
     const cleanKey = storageKey
         .split('?')[0]
         .replace(/^(\/api\/courses\/media\/(public|protected)\/)/, 'courses/$2/')
+        .replace(/^(\/api\/students\/photo-raw\/)/, '')
         .replace(/^\/?(uploads\/)/, '')
         .replace(/^[/\\]+/, '');
     const normalizedKey = path_1.default.normalize(cleanKey);
@@ -585,12 +586,27 @@ function resolveAbsolutePath(storageKey) {
     const resolvedBase = path_1.default.resolve(activeDir);
     const resolvedPath = path_1.default.resolve(resolvedBase, normalizedKey);
     // Strict containment check: must never escape active storage directory
-    if (!resolvedPath.startsWith(resolvedBase + path_1.default.sep) &&
-        resolvedPath !== resolvedBase) {
-        return null;
+    if (resolvedPath.startsWith(resolvedBase + path_1.default.sep) ||
+        resolvedPath === resolvedBase) {
+        if (fs_1.default.existsSync(resolvedPath)) {
+            return resolvedPath;
+        }
     }
-    if (fs_1.default.existsSync(resolvedPath)) {
-        return resolvedPath;
+    // Cross-check alternative storage locations (e.g. server/uploads vs uploads)
+    const altDirs = [
+        path_1.default.resolve(process.cwd(), 'server', 'uploads'),
+        path_1.default.resolve(process.cwd(), 'uploads'),
+        path_1.default.resolve(process.cwd(), '..', 'server', 'uploads'),
+        path_1.default.resolve(process.cwd(), '..', 'uploads'),
+    ];
+    for (const altDir of altDirs) {
+        if (fs_1.default.existsSync(altDir)) {
+            const candidate = path_1.default.resolve(altDir, normalizedKey);
+            if ((candidate.startsWith(altDir + path_1.default.sep) || candidate === altDir) &&
+                fs_1.default.existsSync(candidate)) {
+                return candidate;
+            }
+        }
     }
     return null;
 }

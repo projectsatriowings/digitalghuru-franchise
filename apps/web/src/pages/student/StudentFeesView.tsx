@@ -296,7 +296,7 @@ export const StudentFeesView: React.FC = () => {
                         {a.termLabel || 'Standard Installment'}
                       </td>
                       <td className="px-4 py-3 text-slate-600">
-                        {new Date(a.dueDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                        {new Date(a.dueDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' })}
                       </td>
                       <td className="px-4 py-3 font-semibold text-slate-900">
                         {formatCurrency(a.finalAmount)}

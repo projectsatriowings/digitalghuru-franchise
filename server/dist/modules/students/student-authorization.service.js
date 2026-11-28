@@ -149,7 +149,12 @@ async function getAuthorizedStudentScope(req, prismaClient = prisma_js_1.prisma,
             instituteId: instituteId,
             isStaff: false,
             assignedBatchIds: [],
-            whereClause: { instituteId: instituteId },
+            whereClause: {
+                OR: [
+                    { instituteId: instituteId },
+                    ...(franchiseId ? [{ franchiseId, instituteId: null }] : []),
+                ],
+            },
         };
     }
     // 2b. ACADEMIC_ADMIN / BRANCH_ADMIN: strict single-branch institute scope
