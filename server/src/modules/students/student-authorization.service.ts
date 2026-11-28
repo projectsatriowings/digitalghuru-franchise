@@ -188,7 +188,12 @@ export async function getAuthorizedStaffAssignments(
         instituteId: instituteId!,
         isStaff: false,
         assignedBatchIds: [],
-        whereClause: { instituteId: instituteId! },
+        whereClause: {
+          OR: [
+            { instituteId: instituteId! },
+            ...(franchiseId ? [{ franchiseId, instituteId: null }] : []),
+          ],
+        },
       };
     }
 

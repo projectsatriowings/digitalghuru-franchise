@@ -184,15 +184,15 @@ export async function listStudents(req: AuthenticatedRequest, res: Response) {
     if (req.user?.role === 'FRANCHISE_OWNER') {
       if (isConsolidated || !instituteId) {
         andConditions.push(scope.whereClause);
-      } else if (includeOnline || learningMode === 'ONLINE') {
+      } else if (learningMode === 'OFFLINE') {
+        andConditions.push({ instituteId });
+      } else {
         andConditions.push({
           OR: [
             { instituteId },
             ...(franchiseId ? [{ franchiseId, instituteId: null }] : []),
           ],
         });
-      } else {
-        andConditions.push({ instituteId });
       }
     } else if (req.user?.role === 'SUPER_ADMIN') {
       if (instituteId) {

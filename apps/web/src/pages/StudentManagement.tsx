@@ -801,6 +801,7 @@ Please keep this login and password safe. Use your registered mobile number and 
       setFetchError(null);
       const query = new URLSearchParams({
         search: debouncedSearch.trim(),
+        includeOnline: learningModeFilter === 'OFFLINE' ? 'false' : 'true',
         ...(statusFilter && statusFilter !== 'ALL' ? { status: statusFilter } : {}),
         ...(learningModeFilter && learningModeFilter !== 'ALL' ? { learningMode: learningModeFilter } : {}),
         ...(batchFilter ? { batchId: batchFilter } : {}),
