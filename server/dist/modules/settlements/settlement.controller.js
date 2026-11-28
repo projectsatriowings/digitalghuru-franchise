@@ -193,16 +193,15 @@ async function listSettlements(req, res) {
             totalFranchisePayable += payable;
             totalDgShare += Number(s.digitalGuruShareAmount);
             totalTransferredAmount += transferred;
-            totalRemainingBalance += remaining;
-            if (s.status === 'PENDING_APPROVAL' || s.status === 'PENDING_REVIEW') {
+            if (s.status === 'PENDING_APPROVAL' || s.status === 'PENDING_REVIEW' || s.status === 'DRAFT') {
                 pendingApprovalCount++;
             }
-            if (s.status === 'APPROVED') {
+            if (s.status === 'APPROVED' || s.status === 'PARTIALLY_PAID') {
                 approvedAmount += remaining;
-            }
-            if (s.status === 'PARTIALLY_PAID') {
-                partiallyPaidCount++;
-                approvedAmount += remaining;
+                totalRemainingBalance += remaining;
+                if (s.status === 'PARTIALLY_PAID') {
+                    partiallyPaidCount++;
+                }
             }
             if (s.status === 'COMPLETED' || s.status === 'PAID') {
                 completedAmount += transferred > 0 ? transferred : payable;

@@ -89,6 +89,7 @@ exports.createStaffSchema = zod_1.z.object({
     // Personal Details
     dob: zod_1.z.string().optional().nullable(),
     gender: zod_1.z.string().optional().nullable(),
+    bloodGroup: zod_1.z.string().optional().nullable(),
     altPhone: optionalPhoneValidator,
     personalEmail: optionalEmailValidator,
     emergencyContactName: zod_1.z.string().optional().nullable(),
@@ -128,6 +129,7 @@ exports.updateStaffSchema = zod_1.z.object({
     // Personal Details
     dob: zod_1.z.string().optional().nullable(),
     gender: zod_1.z.string().optional().nullable(),
+    bloodGroup: zod_1.z.string().optional().nullable(),
     altPhone: optionalPhoneValidator,
     personalEmail: optionalEmailValidator,
     emergencyContactName: zod_1.z.string().optional().nullable(),
@@ -392,11 +394,12 @@ async function createStaff(req, res) {
                     employeeCode,
                     designation: data.designation.trim(),
                     qualification: data.qualification?.trim() || null,
-                    permissionsJson: staffPermissions,
+                    permissionsJson: result.staffProfile.permissionsJson,
                     avatarUrl: data.avatarUrl?.trim() || data.photoUrl?.trim() || null,
                     // Personal Details
                     dob: safeParseDate(data.dob),
                     gender: data.gender || null,
+                    bloodGroup: data.bloodGroup?.trim() || null,
                     altPhone: data.altPhone?.trim() || null,
                     personalEmail: data.personalEmail?.trim() || null,
                     emergencyContactName: data.emergencyContactName?.trim() || null,
@@ -492,6 +495,7 @@ async function createStaff(req, res) {
                     qualification: result.staffProfile.qualification,
                     department: result.staffProfile.department,
                     employmentType: result.staffProfile.employmentType,
+                    permissionsJson: result.staffProfile.permissionsJson,
                     user: result.user,
                 },
             },
@@ -683,11 +687,21 @@ async function updateStaff(req, res) {
                     ...(data.employeeCode !== undefined && { employeeCode: data.employeeCode?.trim() || null }),
                     ...(data.designation && { designation: data.designation.trim() }),
                     ...(data.qualification !== undefined && { qualification: data.qualification?.trim() || null }),
-                    ...(data.permissionsJson && { permissionsJson: data.permissionsJson }),
+                    ...(data.permissionsJson && {
+                        permissionsJson: {
+                            ...(existing.permissionsJson || {}),
+                            ...data.permissionsJson,
+                            // Never wipe the stored permanentPassword during general profile updates
+                            ...((existing.permissionsJson?.permanentPassword) && {
+                                permanentPassword: existing.permissionsJson.permanentPassword,
+                            }),
+                        },
+                    }),
                     ...((data.avatarUrl !== undefined || data.photoUrl !== undefined) && { avatarUrl: data.avatarUrl?.trim() || data.photoUrl?.trim() || null }),
                     // Personal Details
                     ...(data.dob !== undefined && { dob: data.dob ? new Date(data.dob) : null }),
                     ...(data.gender !== undefined && { gender: data.gender || null }),
+                    ...(data.bloodGroup !== undefined && { bloodGroup: data.bloodGroup?.trim() || null }),
                     ...(data.altPhone !== undefined && { altPhone: data.altPhone?.trim() || null }),
                     ...(data.personalEmail !== undefined && { personalEmail: data.personalEmail?.trim() || null }),
                     ...(data.emergencyContactName !== undefined && { emergencyContactName: data.emergencyContactName?.trim() || null }),
