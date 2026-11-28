@@ -317,8 +317,18 @@ if (isDirectExecution) {
     NotificationService.startWorker(15000);
   });
 
+  // Database keep-alive ping to prevent Neon serverless cold-start sleep during active dev/prod sessions
+  const dbKeepAliveInterval = setInterval(async () => {
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+    } catch {
+      // Silently swallow keep-alive errors
+    }
+  }, 3 * 60 * 1000);
+
   const handleShutdown = () => {
     console.log('[Digital Ghuru Franchise API Server] Gracefully shutting down...');
+    clearInterval(dbKeepAliveInterval);
     NotificationService.stopWorker();
     server.close(() => {
       console.log('[Digital Ghuru Franchise API Server] Closed remaining connections.');

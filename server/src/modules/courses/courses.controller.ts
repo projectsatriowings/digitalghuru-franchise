@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import fs from 'fs';
 import path from 'path';
+import { serverCache } from '../../utils/cache.js';
 import { CoursesService, CoursePermissionForbiddenError } from './courses.service.js';
 import {
   CreateCourseCategorySchema,
@@ -1014,7 +1015,13 @@ export async function getMyLearningDashboard(req: Request, res: Response) {
     if (!auth.allowed || !auth.studentId) {
       return res.status(403).json({ success: false, message: auth.message || 'Forbidden' });
     }
+    const cacheKey = `student:dashboard:${auth.studentId}`;
+    const cached = serverCache.get<any>(cacheKey);
+    if (cached) {
+      return res.json({ success: true, data: cached });
+    }
     const dashboard = await CoursesService.getStudentLearningDashboard(auth.studentId);
+    serverCache.set(cacheKey, dashboard, 30000);
     res.json({ success: true, data: dashboard });
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message || 'Failed to load learning dashboard' });
@@ -1101,6 +1108,8 @@ export async function completeLesson(req: Request, res: Response) {
       parse.data.chapterId,
       parse.data.timeSpentSec
     );
+
+    serverCache.delete(`student:dashboard:${studentId}`);
 
     res.json({
       success: true,

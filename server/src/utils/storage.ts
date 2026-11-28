@@ -72,7 +72,23 @@ export function getActiveStorageDir(): string {
     );
   }
 
-  return path.resolve(process.cwd(), config.storage.localPath || './uploads');
+  const configuredLocal = config.storage.localPath || './uploads';
+  if (path.isAbsolute(configuredLocal)) {
+    return configuredLocal;
+  }
+  const rootCandidate = path.resolve(process.cwd(), configuredLocal);
+  const serverCandidate = path.resolve(process.cwd(), 'server', configuredLocal);
+
+  // If cwd is repo root and root uploads is missing/empty, use server/uploads if available
+  if (
+    (!fs.existsSync(rootCandidate) || !fs.existsSync(path.join(rootCandidate, 'courses'))) &&
+    fs.existsSync(serverCandidate) &&
+    fs.existsSync(path.join(serverCandidate, 'courses'))
+  ) {
+    return serverCandidate;
+  }
+
+  return rootCandidate;
 }
 
 /**
@@ -521,6 +537,25 @@ export const StorageManager = {
         // continue searching remaining public folders
       }
     }
+
+    // Secondary fallback: check apps/web/public/uploads/courses if available (e.g. dev mode static assets)
+    try {
+      const publicAssetsFile = path.resolve(process.cwd(), 'apps/web/public/uploads/courses', filename);
+      if (fs.existsSync(publicAssetsFile)) {
+        const stat = fs.statSync(publicAssetsFile);
+        const contentType = getMimeType(path.extname(filename));
+        return {
+          stream: fs.createReadStream(publicAssetsFile),
+          statusCode: 200,
+          contentType,
+          contentLength: stat.size,
+          acceptRanges: 'bytes',
+        };
+      }
+    } catch {
+      // ignore fallback error
+    }
+
     return null;
   },
 

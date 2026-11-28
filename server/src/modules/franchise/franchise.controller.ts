@@ -4117,6 +4117,7 @@ export async function getSuperAdminFranchiseDashboard(req: AuthenticatedRequest,
           take: 10,
         }),
         prisma.franchiseRoyaltyInstallment.findMany({
+          take: 200,
           select: {
             id: true,
             installmentNumber: true,
@@ -4185,7 +4186,7 @@ export async function getSuperAdminFranchiseDashboard(req: AuthenticatedRequest,
       success: true,
       data,
     };
-    serverCache.set(cacheKey, responsePayload, 15000);
+    serverCache.set(cacheKey, responsePayload, 60000);
     return res.json(responsePayload);
   } catch (err: any) {
     console.error('[Super Admin Franchise Dashboard Error]', err);
