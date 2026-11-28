@@ -57,11 +57,8 @@ const getDefaultTabForRole = (role?: string): string => {
   }
 };
 
-const isTabAllowedForRole = (tab: string, role?: string, hasCourseSoftwareAccess = true): boolean => {
+const isTabAllowedForRole = (tab: string, role?: string): boolean => {
   if (!role) return false;
-  if (!hasCourseSoftwareAccess && ['franchise_courses', 'parent_courses', 'student_courses'].includes(tab)) {
-    return false;
-  }
   switch (role) {
     case 'SUPER_ADMIN':
       return ['super_admin_dashboard', 'franchise_management', 'course_management', 'monthly_settlements', 'staff', 'students', 'academics', 'exams', 'fees'].includes(tab);
@@ -83,7 +80,6 @@ const isTabAllowedForRole = (tab: string, role?: string, hasCourseSoftwareAccess
 
 const AppContent: React.FC = () => {
   const { user, loading } = useAuth();
-  const hasCourseSoftwareAccess = !user || user.role === 'SUPER_ADMIN' || user.courseSoftwareAccessEnabled !== false;
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [currentTab, setCurrentTab] = useState<string>(() => {
     const raw = window.location.pathname.replace(/^\//, '').trim();
@@ -97,7 +93,7 @@ const AppContent: React.FC = () => {
     if (user) {
       const raw = window.location.pathname.replace(/^\//, '').trim();
       const targetTab = raw === 'learning_materials' ? 'materials' : raw;
-      if (targetTab && isTabAllowedForRole(targetTab, user.role, hasCourseSoftwareAccess)) {
+      if (targetTab && isTabAllowedForRole(targetTab, user.role)) {
         setCurrentTab(targetTab);
       } else {
         const defaultTab = getDefaultTabForRole(user.role);
@@ -105,14 +101,14 @@ const AppContent: React.FC = () => {
         window.history.replaceState({}, '', `/${defaultTab}`);
       }
     }
-  }, [user, hasCourseSoftwareAccess]);
+  }, [user]);
 
   useEffect(() => {
     const handleTabChange = (e: any) => {
       const { tab } = e.detail || {};
       if (tab) {
         const normalized = tab === 'learning_materials' ? 'materials' : tab;
-        if (!user || isTabAllowedForRole(normalized, user.role, hasCourseSoftwareAccess)) {
+        if (!user || isTabAllowedForRole(normalized, user.role)) {
           setCurrentTab(normalized);
         }
       }
@@ -121,7 +117,7 @@ const AppContent: React.FC = () => {
       const raw = window.location.pathname.replace(/^\//, '').trim();
       if (raw) {
         const normalized = raw === 'learning_materials' ? 'materials' : raw;
-        if (!user || isTabAllowedForRole(normalized, user.role, hasCourseSoftwareAccess)) {
+        if (!user || isTabAllowedForRole(normalized, user.role)) {
           setCurrentTab(normalized);
         } else if (user) {
           const defaultTab = getDefaultTabForRole(user.role);
@@ -139,7 +135,7 @@ const AppContent: React.FC = () => {
       window.removeEventListener('dg:tab-change', handleTabChange);
       window.removeEventListener('popstate', handlePopState);
     };
-  }, [user, hasCourseSoftwareAccess]);
+  }, [user]);
 
   // Background-prefetch primary modules during idle time for instant tab switches
   useEffect(() => {
@@ -149,7 +145,7 @@ const AppContent: React.FC = () => {
         loadSuperAdminDashboard();
         loadFranchiseManagement();
         loadCourseManagement();
-      } else if (hasCourseSoftwareAccess && (user.role === 'FRANCHISE_OWNER' || user.role === 'ACADEMIC_ADMIN' || user.role === 'BRANCH_ADMIN')) {
+      } else if (user.role === 'FRANCHISE_OWNER' || user.role === 'ACADEMIC_ADMIN' || user.role === 'BRANCH_ADMIN') {
         loadFranchiseCourses();
       }
     };
@@ -163,15 +159,15 @@ const AppContent: React.FC = () => {
         window.clearTimeout(id);
       }
     };
-  }, [user, hasCourseSoftwareAccess]);
+  }, [user]);
 
   useEffect(() => {
-    if (user && !isTabAllowedForRole(currentTab, user.role, hasCourseSoftwareAccess)) {
+    if (user && !isTabAllowedForRole(currentTab, user.role)) {
       const defaultTab = getDefaultTabForRole(user.role);
       setCurrentTab(defaultTab);
       window.history.replaceState({}, '', `/${defaultTab}`);
     }
-  }, [user, currentTab, hasCourseSoftwareAccess]);
+  }, [user, currentTab]);
 
   if (loading) {
     return (
@@ -241,7 +237,7 @@ const AppContent: React.FC = () => {
                   <MonthlySettlements />
                 )}
 
-                {currentTab === 'franchise_courses' && hasCourseSoftwareAccess && (user.role === 'FRANCHISE_OWNER' || user.role === 'ACADEMIC_ADMIN' || user.role === 'BRANCH_ADMIN' || user.role === 'SUPER_ADMIN') && (
+                {currentTab === 'franchise_courses' && (user.role === 'FRANCHISE_OWNER' || user.role === 'ACADEMIC_ADMIN' || user.role === 'BRANCH_ADMIN' || user.role === 'SUPER_ADMIN') && (
                   <FranchiseCourses />
                 )}
 

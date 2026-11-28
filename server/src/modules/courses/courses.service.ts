@@ -2,11 +2,6 @@ import crypto from 'crypto';
 import { Prisma, CourseStatus, LearningMode, EnrollmentStatus } from '@prisma/client';
 import { prisma } from '../../prisma.js';
 import { serverCache } from '../../utils/cache.js';
-import {
-  getFranchiseSoftwareAccess,
-  getFranchiseSoftwareAccessMap,
-  SOFTWARE_ACCESS_DISABLED_ERROR,
-} from '../../utils/software-access.js';
 
 const XP_LEVEL_THRESHOLDS = [0, 50, 150, 350, 600, 1000, 1500, 2200, 3000, 4000, 5500];
 
@@ -227,19 +222,13 @@ export class CoursesService {
       }),
     ]);
 
-    const [selMap, accessMap] = [
-      new Map(selections.map((s) => [s.franchiseId, s])),
-      await getFranchiseSoftwareAccessMap(franchises.map((f) => f.id)),
-    ];
+    const selMap = new Map(selections.map((s) => [s.franchiseId, s]));
     return franchises.map((fr) => {
       const sel = selMap.get(fr.id);
-      const sw = accessMap.get(fr.id);
       return {
         ...fr,
         isPermitted: Boolean(sel?.isPermitted),
         isEnabled: Boolean(sel?.isPermitted),
-        courseSoftwareAccessEnabled: sw?.enabled ?? true,
-        courseSoftwarePricingNotes: sw?.pricingNotes || null,
         customPrice: null,
       };
     });
@@ -943,12 +932,6 @@ export class CoursesService {
     if (isPermitted && course.status !== CourseStatus.PUBLISHED) {
       throw new Error('Only published global courses can be permitted to franchises');
     }
-    if (isPermitted) {
-      const sw = await getFranchiseSoftwareAccess(franchiseId);
-      if (!sw.enabled) {
-        throw new CoursePermissionForbiddenError(SOFTWARE_ACCESS_DISABLED_ERROR);
-      }
-    }
 
     const rawCustomPrice = options?.customPrice;
     const hasCustomPrice = rawCustomPrice !== undefined;
@@ -1033,14 +1016,7 @@ export class CoursesService {
       targetFranchiseIds = activeFranchises.map((f) => f.id);
     }
 
-    let uniqueFranchiseIds = Array.from(new Set(targetFranchiseIds));
-    let skippedNoSoftwareCount = 0;
-    if (params.isPermitted && uniqueFranchiseIds.length > 0) {
-      const accessMap = await getFranchiseSoftwareAccessMap(uniqueFranchiseIds);
-      const allowedIds = uniqueFranchiseIds.filter((fid) => accessMap.get(fid)?.enabled !== false);
-      skippedNoSoftwareCount = uniqueFranchiseIds.length - allowedIds.length;
-      uniqueFranchiseIds = allowedIds;
-    }
+    const uniqueFranchiseIds = Array.from(new Set(targetFranchiseIds));
     const shouldAutoEnable = params.autoEnable !== undefined ? params.autoEnable : true;
     const results = await prisma.$transaction(async (tx) => {
       const out = [];
@@ -1075,7 +1051,6 @@ export class CoursesService {
     return {
       courseId,
       updatedCount: results.length,
-      skippedNoSoftwareCount,
       selections: results,
     };
   }
@@ -1088,12 +1063,6 @@ export class CoursesService {
     callerRole?: string,
     callerUserId?: string | null
   ) {
-    if (isEnabled) {
-      const sw = await getFranchiseSoftwareAccess(franchiseId);
-      if (!sw.enabled) {
-        throw new CoursePermissionForbiddenError(SOFTWARE_ACCESS_DISABLED_ERROR);
-      }
-    }
     const course = await prisma.globalCourse.findUnique({
       where: { id: courseId },
       select: { id: true, status: true },
@@ -1156,11 +1125,6 @@ export class CoursesService {
     instituteId?: string | null;
     batchId?: string | null;
   }) {
-    const sw = await getFranchiseSoftwareAccess(data.franchiseId);
-    if (!sw.enabled) {
-      throw new CoursePermissionForbiddenError(SOFTWARE_ACCESS_DISABLED_ERROR);
-    }
-
     return prisma.$transaction(async (tx) => {
       // 1. Fetch Student with Institute
       const student = await tx.student.findUnique({
@@ -1299,17 +1263,6 @@ export class CoursesService {
         if (batch.institute.franchiseId !== targetFranchiseId) {
           throw new Error('Destination institute does not belong to the target franchise');
         }
-      }
-
-      // Verify source and target franchises have Course Software Access enabled
-      const [sourceSw, targetSw] = await Promise.all([
-        getFranchiseSoftwareAccess(source.franchiseId),
-        targetFranchiseId === source.franchiseId
-          ? getFranchiseSoftwareAccess(source.franchiseId)
-          : getFranchiseSoftwareAccess(targetFranchiseId),
-      ]);
-      if (!sourceSw.enabled || !targetSw.enabled) {
-        throw new CoursePermissionForbiddenError(SOFTWARE_ACCESS_DISABLED_ERROR);
       }
 
       // Verify target franchise has course permitted by Super Admin

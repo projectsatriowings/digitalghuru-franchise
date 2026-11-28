@@ -37,7 +37,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   const { user } = useAuth();
   const role = user?.role;
-  const hasCourseSoftwareAccess = role === 'SUPER_ADMIN' || user?.courseSoftwareAccessEnabled !== false;
 
   const handleSelect = (tab: string) => {
     onSelectTab(tab);
@@ -114,14 +113,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
             >
               <LayoutDashboard className="w-5 h-5 shrink-0 text-[#FEDC32]" /> Dashboard
             </button>
-            {hasCourseSoftwareAccess && (
-              <button
-                onClick={() => handleSelect('franchise_courses')}
-                className={navItemClass('franchise_courses')}
-              >
-                <BookOpen className="w-5 h-5 shrink-0 text-emerald-400" /> Course Management
-              </button>
-            )}
+            <button
+              onClick={() => handleSelect('franchise_courses')}
+              className={navItemClass('franchise_courses')}
+            >
+              <BookOpen className="w-5 h-5 shrink-0 text-emerald-400" /> Course Management
+            </button>
             <button
               onClick={() => handleSelect('academics')}
               className={navItemClass('academics')}
@@ -189,14 +186,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <LayoutDashboard className="w-5 h-5 shrink-0" /> Dashboard
             </button>
 
-            {hasCourseSoftwareAccess && (
-              <button
-                onClick={() => handleSelect('franchise_courses')}
-                className={navItemClass('franchise_courses')}
-              >
-                <BookOpen className="w-5 h-5 shrink-0 text-emerald-400" /> Course Management
-              </button>
-            )}
+            <button
+              onClick={() => handleSelect('franchise_courses')}
+              className={navItemClass('franchise_courses')}
+            >
+              <BookOpen className="w-5 h-5 shrink-0 text-emerald-400" /> Course Management
+            </button>
 
             <button
               onClick={() => handleSelect('staff')}
@@ -334,14 +329,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <LayoutDashboard className="w-4 h-4" /> Parent Dashboard
             </button>
 
-            {hasCourseSoftwareAccess && (
-              <button
-                onClick={() => onSelectTab('parent_courses')}
-                className={navItemClass('parent_courses')}
-              >
-                <Laptop className="w-4 h-4 text-emerald-400" /> My Courses & Certs
-              </button>
-            )}
+            <button
+              onClick={() => onSelectTab('parent_courses')}
+              className={navItemClass('parent_courses')}
+            >
+              <Laptop className="w-4 h-4 text-emerald-400" /> My Courses & Certs
+            </button>
 
             <button
               onClick={() => onSelectTab('parent_attendance')}
@@ -411,14 +404,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <GraduationCap className="w-4 h-4" /> My Profile
             </button>
 
-            {hasCourseSoftwareAccess && (
-              <button
-                onClick={() => onSelectTab('student_courses')}
-                className={navItemClass('student_courses')}
-              >
-                <Laptop className="w-4 h-4" /> My Courses & Player
-              </button>
-            )}
+            <button
+              onClick={() => onSelectTab('student_courses')}
+              className={navItemClass('student_courses')}
+            >
+              <Laptop className="w-4 h-4" /> My Courses & Player
+            </button>
 
             <button
               onClick={() => onSelectTab('student_fees')}

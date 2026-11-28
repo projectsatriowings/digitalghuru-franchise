@@ -51,11 +51,7 @@ export const ParentCoursesView: React.FC<ParentCoursesViewProps> = ({ student })
         setCertificates(dashRes.data.certificates);
       }
     } catch (err: any) {
-      if (err?.data?.code === 'COURSE_SOFTWARE_DISABLED') {
-        setError('COURSE_SOFTWARE_DISABLED');
-      } else {
-        setError(err.message || 'Failed to load student LMS courses & certificates');
-      }
+      setError(err.message || 'Failed to load student LMS courses & certificates');
     } finally {
       setLoading(false);
     }
@@ -89,17 +85,6 @@ export const ParentCoursesView: React.FC<ParentCoursesViewProps> = ({ student })
       <div className="p-12 bg-white rounded-3xl border border-[#E2E8F0] flex flex-col items-center justify-center gap-3 text-slate-500">
         <Loader2 className="w-6 h-6 animate-spin text-[#006FFF]" />
         <span className="text-sm font-semibold">Loading {student?.firstName}&apos;s Global Courses &amp; Certificates...</span>
-      </div>
-    );
-  }
-
-  if (error === 'COURSE_SOFTWARE_DISABLED') {
-    return (
-      <div className="p-8 rounded-3xl bg-amber-50 border border-amber-200 text-amber-900 text-sm text-center space-y-2">
-        <p className="font-bold">Course Software Access Not Included</p>
-        <p className="text-xs text-amber-800">
-          {student?.firstName}&apos;s campus franchise agreement does not include Digital Ghuru Course Software / LMS access.
-        </p>
       </div>
     );
   }

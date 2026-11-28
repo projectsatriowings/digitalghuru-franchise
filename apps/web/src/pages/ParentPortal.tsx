@@ -144,17 +144,9 @@ export const ParentPortal: React.FC<ParentPortalProps> = ({ initialTab = 'dashbo
     }
   }, [selectedStudentId, activeChildRelation?.student?.instituteId]);
 
-  const hasCourseSoftwareAccess = user?.role === 'SUPER_ADMIN' || user?.courseSoftwareAccessEnabled !== false;
-
-  useEffect(() => {
-    if (!hasCourseSoftwareAccess && activeTab === 'courses') {
-      setActiveTab('dashboard');
-    }
-  }, [hasCourseSoftwareAccess, activeTab]);
-
   const tabs = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    ...(hasCourseSoftwareAccess ? [{ id: 'courses', label: 'My Courses & Certs', icon: Laptop }] : []),
+    { id: 'courses', label: 'My Courses & Certs', icon: Laptop },
     { id: 'attendance', label: 'Attendance', icon: Calendar },
     { id: 'communication', label: 'Teacher Chat', icon: MessageSquare },
     { id: 'fees', label: 'Fee Payments', icon: CreditCard },
@@ -331,11 +323,10 @@ export const ParentPortal: React.FC<ParentPortalProps> = ({ initialTab = 'dashbo
             activeStudent={activeStudent}
             onNavigateTab={(tab) => setActiveTab(tab)}
             formatCurrency={formatCurrency}
-            hasCourseSoftwareAccess={hasCourseSoftwareAccess}
           />
         )}
 
-        {activeTab === 'courses' && hasCourseSoftwareAccess && (
+        {activeTab === 'courses' && (
           <ParentCoursesView student={activeStudent} />
         )}
 

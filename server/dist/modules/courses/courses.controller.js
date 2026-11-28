@@ -44,28 +44,6 @@ const client_1 = require("@prisma/client");
 const prisma_js_1 = require("../../prisma.js");
 const storage_js_1 = require("../../utils/storage.js");
 const security_js_1 = require("../../utils/security.js");
-const software_access_js_1 = require("../../utils/software-access.js");
-async function ensureFranchiseSoftwareAccess(res, franchiseId) {
-    const access = await (0, software_access_js_1.getFranchiseSoftwareAccess)(franchiseId);
-    if (!access.enabled) {
-        res.status(403).json({
-            success: false,
-            code: 'COURSE_SOFTWARE_DISABLED',
-            error: software_access_js_1.SOFTWARE_ACCESS_DISABLED_ERROR,
-            message: software_access_js_1.SOFTWARE_ACCESS_DISABLED_ERROR,
-            courseSoftwareAccessEnabled: false,
-            courseSoftwarePricingNotes: access.pricingNotes,
-        });
-        return false;
-    }
-    return true;
-}
-async function ensureStudentSoftwareAccess(res, studentId) {
-    const franchiseId = await (0, software_access_js_1.resolveStudentFranchiseId)(studentId);
-    if (!franchiseId)
-        return true;
-    return ensureFranchiseSoftwareAccess(res, franchiseId);
-}
 // -------------------------------------------------------------
 // TENANT & OWNERSHIP AUTHORIZATION HELPERS
 // -------------------------------------------------------------
@@ -722,19 +700,10 @@ async function getMyFranchiseCourseContext(req, res) {
                 user: { select: { email: true } },
             },
         });
-        const swAccess = await (0, software_access_js_1.getFranchiseSoftwareAccess)(franchiseId);
         res.json({
             success: true,
             data: {
-                franchise: franchise
-                    ? {
-                        ...franchise,
-                        courseSoftwareAccessEnabled: swAccess.enabled,
-                        courseSoftwarePricingNotes: swAccess.pricingNotes,
-                    }
-                    : null,
-                courseSoftwareAccessEnabled: swAccess.enabled,
-                courseSoftwarePricingNotes: swAccess.pricingNotes,
+                franchise,
                 branches: franchise?.branches || [],
                 students,
                 isBranchScoped,
@@ -752,9 +721,6 @@ async function listFranchiseCourses(req, res) {
         const auth = await authorizeFranchiseAccess(user, franchiseId);
         if (!auth.allowed) {
             return res.status(403).json({ success: false, message: 'Forbidden: Unauthorized franchise access' });
-        }
-        if (user?.role !== client_1.UserRole.SUPER_ADMIN && !(await ensureFranchiseSoftwareAccess(res, franchiseId))) {
-            return;
         }
         const includeUnpermitted = user?.role === client_1.UserRole.SUPER_ADMIN && req.query.includeUnpermitted === 'true';
         const courses = await courses_service_js_1.CoursesService.listFranchiseCourses(franchiseId, { includeUnpermitted });
@@ -783,8 +749,7 @@ async function setFranchiseCoursePermission(req, res) {
         });
     }
     catch (error) {
-        const status = error instanceof courses_service_js_1.CoursePermissionForbiddenError || error?.statusCode === 403 ? 403 : 400;
-        res.status(status).json({ success: false, message: error.message || 'Failed to update franchise permission' });
+        res.status(400).json({ success: false, message: error.message || 'Failed to update franchise permission' });
     }
 }
 async function getCourseFranchiseMatrix(req, res) {
@@ -826,9 +791,6 @@ async function listFranchiseEnrollments(req, res) {
         const auth = await authorizeFranchiseAccess(user, franchiseId);
         if (!auth.allowed) {
             return res.status(403).json({ success: false, message: 'Forbidden: Unauthorized franchise access' });
-        }
-        if (user?.role !== client_1.UserRole.SUPER_ADMIN && !(await ensureFranchiseSoftwareAccess(res, franchiseId))) {
-            return;
         }
         const { instituteId, courseId, mode, status } = req.query;
         let scopedInstituteId = typeof instituteId === 'string' && instituteId !== 'ALL' ? instituteId : undefined;
@@ -971,13 +933,9 @@ async function transferStudentEnrollment(req, res) {
 async function listStudentCourseEnrollments(req, res) {
     try {
         const { studentId } = req.params;
-        const user = req.user;
-        const auth = await resolveAuthorizedStudentId(user, studentId);
+        const auth = await resolveAuthorizedStudentId(req.user, studentId);
         if (!auth.allowed || !auth.studentId) {
             return res.status(403).json({ success: false, message: auth.message || 'Forbidden' });
-        }
-        if (user?.role !== client_1.UserRole.SUPER_ADMIN && !(await ensureStudentSoftwareAccess(res, auth.studentId))) {
-            return;
         }
         const enrollments = await courses_service_js_1.CoursesService.listStudentEnrollments(auth.studentId);
         res.json({ success: true, data: enrollments });
@@ -991,13 +949,9 @@ async function listStudentCourseEnrollments(req, res) {
 // -------------------------------------------------------------
 async function getMyLearningDashboard(req, res) {
     try {
-        const user = req.user;
-        const auth = await resolveAuthorizedStudentId(user, req.query.studentId || null);
+        const auth = await resolveAuthorizedStudentId(req.user, req.query.studentId || null);
         if (!auth.allowed || !auth.studentId) {
             return res.status(403).json({ success: false, message: auth.message || 'Forbidden' });
-        }
-        if (user?.role !== client_1.UserRole.SUPER_ADMIN && !(await ensureStudentSoftwareAccess(res, auth.studentId))) {
-            return;
         }
         const dashboard = await courses_service_js_1.CoursesService.getStudentLearningDashboard(auth.studentId);
         res.json({ success: true, data: dashboard });
@@ -1015,9 +969,6 @@ async function getStudentCoursePlayer(req, res) {
             return res.status(403).json({ success: false, message: auth.message || 'Forbidden' });
         }
         const studentId = auth.studentId;
-        if (user?.role !== client_1.UserRole.SUPER_ADMIN && !(await ensureStudentSoftwareAccess(res, studentId))) {
-            return;
-        }
         const playerData = await courses_service_js_1.CoursesService.getStudentCoursePlayer(studentId, courseId);
         // Fetch batch context if offline
         let batchName = null;
@@ -1075,9 +1026,6 @@ async function completeLesson(req, res) {
             return res.status(403).json({ success: false, message: auth.message || 'Forbidden' });
         }
         const studentId = auth.studentId;
-        if (!(await ensureStudentSoftwareAccess(res, studentId))) {
-            return;
-        }
         const result = await courses_service_js_1.CoursesService.completeLesson(studentId, parse.data.courseId, parse.data.chapterId, parse.data.timeSpentSec);
         res.json({
             success: true,
@@ -1115,9 +1063,6 @@ async function claimCourseCertificate(req, res) {
             return res.status(403).json({ success: false, message: auth.message || 'Forbidden' });
         }
         const studentId = auth.studentId;
-        if (!(await ensureStudentSoftwareAccess(res, studentId))) {
-            return;
-        }
         const certificate = await courses_service_js_1.CoursesService.claimCertificate(studentId, parse.data.courseId);
         res.status(201).json({ success: true, data: certificate });
     }
@@ -1141,13 +1086,9 @@ async function verifyCourseCertificate(req, res) {
 async function listStudentCertificates(req, res) {
     try {
         const { studentId } = req.params;
-        const user = req.user;
-        const auth = await resolveAuthorizedStudentId(user, studentId);
+        const auth = await resolveAuthorizedStudentId(req.user, studentId);
         if (!auth.allowed || !auth.studentId) {
             return res.status(403).json({ success: false, message: auth.message || 'Forbidden' });
-        }
-        if (user?.role !== client_1.UserRole.SUPER_ADMIN && !(await ensureStudentSoftwareAccess(res, auth.studentId))) {
-            return;
         }
         const certs = await courses_service_js_1.CoursesService.listStudentCertificates(auth.studentId);
         res.json({ success: true, data: certs });
@@ -1409,16 +1350,6 @@ async function generateMediaTokenController(req, res) {
                 success: false,
                 message: 'Forbidden: Active enrollment required to generate media access token',
             });
-        }
-        if (user.role !== client_1.UserRole.SUPER_ADMIN) {
-            const access = await (0, software_access_js_1.resolveUserCourseSoftwareAccess)(user);
-            if (!access.enabled) {
-                return res.status(403).json({
-                    success: false,
-                    code: 'COURSE_SOFTWARE_DISABLED',
-                    message: software_access_js_1.SOFTWARE_ACCESS_DISABLED_ERROR,
-                });
-            }
         }
         const token = (0, security_js_1.generateMediaToken)({
             userId: user.userId,
@@ -1683,16 +1614,6 @@ async function streamProtectedMedia(req, res) {
                 success: false,
                 message: 'Forbidden: Active course enrollment required to access this lesson material',
             });
-        }
-        if (user.role !== client_1.UserRole.SUPER_ADMIN) {
-            const access = await (0, software_access_js_1.resolveUserCourseSoftwareAccess)(user);
-            if (!access.enabled) {
-                return res.status(403).json({
-                    success: false,
-                    code: 'COURSE_SOFTWARE_DISABLED',
-                    message: software_access_js_1.SOFTWARE_ACCESS_DISABLED_ERROR,
-                });
-            }
         }
         // -------------------------------------------------------------
         // HTTP BYTE-RANGE & STREAMING DELIVERY

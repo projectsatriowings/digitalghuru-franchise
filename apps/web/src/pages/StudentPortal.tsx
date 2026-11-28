@@ -25,7 +25,6 @@ import {
   CreditCard,
 } from 'lucide-react';
 import { CoursePlayer } from '../components/CoursePlayer';
-import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { StudentFeesView } from './student/StudentFeesView';
 
@@ -34,16 +33,12 @@ interface StudentPortalProps {
 }
 
 export const StudentPortal: React.FC<StudentPortalProps> = ({ initialSection = 'overview' }) => {
-  const { user } = useAuth();
-  const hasCourseSoftwareAccess = user?.role === 'SUPER_ADMIN' || user?.courseSoftwareAccessEnabled !== false;
   const toast = useToast();
-  const [section, setSection] = useState<'overview' | 'courses' | 'fees'>(
-    !hasCourseSoftwareAccess && initialSection === 'courses' ? 'overview' : initialSection
-  );
+  const [section, setSection] = useState<'overview' | 'courses' | 'fees'>(initialSection);
 
   useEffect(() => {
-    setSection(!hasCourseSoftwareAccess && initialSection === 'courses' ? 'overview' : initialSection);
-  }, [initialSection, hasCourseSoftwareAccess]);
+    setSection(initialSection);
+  }, [initialSection]);
 
   const formatKolkataDateTime = (dateString?: string | null) => {
     if (!dateString) return 'Not available';
@@ -82,9 +77,7 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({ initialSection = '
       setLoading(true);
       const [profRes, lmsRes, matRes, hwRes, quizRes] = await Promise.allSettled([
         apiFetch('/students/my/profile', { skipCache: true }),
-        hasCourseSoftwareAccess
-          ? apiFetch('/courses/learning/my-dashboard', { skipCache: true })
-          : Promise.resolve({ success: true, data: null }),
+        apiFetch('/courses/learning/my-dashboard', { skipCache: true }),
         apiFetch('/materials'),
         apiFetch('/homework'),
         apiFetch('/quizzes'),
@@ -96,10 +89,8 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({ initialSection = '
         setError('Student record not found');
       }
 
-      if (hasCourseSoftwareAccess && lmsRes.status === 'fulfilled' && lmsRes.value.success) {
+      if (lmsRes.status === 'fulfilled' && lmsRes.value.success) {
         setLmsDashboard(lmsRes.value.data);
-      } else {
-        setLmsDashboard(null);
       }
 
       if (matRes.status === 'fulfilled' && matRes.value.success) {
@@ -118,7 +109,7 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({ initialSection = '
     } finally {
       setLoading(false);
     }
-  }, [hasCourseSoftwareAccess]);
+  }, []);
 
   useEffect(() => {
     loadStudentData();
@@ -275,7 +266,6 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({ initialSection = '
         </div>
 
         {/* Live XP + Level Card */}
-        {hasCourseSoftwareAccess && (
         <div className="bg-white/10 backdrop-blur-md border border-white/15 rounded-2xl p-4 min-w-[260px]">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2.5">
@@ -304,7 +294,6 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({ initialSection = '
             </div>
           </div>
         </div>
-        )}
       </div>
 
       {/* Section Navigation Switcher */}
@@ -320,19 +309,17 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({ initialSection = '
         >
           <GraduationCap className="w-4 h-4" /> Overview & Academics
         </button>
-        {hasCourseSoftwareAccess && (
-          <button
-            type="button"
-            onClick={() => setSection('courses')}
-            className={`py-3.5 px-3 font-bold text-xs border-b-2 transition-all flex items-center gap-2 cursor-pointer ${
-              section === 'courses'
-                ? 'border-[#006FFF] text-[#006FFF]'
-                : 'border-transparent text-slate-500 hover:text-slate-800'
-            }`}
-          >
-            <Laptop className="w-4 h-4" /> LMS Courses & Certificates
-          </button>
-        )}
+        <button
+          type="button"
+          onClick={() => setSection('courses')}
+          className={`py-3.5 px-3 font-bold text-xs border-b-2 transition-all flex items-center gap-2 cursor-pointer ${
+            section === 'courses'
+              ? 'border-[#006FFF] text-[#006FFF]'
+              : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <Laptop className="w-4 h-4" /> LMS Courses & Certificates
+        </button>
         <button
           type="button"
           onClick={() => setSection('fees')}
@@ -354,7 +341,6 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({ initialSection = '
       {/* ================================================================= */}
       {section !== 'fees' && (
         <>
-          {hasCourseSoftwareAccess && (
           <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div>
@@ -473,12 +459,11 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({ initialSection = '
           </div>
         )}
       </div>
-          )}
 
       {/* ================================================================= */}
       {/* CERTIFICATES & CRYPTOGRAPHIC VERIFICATION                         */}
       {/* ================================================================= */}
-      {hasCourseSoftwareAccess && (certificates.length > 0 || initialSection === 'courses') && (
+      {(certificates.length > 0 || initialSection === 'courses') && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
           <div className="lg:col-span-2 bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-4">
             <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">

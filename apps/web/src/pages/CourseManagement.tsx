@@ -479,12 +479,7 @@ export const CourseManagement: React.FC = () => {
           autoEnable: nextPermitted,
         }),
       });
-      const skipped = Number(res.data?.skippedNoSoftwareCount || 0);
-      toast.success(
-        skipped > 0
-          ? `${res.message || 'Updated bulk franchise permissions'} (${skipped} skipped without Course Software Access)`
-          : res.message || 'Updated bulk franchise permissions'
-      );
+      toast.success(res.message || 'Updated bulk franchise permissions');
       await Promise.all([loadFranchiseMatrix(franchiseCourse.id), fetchCatalogue()]);
     } catch (err: any) {
       toast.error(err.message || 'Bulk permission update failed');
@@ -1263,16 +1258,13 @@ export const CourseManagement: React.FC = () => {
                       const state = franchiseSelections[fr.id] || {
                         isPermitted: false,
                       };
-                      const hasSoftwareAccess = fr.courseSoftwareAccessEnabled !== false;
                       return (
                         <div
                           key={fr.id}
                           className={`p-4 rounded-2xl border transition-colors flex flex-col lg:flex-row lg:items-center justify-between gap-3 ${
-                            !hasSoftwareAccess
-                              ? 'border-amber-200 bg-amber-50/40'
-                              : state.isPermitted
-                                ? 'border-emerald-200 bg-emerald-50/40'
-                                : 'border-slate-200 bg-slate-50/60'
+                            state.isPermitted
+                              ? 'border-emerald-200 bg-emerald-50/40'
+                              : 'border-slate-200 bg-slate-50/60'
                           }`}
                         >
                           <div>
@@ -1281,35 +1273,27 @@ export const CourseManagement: React.FC = () => {
                               <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-600 text-[10px] font-mono">
                                 {fr.code}
                               </span>
-                              {!hasSoftwareAccess ? (
-                                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold border bg-amber-50 text-amber-800 border-amber-200">
-                                  No Software License
-                                </span>
-                              ) : (
-                                <span
-                                  className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
-                                    state.isPermitted
-                                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                                      : 'bg-slate-100 text-slate-500 border-slate-200'
-                                  }`}
-                                >
-                                  {state.isPermitted ? 'Active · HQ Permitted' : 'Not Permitted'}
-                                </span>
-                              )}
+                              <span
+                                className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                                  state.isPermitted
+                                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                    : 'bg-slate-100 text-slate-500 border-slate-200'
+                                }`}
+                              >
+                                {state.isPermitted ? 'Active · HQ Permitted' : 'Not Permitted'}
+                              </span>
                             </div>
                             <div className="text-xs text-slate-500 mt-0.5">
                               {fr.city || '—'}, {fr.state || '—'} · {fr._count?.branches || fr.branches?.length || 0} Branches
-                              {!hasSoftwareAccess && ' · Course Software Access disabled in active agreement'}
                             </div>
                           </div>
 
                           <div className="flex flex-wrap items-center gap-2">
                             <button
                               type="button"
-                              disabled={state.loading || (!hasSoftwareAccess && !state.isPermitted)}
-                              title={!hasSoftwareAccess && !state.isPermitted ? 'Enable Course Software Access in this franchise agreement first' : undefined}
+                              disabled={state.loading}
                               onClick={() => handleSetFranchisePermission(fr.id, !state.isPermitted)}
-                              className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 border transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                              className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 border transition-colors ${
                                 state.isPermitted
                                   ? 'bg-white border-rose-200 text-rose-700 hover:bg-rose-50'
                                   : 'bg-[#006FFF] border-[#006FFF] text-white hover:bg-blue-700'

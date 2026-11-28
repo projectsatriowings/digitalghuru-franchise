@@ -3,7 +3,6 @@ import { prisma } from '../../prisma.js';
 import { z } from 'zod';
 import { verifyPassword, hashPassword, generateAccessToken, generateRefreshToken, verifyRefreshToken } from '../../utils/security.js';
 import { AuthenticatedRequest } from '../../middleware/auth.js';
-import { resolveUserCourseSoftwareAccess } from '../../utils/software-access.js';
 
 const loginSchema = z.object({
   identifier: z.string().min(1, 'Email or Phone is required'),
@@ -321,13 +320,6 @@ export async function login(req: Request, res: Response) {
     // Franchise Owners receive Super-Admin-generated permanent credentials and are never forced to change passwords on login.
     const isExemptFromMandatoryChange = effectiveRole === 'STUDENT' || effectiveRole === 'PARENT' || effectiveRole === 'FRANCHISE_OWNER';
     const effectiveMustChangePassword = isExemptFromMandatoryChange ? false : !!user.mustChangePassword;
-    const softwareAccess = await resolveUserCourseSoftwareAccess({
-      userId: user.id,
-      email: user.email,
-      role: effectiveRole,
-      franchiseId: primaryFranchise?.id || null,
-      instituteId: activeInstitute?.id || null,
-    });
 
     return res.json({
       success: true,
@@ -343,18 +335,10 @@ export async function login(req: Request, res: Response) {
           phone: user.phone,
           role: effectiveRole,
           mustChangePassword: effectiveMustChangePassword,
-          courseSoftwareAccessEnabled: softwareAccess.enabled,
-          courseSoftwarePricingNotes: softwareAccess.pricingNotes,
           memberships: activeMemberships,
           ownedFranchises: user.ownedFranchises,
         },
-        franchise: primaryFranchise
-          ? {
-              ...primaryFranchise,
-              courseSoftwareAccessEnabled: softwareAccess.enabled,
-              courseSoftwarePricingNotes: softwareAccess.pricingNotes,
-            }
-          : null,
+        franchise: primaryFranchise,
         institute: activeInstitute ? {
           id: activeInstitute.id,
           code: activeInstitute.code,
@@ -457,22 +441,9 @@ export async function getCurrentUser(req: AuthenticatedRequest, res: Response) {
     }
 
     const isExemptFromMandatoryChange = user.role === 'STUDENT' || user.role === 'PARENT' || user.role === 'FRANCHISE_OWNER';
-    const requestedInstituteId =
-      typeof req.headers['x-institute-id'] === 'string' && req.headers['x-institute-id'] !== 'ALL'
-        ? req.headers['x-institute-id']
-        : req.user.instituteId;
-    const softwareAccess = await resolveUserCourseSoftwareAccess({
-      userId: user.id,
-      email: user.email,
-      role: user.role,
-      franchiseId: req.user.franchiseId,
-      instituteId: requestedInstituteId,
-    });
     const sanitizedUser = {
       ...user,
       mustChangePassword: isExemptFromMandatoryChange ? false : !!user.mustChangePassword,
-      courseSoftwareAccessEnabled: softwareAccess.enabled,
-      courseSoftwarePricingNotes: softwareAccess.pricingNotes,
     };
 
     return res.json({

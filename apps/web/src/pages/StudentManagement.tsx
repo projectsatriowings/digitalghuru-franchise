@@ -51,7 +51,6 @@ export const StudentManagement: React.FC = () => {
   const [students, setStudents] = useState<Student[]>([]);
   const [batches, setBatches] = useState<Batch[]>([]);
   const [franchiseContext, setFranchiseContext] = useState<{ id: string; name: string; code: string } | null>(null);
-  const [franchiseSoftwareEnabled, setFranchiseSoftwareEnabled] = useState<boolean>(true);
   const [enabledGlobalCourses, setEnabledGlobalCourses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
@@ -773,20 +772,11 @@ Please keep this login and password safe. Use your registered mobile number and 
     if (!user || !['SUPER_ADMIN', 'FRANCHISE_OWNER', 'BRANCH_ADMIN', 'ACADEMIC_ADMIN'].includes(user.role)) {
       return;
     }
-    if (user.role !== 'SUPER_ADMIN' && user.courseSoftwareAccessEnabled === false) {
-      setFranchiseSoftwareEnabled(false);
-      setEnabledGlobalCourses([]);
-      return;
-    }
     try {
       const ctxRes = await apiFetch('/courses/my-franchise-context');
       const fr = ctxRes?.data?.franchise || null;
-      const swEnabled =
-        user.role === 'SUPER_ADMIN' ||
-        (ctxRes?.data?.courseSoftwareAccessEnabled !== false && fr?.courseSoftwareAccessEnabled !== false);
       setFranchiseContext(fr);
-      setFranchiseSoftwareEnabled(swEnabled);
-      if (fr?.id && swEnabled) {
+      if (fr?.id) {
         const fcRes = await apiFetch(`/courses/franchise/${fr.id}`);
         const allCourses = fcRes?.data || [];
         const uniqueCourses = Array.from(
@@ -1431,7 +1421,7 @@ Please keep this login and password safe. Use your registered mobile number and 
               <tr className="border-b border-[#E2E8F0] text-[#64748B] bg-[#F8FAFC] uppercase tracking-wider text-[11px]">
                 <th className="py-3 px-3.5 font-bold">Student Name</th>
                 <th className="py-3 px-3 font-bold">Admission No</th>
-                <th className="py-3 px-3 font-bold">{franchiseSoftwareEnabled ? 'Subjects & Global LMS' : 'Subjects'}</th>
+                <th className="py-3 px-3 font-bold">Subjects & Global LMS</th>
                 <th className="py-3 px-3 font-bold">Batch / Mode</th>
                 <th className="py-3 px-3 font-bold">Linked Guardians</th>
                 <th className="py-3 px-2 font-bold text-center">Status</th>
@@ -2116,7 +2106,6 @@ Please keep this login and password safe. Use your registered mobile number and 
                   )}
 
                   {/* Global LMS Course Enrollment (Optional) */}
-                  {franchiseSoftwareEnabled && (
                   <div className="p-4 bg-[#FAF8F5] border border-[#E2E8F0] rounded-2xl space-y-3">
                     <div className="flex items-center justify-between">
                       <label className="block text-xs font-bold text-[#006FFF] flex items-center gap-1.5">
@@ -2174,7 +2163,6 @@ Please keep this login and password safe. Use your registered mobile number and 
                       </div>
                     )}
                   </div>
-                  )}
 
                   {/* Batch & Subject Allocation (Branch Mode Only) */}
                   {formData.onlineDirect ? (

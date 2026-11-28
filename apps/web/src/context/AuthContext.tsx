@@ -182,7 +182,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     useEffect(() => {
       if (token) {
-        apiFetch('/auth/me', { skipCache: true })
+        apiFetch('/auth/me')
           .then((res) => {
             if (res.data?.user) {
                 const fetchedUser = res.data.user;

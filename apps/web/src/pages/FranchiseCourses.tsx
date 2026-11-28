@@ -26,7 +26,7 @@ import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 import { formatCurrency } from '@tuition/shared';
 
 export const FranchiseCourses: React.FC = () => {
-  const { user, activeInstitute } = useAuth();
+  const { activeInstitute } = useAuth();
   const toast = useToast();
 
   const [loading, setLoading] = useState(true);
@@ -35,9 +35,6 @@ export const FranchiseCourses: React.FC = () => {
   const [students, setStudents] = useState<any[]>([]);
   const [courses, setCourses] = useState<any[]>([]);
   const [enrollments, setEnrollments] = useState<any[]>([]);
-  const [softwareAccessDisabled, setSoftwareAccessDisabled] = useState<boolean>(
-    user?.role !== 'SUPER_ADMIN' && user?.courseSoftwareAccessEnabled === false
-  );
 
   const [activeTab, setActiveTab] = useState<'offerings' | 'enrollments'>('offerings');
   const [search, setSearch] = useState('');
@@ -74,15 +71,11 @@ export const FranchiseCourses: React.FC = () => {
       const opts = forceRefresh ? { skipCache: true } : {};
       const ctxRes = await apiFetch('/courses/my-franchise-context', opts);
       const ctx = ctxRes.data || {};
-      const swDisabled =
-        user?.role !== 'SUPER_ADMIN' &&
-        (ctx.courseSoftwareAccessEnabled === false || ctx.franchise?.courseSoftwareAccessEnabled === false);
       setFranchise(ctx.franchise || null);
       setBranches(ctx.branches || []);
       setStudents(ctx.students || []);
-      setSoftwareAccessDisabled(swDisabled);
 
-      if (ctx.franchise?.id && !swDisabled) {
+      if (ctx.franchise?.id) {
         const instFilter =
           activeInstitute && activeInstitute.id !== 'ALL' ? `&instituteId=${activeInstitute.id}` : '';
         const [coursesRes, enrollmentsRes] = await Promise.all([
@@ -98,17 +91,11 @@ export const FranchiseCourses: React.FC = () => {
         setEnrollments([]);
       }
     } catch (err: any) {
-      if (err?.data?.code === 'COURSE_SOFTWARE_DISABLED') {
-        setSoftwareAccessDisabled(true);
-        setCourses([]);
-        setEnrollments([]);
-      } else {
-        toast.error(err.message || 'Failed to load franchise courses');
-      }
+      toast.error(err.message || 'Failed to load franchise courses');
     } finally {
       setLoading(false);
     }
-  }, [activeInstitute?.id, user?.role]);
+  }, [activeInstitute?.id]);
 
   useEffect(() => {
     loadData();
@@ -234,30 +221,6 @@ export const FranchiseCourses: React.FC = () => {
 
   const enrollSelectedBranch = branches.find((b) => b.id === enrollForm.instituteId);
   const transferSelectedBranch = branches.find((b) => b.id === transferForm.newInstituteId);
-
-  if (softwareAccessDisabled) {
-    return (
-      <div className="space-y-6">
-        <div className="bg-white rounded-3xl border border-amber-200 p-10 text-center max-w-2xl mx-auto mt-6 shadow-sm space-y-3">
-          <div className="w-12 h-12 rounded-2xl bg-amber-50 border border-amber-200 text-amber-700 flex items-center justify-center mx-auto">
-            <ShieldCheck className="w-6 h-6" />
-          </div>
-          <h2 className="text-xl font-extrabold text-slate-900">
-            Course Software Access Not Included
-          </h2>
-          <p className="text-sm text-slate-600 max-w-lg mx-auto">
-            Course Management Software access is currently disabled in your franchise&apos;s active agreement
-            {franchise?.name ? ` (${franchise.name})` : ''}. Standard campus, student, staff, exam, and fee operations remain active.
-          </p>
-          {franchise?.courseSoftwarePricingNotes && (
-            <p className="text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 inline-block">
-              Agreement note: {franchise.courseSoftwarePricingNotes}
-            </p>
-          )}
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-6">
